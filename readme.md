@@ -8,7 +8,7 @@ GRAIN is an open-source Nostr relay implementation written in Go. This project a
 
 - **NIP-01 Protocol Support**: GRAIN fully supports the NIP-01 protocol for WebSocket communication.
 - **Event Processing**: Handles events of kind 0 (user metadata) and kind 1 (text note).
-- **MongoDB Storage**: Utilizes MongoDB to store and manage events efficiently.
+- **MongoDB 🍃**: Utilizes MongoDB to store and manage events efficiently.
 - **Scalability**: Built with Go, ensuring high performance and scalability.
 - **Open Source**: Licensed under the MIT License, making it free to use and modify.
 
