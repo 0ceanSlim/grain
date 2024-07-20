@@ -30,9 +30,6 @@ func main() {
 	// Initialize collections
 	events.InitCollections(client, config.Collections.EventKind0, config.Collections.EventKind1)
 
-	// Set the MongoDB collections in the requests package
-	requests.SetCollections(events.GetCollections())
-
 	// Start WebSocket server
 	http.Handle("/", websocket.Handler(requests.Handler))
 	fmt.Println("WebSocket server started on", config.Server.Address)
