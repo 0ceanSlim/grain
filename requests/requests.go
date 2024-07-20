@@ -60,18 +60,6 @@ func Handler(ws *websocket.Conn) {
 			continue
 		}
 
-		// Store the event in the appropriate MongoDB collection
-		//var collection *mongo.Collection
-		//switch evt.Kind {
-		//case 0:
-		//	collection = eventKind0Collection
-		//case 1:
-		//	collection = eventKind1Collection
-		//default:
-		//	fmt.Println("Unknown event kind:", evt.Kind)
-		//	continue
-		//}
-
 		err = events.HandleEvent(context.TODO(), evt)
 		if err != nil {
 			fmt.Println("Error handling event:", err)
