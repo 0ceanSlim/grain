@@ -41,25 +41,15 @@ func InitCollections(client *mongo.Client, eventKind0, eventKind1 string) {
 }
 
 func HandleEvent(ctx context.Context, evt Event) error {
-	var collection *mongo.Collection
 	switch evt.Kind {
 	case 0:
-		collection = eventKind0Collection
+		return HandleEventKind0(ctx, evt, eventKind0Collection)
 	case 1:
 		return HandleEventKind1(ctx, evt, eventKind1Collection)
 	default:
 		fmt.Println("Unknown event kind:", evt.Kind)
 		return fmt.Errorf("unknown event kind: %d", evt.Kind)
 	}
-
-	_, err := collection.InsertOne(ctx, evt)
-	if err != nil {
-		fmt.Println("Error inserting event into MongoDB:", err)
-		return err
-	}
-
-	fmt.Println("Inserted event into MongoDB:", evt.ID)
-	return nil
 }
 
 func GetCollections() map[string]*mongo.Collection {
