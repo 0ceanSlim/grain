@@ -1,5 +1,13 @@
 # GRAIN 🌾 WIP
 
+
+TODO:
+- Handling kind 0 and kind 1 EVENTS
+ - Validation Checking
+ - updating (replacing replacable notes)
+- Handle REQs  (requests)
+- Handle CLOSE
+
 **Go Relay Archetecture for Implementing Nostr**
 
 GRAIN is an open-source Nostr relay implementation written in Go. This project aims to provide a robust and efficient Nostr relay that supports the NIP-01 protocol, focusing on processing user metadata and text notes.
