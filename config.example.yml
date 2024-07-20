@@ -1,0 +1,8 @@
+mongodb:
+  uri: "mongodb://localhost:27017/"
+  database: "grain"
+collections:
+  event_kind0: "event-kind0"
+  event_kind1: "event-kind1"
+server:
+  address: ":8080"
