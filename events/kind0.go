@@ -20,7 +20,7 @@ func HandleEventKind0(ctx context.Context, evt Event, collection *mongo.Collecti
 		return err
 	}
 
-	fmt.Println("Inserted event kind 1 into MongoDB:", evt.ID)
+	fmt.Println("Inserted event kind 0 into MongoDB:", evt.ID)
 	return nil
 }
 
