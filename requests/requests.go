@@ -7,16 +7,8 @@ import (
 
 	"grain/events"
 
-	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/net/websocket"
 )
-
-var eventKind0Collection, eventKind1Collection *mongo.Collection
-
-func SetCollections(collections map[string]*mongo.Collection) {
-	eventKind0Collection = collections["eventKind0"]
-	eventKind1Collection = collections["eventKind1"]
-}
 
 func Handler(ws *websocket.Conn) {
 	var msg string
