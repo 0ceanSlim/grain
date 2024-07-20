@@ -146,7 +146,7 @@ func handleReq(ws *websocket.Conn, message []interface{}) {
 	fmt.Println("Subscription added:", subID)
 
 	// Query the database with filters and send back the results
-	events, err := QueryEvents(filters, client, "grain", "event-kind0")
+	events, err := QueryEvents(filters, client, "grain", "event-kind1")
 	if err != nil {
 		fmt.Println("Error querying events:", err)
 		return

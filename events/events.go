@@ -10,12 +10,12 @@ import (
 )
 
 type Event struct {
+	ID        string   `json:"id"`
+	PubKey    string   `json:"pubkey"`
 	CreatedAt int64    `json:"created_at"`
 	Kind      int      `json:"kind"`
-	Content   string   `json:"content"`
 	Tags      []string `json:"tags"`
-	PubKey    string   `json:"pubkey"`
-	ID        string   `json:"id"`
+	Content   string   `json:"content"`
 	Sig       string   `json:"sig"`
 }
 
