@@ -7,7 +7,7 @@ import (
 
 	"grain/db"
 	"grain/events"
-	"grain/requests"
+	"grain/server"
 	"grain/utils"
 
 	"golang.org/x/net/websocket"
@@ -30,8 +30,10 @@ func main() {
 	// Initialize collections
 	events.InitCollections(client, config.Collections.EventKind0, config.Collections.EventKind1)
 
+	server.SetClient(client)
+
 	// Start WebSocket server
-	http.Handle("/", websocket.Handler(requests.Handler))
+	http.Handle("/", websocket.Handler(server.Handler))
 	fmt.Println("WebSocket server started on", config.Server.Address)
 	err = http.ListenAndServe(config.Server.Address, nil)
 	if err != nil {

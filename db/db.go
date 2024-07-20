@@ -8,6 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// Initialize MongoDB client
 func InitDB(uri, database string) (*mongo.Client, error) {
 	clientOptions := options.Client().ApplyURI(uri)
 	client, err := mongo.Connect(context.TODO(), clientOptions)
@@ -25,6 +26,7 @@ func InitDB(uri, database string) (*mongo.Client, error) {
 	return client, nil
 }
 
+// Disconnect from MongoDB
 func DisconnectDB(client *mongo.Client) {
 	if err := client.Disconnect(context.TODO()); err != nil {
 		fmt.Println("Error disconnecting from MongoDB:", err)
