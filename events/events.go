@@ -2,59 +2,165 @@ package events
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"log"
 
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/net/websocket"
 )
 
 type Event struct {
-	ID        string   `json:"id"`
-	PubKey    string   `json:"pubkey"`
-	CreatedAt int64    `json:"created_at"`
-	Kind      int      `json:"kind"`
-	Tags      []string `json:"tags"`
-	Content   string   `json:"content"`
-	Sig       string   `json:"sig"`
+	ID        string     `json:"id"`
+	PubKey    string     `json:"pubkey"`
+	CreatedAt int64      `json:"created_at"`
+	Kind      int        `json:"kind"`
+	Tags      [][]string `json:"tags"`
+	Content   string     `json:"content"`
+	Sig       string     `json:"sig"`
 }
 
-var eventKind0Collection *mongo.Collection
-var eventKind1Collection *mongo.Collection
+var collections = make(map[int]*mongo.Collection)
 
-func InitCollections(client *mongo.Client, eventKind0, eventKind1 string) {
-	eventKind0Collection = client.Database("grain").Collection(eventKind0)
-	eventKind1Collection = client.Database("grain").Collection(eventKind1)
+func InitCollections(client *mongo.Client, kinds ...int) {
+	for _, kind := range kinds {
+		collectionName := fmt.Sprintf("event-kind%d", kind)
+		collections[kind] = client.Database("grain").Collection(collectionName)
+		indexModel := mongo.IndexModel{
+			Keys:    bson.D{{Key: "id", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		}
+		_, err := collections[kind].Indexes().CreateOne(context.TODO(), indexModel)
+		if err != nil {
+			fmt.Printf("Failed to create index on %s: %v\n", collectionName, err)
+		}
+	}
+}
 
+func GetCollection(kind int, client *mongo.Client) *mongo.Collection {
+	if collection, exists := collections[kind]; exists {
+		return collection
+	}
+	collectionName := fmt.Sprintf("event-kind%d", kind)
+	collection := client.Database("grain").Collection(collectionName)
+	collections[kind] = collection
 	indexModel := mongo.IndexModel{
 		Keys:    bson.D{{Key: "id", Value: 1}},
 		Options: options.Index().SetUnique(true),
 	}
-	_, err := eventKind0Collection.Indexes().CreateOne(context.TODO(), indexModel)
+	_, err := collection.Indexes().CreateOne(context.TODO(), indexModel)
 	if err != nil {
-		fmt.Println("Failed to create index on event-kind0: ", err)
+		fmt.Printf("Failed to create index on %s: %v\n", collectionName, err)
 	}
-	_, err = eventKind1Collection.Indexes().CreateOne(context.TODO(), indexModel)
-	if err != nil {
-		fmt.Println("Failed to create index on event-kind1: ", err)
-	}
+	return collection
 }
 
-func HandleEvent(ctx context.Context, evt Event) error {
+func HandleEvent(ctx context.Context, evt Event, client *mongo.Client, ws *websocket.Conn) {
+	if !ValidateEvent(evt) {
+		sendOKResponse(ws, evt.ID, false, "invalid: signature verification failed")
+		return
+	}
+
+	collection := GetCollection(evt.Kind, client)
+
+	var err error
 	switch evt.Kind {
 	case 0:
-		return HandleEventKind0(ctx, evt, eventKind0Collection)
+		err = HandleEventKind0(ctx, evt, collection)
 	case 1:
-		return HandleEventKind1(ctx, evt, eventKind1Collection)
+		err = HandleEventKind1(ctx, evt, collection)
 	default:
-		fmt.Println("Unknown event kind:", evt.Kind)
-		return fmt.Errorf("unknown event kind: %d", evt.Kind)
+		err = HandleDefaultEvent(ctx, evt, collection)
 	}
+
+	if err != nil {
+		sendOKResponse(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
+		return
+	}
+
+	sendOKResponse(ws, evt.ID, true, "")
 }
 
-func GetCollections() map[string]*mongo.Collection {
-	return map[string]*mongo.Collection{
-		"eventKind0": eventKind0Collection,
-		"eventKind1": eventKind1Collection,
+func sendOKResponse(ws *websocket.Conn, eventID string, status bool, message string) {
+	response := []interface{}{"OK", eventID, status, message}
+	responseBytes, _ := json.Marshal(response)
+	websocket.Message.Send(ws, string(responseBytes))
+}
+
+func SerializeEvent(evt Event) []byte {
+	eventData := []interface{}{
+		0,
+		evt.PubKey,
+		evt.CreatedAt,
+		evt.Kind,
+		evt.Tags,
+		evt.Content,
 	}
+	serializedEvent, _ := json.Marshal(eventData)
+	return serializedEvent
+}
+
+
+func ValidateEvent(evt Event) bool {
+    serializedEvent := SerializeEvent(evt)
+    hash := sha256.Sum256(serializedEvent)
+    eventID := hex.EncodeToString(hash[:])
+    if eventID != evt.ID {
+        log.Printf("Invalid ID: expected %s, got %s\n", eventID, evt.ID)
+        return false
+    }
+
+    sigBytes, err := hex.DecodeString(evt.Sig)
+    if err != nil {
+        log.Printf("Error decoding signature: %v\n", err)
+        return false
+    }
+
+    sig, err := schnorr.ParseSignature(sigBytes)
+    if err != nil {
+        log.Printf("Error parsing signature: %v\n", err)
+        return false
+    }
+
+    pubKeyBytes, err := hex.DecodeString(evt.PubKey)
+    if err != nil {
+        log.Printf("Error decoding public key: %v\n", err)
+        return false
+    }
+
+    var pubKey *btcec.PublicKey
+    if len(pubKeyBytes) == 32 {
+        // Handle 32-byte public key (x-coordinate only)
+        pubKey, err = btcec.ParsePubKey(append([]byte{0x02}, pubKeyBytes...))
+    } else {
+        // Handle standard compressed or uncompressed public key
+        pubKey, err = btcec.ParsePubKey(pubKeyBytes)
+    }
+    if err != nil {
+        log.Printf("Error parsing public key: %v\n", err)
+        return false
+    }
+
+    verified := sig.Verify(hash[:], pubKey)
+    if !verified {
+        log.Printf("Signature verification failed for event ID: %s\n", evt.ID)
+    }
+
+    return verified
+}
+
+func HandleDefaultEvent(ctx context.Context, evt Event, collection *mongo.Collection) error {
+	_, err := collection.InsertOne(ctx, evt)
+	if err != nil {
+		return fmt.Errorf("Error inserting default event into MongoDB: %v", err)
+	}
+
+	fmt.Println("Inserted default event into MongoDB:", evt.ID)
+	return nil
 }
