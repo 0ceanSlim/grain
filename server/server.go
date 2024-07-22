@@ -7,6 +7,8 @@ import (
 	"grain/events"
 	"time"
 
+	"grain/utils"
+
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/net/websocket"
 )
@@ -101,11 +103,7 @@ func handleEvent(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
-	err = events.HandleEvent(context.TODO(), evt)
-	if err != nil {
-		fmt.Println("Error handling event:", err)
-		return
-	}
+	events.HandleEvent(context.TODO(), evt, client, ws)
 
 	fmt.Println("Event processed:", evt.ID)
 }
@@ -131,13 +129,13 @@ func handleReq(ws *websocket.Conn, message []interface{}) {
 		}
 
 		var f Filter
-		f.IDs = toStringArray(filterData["ids"])
-		f.Authors = toStringArray(filterData["authors"])
-		f.Kinds = toIntArray(filterData["kinds"])
-		f.Tags = toTagsMap(filterData["tags"])
-		f.Since = toTime(filterData["since"])
-		f.Until = toTime(filterData["until"])
-		f.Limit = toInt(filterData["limit"])
+		f.IDs = utils.ToStringArray(filterData["ids"])
+		f.Authors = utils.ToStringArray(filterData["authors"])
+		f.Kinds = utils.ToIntArray(filterData["kinds"])
+		f.Tags = utils.ToTagsMap(filterData["tags"])
+		f.Since = utils.ToTime(filterData["since"])
+		f.Until = utils.ToTime(filterData["until"])
+		f.Limit = utils.ToInt(filterData["limit"])
 
 		filters[i] = f
 	}
@@ -194,93 +192,4 @@ func handleClose(ws *websocket.Conn, message []interface{}) {
 		fmt.Println("Error sending CLOSE message:", err)
 		return
 	}
-}
-
-func toStringArray(i interface{}) []string {
-	if i == nil {
-		return nil
-	}
-	arr, ok := i.([]interface{})
-	if !ok {
-		return nil
-	}
-	var result []string
-	for _, v := range arr {
-		str, ok := v.(string)
-		if ok {
-			result = append(result, str)
-		}
-	}
-	return result
-}
-
-func toIntArray(i interface{}) []int {
-	if i == nil {
-		return nil
-	}
-	arr, ok := i.([]interface{})
-	if !ok {
-		return nil
-	}
-	var result []int
-	for _, v := range arr {
-		num, ok := v.(float64)
-		if ok {
-			result = append(result, int(num))
-		}
-	}
-	return result
-}
-
-func toTagsMap(i interface{}) map[string][]string {
-	if i == nil {
-		return nil
-	}
-	tags, ok := i.(map[string]interface{})
-	if !ok {
-		return nil
-	}
-	result := make(map[string][]string)
-	for k, v := range tags {
-		result[k] = toStringArray(v)
-	}
-	return result
-}
-
-func toInt64(i interface{}) *int64 {
-	if i == nil {
-		return nil
-	}
-	num, ok := i.(float64)
-	if !ok {
-		return nil
-	}
-	val := int64(num)
-	return &val
-}
-
-func toInt(i interface{}) *int {
-	if i == nil {
-		return nil
-	}
-	num, ok := i.(float64)
-	if !ok {
-		return nil
-	}
-	val := int(num)
-	return &val
-}
-
-func toTime(data interface{}) *time.Time {
-	if data == nil {
-		return nil
-	}
-	// Ensure data is a float64 which MongoDB uses for numbers
-	timestamp, ok := data.(float64)
-	if !ok {
-		fmt.Println("Invalid timestamp format")
-		return nil
-	}
-	t := time.Unix(int64(timestamp), 0).UTC()
-	return &t
 }

@@ -10,11 +10,6 @@ import (
 )
 
 func HandleEventKind0(ctx context.Context, evt Event, collection *mongo.Collection) error {
-	// Perform specific validation for event kind 0
-	if !isValidEventKind0(evt) {
-		return fmt.Errorf("validation failed for event kind 0: %s", evt.ID)
-	}
-
 	// Replace the existing event if it has the same pubkey
 	filter := bson.M{"pubkey": evt.PubKey}
 	update := bson.M{
@@ -28,21 +23,12 @@ func HandleEventKind0(ctx context.Context, evt Event, collection *mongo.Collecti
 		},
 	}
 
-	options := options.Update().SetUpsert(true) // Insert if not found
-	_, err := collection.UpdateOne(ctx, filter, update, options)
+	opts := options.Update().SetUpsert(true) // Insert if not found
+	_, err := collection.UpdateOne(ctx, filter, update, opts)
 	if err != nil {
-		fmt.Println("Error updating/inserting event kind 0 into MongoDB:", err)
-		return err
+		return fmt.Errorf("Error updating/inserting event kind 0 into MongoDB: %v", err)
 	}
 
 	fmt.Println("Upserted event kind 0 into MongoDB:", evt.ID)
 	return nil
-}
-
-func isValidEventKind0(evt Event) bool {
-	// Placeholder for actual validation logic
-	if evt.Content == "" {
-		return false
-	}
-	return true
 }
