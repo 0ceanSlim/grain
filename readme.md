@@ -1,63 +1,25 @@
-# GRAIN 🌾 WIP
-
-
-TODO:
-- Handling kind 0 and kind 1 EVENTS
- - Validation Checking
- - updating (replacing replacable notes)
-- Handle REQs  (requests)
-- Handle CLOSE
+# GRAIN 🌾
 
 **Go Relay Archetecture for Implementing Nostr**
 
-GRAIN is an open-source Nostr relay implementation written in Go. This project aims to provide a robust and efficient Nostr relay that supports the NIP-01 protocol, focusing on processing user metadata and text notes.
+GRAIN is an open-source Nostr relay implementation written in Go. This project aims to provide a robust and efficient Nostr relay that currently supports the NIP-01 of the nostr protocol.
 
 ## Features
 
-- **NIP-01 Protocol Support**: GRAIN fully supports the NIP-01 protocol for WebSocket communication.
+- **NIP-01 Protocol Support**: GRAIN fully supports the NIP-01 for WebSocket communication.
 - **Event Processing**: Handles events of kind 0 (user metadata) and kind 1 (text note).
 - **MongoDB 🍃**: Utilizes MongoDB to store and manage events efficiently.
 - **Scalability**: Built with Go, ensuring high performance and scalability.
 - **Open Source**: Licensed under the MIT License, making it free to use and modify.
 
-## Installation
+## Configuration 🍃
 
-1. **Clone the repository**:
+Configuration options can be set through environment variables or a configuration file.
 
-   ```sh
-   git clone https://github.com/oceanslim/grain.git
-   cd grain
-   ```
+There is an example config in this repo. Copy the example config to config.yml to get started
 
-2. **Build the executable**:
-
-   ```sh
-   go build -o grain.exe
-   ```
-
-   The `grain.exe` will be placed in a temporary directory within `...\appdata\local\temp\go-build` and subdirectories.
-
-## Usage
-
-To run the GRAIN relay:
-
-```sh
-./grain.exe
-```
-
-### Configuration 🍃
-
-Configuration options can be set through environment variables or a configuration file. Example configuration:
-
-```yml
-server:
-  port: 8080
-database:
-  type: mongodb
-  connection_string: mongodb://localhost:27017
-  database_name: grain
-logging:
-  level: info
+```bash
+cp config.example.yml config.yml
 ```
 
 ### WebSocket Endpoints
@@ -65,33 +27,37 @@ logging:
 - Connect: / - Clients can connect to this endpoint to start a WebSocket session.
 - Publish Event: Send events of kind 0 (user metadata) or kind 1 (text note) to the relay.
 
+### TODO
+
+- Handle more kinds
+- create whitelist/blacklist functionality
+  for:
+  - valid nip05 domain
+  - pubkey
+  - npub
+  - kind int
+  - kind 1 wordlist
+- Rate limit Events
+
 ### Development
 
 To contribute to GRAIN, follow these steps:
 
 1. Fork the repository.
-2. Create a new branch:
-
-```sh
-git checkout -b feature-branch
-```
-
-3. Make your changes.
-4. Commit your changes:
+2. Make your changes.
+3. Commit your changes:
 
 ```sh
 git commit -m "Description of changes"
 ```
 
-5. Push to the branch:
+4. Push to the repo:
 
 ```sh
-git push origin feature-branch
+git push
 ```
 
-6. Create a Pull Request.
-
-### Contributing
+5. Create a Pull Request.
 
 ### License
 
