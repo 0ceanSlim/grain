@@ -5,30 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"grain/events"
+	server "grain/server/types"
 	"grain/utils"
-	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/net/websocket"
 )
 
-type Subscription struct {
-	ID      string
-	Filters []Filter
-}
-
-// Filter represents the criteria used to query events
-type Filter struct {
-	IDs     []string            `json:"ids"`
-	Authors []string            `json:"authors"`
-	Kinds   []int               `json:"kinds"`
-	Tags    map[string][]string `json:"tags"`
-	Since   *time.Time          `json:"since"`
-	Until   *time.Time          `json:"until"`
-	Limit   *int                `json:"limit"`
-}
-
-var subscriptions = make(map[string]Subscription)
+var subscriptions = make(map[string]server.Subscription)
 var client *mongo.Client
 
 func SetClient(mongoClient *mongo.Client) {
@@ -121,7 +105,7 @@ func handleReq(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
-	filters := make([]Filter, len(message)-2)
+	filters := make([]server.Filter, len(message)-2)
 	for i, filter := range message[2:] {
 		filterData, ok := filter.(map[string]interface{})
 		if !ok {
@@ -129,7 +113,7 @@ func handleReq(ws *websocket.Conn, message []interface{}) {
 			return
 		}
 
-		var f Filter
+		var f server.Filter
 		f.IDs = utils.ToStringArray(filterData["ids"])
 		f.Authors = utils.ToStringArray(filterData["authors"])
 		f.Kinds = utils.ToIntArray(filterData["kinds"])
@@ -141,7 +125,7 @@ func handleReq(ws *websocket.Conn, message []interface{}) {
 		filters[i] = f
 	}
 
-	subscriptions[subID] = Subscription{ID: subID, Filters: filters}
+	subscriptions[subID] = server.Subscription{ID: subID, Filters: filters}
 	fmt.Println("Subscription added:", subID)
 
 	// Query the database with filters and send back the results

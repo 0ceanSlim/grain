@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"grain/events"
+	server "grain/server/types"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -12,7 +13,7 @@ import (
 )
 
 // QueryEvents queries events from the MongoDB collection based on filters
-func QueryEvents(filters []Filter, client *mongo.Client, databaseName, collectionName string) ([]events.Event, error) {
+func QueryEvents(filters []server.Filter, client *mongo.Client, databaseName, collectionName string) ([]events.Event, error) {
 	collection := client.Database(databaseName).Collection(collectionName)
 
 	var results []events.Event
