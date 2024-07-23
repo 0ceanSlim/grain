@@ -1,0 +1,34 @@
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="en" data-theme="{{.Theme}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+    CDNs are used for ease of development. In a Production enviornment, 
+    build a proper minified custom CSS using the Tailwind CLI tool and serve
+    the latest available minified htmx and custom css directly from your server.
+    To download a copy of htmx: https://htmx.org/docs/#download-a-copy
+
+    <link href="/static/tailwind.min.css" rel="stylesheet" />
+    <link href="/static/htmx.min.js">
+    -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script
+      src="https://unpkg.com/htmx.org@1.9.12"
+      integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2"
+      crossorigin="anonymous"
+    ></script>
+    <!-- 
+      link the custom minified styling included in this repo, built from the configuration 
+      in the /web/style directory
+    -->
+    <link href="/static/custom.min.css" rel="stylesheet" />
+    <link rel="icon" href="/static/img/favicon.ico" type="image/x-icon" />
+    <title>{{.Title}}</title>
+  </head>
+  <body class="font-mono text-center text-textPrimary bg-bgPrimary">
+    {{template "header" .}} {{template "view" .}} {{template "footer" .}}
+  </body>
+</html>
+{{end}}

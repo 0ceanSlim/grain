@@ -1,0 +1,26 @@
+@config "tailwind.config.js";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bgPrimary: rgb(16, 16, 16);
+    --color-bgSecondary: rgb(40, 40, 40);
+    --color-bgInverted: rgb(225, 225, 225);
+    --color-textPrimary: rgb(255, 255, 255);
+    --color-textSecondary: rgb(235, 235, 235);
+    --color-textMuted: rgb(200, 200, 200);
+    --color-textInverted: rgb(16, 16, 16);
+  }
+  :root[data-theme="light"] {
+    --color-bgPrimary: rgb(200, 200, 200);
+    --color-bgSecondary: rgb(230, 230, 230);
+    --color-bgInverted: rgb(80, 80, 80);
+    --color-textPrimary: rgb(0, 0, 0);
+    --color-textSecondary: rgb(20, 20, 20);
+    --color-textMuted: rgb(100, 100, 100);
+    --color-textInverted: rgb(255, 255, 255);
+  }
+}

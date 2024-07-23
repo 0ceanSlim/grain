@@ -11,9 +11,12 @@ type Config struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
 	} `yaml:"mongodb"`
-	Server struct {
-		Address string `yaml:"address"`
-	} `yaml:"server"`
+	Relay struct {
+		Port string `yaml:"port"`
+	} `yaml:"relay"`
+	Web struct {
+		Port string `yaml:"port"`
+	} `yaml:"web"`
 }
 
 func LoadConfig(filename string) (*Config, error) {
