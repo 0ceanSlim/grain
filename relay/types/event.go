@@ -1,4 +1,4 @@
-package server
+package relay
 
 type Event struct {
 	ID        string     `json:"id"`

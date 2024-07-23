@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"log"
 
-	server "grain/server/types"
+	relay "grain/relay/types"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
-func SerializeEvent(evt server.Event) []byte {
+func SerializeEvent(evt relay.Event) []byte {
 	eventData := []interface{}{
 		0,
 		evt.PubKey,
@@ -24,7 +24,7 @@ func SerializeEvent(evt server.Event) []byte {
 	return serializedEvent
 }
 
-func CheckSignature(evt server.Event) bool {
+func CheckSignature(evt relay.Event) bool {
 	serializedEvent := SerializeEvent(evt)
 	hash := sha256.Sum256(serializedEvent)
 	eventID := hex.EncodeToString(hash[:])

@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	server "grain/server/types"
+	relay "grain/relay/types"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func HandleKind0(ctx context.Context, evt server.Event, collection *mongo.Collection) error {
+func HandleKind0(ctx context.Context, evt relay.Event, collection *mongo.Collection) error {
 	// Replace the existing event if it has the same pubkey
 	filter := bson.M{"pubkey": evt.PubKey}
 	update := bson.M{

@@ -1,10 +1,10 @@
-package server
+package relay
 
 import (
 	"context"
 	"fmt"
 
-	server "grain/server/types"
+	relay "grain/relay/types"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -12,10 +12,10 @@ import (
 )
 
 // QueryEvents queries events from the MongoDB collection based on filters
-func QueryEvents(filters []server.Filter, client *mongo.Client, databaseName, collectionName string) ([]server.Event, error) {
+func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName, collectionName string) ([]relay.Event, error) {
 	collection := client.Database(databaseName).Collection(collectionName)
 
-	var results []server.Event
+	var results []relay.Event
 
 	for _, filter := range filters {
 		filterBson := bson.M{}
@@ -55,7 +55,7 @@ func QueryEvents(filters []server.Filter, client *mongo.Client, databaseName, co
 		defer cursor.Close(context.TODO())
 
 		for cursor.Next(context.TODO()) {
-			var event server.Event
+			var event relay.Event
 			if err := cursor.Decode(&event); err != nil {
 				return nil, fmt.Errorf("error decoding event: %v", err)
 			}

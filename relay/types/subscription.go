@@ -1,4 +1,4 @@
-package server
+package relay
 
 type Subscription struct {
 	ID      string

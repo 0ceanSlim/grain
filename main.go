@@ -5,9 +5,9 @@ import (
 	"log"
 	"net/http"
 
-	"grain/server"
-	"grain/server/db"
-	"grain/server/utils"
+	"grain/relay"
+	"grain/relay/db"
+	"grain/relay/utils"
 
 	"golang.org/x/net/websocket"
 )
@@ -26,8 +26,8 @@ func main() {
 	}
 	defer db.DisconnectDB()
 
-	// Start WebSocket server
-	http.Handle("/", websocket.Handler(server.Listener))
+	// Start WebSocket relay
+	http.Handle("/", websocket.Handler(relay.Listener))
 	fmt.Println("WebSocket server started on", config.Server.Address)
 	err = http.ListenAndServe(config.Server.Address, nil)
 	if err != nil {

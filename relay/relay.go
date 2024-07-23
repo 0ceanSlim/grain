@@ -1,18 +1,18 @@
-package server
+package relay
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"grain/server/db"
-	"grain/server/kinds"
-	server "grain/server/types"
-	"grain/server/utils"
+	"grain/relay/db"
+	"grain/relay/kinds"
+	relay "grain/relay/types"
+	"grain/relay/utils"
 
 	"golang.org/x/net/websocket"
 )
 
-var subscriptions = make(map[string]server.Subscription)
+var subscriptions = make(map[string]relay.Subscription)
 
 func Listener(ws *websocket.Conn) {
 	defer ws.Close()
@@ -74,7 +74,7 @@ func handleEvent(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
-	var evt server.Event
+	var evt relay.Event
 	err = json.Unmarshal(eventBytes, &evt)
 	if err != nil {
 		fmt.Println("Error unmarshaling event data:", err)
@@ -87,7 +87,7 @@ func handleEvent(ws *websocket.Conn, message []interface{}) {
 	fmt.Println("Event processed:", evt.ID)
 }
 
-func HandleKind(ctx context.Context, evt server.Event, ws *websocket.Conn) {
+func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	if !utils.CheckSignature(evt) {
 		sendOKResponse(ws, evt.ID, false, "invalid: signature verification failed")
 		return
@@ -131,7 +131,7 @@ func handleReq(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
-	filters := make([]server.Filter, len(message)-2)
+	filters := make([]relay.Filter, len(message)-2)
 	for i, filter := range message[2:] {
 		filterData, ok := filter.(map[string]interface{})
 		if !ok {
@@ -139,7 +139,7 @@ func handleReq(ws *websocket.Conn, message []interface{}) {
 			return
 		}
 
-		var f server.Filter
+		var f relay.Filter
 		f.IDs = utils.ToStringArray(filterData["ids"])
 		f.Authors = utils.ToStringArray(filterData["authors"])
 		f.Kinds = utils.ToIntArray(filterData["kinds"])
@@ -151,7 +151,7 @@ func handleReq(ws *websocket.Conn, message []interface{}) {
 		filters[i] = f
 	}
 
-	subscriptions[subID] = server.Subscription{ID: subID, Filters: filters}
+	subscriptions[subID] = relay.Subscription{ID: subID, Filters: filters}
 	fmt.Println("Subscription added:", subID)
 
 	// Query the database with filters and send back the results
