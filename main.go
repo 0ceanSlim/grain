@@ -5,10 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	"grain/db"
-	"grain/events"
 	"grain/server"
-	"grain/utils"
+	"grain/server/db"
+	"grain/server/events"
+	"grain/server/utils"
 
 	"golang.org/x/net/websocket"
 )

@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"grain/events"
+	"grain/server/events"
 	server "grain/server/types"
-	"grain/utils"
+	"grain/server/utils"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/net/websocket"
