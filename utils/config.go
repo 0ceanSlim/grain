@@ -11,10 +11,6 @@ type Config struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
 	} `yaml:"mongodb"`
-	Collections struct {
-		EventKind0 string `yaml:"event_kind0"`
-		EventKind1 string `yaml:"event_kind1"`
-	} `yaml:"collections"`
 	Server struct {
 		Address string `yaml:"address"`
 	} `yaml:"server"`

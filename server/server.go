@@ -5,9 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"grain/events"
-	"time"
-
 	"grain/utils"
+	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/net/websocket"
@@ -34,6 +33,7 @@ var client *mongo.Client
 
 func SetClient(mongoClient *mongo.Client) {
 	client = mongoClient
+	events.SetClient(mongoClient) // Ensure the events package has the MongoDB client
 }
 
 func Handler(ws *websocket.Conn) {
@@ -103,7 +103,8 @@ func handleEvent(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
-	events.HandleEvent(context.TODO(), evt, client, ws)
+	// Call the HandleEvent function from the events package
+	events.HandleEvent(context.TODO(), evt, ws)
 
 	fmt.Println("Event processed:", evt.ID)
 }
@@ -144,13 +145,13 @@ func handleReq(ws *websocket.Conn, message []interface{}) {
 	fmt.Println("Subscription added:", subID)
 
 	// Query the database with filters and send back the results
-	events, err := QueryEvents(filters, client, "grain", "event-kind1")
+	queriedEvents, err := QueryEvents(filters, client, "grain", "event-kind1")
 	if err != nil {
 		fmt.Println("Error querying events:", err)
 		return
 	}
 
-	for _, evt := range events {
+	for _, evt := range queriedEvents {
 		msg := []interface{}{"EVENT", subID, evt}
 		msgBytes, _ := json.Marshal(msg)
 		err = websocket.Message.Send(ws, string(msgBytes))

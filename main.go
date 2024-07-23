@@ -27,8 +27,8 @@ func main() {
 	}
 	defer db.DisconnectDB(client)
 
-	// Initialize collections
-	events.InitCollections(client, 0, 1) // Initialize known kinds
+	// Initialize collections (dynamically handled in the events package)
+	events.SetClient(client)
 
 	server.SetClient(client)
 

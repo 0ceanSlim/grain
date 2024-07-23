@@ -26,24 +26,16 @@ type Event struct {
 	Sig       string     `json:"sig"`
 }
 
-var collections = make(map[int]*mongo.Collection)
+var (
+	client      *mongo.Client
+	collections = make(map[int]*mongo.Collection)
+)
 
-func InitCollections(client *mongo.Client, kinds ...int) {
-	for _, kind := range kinds {
-		collectionName := fmt.Sprintf("event-kind%d", kind)
-		collections[kind] = client.Database("grain").Collection(collectionName)
-		indexModel := mongo.IndexModel{
-			Keys:    bson.D{{Key: "id", Value: 1}},
-			Options: options.Index().SetUnique(true),
-		}
-		_, err := collections[kind].Indexes().CreateOne(context.TODO(), indexModel)
-		if err != nil {
-			fmt.Printf("Failed to create index on %s: %v\n", collectionName, err)
-		}
-	}
+func SetClient(mongoClient *mongo.Client) {
+	client = mongoClient
 }
 
-func GetCollection(kind int, client *mongo.Client) *mongo.Collection {
+func GetCollection(kind int) *mongo.Collection {
 	if collection, exists := collections[kind]; exists {
 		return collection
 	}
@@ -61,13 +53,13 @@ func GetCollection(kind int, client *mongo.Client) *mongo.Collection {
 	return collection
 }
 
-func HandleEvent(ctx context.Context, evt Event, client *mongo.Client, ws *websocket.Conn) {
-	if !ValidateEvent(evt) {
+func HandleEvent(ctx context.Context, evt Event, ws *websocket.Conn) {
+	if !CheckSignature(evt) {
 		sendOKResponse(ws, evt.ID, false, "invalid: signature verification failed")
 		return
 	}
 
-	collection := GetCollection(evt.Kind, client)
+	collection := GetCollection(evt.Kind)
 
 	var err error
 	switch evt.Kind {
@@ -76,7 +68,7 @@ func HandleEvent(ctx context.Context, evt Event, client *mongo.Client, ws *webso
 	case 1:
 		err = HandleEventKind1(ctx, evt, collection)
 	default:
-		err = HandleDefaultEvent(ctx, evt, collection)
+		err = HandleUnknownEvent(ctx, evt, collection)
 	}
 
 	if err != nil {
@@ -106,61 +98,50 @@ func SerializeEvent(evt Event) []byte {
 	return serializedEvent
 }
 
-
-func ValidateEvent(evt Event) bool {
-    serializedEvent := SerializeEvent(evt)
-    hash := sha256.Sum256(serializedEvent)
-    eventID := hex.EncodeToString(hash[:])
-    if eventID != evt.ID {
-        log.Printf("Invalid ID: expected %s, got %s\n", eventID, evt.ID)
-        return false
-    }
-
-    sigBytes, err := hex.DecodeString(evt.Sig)
-    if err != nil {
-        log.Printf("Error decoding signature: %v\n", err)
-        return false
-    }
-
-    sig, err := schnorr.ParseSignature(sigBytes)
-    if err != nil {
-        log.Printf("Error parsing signature: %v\n", err)
-        return false
-    }
-
-    pubKeyBytes, err := hex.DecodeString(evt.PubKey)
-    if err != nil {
-        log.Printf("Error decoding public key: %v\n", err)
-        return false
-    }
-
-    var pubKey *btcec.PublicKey
-    if len(pubKeyBytes) == 32 {
-        // Handle 32-byte public key (x-coordinate only)
-        pubKey, err = btcec.ParsePubKey(append([]byte{0x02}, pubKeyBytes...))
-    } else {
-        // Handle standard compressed or uncompressed public key
-        pubKey, err = btcec.ParsePubKey(pubKeyBytes)
-    }
-    if err != nil {
-        log.Printf("Error parsing public key: %v\n", err)
-        return false
-    }
-
-    verified := sig.Verify(hash[:], pubKey)
-    if !verified {
-        log.Printf("Signature verification failed for event ID: %s\n", evt.ID)
-    }
-
-    return verified
-}
-
-func HandleDefaultEvent(ctx context.Context, evt Event, collection *mongo.Collection) error {
-	_, err := collection.InsertOne(ctx, evt)
-	if err != nil {
-		return fmt.Errorf("Error inserting default event into MongoDB: %v", err)
+func CheckSignature(evt Event) bool {
+	serializedEvent := SerializeEvent(evt)
+	hash := sha256.Sum256(serializedEvent)
+	eventID := hex.EncodeToString(hash[:])
+	if eventID != evt.ID {
+		log.Printf("Invalid ID: expected %s, got %s\n", eventID, evt.ID)
+		return false
 	}
 
-	fmt.Println("Inserted default event into MongoDB:", evt.ID)
-	return nil
+	sigBytes, err := hex.DecodeString(evt.Sig)
+	if err != nil {
+		log.Printf("Error decoding signature: %v\n", err)
+		return false
+	}
+
+	sig, err := schnorr.ParseSignature(sigBytes)
+	if err != nil {
+		log.Printf("Error parsing signature: %v\n", err)
+		return false
+	}
+
+	pubKeyBytes, err := hex.DecodeString(evt.PubKey)
+	if err != nil {
+		log.Printf("Error decoding public key: %v\n", err)
+		return false
+	}
+
+	var pubKey *btcec.PublicKey
+	if len(pubKeyBytes) == 32 {
+		// Handle 32-byte public key (x-coordinate only)
+		pubKey, err = btcec.ParsePubKey(append([]byte{0x02}, pubKeyBytes...))
+	} else {
+		// Handle standard compressed or uncompressed public key
+		pubKey, err = btcec.ParsePubKey(pubKeyBytes)
+	}
+	if err != nil {
+		log.Printf("Error parsing public key: %v\n", err)
+		return false
+	}
+
+	verified := sig.Verify(hash[:], pubKey)
+	if !verified {
+		log.Printf("Signature verification failed for event ID: %s\n", evt.ID)
+	}
+
+	return verified
 }
