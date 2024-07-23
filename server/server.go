@@ -81,7 +81,7 @@ func handleEvent(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
-	// Call the HandleKind function from the events package
+	// Call the HandleKind function
 	HandleKind(context.TODO(), evt, ws)
 
 	fmt.Println("Event processed:", evt.ID)
@@ -155,6 +155,7 @@ func handleReq(ws *websocket.Conn, message []interface{}) {
 	fmt.Println("Subscription added:", subID)
 
 	// Query the database with filters and send back the results
+	// TO DO why is this taking a certain kind as an argument for collection???
 	queriedEvents, err := QueryEvents(filters, db.GetClient(), "grain", "event-kind1")
 	if err != nil {
 		fmt.Println("Error querying events:", err)
