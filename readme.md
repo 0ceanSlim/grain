@@ -29,6 +29,7 @@ cp config.example.yml config.yml
 
 ### TODO
 
+- merge event and db package into server package.
 - Handle more kinds
 - create whitelist/blacklist functionality
   for:
