@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"grain/events"
 	server "grain/server/types"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -13,10 +12,10 @@ import (
 )
 
 // QueryEvents queries events from the MongoDB collection based on filters
-func QueryEvents(filters []server.Filter, client *mongo.Client, databaseName, collectionName string) ([]events.Event, error) {
+func QueryEvents(filters []server.Filter, client *mongo.Client, databaseName, collectionName string) ([]server.Event, error) {
 	collection := client.Database(databaseName).Collection(collectionName)
 
-	var results []events.Event
+	var results []server.Event
 
 	for _, filter := range filters {
 		filterBson := bson.M{}
@@ -56,7 +55,7 @@ func QueryEvents(filters []server.Filter, client *mongo.Client, databaseName, co
 		defer cursor.Close(context.TODO())
 
 		for cursor.Next(context.TODO()) {
-			var event events.Event
+			var event server.Event
 			if err := cursor.Decode(&event); err != nil {
 				return nil, fmt.Errorf("error decoding event: %v", err)
 			}
