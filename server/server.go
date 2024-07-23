@@ -4,21 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"grain/server/db"
 	"grain/server/events"
 	server "grain/server/types"
 	"grain/server/utils"
 
-	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/net/websocket"
 )
 
 var subscriptions = make(map[string]server.Subscription)
-var client *mongo.Client
-
-func SetClient(mongoClient *mongo.Client) {
-	client = mongoClient
-	events.SetClient(mongoClient) // Ensure the events package has the MongoDB client
-}
 
 func Handler(ws *websocket.Conn) {
 	defer ws.Close()
@@ -80,17 +74,49 @@ func handleEvent(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
-	var evt events.Event
+	var evt server.Event
 	err = json.Unmarshal(eventBytes, &evt)
 	if err != nil {
 		fmt.Println("Error unmarshaling event data:", err)
 		return
 	}
 
-	// Call the HandleEvent function from the events package
-	events.HandleEvent(context.TODO(), evt, ws)
+	// Call the HandleKind function from the events package
+	HandleKind(context.TODO(), evt, ws)
 
 	fmt.Println("Event processed:", evt.ID)
+}
+
+func HandleKind(ctx context.Context, evt server.Event, ws *websocket.Conn) {
+	if !utils.CheckSignature(evt) {
+		sendOKResponse(ws, evt.ID, false, "invalid: signature verification failed")
+		return
+	}
+
+	collection := db.GetCollection(evt.Kind)
+
+	var err error
+	switch evt.Kind {
+	case 0:
+		err = events.HandleKind0(ctx, evt, collection)
+	case 1:
+		err = events.HandleKind1(ctx, evt, collection)
+	default:
+		err = events.HandleUnknownKind(ctx, evt, collection)
+	}
+
+	if err != nil {
+		sendOKResponse(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
+		return
+	}
+
+	sendOKResponse(ws, evt.ID, true, "")
+}
+
+func sendOKResponse(ws *websocket.Conn, eventID string, status bool, message string) {
+	response := []interface{}{"OK", eventID, status, message}
+	responseBytes, _ := json.Marshal(response)
+	websocket.Message.Send(ws, string(responseBytes))
 }
 
 func handleReq(ws *websocket.Conn, message []interface{}) {
@@ -129,7 +155,7 @@ func handleReq(ws *websocket.Conn, message []interface{}) {
 	fmt.Println("Subscription added:", subID)
 
 	// Query the database with filters and send back the results
-	queriedEvents, err := QueryEvents(filters, client, "grain", "event-kind1")
+	queriedEvents, err := QueryEvents(filters, db.GetClient(), "grain", "event-kind1")
 	if err != nil {
 		fmt.Println("Error querying events:", err)
 		return

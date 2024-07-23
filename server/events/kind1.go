@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	server "grain/server/types"
+
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func HandleEventKind1(ctx context.Context, evt Event, collection *mongo.Collection) error {
+func HandleKind1(ctx context.Context, evt server.Event, collection *mongo.Collection) error {
 	// Insert event into MongoDB
 	_, err := collection.InsertOne(ctx, evt)
 	if err != nil {

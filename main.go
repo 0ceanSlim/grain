@@ -7,7 +7,6 @@ import (
 
 	"grain/server"
 	"grain/server/db"
-	"grain/server/events"
 	"grain/server/utils"
 
 	"golang.org/x/net/websocket"
@@ -21,16 +20,11 @@ func main() {
 	}
 
 	// Initialize MongoDB client
-	client, err := db.InitDB(config.MongoDB.URI, config.MongoDB.Database)
+	_, err = db.InitDB(config.MongoDB.URI, config.MongoDB.Database)
 	if err != nil {
 		log.Fatal("Error initializing database: ", err)
 	}
-	defer db.DisconnectDB(client)
-
-	// Initialize collections (dynamically handled in the events package)
-	events.SetClient(client)
-
-	server.SetClient(client)
+	defer db.DisconnectDB()
 
 	// Start WebSocket server
 	http.Handle("/", websocket.Handler(server.Handler))
