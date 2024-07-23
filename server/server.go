@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"grain/server/db"
-	"grain/server/events"
+	"grain/server/kinds"
 	server "grain/server/types"
 	"grain/server/utils"
 
@@ -98,11 +98,11 @@ func HandleKind(ctx context.Context, evt server.Event, ws *websocket.Conn) {
 	var err error
 	switch evt.Kind {
 	case 0:
-		err = events.HandleKind0(ctx, evt, collection)
+		err = kinds.HandleKind0(ctx, evt, collection)
 	case 1:
-		err = events.HandleKind1(ctx, evt, collection)
+		err = kinds.HandleKind1(ctx, evt, collection)
 	default:
-		err = events.HandleUnknownKind(ctx, evt, collection)
+		err = kinds.HandleUnknownKind(ctx, evt, collection)
 	}
 
 	if err != nil {
