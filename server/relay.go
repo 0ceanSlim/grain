@@ -14,7 +14,7 @@ import (
 
 var subscriptions = make(map[string]server.Subscription)
 
-func Handler(ws *websocket.Conn) {
+func Listener(ws *websocket.Conn) {
 	defer ws.Close()
 
 	var msg string

@@ -27,7 +27,7 @@ func main() {
 	defer db.DisconnectDB()
 
 	// Start WebSocket server
-	http.Handle("/", websocket.Handler(server.Handler))
+	http.Handle("/", websocket.Handler(server.Listener))
 	fmt.Println("WebSocket server started on", config.Server.Address)
 	err = http.ListenAndServe(config.Server.Address, nil)
 	if err != nil {
