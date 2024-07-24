@@ -11,7 +11,7 @@ import (
 func HandleUnknownKind(ctx context.Context, evt relay.Event, collection *mongo.Collection) error {
 	_, err := collection.InsertOne(ctx, evt)
 	if err != nil {
-		return fmt.Errorf("Error inserting unknown event into MongoDB: %v", err)
+		return fmt.Errorf("error inserting unknown event into MongoDB: %v", err)
 	}
 
 	fmt.Println("Inserted unknown event into MongoDB:", evt.ID)

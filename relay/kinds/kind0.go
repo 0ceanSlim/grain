@@ -18,7 +18,7 @@ func HandleKind0(ctx context.Context, evt relay.Event, collection *mongo.Collect
 	var existingEvent relay.Event
 	err := collection.FindOne(ctx, filter).Decode(&existingEvent)
 	if err != nil && err != mongo.ErrNoDocuments {
-		return fmt.Errorf("Error finding existing event: %v", err)
+		return fmt.Errorf("error finding existing event: %v", err)
 	}
 
 	// If an existing event is found, compare the created_at times
@@ -45,7 +45,7 @@ func HandleKind0(ctx context.Context, evt relay.Event, collection *mongo.Collect
 	opts := options.Update().SetUpsert(true) // Insert if not found
 	_, err = collection.UpdateOne(ctx, filter, update, opts)
 	if err != nil {
-		return fmt.Errorf("Error updating/inserting event kind 0 into MongoDB: %v", err)
+		return fmt.Errorf("error updating/inserting event kind 0 into MongoDB: %v", err)
 	}
 
 	fmt.Println("Upserted event kind 0 into MongoDB:", evt.ID)
