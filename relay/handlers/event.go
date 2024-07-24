@@ -45,7 +45,7 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 
 func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	if !utils.CheckSignature(evt) {
-		OKResponse(ws, evt.ID, false, "invalid: signature verification failed")
+		sendOK(ws, evt.ID, false, "invalid: signature verification failed")
 		return
 	}
 
@@ -77,15 +77,11 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	}
 
 	if err != nil {
-		OKResponse(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
+		sendOK(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
 		return
 	}
 
-	OKResponse(ws, evt.ID, true, "")
+	sendOK(ws, evt.ID, true, "")
 }
 
-func OKResponse(ws *websocket.Conn, eventID string, status bool, message string) {
-	response := []interface{}{"OK", eventID, status, message}
-	responseBytes, _ := json.Marshal(response)
-	websocket.Message.Send(ws, string(responseBytes))
-}
+
