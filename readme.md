@@ -49,15 +49,15 @@ To contribute to GRAIN, follow these steps:
 2. Make your changes.
 3. Commit your changes:
 
-```sh
-git commit -m "Description of changes"
-```
+   ```sh
+   git commit -m "Description of changes"
+   ```
 
 4. Push to the repo:
 
-```sh
-git push
-```
+   ```sh
+   git push
+   ```
 
 5. Create a Pull Request.
 
