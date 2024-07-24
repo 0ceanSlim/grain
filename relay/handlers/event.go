@@ -52,11 +52,20 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	collection := db.GetCollection(evt.Kind)
 
 	var err error
-	switch evt.Kind {
-	case 0:
+	switch {
+	case evt.Kind == 0:
 		err = kinds.HandleKind0(ctx, evt, collection, ws)
-	case 1:
+	case evt.Kind == 1:
 		err = kinds.HandleKind1(ctx, evt, collection)
+	case evt.Kind == 3:
+		err = kinds.HandleReplaceableKind(ctx, evt, collection, ws)
+	case evt.Kind >= 10000 && evt.Kind < 20000:
+		err = kinds.HandleReplaceableKind(ctx, evt, collection, ws)
+	case evt.Kind >= 20000 && evt.Kind < 30000:
+		// Ephemeral events are not stored
+		fmt.Println("Ephemeral event received and ignored:", evt.ID)
+	case evt.Kind >= 30000 && evt.Kind < 40000:
+		err = kinds.HandleParameterizedReplaceableKind(ctx, evt, collection, ws)
 	default:
 		err = kinds.HandleUnknownKind(ctx, evt, collection)
 	}
