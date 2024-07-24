@@ -2,7 +2,6 @@ package kinds
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	relay "grain/relay/types"
 
@@ -50,10 +49,4 @@ func HandleKind0(ctx context.Context, evt relay.Event, collection *mongo.Collect
 
 	fmt.Println("Upserted event kind 0 into MongoDB:", evt.ID)
 	return nil
-}
-
-func sendNotice(ws *websocket.Conn, pubKey, message string) {
-	notice := []interface{}{"NOTICE", pubKey, message}
-	noticeBytes, _ := json.Marshal(notice)
-	websocket.Message.Send(ws, string(noticeBytes))
 }
