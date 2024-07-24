@@ -54,7 +54,7 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	var err error
 	switch evt.Kind {
 	case 0:
-		err = kinds.HandleKind0(ctx, evt, collection)
+		err = kinds.HandleKind0(ctx, evt, collection, ws)
 	case 1:
 		err = kinds.HandleKind1(ctx, evt, collection)
 	default:

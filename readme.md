@@ -1,6 +1,6 @@
 # GRAIN 🌾
 
-**Go Relay Archetecture for Implementing Nostr**
+## Go Relay Archetecture for Implementing Nostr
 
 GRAIN is an open-source Nostr relay implementation written in Go. This project aims to provide a robust and efficient Nostr relay that currently supports the NIP-01 of the nostr protocol.
 
@@ -29,8 +29,7 @@ cp config.example.yml config.yml
 
 ### TODO
 
-- Handle more kinds
-- Fix Request Query to handle and serve unhandled events by kind
+- Explicitely Handle more kinds
 - create whitelist/blacklist functionality
   for:
   - valid nip05 domain
