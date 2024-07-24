@@ -52,8 +52,7 @@ func HandleReq(ws *websocket.Conn, message []interface{}) {
 	fmt.Println("Subscription added:", subID)
 
 	// Query the database with filters and send back the results
-	// TO DO why is this taking a certain kind as an argument for collection???
-	queriedEvents, err := QueryEvents(filters, db.GetClient(), "grain", "event-kind1")
+	queriedEvents, err := QueryEvents(filters, db.GetClient(), "grain")
 	if err != nil {
 		fmt.Println("Error querying events:", err)
 		return
@@ -78,20 +77,19 @@ func HandleReq(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 }
-// QueryEvents queries events from the MongoDB collection based on filters
-func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName, collectionName string) ([]relay.Event, error) {
-	collection := client.Database(databaseName).Collection(collectionName)
 
+// QueryEvents queries events from the MongoDB collection based on filters
+func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName string) ([]relay.Event, error) {
 	var results []relay.Event
 
 	for _, filter := range filters {
 		filterBson := bson.M{}
 
 		if len(filter.IDs) > 0 {
-			filterBson["_id"] = bson.M{"$in": filter.IDs}
+			filterBson["id"] = bson.M{"$in": filter.IDs}
 		}
 		if len(filter.Authors) > 0 {
-			filterBson["author"] = bson.M{"$in": filter.Authors}
+			filterBson["pubkey"] = bson.M{"$in": filter.Authors}
 		}
 		if len(filter.Kinds) > 0 {
 			filterBson["kind"] = bson.M{"$in": filter.Kinds}
@@ -99,37 +97,45 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName, col
 		if filter.Tags != nil {
 			for key, values := range filter.Tags {
 				if len(values) > 0 {
-					filterBson[key] = bson.M{"$in": values}
+					filterBson["tags."+key] = bson.M{"$in": values}
 				}
 			}
 		}
 		if filter.Since != nil {
-			filterBson["created_at"] = bson.M{"$gte": *filter.Since}
+			filterBson["createdat"] = bson.M{"$gte": *filter.Since}
 		}
 		if filter.Until != nil {
-			filterBson["created_at"] = bson.M{"$lte": *filter.Until}
+			if filterBson["createdat"] == nil {
+				filterBson["createdat"] = bson.M{"$lte": *filter.Until}
+			} else {
+				filterBson["createdat"].(bson.M)["$lte"] = *filter.Until
+			}
 		}
 
-		opts := options.Find()
+		opts := options.Find().SetSort(bson.D{{Key: "createdat", Value: -1}})
 		if filter.Limit != nil {
 			opts.SetLimit(int64(*filter.Limit))
 		}
 
-		cursor, err := collection.Find(context.TODO(), filterBson, opts)
-		if err != nil {
-			return nil, fmt.Errorf("error querying events: %v", err)
-		}
-		defer cursor.Close(context.TODO())
-
-		for cursor.Next(context.TODO()) {
-			var event relay.Event
-			if err := cursor.Decode(&event); err != nil {
-				return nil, fmt.Errorf("error decoding event: %v", err)
+		for _, kind := range filter.Kinds {
+			collectionName := fmt.Sprintf("event-kind%d", kind)
+			collection := client.Database(databaseName).Collection(collectionName)
+			cursor, err := collection.Find(context.TODO(), filterBson, opts)
+			if err != nil {
+				return nil, fmt.Errorf("error querying events: %v", err)
 			}
-			results = append(results, event)
-		}
-		if err := cursor.Err(); err != nil {
-			return nil, fmt.Errorf("cursor error: %v", err)
+			defer cursor.Close(context.TODO())
+
+			for cursor.Next(context.TODO()) {
+				var event relay.Event
+				if err := cursor.Decode(&event); err != nil {
+					return nil, fmt.Errorf("error decoding event: %v", err)
+				}
+				results = append(results, event)
+			}
+			if err := cursor.Err(); err != nil {
+				return nil, fmt.Errorf("cursor error: %v", err)
+			}
 		}
 	}
 
