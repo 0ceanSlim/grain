@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"grain/relay/db"
-	"grain/relay/kinds"
+	"grain/relay/handlers/kinds"
 	"grain/relay/utils"
 
 	relay "grain/relay/types"
