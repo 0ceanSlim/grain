@@ -30,10 +30,10 @@ func main() {
 
 	// Initialize Rate Limiter
 	rateLimiter := utils.NewRateLimiter(
-		rate.Limit(config.RateLimit.EventLimit),
-		config.RateLimit.EventBurst,
 		rate.Limit(config.RateLimit.WsLimit),
 		config.RateLimit.WsBurst,
+		rate.Limit(config.RateLimit.EventLimit),
+		config.RateLimit.EventBurst,
 	)
 
 	for _, kindLimit := range config.RateLimit.KindLimits {

@@ -29,6 +29,16 @@ type RateLimiter struct {
 var rateLimiterInstance *RateLimiter
 var once sync.Once
 
+func SetRateLimiter(rl *RateLimiter) {
+	once.Do(func() {
+		rateLimiterInstance = rl
+	})
+}
+
+func GetRateLimiter() *RateLimiter {
+	return rateLimiterInstance
+}
+
 func NewRateLimiter(eventLimit rate.Limit, eventBurst int, wsLimit rate.Limit, wsBurst int) *RateLimiter {
 	return &RateLimiter{
 		eventLimiter:     rate.NewLimiter(eventLimit, eventBurst),
@@ -38,24 +48,8 @@ func NewRateLimiter(eventLimit rate.Limit, eventBurst int, wsLimit rate.Limit, w
 	}
 }
 
-func (rl *RateLimiter) AddKindLimit(kind int, limit rate.Limit, burst int) {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	rl.kindLimiters[kind] = &KindLimiter{
-		Limiter: rate.NewLimiter(limit, burst),
-		Limit:   limit,
-		Burst:   burst,
-	}
-}
-
-func (rl *RateLimiter) AddCategoryLimit(category string, limit rate.Limit, burst int) {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	rl.categoryLimiters[category] = &CategoryLimiter{
-		Limiter: rate.NewLimiter(limit, burst),
-		Limit:   limit,
-		Burst:   burst,
-	}
+func (rl *RateLimiter) AllowWs() bool {
+	return rl.wsLimiter.Allow()
 }
 
 func (rl *RateLimiter) AllowEvent(kind int, category string) bool {
@@ -81,16 +75,22 @@ func (rl *RateLimiter) AllowEvent(kind int, category string) bool {
 	return true
 }
 
-func (rl *RateLimiter) AllowWs() bool {
-	return rl.wsLimiter.Allow()
+func (rl *RateLimiter) AddCategoryLimit(category string, limit rate.Limit, burst int) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.categoryLimiters[category] = &CategoryLimiter{
+		Limiter: rate.NewLimiter(limit, burst),
+		Limit:   limit,
+		Burst:   burst,
+	}
 }
 
-func SetRateLimiter(rl *RateLimiter) {
-	once.Do(func() {
-		rateLimiterInstance = rl
-	})
-}
-
-func GetRateLimiter() *RateLimiter {
-	return rateLimiterInstance
+func (rl *RateLimiter) AddKindLimit(kind int, limit rate.Limit, burst int) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.kindLimiters[kind] = &KindLimiter{
+		Limiter: rate.NewLimiter(limit, burst),
+		Limit:   limit,
+		Burst:   burst,
+	}
 }
