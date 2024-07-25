@@ -103,7 +103,7 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	case evt.Kind >= 30000 && evt.Kind < 40000:
 		err = kinds.HandleParameterizedReplaceableKind(ctx, evt, collection, ws)
 	default:
-		err = kinds.HandleUnknownKind(ctx, evt, collection)
+		err = kinds.HandleUnknownKind(ctx, evt, collection, ws)
 	}
 
 	if err != nil {
