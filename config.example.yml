@@ -1,7 +1,5 @@
 mongodb:
   uri: "mongodb://localhost:27017/"
   database: "grain"
-relay:
+server:
   port: ":8080"
-web:
-  port: ":8181"

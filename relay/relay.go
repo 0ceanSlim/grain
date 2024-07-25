@@ -8,7 +8,8 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-func Listener(ws *websocket.Conn) {
+// WebSocketHandler handles incoming WebSocket connections
+func WebSocketHandler(ws *websocket.Conn) {
 	defer ws.Close()
 
 	var msg string

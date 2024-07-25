@@ -27,23 +27,33 @@ func main() {
 	}
 	defer db.DisconnectDB()
 
-	// Run the WebSocket server in a goroutine
-	go func() {
-		fmt.Printf("WebSocket server is running on ws://localhost%s\n", config.Relay.Port)
-		err := http.ListenAndServe(config.Relay.Port, websocket.Handler(relay.Listener))
-		if err != nil {
-			fmt.Println("Error starting WebSocket server:", err)
-		}
-	}()
-
-	// Run the HTTP server for serving static files and home page
+	// Create a new ServeMux
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", web.RootHandler)
+
+	// Handle the root path
+	mux.HandleFunc("/", ListenAndServe)
+
+	// Serve static files
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 
-	fmt.Printf("Http server is running on http://localhost%s\n", config.Web.Port)
-	err = http.ListenAndServe(config.Web.Port, mux)
+	// Serve the favicon
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "web/static/img/favicon.ico")
+	})
+
+	// Start the Relay
+	fmt.Printf("Server is running on http://localhost%s\n", config.Server.Port)
+	err = http.ListenAndServe(config.Server.Port, mux)
 	if err != nil {
-		fmt.Println("Error starting web server:", err)
+		fmt.Println("Error starting server:", err)
+	}
+}
+
+// Listener serves both WebSocket and HTML
+func ListenAndServe(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Upgrade") == "websocket" {
+		websocket.Handler(relay.WebSocketHandler).ServeHTTP(w, r)
+	} else {
+		web.RootHandler(w, r)
 	}
 }
