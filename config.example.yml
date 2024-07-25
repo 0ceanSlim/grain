@@ -1,22 +1,37 @@
 mongodb:
-  uri: "mongodb://localhost:27017/"
-  database: "grain"
+  uri: "mongodb://localhost:27017/" # MongoDB connection URI
+  database: "grain" # Database name
+
 server:
-  port: ":8080"
-  # Rate Limits Integers are per second
-  # burst is an override for the limit, this is to handle spikes in traffic
+  port: ":8080" # Port for the server to listen on
+
 rate_limit:
-  ws_limit: 50
-  ws_burst: 100
-  event_limit: 25
-  event_burst: 50
-  kind_limits:
+  event_limit: 25 # Global rate limit for events (25 events per second)
+  event_burst: 50 # Global burst limit for events (allows a burst of 50 events)
+  ws_limit: 50 # Global rate limit for WebSocket messages (50 messages per second)
+  ws_burst: 100 # Global burst limit for WebSocket messages (allows a burst of 100 messages)
+
+  kind_limits: # Specific rate limits for different kinds of events
     - kind: 0
-      limit: 1
-      burst: 5
+      limit: 1 # Rate limit for events of kind 0 (1 event per second)
+      burst: 5 # Burst limit for events of kind 0 (allows a burst of 5 events)
     - kind: 1
-      limit: 100
-      burst: 200
+      limit: 100 # Rate limit for events of kind 1 (100 events per second)
+      burst: 200 # Burst limit for events of kind 1 (allows a burst of 200 events)
     - kind: 3
-      limit: 25
-      burst: 50
+      limit: 25 # Rate limit for events of kind 3 (25 events per second)
+      burst: 50 # Burst limit for events of kind 3 (allows a burst of 50 events)
+
+  category_limits: # Rate limits based on event categories
+    regular:
+      limit: 50 # Rate limit for regular events (50 events per second)
+      burst: 100 # Burst limit for regular events (allows a burst of 100 events)
+    replaceable:
+      limit: 10 # Rate limit for replaceable events (10 events per second)
+      burst: 20 # Burst limit for replaceable events (allows a burst of 20 events)
+    parameterized_replaceable:
+      limit: 5 # Rate limit for parameterized replaceable events (5 events per second)
+      burst: 10 # Burst limit for parameterized replaceable events (allows a burst of 10 events)
+    ephemeral:
+      limit: 100 # Rate limit for ephemeral events (100 events per second)
+      burst: 200 # Burst limit for ephemeral events (allows a burst of 200 events)
