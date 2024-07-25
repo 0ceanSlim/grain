@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"grain/relay/handlers"
 
+	"grain/relay/utils"
+
 	"golang.org/x/net/websocket"
 )
 
 // WebSocketHandler handles incoming WebSocket connections
-func WebSocketHandler(ws *websocket.Conn) {
+func WebSocketHandler(ws *websocket.Conn, rateLimiter *utils.RateLimiter) {
 	defer ws.Close()
 
 	var msg string
@@ -39,9 +41,14 @@ func WebSocketHandler(ws *websocket.Conn) {
 			continue
 		}
 
+		if !rateLimiter.AllowWs() {
+			fmt.Println("WebSocket message rate limit exceeded")
+			continue
+		}
+
 		switch messageType {
 		case "EVENT":
-			handlers.HandleEvent(ws, message)
+			handlers.HandleEvent(ws, message, rateLimiter)
 		case "REQ":
 			handlers.HandleReq(ws, message)
 		case "CLOSE":

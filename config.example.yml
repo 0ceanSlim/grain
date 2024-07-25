@@ -6,10 +6,10 @@ server:
   # Rate Limits Integers are per second
   # burst is an override for the limit, this is to handle spikes in traffic
 rate_limit:
-  event_limit: 25
-  event_burst: 50
   ws_limit: 50
   ws_burst: 100
+  event_limit: 25
+  event_burst: 50
   kind_limits:
     - kind: 0
       limit: 1

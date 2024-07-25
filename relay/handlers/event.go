@@ -13,13 +13,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-var rl *utils.RateLimiter
-
-func SetRateLimiter(rateLimiter *utils.RateLimiter) {
-	rl = rateLimiter
-}
-
-func HandleEvent(ws *websocket.Conn, message []interface{}) {
+func HandleEvent(ws *websocket.Conn, message []interface{}, rateLimiter *utils.RateLimiter) {
 	if len(message) != 2 {
 		fmt.Println("Invalid EVENT message format")
 		return
@@ -43,9 +37,11 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
-	// Check rate limits
-	if !rl.AllowEvent(evt.Kind) {
-		kinds.SendNotice(ws, evt.ID, "rate limit exceeded")
+	// Determine the category based on the kind
+	category := getCategory(evt.Kind)
+
+	if !rateLimiter.AllowEvent(evt.Kind, category) {
+		fmt.Printf("Event rate limit exceeded for kind: %d, category: %s\n", evt.Kind, category)
 		return
 	}
 
@@ -53,6 +49,21 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 	HandleKind(context.TODO(), evt, ws)
 
 	fmt.Println("Event processed:", evt.ID)
+}
+
+func getCategory(kind int) string {
+	switch {
+	case kind == 0 || kind == 3 || (kind >= 10000 && kind < 20000):
+		return "replaceable"
+	case kind >= 20000 && kind < 30000:
+		return "ephemeral"
+	case kind >= 30000 && kind < 40000:
+		return "parameterized_replaceable"
+	case (kind >= 4 && kind < 45) || (kind >= 1000 && kind < 10000) || kind == 1:
+		return "regular"
+	default:
+		return "unknown"
+	}
 }
 
 func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
