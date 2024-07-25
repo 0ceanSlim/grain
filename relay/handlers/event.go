@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"grain/relay/db"
 	"grain/relay/handlers/kinds"
+	"grain/relay/handlers/response"
 	"grain/relay/utils"
 
 	relay "grain/relay/types"
@@ -45,7 +46,7 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 
 func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	if !utils.CheckSignature(evt) {
-		sendOK(ws, evt.ID, false, "invalid: signature verification failed")
+		response.SendOK(ws, evt.ID, false, "invalid: signature verification failed")
 		return
 	}
 
@@ -77,7 +78,7 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	}
 
 	if !rateLimiter.AllowEvent(evt.Kind, category) {
-		sendOK(ws, evt.ID, false, fmt.Sprintf("rate limit exceeded for category: %s", category))
+		response.SendOK(ws, evt.ID, false, fmt.Sprintf("rate limit exceeded for category: %s", category))
 		return
 	}
 
@@ -107,10 +108,10 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	}
 
 	if err != nil {
-		sendOK(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
+		response.SendOK(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
 		return
 	}
 
-	sendOK(ws, evt.ID, true, "")
+	response.SendOK(ws, evt.ID, true, "")
 }
 

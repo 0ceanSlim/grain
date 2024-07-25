@@ -1,4 +1,4 @@
-package handlers
+package response
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-func sendOK(ws *websocket.Conn, eventID string, status bool, message string) {
+func SendOK(ws *websocket.Conn, eventID string, status bool, message string) {
 	response := []interface{}{"OK", eventID, status, message}
 	responseBytes, _ := json.Marshal(response)
 	websocket.Message.Send(ws, string(responseBytes))

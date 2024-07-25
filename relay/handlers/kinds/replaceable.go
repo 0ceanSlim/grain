@@ -3,6 +3,7 @@ package kinds
 import (
 	"context"
 	"fmt"
+	"grain/relay/handlers/response"
 	relay "grain/relay/types"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -21,7 +22,7 @@ func HandleReplaceableKind(ctx context.Context, evt relay.Event, collection *mon
 
 	if err != mongo.ErrNoDocuments {
 		if existingEvent.CreatedAt > evt.CreatedAt || (existingEvent.CreatedAt == evt.CreatedAt && existingEvent.ID < evt.ID) {
-			SendNotice(ws, evt.PubKey, "relay already has a newer kind 0 event for this pubkey")
+			response.SendNotice(ws, evt.PubKey, "relay already has a newer kind 0 event for this pubkey")
 			return nil
 		}
 	}

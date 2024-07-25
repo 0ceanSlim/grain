@@ -1,4 +1,4 @@
-package kinds
+package response
 
 import (
 	"encoding/json"
