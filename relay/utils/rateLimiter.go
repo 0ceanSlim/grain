@@ -19,18 +19,21 @@ type CategoryLimiter struct {
 }
 
 type RateLimiter struct {
-	eventLimiter   *rate.Limiter
-	wsLimiter      *rate.Limiter
-	kindLimiters   map[int]*KindLimiter
+	eventLimiter     *rate.Limiter
+	wsLimiter        *rate.Limiter
+	kindLimiters     map[int]*KindLimiter
 	categoryLimiters map[string]*CategoryLimiter
-	mu             sync.RWMutex
+	mu               sync.RWMutex
 }
+
+var rateLimiterInstance *RateLimiter
+var once sync.Once
 
 func NewRateLimiter(eventLimit rate.Limit, eventBurst int, wsLimit rate.Limit, wsBurst int) *RateLimiter {
 	return &RateLimiter{
-		eventLimiter:   rate.NewLimiter(eventLimit, eventBurst),
-		wsLimiter:      rate.NewLimiter(wsLimit, wsBurst),
-		kindLimiters:   make(map[int]*KindLimiter),
+		eventLimiter:     rate.NewLimiter(eventLimit, eventBurst),
+		wsLimiter:        rate.NewLimiter(wsLimit, wsBurst),
+		kindLimiters:     make(map[int]*KindLimiter),
 		categoryLimiters: make(map[string]*CategoryLimiter),
 	}
 }
@@ -80,4 +83,14 @@ func (rl *RateLimiter) AllowEvent(kind int, category string) bool {
 
 func (rl *RateLimiter) AllowWs() bool {
 	return rl.wsLimiter.Allow()
+}
+
+func SetRateLimiter(rl *RateLimiter) {
+	once.Do(func() {
+		rateLimiterInstance = rl
+	})
+}
+
+func GetRateLimiter() *RateLimiter {
+	return rateLimiterInstance
 }

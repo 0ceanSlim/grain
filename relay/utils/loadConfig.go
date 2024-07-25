@@ -12,7 +12,7 @@ type RateLimitConfig struct {
 	EventLimit float64           `yaml:"event_limit"`
 	EventBurst int               `yaml:"event_burst"`
 	KindLimits []KindLimitConfig `yaml:"kind_limits"`
-	CategoryLimits CategoryLimitConfig `yaml:"category_limits"`
+	CategoryLimits map[string]KindLimitConfig `yaml:"category_limits"`
 }
 
 type KindLimitConfig struct {

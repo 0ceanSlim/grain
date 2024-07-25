@@ -13,7 +13,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-func HandleEvent(ws *websocket.Conn, message []interface{}, rateLimiter *utils.RateLimiter) {
+func HandleEvent(ws *websocket.Conn, message []interface{}) {
 	if len(message) != 2 {
 		fmt.Println("Invalid EVENT message format")
 		return
@@ -37,33 +37,10 @@ func HandleEvent(ws *websocket.Conn, message []interface{}, rateLimiter *utils.R
 		return
 	}
 
-	// Determine the category based on the kind
-	category := getCategory(evt.Kind)
-
-	if !rateLimiter.AllowEvent(evt.Kind, category) {
-		fmt.Printf("Event rate limit exceeded for kind: %d, category: %s\n", evt.Kind, category)
-		return
-	}
-
 	// Call the HandleKind function
 	HandleKind(context.TODO(), evt, ws)
 
 	fmt.Println("Event processed:", evt.ID)
-}
-
-func getCategory(kind int) string {
-	switch {
-	case kind == 0 || kind == 3 || (kind >= 10000 && kind < 20000):
-		return "replaceable"
-	case kind >= 20000 && kind < 30000:
-		return "ephemeral"
-	case kind >= 30000 && kind < 40000:
-		return "parameterized_replaceable"
-	case (kind >= 4 && kind < 45) || (kind >= 1000 && kind < 10000) || kind == 1:
-		return "regular"
-	default:
-		return "unknown"
-	}
 }
 
 func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
@@ -73,6 +50,36 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	}
 
 	collection := db.GetCollection(evt.Kind)
+
+	rateLimiter := utils.GetRateLimiter()
+	var category string
+	switch {
+	case evt.Kind == 0:
+		category = "replaceable"
+	case evt.Kind == 1:
+		category = "regular"
+	case evt.Kind == 2:
+		category = "deprecated"
+	case evt.Kind == 3:
+		category = "replaceable"
+	case evt.Kind >= 4 && evt.Kind < 45:
+		category = "regular"
+	case evt.Kind >= 1000 && evt.Kind < 10000:
+		category = "regular"
+	case evt.Kind >= 10000 && evt.Kind < 20000:
+		category = "replaceable"
+	case evt.Kind >= 20000 && evt.Kind < 30000:
+		category = "ephemeral"
+	case evt.Kind >= 30000 && evt.Kind < 40000:
+		category = "parameterized_replaceable"
+	default:
+		category = "unknown"
+	}
+
+	if !rateLimiter.AllowEvent(evt.Kind, category) {
+		sendOK(ws, evt.ID, false, fmt.Sprintf("rate limit exceeded for category: %s", category))
+		return
+	}
 
 	var err error
 	switch {
@@ -106,3 +113,4 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 
 	sendOK(ws, evt.ID, true, "")
 }
+
