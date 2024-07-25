@@ -30,6 +30,9 @@ cp config.example.yml config.yml
 ### TODO
 
 - Explicitely Handle more kinds
+- configurable event purging for regular events
+  - by kind
+  - by time since latest
 - create whitelist/blacklist functionality
   for:
   - valid nip05 domain
