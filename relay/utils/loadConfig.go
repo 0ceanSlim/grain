@@ -6,6 +6,20 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type RateLimitConfig struct {
+	EventLimit float64           `yaml:"event_limit"`
+	EventBurst int               `yaml:"event_burst"`
+	WsLimit    float64           `yaml:"ws_limit"`
+	WsBurst    int               `yaml:"ws_burst"`
+	KindLimits []KindLimitConfig `yaml:"kind_limits"`
+}
+
+type KindLimitConfig struct {
+	Kind  int     `yaml:"kind"`
+	Limit float64 `yaml:"limit"`
+	Burst int     `yaml:"burst"`
+}
+
 type Config struct {
 	MongoDB struct {
 		URI      string `yaml:"uri"`
@@ -14,6 +28,7 @@ type Config struct {
 	Server struct {
 		Port string `yaml:"port"`
 	} `yaml:"server"`
+	RateLimit RateLimitConfig `yaml:"rate_limit"`
 }
 
 func LoadConfig(filename string) (*Config, error) {

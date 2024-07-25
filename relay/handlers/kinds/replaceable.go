@@ -21,7 +21,7 @@ func HandleReplaceableKind(ctx context.Context, evt relay.Event, collection *mon
 
 	if err != mongo.ErrNoDocuments {
 		if existingEvent.CreatedAt > evt.CreatedAt || (existingEvent.CreatedAt == evt.CreatedAt && existingEvent.ID < evt.ID) {
-			sendNotice(ws, evt.PubKey, "relay already has a newer kind 0 event for this pubkey")
+			SendNotice(ws, evt.PubKey, "relay already has a newer kind 0 event for this pubkey")
 			return nil
 		}
 	}

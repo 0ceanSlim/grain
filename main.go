@@ -7,11 +7,15 @@ import (
 
 	"grain/relay"
 	"grain/relay/db"
+	"grain/relay/handlers"
 	"grain/relay/utils"
 	"grain/web"
 
 	"golang.org/x/net/websocket"
+	"golang.org/x/time/rate"
 )
+
+var rl *utils.RateLimiter
 
 func main() {
 	// Load configuration
@@ -26,6 +30,14 @@ func main() {
 		log.Fatal("Error initializing database: ", err)
 	}
 	defer db.DisconnectDB()
+
+	// Initialize rate limiter
+	rl = utils.NewRateLimiter(rate.Limit(config.RateLimit.EventLimit), config.RateLimit.EventBurst, rate.Limit(config.RateLimit.WsLimit), config.RateLimit.WsBurst)
+	for _, kindLimit := range config.RateLimit.KindLimits {
+		rl.AddKindLimit(kindLimit.Kind, rate.Limit(kindLimit.Limit), kindLimit.Burst)
+	}
+
+	handlers.SetRateLimiter(rl)
 
 	// Create a new ServeMux
 	mux := http.NewServeMux()
@@ -52,7 +64,13 @@ func main() {
 // Listener serves both WebSocket and HTML
 func ListenAndServe(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Upgrade") == "websocket" {
-		websocket.Handler(relay.WebSocketHandler).ServeHTTP(w, r)
+		websocket.Handler(func(ws *websocket.Conn) {
+			if !rl.AllowWs() {
+				ws.Close()
+				return
+			}
+			relay.WebSocketHandler(ws)
+		}).ServeHTTP(w, r)
 	} else {
 		web.RootHandler(w, r)
 	}

@@ -28,7 +28,7 @@ func HandleParameterizedReplaceableKind(ctx context.Context, evt relay.Event, co
 
 	if err != mongo.ErrNoDocuments {
 		if existingEvent.CreatedAt > evt.CreatedAt || (existingEvent.CreatedAt == evt.CreatedAt && existingEvent.ID < evt.ID) {
-			sendNotice(ws, evt.PubKey, "relay already has a newer event for this pubkey and d tag")
+			SendNotice(ws, evt.PubKey, "relay already has a newer event for this pubkey and d tag")
 			return nil
 		}
 	}

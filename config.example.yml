@@ -3,3 +3,20 @@ mongodb:
   database: "grain"
 server:
   port: ":8080"
+  # Rate Limits Integers are per second
+  # burst is an override for the limit, this is to handle spikes in traffic
+rate_limit:
+  event_limit: 25
+  event_burst: 50
+  ws_limit: 50
+  ws_burst: 100
+  kind_limits:
+    - kind: 0
+      limit: 1
+      burst: 5
+    - kind: 1
+      limit: 100
+      burst: 200
+    - kind: 3
+      limit: 25
+      burst: 50

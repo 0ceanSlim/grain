@@ -13,6 +13,12 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+var rl *utils.RateLimiter
+
+func SetRateLimiter(rateLimiter *utils.RateLimiter) {
+	rl = rateLimiter
+}
+
 func HandleEvent(ws *websocket.Conn, message []interface{}) {
 	if len(message) != 2 {
 		fmt.Println("Invalid EVENT message format")
@@ -34,6 +40,12 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 	err = json.Unmarshal(eventBytes, &evt)
 	if err != nil {
 		fmt.Println("Error unmarshaling event data:", err)
+		return
+	}
+
+	// Check rate limits
+	if !rl.AllowEvent(evt.Kind) {
+		kinds.SendNotice(ws, evt.ID, "rate limit exceeded")
 		return
 	}
 
@@ -83,5 +95,3 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 
 	sendOK(ws, evt.ID, true, "")
 }
-
-
