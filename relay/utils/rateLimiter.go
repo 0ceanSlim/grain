@@ -19,10 +19,10 @@ type CategoryLimiter struct {
 }
 
 type RateLimiter struct {
-	eventLimiter     *rate.Limiter
 	wsLimiter        *rate.Limiter
-	kindLimiters     map[int]*KindLimiter
+	eventLimiter     *rate.Limiter
 	categoryLimiters map[string]*CategoryLimiter
+	kindLimiters     map[int]*KindLimiter
 	mu               sync.RWMutex
 }
 
@@ -39,12 +39,12 @@ func GetRateLimiter() *RateLimiter {
 	return rateLimiterInstance
 }
 
-func NewRateLimiter(eventLimit rate.Limit, eventBurst int, wsLimit rate.Limit, wsBurst int) *RateLimiter {
+func NewRateLimiter(wsLimit rate.Limit, wsBurst int, eventLimit rate.Limit, eventBurst int) *RateLimiter {
 	return &RateLimiter{
-		eventLimiter:     rate.NewLimiter(eventLimit, eventBurst),
 		wsLimiter:        rate.NewLimiter(wsLimit, wsBurst),
-		kindLimiters:     make(map[int]*KindLimiter),
+		eventLimiter:     rate.NewLimiter(eventLimit, eventBurst),
 		categoryLimiters: make(map[string]*CategoryLimiter),
+		kindLimiters:     make(map[int]*KindLimiter),
 	}
 }
 
