@@ -45,6 +45,13 @@ func main() {
 
 	utils.SetRateLimiter(rateLimiter)
 
+	sizeLimiter := utils.NewSizeLimiter(config.RateLimit.MaxEventSize)
+	for _, kindSizeLimit := range config.RateLimit.KindSizeLimits {
+		sizeLimiter.AddKindSizeLimit(kindSizeLimit.Kind, kindSizeLimit.MaxSize)
+	}
+	
+	utils.SetSizeLimiter(sizeLimiter)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", ListenAndServe)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))

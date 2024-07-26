@@ -38,12 +38,12 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
-	HandleKind(context.TODO(), evt, ws)
+	HandleKind(context.TODO(), evt, ws, eventBytes)
 
 	fmt.Println("Event processed:", evt.ID)
 }
 
-func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
+func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventBytes []byte) {
 	if !utils.CheckSignature(evt) {
 		response.SendOK(ws, evt.ID, false, "invalid: signature verification failed")
 		return
@@ -52,6 +52,7 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	collection := db.GetCollection(evt.Kind)
 
 	rateLimiter := utils.GetRateLimiter()
+	sizeLimiter := utils.GetSizeLimiter()
 	var category string
 	switch {
 	case evt.Kind == 0:
@@ -77,6 +78,12 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	}
 
 	if allowed, msg := rateLimiter.AllowEvent(evt.Kind, category); !allowed {
+		response.SendOK(ws, evt.ID, false, msg)
+		return
+	}
+
+	eventSize := len(eventBytes) // Calculate event size
+	if allowed, msg := sizeLimiter.AllowSize(evt.Kind, eventSize); !allowed {
 		response.SendOK(ws, evt.ID, false, msg)
 		return
 	}

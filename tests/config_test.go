@@ -44,6 +44,9 @@ func TestConfigValidity(t *testing.T) {
 	if config.RateLimit.ReqBurst == 0 {
 		t.Error("REQ burst is required")
 	}
+	if config.RateLimit.MaxEventSize == 0 {
+		t.Error("Global maximum event size is required")
+	}
 
 	// Check Category Limits
 	if len(config.RateLimit.CategoryLimits) == 0 {
@@ -72,6 +75,13 @@ func TestConfigValidity(t *testing.T) {
 		}
 		if kindLimit.Burst == 0 {
 			t.Errorf("Burst is required for kind: %d", kindLimit.Kind)
+		}
+	}
+
+	// Validate kind size limits
+	for _, kindSizeLimit := range config.RateLimit.KindSizeLimits {
+		if kindSizeLimit.MaxSize == 0 {
+			t.Errorf("Maximum size is required for kind: %d", kindSizeLimit.Kind)
 		}
 	}
 }
