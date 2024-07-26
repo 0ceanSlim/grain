@@ -1,6 +1,8 @@
+// rateLimiter.go
 package utils
 
 import (
+	"fmt"
 	"sync"
 
 	"golang.org/x/time/rate"
@@ -21,6 +23,7 @@ type CategoryLimiter struct {
 type RateLimiter struct {
 	wsLimiter        *rate.Limiter
 	eventLimiter     *rate.Limiter
+	reqLimiter       *rate.Limiter
 	categoryLimiters map[string]*CategoryLimiter
 	kindLimiters     map[int]*KindLimiter
 	mu               sync.RWMutex
@@ -39,40 +42,51 @@ func GetRateLimiter() *RateLimiter {
 	return rateLimiterInstance
 }
 
-func NewRateLimiter(wsLimit rate.Limit, wsBurst int, eventLimit rate.Limit, eventBurst int) *RateLimiter {
+func NewRateLimiter(wsLimit rate.Limit, wsBurst int, eventLimit rate.Limit, eventBurst int, reqLimit rate.Limit, reqBurst int) *RateLimiter {
 	return &RateLimiter{
 		wsLimiter:        rate.NewLimiter(wsLimit, wsBurst),
 		eventLimiter:     rate.NewLimiter(eventLimit, eventBurst),
+		reqLimiter:       rate.NewLimiter(reqLimit, reqBurst),
 		categoryLimiters: make(map[string]*CategoryLimiter),
 		kindLimiters:     make(map[int]*KindLimiter),
 	}
 }
 
-func (rl *RateLimiter) AllowWs() bool {
-	return rl.wsLimiter.Allow()
+func (rl *RateLimiter) AllowWs() (bool, string) {
+	if !rl.wsLimiter.Allow() {
+		return false, "WebSocket message rate limit exceeded"
+	}
+	return true, ""
 }
 
-func (rl *RateLimiter) AllowEvent(kind int, category string) bool {
+func (rl *RateLimiter) AllowEvent(kind int, category string) (bool, string) {
 	rl.mu.RLock()
 	defer rl.mu.RUnlock()
 
 	if !rl.eventLimiter.Allow() {
-		return false
+		return false, "Global event rate limit exceeded"
 	}
 
 	if kindLimiter, exists := rl.kindLimiters[kind]; exists {
 		if !kindLimiter.Limiter.Allow() {
-			return false
+			return false, fmt.Sprintf("Rate limit exceeded for kind: %d", kind)
 		}
 	}
 
 	if categoryLimiter, exists := rl.categoryLimiters[category]; exists {
 		if !categoryLimiter.Limiter.Allow() {
-			return false
+			return false, fmt.Sprintf("Rate limit exceeded for category: %s", category)
 		}
 	}
 
-	return true
+	return true, ""
+}
+
+func (rl *RateLimiter) AllowReq() (bool, string) {
+	if !rl.reqLimiter.Allow() {
+		return false, "REQ rate limit exceeded"
+	}
+	return true, ""
 }
 
 func (rl *RateLimiter) AddCategoryLimit(category string, limit rate.Limit, burst int) {

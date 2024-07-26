@@ -6,12 +6,14 @@ server:
   port: ":8080" # Port for the server to listen on
 
 rate_limit:
-  #WS is not working as intended. It's only working for accepting Events, which is what event limit already does
+  #WS is not working as intended. It's only working for accepting Events, which is what event is supposed to do
   ws_limit: 100 # Global rate limit for WebSocket messages (50 messages per second)
   ws_burst: 200 # Global burst limit for WebSocket messages (allows a burst of 100 messages)
   #event limit doesn't seem to work either
   event_limit: 50 # Global rate limit for events (25 events per second)
   event_burst: 100 # Global burst limit for events (allows a burst of 50 events)
+  req_limit: 50 # Added limit for REQ messages
+  req_burst: 100 # Added burst limit for REQ messages
 
   category_limits: # Rate limits based on event categories
     regular:
@@ -35,5 +37,5 @@ rate_limit:
       limit: 25 # Rate limit for events of kind 1 (100 events per second)
       burst: 50 # Burst limit for events of kind 1 (allows a burst of 200 events)
     - kind: 3
-      limit: 25 # Rate limit for events of kind 3 (25 events per second)
-      burst: 50 # Burst limit for events of kind 3 (allows a burst of 50 events)
+      limit: 10 # Rate limit for events of kind 3 (25 events per second)
+      burst: 20 # Burst limit for events of kind 3 (allows a burst of 50 events)

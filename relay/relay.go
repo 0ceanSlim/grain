@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"grain/relay/handlers"
+	"grain/relay/utils"
 
 	"golang.org/x/net/websocket"
 )
@@ -12,6 +13,8 @@ func WebSocketHandler(ws *websocket.Conn) {
 	defer ws.Close()
 
 	var msg string
+	rateLimiter := utils.GetRateLimiter()
+
 	for {
 		err := websocket.Message.Receive(ws, &msg)
 		if err != nil {
@@ -19,6 +22,11 @@ func WebSocketHandler(ws *websocket.Conn) {
 			return
 		}
 		fmt.Println("Received message:", msg)
+
+		if allowed, msg := rateLimiter.AllowWs(); !allowed {
+			websocket.Message.Send(ws, fmt.Sprintf(`{"error": "%s"}`, msg))
+			return
+		}
 
 		var message []interface{}
 		err = json.Unmarshal([]byte(msg), &message)
@@ -42,6 +50,10 @@ func WebSocketHandler(ws *websocket.Conn) {
 		case "EVENT":
 			handlers.HandleEvent(ws, message)
 		case "REQ":
+			if allowed, msg := rateLimiter.AllowReq(); !allowed {
+				websocket.Message.Send(ws, fmt.Sprintf(`{"error": "%s"}`, msg))
+				return
+			}
 			handlers.HandleReq(ws, message)
 		case "CLOSE":
 			handlers.HandleClose(ws, message)

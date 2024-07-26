@@ -1,3 +1,4 @@
+// event.go
 package handlers
 
 import (
@@ -38,7 +39,6 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
-	// Call the HandleKind function
 	HandleKind(context.TODO(), evt, ws)
 
 	fmt.Println("Event processed:", evt.ID)
@@ -77,8 +77,8 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 		category = "unknown"
 	}
 
-	if !rateLimiter.AllowEvent(evt.Kind, category) {
-		response.SendOK(ws, evt.ID, false, fmt.Sprintf("rate limit exceeded for category: %s", category))
+	if allowed, msg := rateLimiter.AllowEvent(evt.Kind, category); !allowed {
+		response.SendOK(ws, evt.ID, false, msg)
 		return
 	}
 
@@ -99,7 +99,6 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	case evt.Kind >= 10000 && evt.Kind < 20000:
 		err = kinds.HandleReplaceableKind(ctx, evt, collection, ws)
 	case evt.Kind >= 20000 && evt.Kind < 30000:
-		// Ephemeral events are not stored
 		fmt.Println("Ephemeral event received and ignored:", evt.ID)
 	case evt.Kind >= 30000 && evt.Kind < 40000:
 		err = kinds.HandleParameterizedReplaceableKind(ctx, evt, collection, ws)
@@ -114,4 +113,3 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 
 	response.SendOK(ws, evt.ID, true, "")
 }
-

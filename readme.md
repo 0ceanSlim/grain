@@ -6,15 +6,15 @@ GRAIN is an open-source Nostr relay implementation written in Go. This project a
 
 ## Features
 
-- **NIP-01 Protocol Support**: GRAIN (nearly)fully supports the NIP-01 for WebSocket communication.
-- **Event Processing**: Handles events of kind 0 (user metadata) and kind 1 (text note).
+- **NIP-01 Protocol Support**: GRAIN (nearly)fully supports NIP-01 for WebSocket communication.
+- **Event Processing**: Handles all events by category and kind.
 - **MongoDB 🍃**: Utilizes MongoDB to store and manage events efficiently.
 - **Scalability**: Built with Go, ensuring high performance and scalability.
 - **Open Source**: Licensed under the MIT License, making it free to use and modify.
 
 ## Configuration
 
-Configuration options can be set through environment variables or a configuration file.
+Configuration options can be set through a configuration file.
 
 There is an example config in this repo. Copy the example config to config.yml to get started
 
@@ -22,15 +22,13 @@ There is an example config in this repo. Copy the example config to config.yml t
 cp config.example.yml config.yml
 ```
 
-### WebSocket Endpoints
-
-- Connect: / - Clients can connect to this endpoint to start a WebSocket session.
-- Publish Event: Send events of kind 0 (user metadata) or kind 1 (text note) to the relay.
-
 ### TODO
 
-- Explicitely Handle more kinds
-- configurable event purging for regular events
+- Handle Kind 5 explicitely to delete Events from the Database
+- Handle Ephemeral event
+  - configurable amount of time to keep ephemeral notes
+- configurable event purging
+  - by category
   - by kind
   - by time since latest
 - create whitelist/blacklist functionality
@@ -40,9 +38,6 @@ cp config.example.yml config.yml
   - npub
   - kind int
   - kind 1 wordlist
-- Rate limit Events.
-  - by kind
-  - configurable in config.yml
 
 ### Development
 

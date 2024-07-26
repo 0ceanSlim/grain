@@ -27,6 +27,8 @@ type RateLimitConfig struct {
 	WsBurst    int               `yaml:"ws_burst"`
 	EventLimit float64           `yaml:"event_limit"`
 	EventBurst int               `yaml:"event_burst"`
+	ReqLimit float64             `yaml:"req_limit"`
+	ReqBurst int               	 `yaml:"req_burst"`
 	CategoryLimits map[string]KindLimitConfig `yaml:"category_limits"`
 	KindLimits []KindLimitConfig `yaml:"kind_limits"`
 }
