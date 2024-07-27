@@ -13,7 +13,6 @@ import (
 )
 
 func HandleKind0(ctx context.Context, evt relay.Event, collection *mongo.Collection, ws *websocket.Conn) error {
-	// Find the existing event with the same pubkey
 	filter := bson.M{"pubkey": evt.PubKey}
 	var existingEvent relay.Event
 	err := collection.FindOne(ctx, filter).Decode(&existingEvent)
@@ -21,16 +20,14 @@ func HandleKind0(ctx context.Context, evt relay.Event, collection *mongo.Collect
 		return fmt.Errorf("error finding existing event: %v", err)
 	}
 
-	// If an existing event is found, compare the created_at times
 	if err != mongo.ErrNoDocuments {
 		if existingEvent.CreatedAt >= evt.CreatedAt {
-			// If the existing event is newer or the same, respond with a NOTICE
-			response.SendNotice(ws, evt.PubKey, "relay already has a newer kind 0 event for this pubkey")
+			response.SendNotice(ws, evt.PubKey, "blocked: a newer kind 0 event already exists for this pubkey")
+			response.SendOK(ws, evt.ID, false, "blocked: a newer kind 0 event already exists for this pubkey")
 			return nil
 		}
 	}
 
-	// Replace the existing event if it has the same pubkey
 	update := bson.M{
 		"$set": bson.M{
 			"id":         evt.ID,
@@ -42,12 +39,13 @@ func HandleKind0(ctx context.Context, evt relay.Event, collection *mongo.Collect
 		},
 	}
 
-	opts := options.Update().SetUpsert(true) // Insert if not found
+	opts := options.Update().SetUpsert(true)
 	_, err = collection.UpdateOne(ctx, filter, update, opts)
 	if err != nil {
+		response.SendOK(ws, evt.ID, false, "error: could not connect to the database")
 		return fmt.Errorf("error updating/inserting event kind 0 into MongoDB: %v", err)
 	}
-
+	response.SendOK(ws, evt.ID, true, "")
 	fmt.Println("Upserted event kind 0 into MongoDB:", evt.ID)
 	return nil
 }

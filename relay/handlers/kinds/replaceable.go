@@ -22,7 +22,8 @@ func HandleReplaceableKind(ctx context.Context, evt relay.Event, collection *mon
 
 	if err != mongo.ErrNoDocuments {
 		if existingEvent.CreatedAt > evt.CreatedAt || (existingEvent.CreatedAt == evt.CreatedAt && existingEvent.ID < evt.ID) {
-			response.SendNotice(ws, evt.PubKey, "relay already has a newer kind 0 event for this pubkey")
+			response.SendNotice(ws, evt.PubKey, "blocked: relay already has a newer event of the same kind with this pubkey")
+			response.SendOK(ws, evt.ID, false, "blocked: relay already has a newer event of the same kind with this pubkey")
 			return nil
 		}
 	}
@@ -33,9 +34,11 @@ func HandleReplaceableKind(ctx context.Context, evt relay.Event, collection *mon
 	}
 	_, err = collection.UpdateOne(ctx, filter, update, opts)
 	if err != nil {
+		response.SendOK(ws, evt.ID, false, "error: could not connect to the database")
 		return fmt.Errorf("error updating/inserting event kind %d into MongoDB: %v", evt.Kind, err)
 	}
 
 	fmt.Printf("Upserted event kind %d into MongoDB: %s\n", evt.Kind, evt.ID)
+	response.SendOK(ws, evt.ID, true, "")
 	return nil
 }

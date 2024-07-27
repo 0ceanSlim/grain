@@ -17,17 +17,20 @@ import (
 func HandleEvent(ws *websocket.Conn, message []interface{}) {
 	if len(message) != 2 {
 		fmt.Println("Invalid EVENT message format")
+		response.SendNotice(ws, "", "Invalid EVENT message format")
 		return
 	}
 
 	eventData, ok := message[1].(map[string]interface{})
 	if !ok {
 		fmt.Println("Invalid event data format")
+		response.SendNotice(ws, "", "Invalid event data format")
 		return
 	}
 	eventBytes, err := json.Marshal(eventData)
 	if err != nil {
 		fmt.Println("Error marshaling event data:", err)
+		response.SendNotice(ws, "", "Error marshaling event data")
 		return
 	}
 
@@ -35,54 +38,33 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 	err = json.Unmarshal(eventBytes, &evt)
 	if err != nil {
 		fmt.Println("Error unmarshaling event data:", err)
+		response.SendNotice(ws, "", "Error unmarshaling event data")
 		return
 	}
 
-	HandleKind(context.TODO(), evt, ws, eventBytes)
+	eventSize := len(eventBytes) // Calculate event size
+	HandleKind(context.TODO(), evt, ws, eventSize)
 
 	fmt.Println("Event processed:", evt.ID)
 }
 
-func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventBytes []byte) {
+func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventSize int) {
 	if !utils.CheckSignature(evt) {
 		response.SendOK(ws, evt.ID, false, "invalid: signature verification failed")
 		return
 	}
 
 	collection := db.GetCollection(evt.Kind)
-
 	rateLimiter := utils.GetRateLimiter()
 	sizeLimiter := utils.GetSizeLimiter()
-	var category string
-	switch {
-	case evt.Kind == 0:
-		category = "replaceable"
-	case evt.Kind == 1:
-		category = "regular"
-	case evt.Kind == 2:
-		category = "deprecated"
-	case evt.Kind == 3:
-		category = "replaceable"
-	case evt.Kind >= 4 && evt.Kind < 45:
-		category = "regular"
-	case evt.Kind >= 1000 && evt.Kind < 10000:
-		category = "regular"
-	case evt.Kind >= 10000 && evt.Kind < 20000:
-		category = "replaceable"
-	case evt.Kind >= 20000 && evt.Kind < 30000:
-		category = "ephemeral"
-	case evt.Kind >= 30000 && evt.Kind < 40000:
-		category = "parameterized_replaceable"
-	default:
-		category = "unknown"
-	}
+
+	category := determineCategory(evt.Kind)
 
 	if allowed, msg := rateLimiter.AllowEvent(evt.Kind, category); !allowed {
 		response.SendOK(ws, evt.ID, false, msg)
 		return
 	}
 
-	eventSize := len(eventBytes) // Calculate event size
 	if allowed, msg := sizeLimiter.AllowSize(evt.Kind, eventSize); !allowed {
 		response.SendOK(ws, evt.ID, false, msg)
 		return
@@ -93,15 +75,15 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventB
 	case evt.Kind == 0:
 		err = kinds.HandleKind0(ctx, evt, collection, ws)
 	case evt.Kind == 1:
-		err = kinds.HandleKind1(ctx, evt, collection)
+		err = kinds.HandleKind1(ctx, evt, collection, ws)
 	case evt.Kind == 2:
-		err = kinds.HandleKind2Deprecated(ctx, evt, ws)
+		err = kinds.HandleKind2(ctx, evt, ws)
 	case evt.Kind == 3:
 		err = kinds.HandleReplaceableKind(ctx, evt, collection, ws)
 	case evt.Kind >= 4 && evt.Kind < 45:
-		err = kinds.HandleRegularKind(ctx, evt, collection)
+		err = kinds.HandleRegularKind(ctx, evt, collection, ws)
 	case evt.Kind >= 1000 && evt.Kind < 10000:
-		err = kinds.HandleRegularKind(ctx, evt, collection)
+		err = kinds.HandleRegularKind(ctx, evt, collection, ws)
 	case evt.Kind >= 10000 && evt.Kind < 20000:
 		err = kinds.HandleReplaceableKind(ctx, evt, collection, ws)
 	case evt.Kind >= 20000 && evt.Kind < 30000:
@@ -118,4 +100,21 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventB
 	}
 
 	response.SendOK(ws, evt.ID, true, "")
+}
+
+func determineCategory(kind int) string {
+	switch {
+	case kind == 0, kind == 3, kind >= 10000 && kind < 20000:
+		return "replaceable"
+	case kind == 1, kind >= 4 && kind < 45, kind >= 1000 && kind < 10000:
+		return "regular"
+	case kind == 2:
+		return "deprecated"
+	case kind >= 20000 && kind < 30000:
+		return "ephemeral"
+	case kind >= 30000 && kind < 40000:
+		return "parameterized_replaceable"
+	default:
+		return "unknown"
+	}
 }
