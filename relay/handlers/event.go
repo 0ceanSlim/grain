@@ -80,6 +80,8 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventS
 		err = kinds.HandleKind2(ctx, evt, ws)
 	case evt.Kind == 3:
 		err = kinds.HandleReplaceableKind(ctx, evt, collection, ws)
+	case evt.Kind == 5:
+		err = kinds.HandleKind5(ctx, evt, db.GetClient(), ws)
 	case evt.Kind >= 4 && evt.Kind < 45:
 		err = kinds.HandleRegularKind(ctx, evt, collection, ws)
 	case evt.Kind >= 1000 && evt.Kind < 10000:
