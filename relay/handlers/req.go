@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"grain/relay/db"
+	"grain/relay/handlers/response"
 	relay "grain/relay/types"
 	"grain/relay/utils"
 
@@ -19,14 +20,14 @@ var subscriptions = make(map[string]relay.Subscription)
 func HandleReq(ws *websocket.Conn, message []interface{}) {
 	if len(message) < 3 {
 		fmt.Println("Invalid REQ message format")
-		SendClosed(ws, "", "invalid: invalid REQ message format")
+		response.SendClosed(ws, "", "invalid: invalid REQ message format")
 		return
 	}
 
 	subID, ok := message[1].(string)
 	if !ok {
 		fmt.Println("Invalid subscription ID format")
-		SendClosed(ws, "", "invalid: invalid subscription ID format")
+		response.SendClosed(ws, "", "invalid: invalid subscription ID format")
 		return
 	}
 
@@ -35,7 +36,7 @@ func HandleReq(ws *websocket.Conn, message []interface{}) {
 		filterData, ok := filter.(map[string]interface{})
 		if !ok {
 			fmt.Println("Invalid filter format")
-			SendClosed(ws, subID, "invalid: invalid filter format")
+			response.SendClosed(ws, subID, "invalid: invalid filter format")
 			return
 		}
 
@@ -53,7 +54,7 @@ func HandleReq(ws *websocket.Conn, message []interface{}) {
 
 	// Check if subscription already exists
 	if _, exists := subscriptions[subID]; exists {
-		SendClosed(ws, subID, "duplicate: subID already opened")
+		response.SendClosed(ws, subID, "duplicate: subID already opened")
 		return
 	}
 
@@ -64,7 +65,7 @@ func HandleReq(ws *websocket.Conn, message []interface{}) {
 	queriedEvents, err := QueryEvents(filters, db.GetClient(), "grain")
 	if err != nil {
 		fmt.Println("Error querying events:", err)
-		SendClosed(ws, subID, "error: could not query events")
+		response.SendClosed(ws, subID, "error: could not query events")
 		return
 	}
 
@@ -74,7 +75,7 @@ func HandleReq(ws *websocket.Conn, message []interface{}) {
 		err = websocket.Message.Send(ws, string(msgBytes))
 		if err != nil {
 			fmt.Println("Error sending event:", err)
-			SendClosed(ws, subID, "error: could not send event")
+			response.SendClosed(ws, subID, "error: could not send event")
 			return
 		}
 	}
@@ -85,7 +86,7 @@ func HandleReq(ws *websocket.Conn, message []interface{}) {
 	err = websocket.Message.Send(ws, string(eoseBytes))
 	if err != nil {
 		fmt.Println("Error sending EOSE:", err)
-		SendClosed(ws, subID, "error: could not send EOSE")
+		response.SendClosed(ws, subID, "error: could not send EOSE")
 		return
 	}
 }
@@ -152,10 +153,4 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 	}
 
 	return results, nil
-}
-
-func SendClosed(ws *websocket.Conn, subID string, message string) {
-	closeMsg := []interface{}{"CLOSED", subID, message}
-	closeBytes, _ := json.Marshal(closeMsg)
-	websocket.Message.Send(ws, string(closeBytes))
 }
