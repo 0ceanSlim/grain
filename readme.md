@@ -22,11 +22,14 @@ There is an example config in this repo. Copy the example config to config.yml t
 cp config.example.yml config.yml
 ```
 
+Additionally, you may set metadata Information for your relay with `relay_matadata.json`
+
+```bash
+cp relay_metadata.example.json relay_metadata.json
+```
+
 ### TODO
 
-- Handle Kind 5 explicitely to delete Events from the Database
-- Handle Ephemeral event
-  - configurable amount of time to keep ephemeral notes
 - configurable event purging
   - by category
   - by kind

@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"grain/relay/db"
 	relay "grain/relay/types"
 	"html/template"
@@ -35,6 +36,20 @@ func RootHandler(w http.ResponseWriter, r *http.Request) {
 	RenderTemplate(w, data, "index.html")
 }
 
+func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Accept") != "application/nostr+json" {
+		http.Error(w, "Unsupported Media Type", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/nostr+json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Methods", "GET")
+
+	json.NewEncoder(w).Encode(relayMetadata)
+}
+
 // Define the base directories for views and templates
 const (
 	viewsDir     = "web/views/"
@@ -43,7 +58,7 @@ const (
 
 // Define the common layout templates filenames
 var templateFiles = []string{
-	"#layout.html",
+	"layout.html",
 	"header.html",
 	"footer.html",
 }
@@ -52,7 +67,6 @@ var templateFiles = []string{
 var layout = PrependDir(templatesDir, templateFiles)
 
 func RenderTemplate(w http.ResponseWriter, data PageData, view string) {
-
 	// Append the specific template for the route
 	templates := append(layout, viewsDir+view)
 
@@ -83,33 +97,26 @@ func PrependDir(dir string, files []string) []string {
 func FetchTopTenRecentEvents(client *mongo.Client) ([]relay.Event, error) {
 	var results []relay.Event
 
-	collections, err := client.Database("grain").ListCollectionNames(context.TODO(), bson.M{})
+	collection := client.Database("grain").Collection("events")
+	filter := bson.D{}
+	opts := options.Find().SetSort(bson.D{{Key: "createdat", Value: -1}}).SetLimit(10)
+
+	cursor, err := collection.Find(context.TODO(), filter, opts)
 	if err != nil {
 		return nil, err
 	}
+	defer cursor.Close(context.TODO())
 
-	for _, collectionName := range collections {
-		collection := client.Database("grain").Collection(collectionName)
-		filter := bson.D{}
-		opts := options.Find().SetSort(bson.D{{Key: "createdat", Value: -1}}).SetLimit(10)
-
-		cursor, err := collection.Find(context.TODO(), filter, opts)
-		if err != nil {
+	for cursor.Next(context.TODO()) {
+		var event relay.Event
+		if err := cursor.Decode(&event); err != nil {
 			return nil, err
 		}
-		defer cursor.Close(context.TODO())
+		results = append(results, event)
+	}
 
-		for cursor.Next(context.TODO()) {
-			var event relay.Event
-			if err := cursor.Decode(&event); err != nil {
-				return nil, err
-			}
-			results = append(results, event)
-		}
-
-		if err := cursor.Err(); err != nil {
-			return nil, err
-		}
+	if err := cursor.Err(); err != nil {
+		return nil, err
 	}
 
 	return results, nil

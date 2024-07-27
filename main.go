@@ -49,11 +49,17 @@ func main() {
 	for _, kindSizeLimit := range config.RateLimit.KindSizeLimits {
 		sizeLimiter.AddKindSizeLimit(kindSizeLimit.Kind, kindSizeLimit.MaxSize)
 	}
-	
+
 	utils.SetSizeLimiter(sizeLimiter)
+
+	err = web.LoadRelayMetadata("relay_metadata.json")
+	if err != nil {
+		log.Fatalf("Failed to load relay metadata: %v", err)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", ListenAndServe)
+	mux.HandleFunc("/relay-info", web.RelayInfoHandler)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "web/static/img/favicon.ico")

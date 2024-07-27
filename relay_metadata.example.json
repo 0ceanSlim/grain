@@ -1,0 +1,9 @@
+{
+  "name": "GRAIN Relay",
+  "description": "Go Relay Archetecture for Implementing Nostr",
+  "pubkey": "16f1a0100d4cfffbcc4230e8e0e4290cc5849c1adc64d6653fda07c031b1074b",
+  "contact": "oceanslim@gmx.com",
+  "supported_nips": [1, 2, 9, 11],
+  "software": "https://forge.happytavern.co/oceanslim/grain",
+  "version": "0.1.0"
+}
