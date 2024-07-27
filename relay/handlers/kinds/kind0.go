@@ -22,7 +22,6 @@ func HandleKind0(ctx context.Context, evt relay.Event, collection *mongo.Collect
 
 	if err != mongo.ErrNoDocuments {
 		if existingEvent.CreatedAt >= evt.CreatedAt {
-			response.SendNotice(ws, evt.PubKey, "blocked: a newer kind 0 event already exists for this pubkey")
 			response.SendOK(ws, evt.ID, false, "blocked: a newer kind 0 event already exists for this pubkey")
 			return nil
 		}
