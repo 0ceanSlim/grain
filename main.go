@@ -59,7 +59,6 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", ListenAndServe)
-	mux.HandleFunc("/relay-info", web.RelayInfoHandler)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "web/static/img/favicon.ico")
@@ -77,6 +76,8 @@ func ListenAndServe(w http.ResponseWriter, r *http.Request) {
 		websocket.Handler(func(ws *websocket.Conn) {
 			relay.WebSocketHandler(ws)
 		}).ServeHTTP(w, r)
+	} else if r.Header.Get("Accept") == "application/nostr+json" {
+		web.RelayInfoHandler(w, r)
 	} else {
 		web.RootHandler(w, r)
 	}

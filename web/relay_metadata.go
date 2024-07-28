@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"net/http"
 	"os"
 )
 
@@ -29,4 +30,17 @@ func LoadRelayMetadata(filename string) error {
 	}
 
 	return nil
+}
+func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Accept") != "application/nostr+json" {
+		http.Error(w, "Unsupported Media Type", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/nostr+json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Methods", "GET")
+
+	json.NewEncoder(w).Encode(relayMetadata)
 }
