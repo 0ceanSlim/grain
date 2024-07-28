@@ -97,26 +97,33 @@ func PrependDir(dir string, files []string) []string {
 func FetchTopTenRecentEvents(client *mongo.Client) ([]relay.Event, error) {
 	var results []relay.Event
 
-	collection := client.Database("grain").Collection("events")
-	filter := bson.D{}
-	opts := options.Find().SetSort(bson.D{{Key: "createdat", Value: -1}}).SetLimit(10)
-
-	cursor, err := collection.Find(context.TODO(), filter, opts)
+	collections, err := client.Database("grain").ListCollectionNames(context.TODO(), bson.M{})
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
 
-	for cursor.Next(context.TODO()) {
-		var event relay.Event
-		if err := cursor.Decode(&event); err != nil {
+	for _, collectionName := range collections {
+		collection := client.Database("grain").Collection(collectionName)
+		filter := bson.D{}
+		opts := options.Find().SetSort(bson.D{{Key: "createdat", Value: -1}}).SetLimit(10)
+
+		cursor, err := collection.Find(context.TODO(), filter, opts)
+		if err != nil {
 			return nil, err
 		}
-		results = append(results, event)
-	}
+		defer cursor.Close(context.TODO())
 
-	if err := cursor.Err(); err != nil {
-		return nil, err
+		for cursor.Next(context.TODO()) {
+			var event relay.Event
+			if err := cursor.Decode(&event); err != nil {
+				return nil, err
+			}
+			results = append(results, event)
+		}
+
+		if err := cursor.Err(); err != nil {
+			return nil, err
+		}
 	}
 
 	return results, nil
