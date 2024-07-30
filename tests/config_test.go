@@ -3,11 +3,11 @@ package tests
 import (
 	"testing"
 
-	"grain/relay/utils"
+	"grain/config"
 )
 
 func TestConfigValidity(t *testing.T) {
-	config, err := utils.LoadConfig("../config.yml")
+	config, err := config.LoadConfig("../config.yml")
 	if err != nil {
 		t.Fatalf("Error loading config: %v", err)
 	}

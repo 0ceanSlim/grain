@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"grain/relay/handlers"
-	"grain/relay/utils"
+
+	"grain/config"
 
 	"golang.org/x/net/websocket"
 )
@@ -13,7 +14,7 @@ func WebSocketHandler(ws *websocket.Conn) {
 	defer ws.Close()
 
 	var msg string
-	rateLimiter := utils.GetRateLimiter()
+	rateLimiter := config.GetRateLimiter()
 
 	for {
 		err := websocket.Message.Receive(ws, &msg)

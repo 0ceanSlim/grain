@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"grain/config"
 	"grain/relay/db"
 	"grain/relay/handlers/kinds"
 	"grain/relay/handlers/response"
@@ -55,8 +56,8 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventS
 	}
 
 	collection := db.GetCollection(evt.Kind)
-	rateLimiter := utils.GetRateLimiter()
-	sizeLimiter := utils.GetSizeLimiter()
+	rateLimiter := config.GetRateLimiter()
+	sizeLimiter := config.GetSizeLimiter()
 
 	category := determineCategory(evt.Kind)
 

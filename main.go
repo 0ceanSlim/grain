@@ -5,9 +5,9 @@ import (
 	"log"
 	"net/http"
 
+	"grain/config"
 	"grain/relay"
 	"grain/relay/db"
-	"grain/relay/utils"
 	"grain/web"
 
 	"golang.org/x/net/websocket"
@@ -15,19 +15,19 @@ import (
 )
 
 func main() {
-	config, err := loadConfiguration()
+	cfg, err := loadConfiguration()
 	if err != nil {
 		log.Fatal("Error loading config: ", err)
 	}
 
-	err = initializeDatabase(config)
+	err = initializeDatabase(cfg)
 	if err != nil {
 		log.Fatal("Error initializing database: ", err)
 	}
 	defer db.DisconnectDB()
 
-	setupRateLimiter(config)
-	setupSizeLimiter(config)
+	setupRateLimiter(cfg)
+	setupSizeLimiter(cfg)
 
 	err = loadRelayMetadata()
 	if err != nil {
@@ -36,46 +36,46 @@ func main() {
 
 	mux := setupRoutes()
 
-	startServer(config, mux)
+	startServer(cfg, mux)
 }
 
-func loadConfiguration() (*utils.Config, error) {
-	return utils.LoadConfig("config.yml")
+func loadConfiguration() (*config.Config, error) {
+	return config.LoadConfig("config.yml")
 }
 
-func initializeDatabase(config *utils.Config) error {
+func initializeDatabase(config *config.Config) error {
 	_, err := db.InitDB(config.MongoDB.URI, config.MongoDB.Database)
 	return err
 }
 
-func setupRateLimiter(config *utils.Config) {
-	rateLimiter := utils.NewRateLimiter(
-		rate.Limit(config.RateLimit.WsLimit),
-		config.RateLimit.WsBurst,
-		rate.Limit(config.RateLimit.EventLimit),
-		config.RateLimit.EventBurst,
-		rate.Limit(config.RateLimit.ReqLimit),
-		config.RateLimit.ReqBurst,
+func setupRateLimiter(cfg *config.Config) {
+	rateLimiter := config.NewRateLimiter(
+		rate.Limit(cfg.RateLimit.WsLimit),
+		cfg.RateLimit.WsBurst,
+		rate.Limit(cfg.RateLimit.EventLimit),
+		cfg.RateLimit.EventBurst,
+		rate.Limit(cfg.RateLimit.ReqLimit),
+		cfg.RateLimit.ReqBurst,
 	)
 
-	for _, kindLimit := range config.RateLimit.KindLimits {
+	for _, kindLimit := range cfg.RateLimit.KindLimits {
 		rateLimiter.AddKindLimit(kindLimit.Kind, rate.Limit(kindLimit.Limit), kindLimit.Burst)
 	}
 
-	for category, categoryLimit := range config.RateLimit.CategoryLimits {
+	for category, categoryLimit := range cfg.RateLimit.CategoryLimits {
 		rateLimiter.AddCategoryLimit(category, rate.Limit(categoryLimit.Limit), categoryLimit.Burst)
 	}
 
-	utils.SetRateLimiter(rateLimiter)
+	config.SetRateLimiter(rateLimiter)
 }
 
-func setupSizeLimiter(config *utils.Config) {
-	sizeLimiter := utils.NewSizeLimiter(config.RateLimit.MaxEventSize)
-	for _, kindSizeLimit := range config.RateLimit.KindSizeLimits {
+func setupSizeLimiter(cfg *config.Config) {
+	sizeLimiter := config.NewSizeLimiter(cfg.RateLimit.MaxEventSize)
+	for _, kindSizeLimit := range cfg.RateLimit.KindSizeLimits {
 		sizeLimiter.AddKindSizeLimit(kindSizeLimit.Kind, kindSizeLimit.MaxSize)
 	}
 
-	utils.SetSizeLimiter(sizeLimiter)
+	config.SetSizeLimiter(sizeLimiter)
 }
 
 func loadRelayMetadata() error {
@@ -92,7 +92,7 @@ func setupRoutes() *http.ServeMux {
 	return mux
 }
 
-func startServer(config *utils.Config, mux *http.ServeMux) {
+func startServer(config *config.Config, mux *http.ServeMux) {
 	fmt.Printf("Server is running on http://localhost%s\n", config.Server.Port)
 	err := http.ListenAndServe(config.Server.Port, mux)
 	if err != nil {

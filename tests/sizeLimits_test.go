@@ -1,12 +1,12 @@
 package tests
 
 import (
-	"grain/relay/utils"
+	"grain/config"
 	"testing"
 )
 
 func TestSizeLimiterGlobalMaxSize(t *testing.T) {
-	sizeLimiter := utils.NewSizeLimiter(1024) // Set global max size to 1024 bytes
+	sizeLimiter := config.NewSizeLimiter(1024) // Set global max size to 1024 bytes
 
 	// Test that an event within the global max size is allowed
 	if allowed, _ := sizeLimiter.AllowSize(0, 512); !allowed {
@@ -25,7 +25,7 @@ func TestSizeLimiterGlobalMaxSize(t *testing.T) {
 }
 
 func TestSizeLimiterKindSpecificSize(t *testing.T) {
-	sizeLimiter := utils.NewSizeLimiter(1024) // Set global max size to 1024 bytes
+	sizeLimiter := config.NewSizeLimiter(1024) // Set global max size to 1024 bytes
 	sizeLimiter.AddKindSizeLimit(1, 512)      // Set max size for kind 1 to 512 bytes
 
 	// Test that an event within the kind-specific max size is allowed
@@ -55,7 +55,7 @@ func TestSizeLimiterKindSpecificSize(t *testing.T) {
 }
 
 func TestSizeLimiterNoKindSpecificLimit(t *testing.T) {
-	sizeLimiter := utils.NewSizeLimiter(1024) // Set global max size to 1024 bytes
+	sizeLimiter := config.NewSizeLimiter(1024) // Set global max size to 1024 bytes
 
 	// Test that an event for a kind without a specific limit is governed by the global limit
 	if allowed, _ := sizeLimiter.AllowSize(2, 512); !allowed {

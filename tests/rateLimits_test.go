@@ -3,13 +3,13 @@ package tests
 import (
 	"testing"
 
-	"grain/relay/utils"
+	"grain/config"
 
 	"golang.org/x/time/rate"
 )
 
 func TestWebSocketRateLimit(t *testing.T) {
-	rateLimiter := utils.NewRateLimiter(rate.Limit(1), 1, rate.Limit(100), 200, rate.Limit(100), 200)
+	rateLimiter := config.NewRateLimiter(rate.Limit(1), 1, rate.Limit(100), 200, rate.Limit(100), 200)
 
 	// First message should be allowed
 	if allowed, _ := rateLimiter.AllowWs(); !allowed {
@@ -28,7 +28,7 @@ func TestWebSocketRateLimit(t *testing.T) {
 }
 
 func TestEventRateLimit(t *testing.T) {
-	rateLimiter := utils.NewRateLimiter(rate.Limit(100), 200, rate.Limit(1), 1, rate.Limit(100), 200)
+	rateLimiter := config.NewRateLimiter(rate.Limit(100), 200, rate.Limit(1), 1, rate.Limit(100), 200)
 	rateLimiter.AddKindLimit(1, rate.Limit(1), 1)
 	rateLimiter.AddCategoryLimit("regular", rate.Limit(1), 1)
 
@@ -49,7 +49,7 @@ func TestEventRateLimit(t *testing.T) {
 }
 
 func TestReqRateLimit(t *testing.T) {
-	rateLimiter := utils.NewRateLimiter(rate.Limit(100), 200, rate.Limit(100), 200, rate.Limit(1), 1)
+	rateLimiter := config.NewRateLimiter(rate.Limit(100), 200, rate.Limit(100), 200, rate.Limit(1), 1)
 
 	// First REQ should be allowed
 	if allowed, _ := rateLimiter.AllowReq(); !allowed {
@@ -68,7 +68,7 @@ func TestReqRateLimit(t *testing.T) {
 }
 
 func TestKindRateLimit(t *testing.T) {
-	rateLimiter := utils.NewRateLimiter(rate.Limit(100), 200, rate.Limit(100), 200, rate.Limit(100), 200)
+	rateLimiter := config.NewRateLimiter(rate.Limit(100), 200, rate.Limit(100), 200, rate.Limit(100), 200)
 	rateLimiter.AddKindLimit(1, rate.Limit(1), 1)
 
 	// First event of kind 1 should be allowed
@@ -88,7 +88,7 @@ func TestKindRateLimit(t *testing.T) {
 }
 
 func TestCategoryRateLimit(t *testing.T) {
-	rateLimiter := utils.NewRateLimiter(rate.Limit(100), 200, rate.Limit(100), 200, rate.Limit(100), 200)
+	rateLimiter := config.NewRateLimiter(rate.Limit(100), 200, rate.Limit(100), 200, rate.Limit(100), 200)
 	rateLimiter.AddCategoryLimit("regular", rate.Limit(1), 1)
 
 	// First event in category "regular" should be allowed
