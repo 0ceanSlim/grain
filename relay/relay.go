@@ -19,12 +19,15 @@ func WebSocketHandler(ws *websocket.Conn) {
 		err := websocket.Message.Receive(ws, &msg)
 		if err != nil {
 			fmt.Println("Error receiving message:", err)
+			// Send a close message with an error code and reason
+			ws.Close()
 			return
 		}
 		fmt.Println("Received message:", msg)
 
 		if allowed, msg := rateLimiter.AllowWs(); !allowed {
 			websocket.Message.Send(ws, fmt.Sprintf(`{"error": "%s"}`, msg))
+			ws.Close()
 			return
 		}
 
@@ -52,6 +55,7 @@ func WebSocketHandler(ws *websocket.Conn) {
 		case "REQ":
 			if allowed, msg := rateLimiter.AllowReq(); !allowed {
 				websocket.Message.Send(ws, fmt.Sprintf(`{"error": "%s"}`, msg))
+				ws.Close()
 				return
 			}
 			handlers.HandleReq(ws, message)
