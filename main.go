@@ -11,25 +11,24 @@ import (
 	"grain/web"
 
 	"golang.org/x/net/websocket"
-	"golang.org/x/time/rate"
 )
 
 func main() {
-	cfg, err := loadConfiguration()
+	cfg, err := config.LoadConfiguration()
 	if err != nil {
 		log.Fatal("Error loading config: ", err)
 	}
 
-	err = initializeDatabase(cfg)
+	err = db.InitializeDatabase(cfg)
 	if err != nil {
 		log.Fatal("Error initializing database: ", err)
 	}
 	defer db.DisconnectDB()
 
-	setupRateLimiter(cfg)
-	setupSizeLimiter(cfg)
+	config.SetupRateLimiter(cfg)
+	config.SetupSizeLimiter(cfg)
 
-	err = loadRelayMetadata()
+	err = web.LoadRelayMetadataJSON()
 	if err != nil {
 		log.Fatal("Failed to load relay metadata: ", err)
 	}
@@ -37,49 +36,6 @@ func main() {
 	mux := setupRoutes()
 
 	startServer(cfg, mux)
-}
-
-func loadConfiguration() (*config.Config, error) {
-	return config.LoadConfig("config.yml")
-}
-
-func initializeDatabase(config *config.Config) error {
-	_, err := db.InitDB(config.MongoDB.URI, config.MongoDB.Database)
-	return err
-}
-
-func setupRateLimiter(cfg *config.Config) {
-	rateLimiter := config.NewRateLimiter(
-		rate.Limit(cfg.RateLimit.WsLimit),
-		cfg.RateLimit.WsBurst,
-		rate.Limit(cfg.RateLimit.EventLimit),
-		cfg.RateLimit.EventBurst,
-		rate.Limit(cfg.RateLimit.ReqLimit),
-		cfg.RateLimit.ReqBurst,
-	)
-
-	for _, kindLimit := range cfg.RateLimit.KindLimits {
-		rateLimiter.AddKindLimit(kindLimit.Kind, rate.Limit(kindLimit.Limit), kindLimit.Burst)
-	}
-
-	for category, categoryLimit := range cfg.RateLimit.CategoryLimits {
-		rateLimiter.AddCategoryLimit(category, rate.Limit(categoryLimit.Limit), categoryLimit.Burst)
-	}
-
-	config.SetRateLimiter(rateLimiter)
-}
-
-func setupSizeLimiter(cfg *config.Config) {
-	sizeLimiter := config.NewSizeLimiter(cfg.RateLimit.MaxEventSize)
-	for _, kindSizeLimit := range cfg.RateLimit.KindSizeLimits {
-		sizeLimiter.AddKindSizeLimit(kindSizeLimit.Kind, kindSizeLimit.MaxSize)
-	}
-
-	config.SetSizeLimiter(sizeLimiter)
-}
-
-func loadRelayMetadata() error {
-	return web.LoadRelayMetadata("relay_metadata.json")
 }
 
 func setupRoutes() *http.ServeMux {

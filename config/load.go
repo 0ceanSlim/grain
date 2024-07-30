@@ -53,6 +53,10 @@ type KindLimitConfig struct {
 	Burst int     `yaml:"burst"`
 }
 
+func LoadConfiguration() (*Config, error) {
+	return LoadConfig("config.yml")
+}
+
 func LoadConfig(filename string) (*Config, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {

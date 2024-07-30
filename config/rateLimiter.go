@@ -31,6 +31,27 @@ type RateLimiter struct {
 var rateLimiterInstance *RateLimiter
 var once sync.Once
 
+func SetupRateLimiter(cfg *Config) {
+	rateLimiter := NewRateLimiter(
+		rate.Limit(cfg.RateLimit.WsLimit),
+		cfg.RateLimit.WsBurst,
+		rate.Limit(cfg.RateLimit.EventLimit),
+		cfg.RateLimit.EventBurst,
+		rate.Limit(cfg.RateLimit.ReqLimit),
+		cfg.RateLimit.ReqBurst,
+	)
+
+	for _, kindLimit := range cfg.RateLimit.KindLimits {
+		rateLimiter.AddKindLimit(kindLimit.Kind, rate.Limit(kindLimit.Limit), kindLimit.Burst)
+	}
+
+	for category, categoryLimit := range cfg.RateLimit.CategoryLimits {
+		rateLimiter.AddCategoryLimit(category, rate.Limit(categoryLimit.Limit), categoryLimit.Burst)
+	}
+
+	SetRateLimiter(rateLimiter)
+}
+
 func SetRateLimiter(rl *RateLimiter) {
 	once.Do(func() {
 		rateLimiterInstance = rl

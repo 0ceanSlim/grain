@@ -10,6 +10,15 @@ type SizeLimiter struct {
 	mu             sync.RWMutex
 }
 
+func SetupSizeLimiter(cfg *Config) {
+	sizeLimiter := NewSizeLimiter(cfg.RateLimit.MaxEventSize)
+	for _, kindSizeLimit := range cfg.RateLimit.KindSizeLimits {
+		sizeLimiter.AddKindSizeLimit(kindSizeLimit.Kind, kindSizeLimit.MaxSize)
+	}
+
+	SetSizeLimiter(sizeLimiter)
+}
+
 func NewSizeLimiter(globalMaxSize int) *SizeLimiter {
 	return &SizeLimiter{
 		globalMaxSize:  globalMaxSize,

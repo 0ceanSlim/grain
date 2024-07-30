@@ -18,6 +18,10 @@ type RelayMetadata struct {
 
 var relayMetadata RelayMetadata
 
+func LoadRelayMetadataJSON() error {
+	return LoadRelayMetadata("relay_metadata.json")
+}
+
 func LoadRelayMetadata(filename string) error {
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -31,6 +35,7 @@ func LoadRelayMetadata(filename string) error {
 
 	return nil
 }
+
 func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Accept") != "application/nostr+json" {
 		http.Error(w, "Unsupported Media Type", http.StatusUnsupportedMediaType)

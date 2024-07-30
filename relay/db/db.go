@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"grain/config"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -15,6 +16,10 @@ var collections = make(map[int]*mongo.Collection)
 // GetClient returns the MongoDB client
 func GetClient() *mongo.Client {
 	return client
+}
+func InitializeDatabase(config *config.Config) error {
+	_, err := InitDB(config.MongoDB.URI, config.MongoDB.Database)
+	return err
 }
 
 // Initialize MongoDB client
