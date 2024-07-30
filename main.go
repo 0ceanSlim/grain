@@ -15,17 +15,40 @@ import (
 )
 
 func main() {
-	config, err := utils.LoadConfig("config.yml")
+	config, err := loadConfiguration()
 	if err != nil {
 		log.Fatal("Error loading config: ", err)
 	}
 
-	_, err = db.InitDB(config.MongoDB.URI, config.MongoDB.Database)
+	err = initializeDatabase(config)
 	if err != nil {
 		log.Fatal("Error initializing database: ", err)
 	}
 	defer db.DisconnectDB()
 
+	setupRateLimiter(config)
+	setupSizeLimiter(config)
+
+	err = loadRelayMetadata()
+	if err != nil {
+		log.Fatal("Failed to load relay metadata: ", err)
+	}
+
+	mux := setupRoutes()
+
+	startServer(config, mux)
+}
+
+func loadConfiguration() (*utils.Config, error) {
+	return utils.LoadConfig("config.yml")
+}
+
+func initializeDatabase(config *utils.Config) error {
+	_, err := db.InitDB(config.MongoDB.URI, config.MongoDB.Database)
+	return err
+}
+
+func setupRateLimiter(config *utils.Config) {
 	rateLimiter := utils.NewRateLimiter(
 		rate.Limit(config.RateLimit.WsLimit),
 		config.RateLimit.WsBurst,
@@ -44,28 +67,34 @@ func main() {
 	}
 
 	utils.SetRateLimiter(rateLimiter)
+}
 
+func setupSizeLimiter(config *utils.Config) {
 	sizeLimiter := utils.NewSizeLimiter(config.RateLimit.MaxEventSize)
 	for _, kindSizeLimit := range config.RateLimit.KindSizeLimits {
 		sizeLimiter.AddKindSizeLimit(kindSizeLimit.Kind, kindSizeLimit.MaxSize)
 	}
 
 	utils.SetSizeLimiter(sizeLimiter)
+}
 
-	err = web.LoadRelayMetadata("relay_metadata.json")
-	if err != nil {
-		log.Fatalf("Failed to load relay metadata: %v", err)
-	}
+func loadRelayMetadata() error {
+	return web.LoadRelayMetadata("relay_metadata.json")
+}
 
+func setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", ListenAndServe)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "web/static/img/favicon.ico")
 	})
+	return mux
+}
 
+func startServer(config *utils.Config, mux *http.ServeMux) {
 	fmt.Printf("Server is running on http://localhost%s\n", config.Server.Port)
-	err = http.ListenAndServe(config.Server.Port, mux)
+	err := http.ListenAndServe(config.Server.Port, mux)
 	if err != nil {
 		fmt.Println("Error starting server:", err)
 	}
