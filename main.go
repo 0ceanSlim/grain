@@ -6,7 +6,9 @@ import (
 	configTypes "grain/config/types"
 	"grain/relay"
 	"grain/relay/db"
+	"grain/relay/utils"
 	"grain/web"
+
 	"log"
 	"net/http"
 
@@ -14,6 +16,9 @@ import (
 )
 
 func main() {
+	utils.EnsureFileExists("config.yml", "config/config.example.yml")
+	utils.EnsureFileExists("relay_metadata.json", "web/relay_metadata.example.json")
+
 	cfg, err := config.LoadConfig("config.yml")
 	if err != nil {
 		log.Fatal("Error loading config: ", err)
