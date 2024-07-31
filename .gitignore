@@ -2,4 +2,4 @@
 config.yml
 relay_metadata.json
 grain.exe
-/release
+/build

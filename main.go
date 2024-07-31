@@ -47,9 +47,9 @@ func main() {
 func setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", ListenAndServe)
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("app/static"))))
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/static/img/favicon.ico")
+		http.ServeFile(w, r, "app/static/img/favicon.ico")
 	})
 	return mux
 }

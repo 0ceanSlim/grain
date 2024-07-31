@@ -37,8 +37,8 @@ func RootHandler(w http.ResponseWriter, r *http.Request) {
 
 // Define the base directories for views and templates
 const (
-	viewsDir     = "web/views/"
-	templatesDir = "web/views/templates/"
+	viewsDir     = "app/views/"
+	templatesDir = "app/views/templates/"
 )
 
 // Define the common layout templates filenames
