@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"grain/config"
-	"grain/relay/db"
-	"grain/relay/handlers/kinds"
-	"grain/relay/handlers/response"
-	"grain/relay/utils"
+	"grain/server/db"
+	"grain/server/handlers/kinds"
+	"grain/server/handlers/response"
+	"grain/server/utils"
 
-	relay "grain/relay/types"
+	relay "grain/server/types"
 
 	"golang.org/x/net/websocket"
 )

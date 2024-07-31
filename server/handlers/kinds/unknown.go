@@ -2,8 +2,8 @@ package kinds
 
 import (
 	"context"
-	"grain/relay/handlers/response"
-	relay "grain/relay/types"
+	"grain/server/handlers/response"
+	relay "grain/server/types"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/net/websocket"

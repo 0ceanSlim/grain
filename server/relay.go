@@ -3,7 +3,7 @@ package relay
 import (
 	"encoding/json"
 	"fmt"
-	"grain/relay/handlers"
+	"grain/server/handlers"
 
 	"grain/config"
 

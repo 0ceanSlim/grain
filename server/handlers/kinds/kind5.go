@@ -3,8 +3,8 @@ package kinds
 import (
 	"context"
 	"fmt"
-	"grain/relay/handlers/response"
-	relay "grain/relay/types"
+	"grain/server/handlers/response"
+	relay "grain/server/types"
 	"strings"
 
 	"go.mongodb.org/mongo-driver/bson"
