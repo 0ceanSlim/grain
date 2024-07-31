@@ -17,21 +17,14 @@ var collections = make(map[int]*mongo.Collection)
 func GetClient() *mongo.Client {
 	return client
 }
-func InitializeDatabase(config *config.Config) error {
-	_, err := InitDB(config.MongoDB.URI, config.MongoDB.Database)
-	return err
-}
-
-// Initialize MongoDB client
-func InitDB(uri, database string) (*mongo.Client, error) {
-	clientOptions := options.Client().ApplyURI(uri)
+func InitDB(cfg *config.Config) (*mongo.Client, error) {
+	clientOptions := options.Client().ApplyURI(cfg.MongoDB.URI)
 	var err error
 	client, err = mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check the connection
 	err = client.Ping(context.TODO(), nil)
 	if err != nil {
 		return nil, err
@@ -61,8 +54,9 @@ func GetCollection(kind int) *mongo.Collection {
 }
 
 // Disconnect from MongoDB
-func DisconnectDB() {
-	if err := client.Disconnect(context.TODO()); err != nil {
+func DisconnectDB(client *mongo.Client) {
+	err := client.Disconnect(context.TODO())
+	if err != nil {
 		fmt.Println("Error disconnecting from MongoDB:", err)
 	}
 	fmt.Println("Disconnected from MongoDB!")

@@ -2,28 +2,27 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net/http"
-
 	"grain/config"
 	"grain/relay"
 	"grain/relay/db"
 	"grain/web"
+	"log"
+	"net/http"
 
 	"golang.org/x/net/websocket"
 )
 
 func main() {
-	cfg, err := config.LoadConfiguration()
+	cfg, err := config.LoadConfig("config.yml")
 	if err != nil {
 		log.Fatal("Error loading config: ", err)
 	}
 
-	err = db.InitializeDatabase(cfg)
+	client, err := db.InitDB(cfg)
 	if err != nil {
 		log.Fatal("Error initializing database: ", err)
 	}
-	defer db.DisconnectDB()
+	defer db.DisconnectDB(client)
 
 	config.SetupRateLimiter(cfg)
 	config.SetupSizeLimiter(cfg)
