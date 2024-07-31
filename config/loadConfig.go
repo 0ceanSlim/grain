@@ -8,8 +8,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-
-
 func LoadConfig(filename string) (*config.ServerConfig, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
