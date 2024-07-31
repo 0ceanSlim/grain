@@ -2,8 +2,8 @@ package app
 
 import (
 	"context"
-	"grain/relay/db"
-	relay "grain/relay/types"
+	"grain/server/db"
+	relay "grain/server/types"
 	"html/template"
 	"net/http"
 

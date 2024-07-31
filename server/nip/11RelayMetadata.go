@@ -1,4 +1,4 @@
-package app
+package nip
 
 import (
 	"encoding/json"
@@ -19,7 +19,7 @@ type RelayMetadata struct {
 var relayMetadata RelayMetadata
 
 func LoadRelayMetadataJSON() error {
-	return LoadRelayMetadata("app/relay_metadata.json")
+	return LoadRelayMetadata("relay_metadata.json")
 }
 
 func LoadRelayMetadata(filename string) error {

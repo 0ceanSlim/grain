@@ -7,6 +7,7 @@ import (
 	configTypes "grain/config/types"
 	relay "grain/server"
 	"grain/server/db"
+	"grain/server/nip"
 	"grain/server/utils"
 
 	"log"
@@ -16,8 +17,8 @@ import (
 )
 
 func main() {
-	utils.EnsureFileExists("config.yml", "config/config.example.yml")
-	utils.EnsureFileExists("app/relay_metadata.json", "app/relay_metadata.example.json")
+	utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
+	utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
 
 	cfg, err := config.LoadConfig("config.yml")
 	if err != nil {
@@ -33,7 +34,7 @@ func main() {
 	config.SetupRateLimiter(cfg)
 	config.SetupSizeLimiter(cfg)
 
-	err = app.LoadRelayMetadataJSON()
+	err = nip.LoadRelayMetadataJSON()
 	if err != nil {
 		log.Fatal("Failed to load relay metadata: ", err)
 	}
@@ -67,7 +68,7 @@ func ListenAndServe(w http.ResponseWriter, r *http.Request) {
 			relay.WebSocketHandler(ws)
 		}).ServeHTTP(w, r)
 	} else if r.Header.Get("Accept") == "application/nostr+json" {
-		app.RelayInfoHandler(w, r)
+		nip.RelayInfoHandler(w, r)
 	} else {
 		app.RootHandler(w, r)
 	}
