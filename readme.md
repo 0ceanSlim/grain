@@ -14,19 +14,9 @@ GRAIN is an open-source Nostr relay implementation written in Go. This project a
 
 ## Configuration
 
-Configuration options can be set through a configuration file.
+Grain will automatically create the configurations and relay metadata files necessary if they do not already exist when you first run the program.
 
-There is an example config in this repo. Copy the example config to config.yml to get started
-
-```bash
-cp config.example.yml config.yml
-```
-
-Additionally, you may set metadata Information for your relay with `relay_matadata.json`
-
-```bash
-cp relay_metadata.example.json relay_metadata.json
-```
+They are created in the root directory of Grain. Feel free to change any coinfigurations you want in these files.
 
 ### TODO
 
