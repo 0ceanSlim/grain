@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"grain/config"
+	configTypes "grain/config/types"
 	"grain/relay"
 	"grain/relay/db"
 	"grain/web"
@@ -47,7 +48,7 @@ func setupRoutes() *http.ServeMux {
 	return mux
 }
 
-func startServer(config *config.Config, mux *http.ServeMux) {
+func startServer(config *configTypes.ServerConfig, mux *http.ServeMux) {
 	fmt.Printf("Server is running on http://localhost%s\n", config.Server.Port)
 	err := http.ListenAndServe(config.Server.Port, mux)
 	if err != nil {

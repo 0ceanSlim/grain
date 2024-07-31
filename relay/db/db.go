@@ -3,7 +3,8 @@ package db
 import (
 	"context"
 	"fmt"
-	"grain/config"
+
+	config "grain/config/types"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -17,7 +18,7 @@ var collections = make(map[int]*mongo.Collection)
 func GetClient() *mongo.Client {
 	return client
 }
-func InitDB(cfg *config.Config) (*mongo.Client, error) {
+func InitDB(cfg *config.ServerConfig) (*mongo.Client, error) {
 	clientOptions := options.Client().ApplyURI(cfg.MongoDB.URI)
 	var err error
 	client, err = mongo.Connect(context.TODO(), clientOptions)

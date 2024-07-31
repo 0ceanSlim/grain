@@ -2,6 +2,8 @@ package config
 
 import (
 	"sync"
+
+	config "grain/config/types"
 )
 
 type SizeLimiter struct {
@@ -10,7 +12,7 @@ type SizeLimiter struct {
 	mu             sync.RWMutex
 }
 
-func SetupSizeLimiter(cfg *Config) {
+func SetupSizeLimiter(cfg *config.ServerConfig) {
 	sizeLimiter := NewSizeLimiter(cfg.RateLimit.MaxEventSize)
 	for _, kindSizeLimit := range cfg.RateLimit.KindSizeLimits {
 		sizeLimiter.AddKindSizeLimit(kindSizeLimit.Kind, kindSizeLimit.MaxSize)

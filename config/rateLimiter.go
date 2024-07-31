@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	config "grain/config/types"
 	"sync"
 
 	"golang.org/x/time/rate"
@@ -31,7 +32,7 @@ type RateLimiter struct {
 var rateLimiterInstance *RateLimiter
 var once sync.Once
 
-func SetupRateLimiter(cfg *Config) {
+func SetupRateLimiter(cfg *config.ServerConfig) {
 	rateLimiter := NewRateLimiter(
 		rate.Limit(cfg.RateLimit.WsLimit),
 		cfg.RateLimit.WsBurst,
