@@ -7,6 +7,8 @@ import (
 
 	"grain/config"
 
+	relay "grain/server/types"
+
 	"golang.org/x/net/websocket"
 )
 
@@ -16,11 +18,12 @@ func WebSocketHandler(ws *websocket.Conn) {
 	var msg string
 	rateLimiter := config.GetRateLimiter()
 
+	subscriptions := make(map[string][]relay.Filter) // Subscription map scoped to the connection
+
 	for {
 		err := websocket.Message.Receive(ws, &msg)
 		if err != nil {
 			fmt.Println("Error receiving message:", err)
-			// Send a close message with an error code and reason
 			ws.Close()
 			return
 		}
@@ -59,7 +62,7 @@ func WebSocketHandler(ws *websocket.Conn) {
 				ws.Close()
 				return
 			}
-			handlers.HandleReq(ws, message)
+			handlers.HandleReq(ws, message, subscriptions)
 		case "CLOSE":
 			handlers.HandleClose(ws, message)
 		default:

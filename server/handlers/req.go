@@ -17,7 +17,7 @@ import (
 
 var subscriptions = make(map[string]relay.Subscription)
 
-func HandleReq(ws *websocket.Conn, message []interface{}) {
+func HandleReq(ws *websocket.Conn, message []interface{}, subscriptions map[string][]relay.Filter) {
 	if len(message) < 3 {
 		fmt.Println("Invalid REQ message format")
 		response.SendClosed(ws, "", "invalid: invalid REQ message format")
@@ -52,14 +52,9 @@ func HandleReq(ws *websocket.Conn, message []interface{}) {
 		filters[i] = f
 	}
 
-	// Check if subscription already exists
-	if _, exists := subscriptions[subID]; exists {
-		response.SendClosed(ws, subID, "duplicate: subID already opened")
-		return
-	}
-
-	subscriptions[subID] = relay.Subscription{ID: subID, Filters: filters}
-	fmt.Println("Subscription added:", subID)
+	// Update or add the subscription for the given subID
+	subscriptions[subID] = filters
+	fmt.Println("Subscription updated:", subID)
 
 	// Query the database with filters and send back the results
 	queriedEvents, err := QueryEvents(filters, db.GetClient(), "grain")
