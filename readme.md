@@ -18,11 +18,12 @@ GRAIN is an open-source Nostr relay implementation written in Go. This project a
 
 ## Prerequisites
 
-**MongoDB Server 🍃**
+### MongoDB Server 🍃
+
 GRAIN 🌾 leverages MongoDB for efficient storage and management of events. MongoDB, known for its high performance and scalability, is an ideal choice for handling large volumes of real-time data. GRAIN 🌾 uses MongoDB collections to store events categorized by kind and ensures quick retrieval and manipulation of these events through its robust querying capabilities.
 
 You can get the free Community Server edition of MongoDB from the official MongoDB website:
-[MongoDB Community Server](https://www.mongodb.com/try/download/community)
+[MongoDB Community Server](https://www.mongodb.com/try/download/community)  
 MongoDB provides extensive documentation and support to help you get started with installation and configuration, ensuring a smooth integration with GRAIN.
 
 ## Configuration
@@ -31,7 +32,7 @@ Grain will automatically create the configurations and relay metadata files nece
 
 They are created in the root directory of Grain. You can change configurations and relay_metadata here. The relay must be restarted for new configurations to take effect.
 
-### Development
+## Development
 
 To contribute to GRAIN, follow these steps:
 
