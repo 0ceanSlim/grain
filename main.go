@@ -9,9 +9,9 @@ import (
 	"grain/server/db"
 	"grain/server/nip"
 	"grain/server/utils"
-
 	"log"
 	"net/http"
+	"time"
 
 	"golang.org/x/net/websocket"
 )
@@ -46,17 +46,26 @@ func main() {
 
 func setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", ListenAndServe)
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("app/static"))))
-	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", utils.WithCORS(ListenAndServe))
+	mux.Handle("/static/", utils.WithCORSHandler(http.StripPrefix("/static/", http.FileServer(http.Dir("app/static")))))
+	mux.HandleFunc("/favicon.ico", utils.WithCORS(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "app/static/img/favicon.ico")
-	})
+	}))
 	return mux
 }
 
+
+
 func startServer(config *configTypes.ServerConfig, mux *http.ServeMux) {
+	server := &http.Server{
+		Addr:         config.Server.Port,
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
 	fmt.Printf("Server is running on http://localhost%s\n", config.Server.Port)
-	err := http.ListenAndServe(config.Server.Port, mux)
+	err := server.ListenAndServe()
 	if err != nil {
 		fmt.Println("Error starting server:", err)
 	}
