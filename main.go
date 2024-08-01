@@ -46,15 +46,13 @@ func main() {
 
 func setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", utils.WithCORS(ListenAndServe))
-	mux.Handle("/static/", utils.WithCORSHandler(http.StripPrefix("/static/", http.FileServer(http.Dir("app/static")))))
-	mux.HandleFunc("/favicon.ico", utils.WithCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", ListenAndServe)
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("app/static"))))
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "app/static/img/favicon.ico")
-	}))
+	})
 	return mux
 }
-
-
 
 func startServer(config *configTypes.ServerConfig, mux *http.ServeMux) {
 	server := &http.Server{
