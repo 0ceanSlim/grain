@@ -9,4 +9,5 @@ type ServerConfig struct {
 		Port string `yaml:"port"`
 	} `yaml:"server"`
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
+	Whitelist WhitelistConfig `yaml:"whitelist"`
 }

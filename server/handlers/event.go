@@ -59,6 +59,12 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventS
 	rateLimiter := config.GetRateLimiter()
 	sizeLimiter := config.GetSizeLimiter()
 
+	// Check whitelist
+	if !isWhitelisted(evt.PubKey) {
+		response.SendOK(ws, evt.ID, false, "not allowed: pubkey is not whitelisted")
+		return
+	}
+
 	category := determineCategory(evt.Kind)
 
 	if allowed, msg := rateLimiter.AllowEvent(evt.Kind, category); !allowed {
@@ -120,4 +126,18 @@ func determineCategory(kind int) string {
 	default:
 		return "unknown"
 	}
+}
+
+// Helper function to check if a pubkey is whitelisted
+func isWhitelisted(pubKey string) bool {
+	cfg := config.GetConfig()
+	if !cfg.Whitelist.Enabled {
+		return true
+	}
+	for _, whitelistedKey := range cfg.Whitelist.Pubkeys {
+		if pubKey == whitelistedKey {
+			return true
+		}
+	}
+	return false
 }

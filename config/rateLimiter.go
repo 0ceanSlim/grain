@@ -30,7 +30,7 @@ type RateLimiter struct {
 }
 
 var rateLimiterInstance *RateLimiter
-var once sync.Once
+var rateOnce sync.Once
 
 func SetupRateLimiter(cfg *config.ServerConfig) {
 	rateLimiter := NewRateLimiter(
@@ -54,7 +54,7 @@ func SetupRateLimiter(cfg *config.ServerConfig) {
 }
 
 func SetRateLimiter(rl *RateLimiter) {
-	once.Do(func() {
+	rateOnce.Do(func() {
 		rateLimiterInstance = rl
 	})
 }

@@ -2,24 +2,37 @@ package config
 
 import (
 	"os"
+	"sync"
 
-	config "grain/config/types"
+	configTypes "grain/config/types"
 
 	"gopkg.in/yaml.v2"
 )
 
-func LoadConfig(filename string) (*config.ServerConfig, error) {
+var (
+	cfg  *configTypes.ServerConfig
+	once sync.Once
+)
+
+func LoadConfig(filename string) (*configTypes.ServerConfig, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	var config config.ServerConfig
-
+	var config configTypes.ServerConfig
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	once.Do(func() {
+		cfg = &config
+	})
+
+	return cfg, nil
+}
+
+func GetConfig() *configTypes.ServerConfig {
+	return cfg
 }
