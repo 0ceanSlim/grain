@@ -128,16 +128,31 @@ func determineCategory(kind int) string {
 	}
 }
 
-// Helper function to check if a pubkey is whitelisted
+// Helper function to check if a pubkey or npub is whitelisted
 func isWhitelisted(pubKey string) bool {
 	cfg := config.GetConfig()
 	if !cfg.Whitelist.Enabled {
 		return true
 	}
+
+	// Check pubkeys
 	for _, whitelistedKey := range cfg.Whitelist.Pubkeys {
 		if pubKey == whitelistedKey {
 			return true
 		}
 	}
+
+	// Check npubs
+	for _, npub := range cfg.Whitelist.Npubs {
+		decodedPubKey, err := utils.DecodeNpub(npub)
+		if err != nil {
+			fmt.Println("Error decoding npub:", err)
+			continue
+		}
+		if pubKey == decodedPubKey {
+			return true
+		}
+	}
+
 	return false
 }

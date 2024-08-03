@@ -8,6 +8,7 @@ whitelist:
   enabled: false
   pubkeys: #["3fe0ab6cbdb7ee27148202249e3fb3b89423c6f6cda6ef43ea5057c3d93088e4",
   #"cac0e43235806da094f0787a5b04e29ad04cb1a3c7ea5cf61edc1c338734082b"]
+  npubs: #["npub18ls2km9aklhzw9yzqgjfu0anhz2z83hkeknw7sl22ptu8kfs3rjq54am44"]
 rate_limit:
   ws_limit: 100 # Global rate limit for WebSocket messages (50 messages per second)
   ws_burst: 200 # Global burst limit for WebSocket messages (allows a burst of 100 messages)
