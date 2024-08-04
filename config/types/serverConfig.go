@@ -11,4 +11,5 @@ type ServerConfig struct {
 	RateLimit       RateLimitConfig       `yaml:"rate_limit"`
 	PubkeyWhitelist PubkeyWhitelistConfig `yaml:"pubkey_whitelist"`
 	KindWhitelist   KindWhitelistConfig   `yaml:"kind_whitelist"`
+	DomainWhitelist DomainWhitelistConfig `yaml:"domain_whitelist"`
 }

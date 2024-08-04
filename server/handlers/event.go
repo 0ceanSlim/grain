@@ -60,6 +60,19 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventS
 	rateLimiter := config.GetRateLimiter()
 	sizeLimiter := config.GetSizeLimiter()
 
+	if config.GetConfig().DomainWhitelist.Enabled {
+		domains := config.GetConfig().DomainWhitelist.Domains
+		pubkeys, err := utils.FetchPubkeysFromDomains(domains)
+		if err != nil {
+			fmt.Println("Error fetching pubkeys from domains:", err)
+			response.SendNotice(ws, "", "Error fetching pubkeys from domains")
+			return
+		}
+		for _, pubkey := range pubkeys {
+			config.GetConfig().PubkeyWhitelist.Pubkeys = append(config.GetConfig().PubkeyWhitelist.Pubkeys, pubkey)
+		}
+	}
+
 	// Check if the kind is whitelisted
 	if config.GetConfig().KindWhitelist.Enabled && !isKindWhitelisted(evt.Kind) {
 		response.SendOK(ws, evt.ID, false, "not allowed: event kind is not whitelisted")

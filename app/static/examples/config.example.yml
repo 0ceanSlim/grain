@@ -12,6 +12,10 @@ pubkey_whitelist:
 kind_whitelist:
   enabled: false
   kinds: #[0, 1]
+  #If pubkey_whitelist not enabled, domain_whitelist will be ignored
+domain_whitelist:
+  enabled: false
+  domains: #["happytavern.co", "nostrplebs.com"]
 rate_limit:
   ws_limit: 100 # Global rate limit for WebSocket messages (50 messages per second)
   ws_burst: 200 # Global burst limit for WebSocket messages (allows a burst of 100 messages)
