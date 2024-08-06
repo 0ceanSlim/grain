@@ -12,38 +12,13 @@
     </li>
     {{end}}
   </ul>-->
-  <div
-    class="container flex justify-center p-4 border-2 border-gray-600 border-solid rounded-md w-fit"
+  <button
+    hx-get="/import-events"
+    hx-swap="outerHTML"
+    class="p-2 mb-2 text-white bg-orange-400 rounded-md"
+    hx-target="body"
   >
-    <form id="import-form" method="POST" action="/import-events">
-      <div>
-        <label for="pubkey">Pubkey:</label>
-        <input
-          class="p-2 m-2 text-black rounded-md"
-          type="text"
-          id="pubkey"
-          name="pubkey"
-          required
-          maxlength="64"
-        />
-      </div>
-      <div>
-        <label for="relayUrls">Relay URLs (comma separated):</label>
-        <input
-          class="p-2 m-2 text-black rounded-md"
-          type="text"
-          id="relayUrls"
-          name="relayUrls"
-          required
-        />
-      </div>
-      <button
-        class="p-2 m-2 font-bold bg-green-500 rounded-md font-xl"
-        type="submit"
-      >
-        Import Events
-      </button>
-    </form>
-  </div>
+    Import Events
+  </button>
 </main>
 {{end}}

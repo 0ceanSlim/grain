@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
-	"grain/app"
+	app "grain/app/src"
+	"grain/app/src/api"
+	"grain/app/src/routes"
 	"grain/config"
 	configTypes "grain/config/types"
 	relay "grain/server"
@@ -47,7 +49,8 @@ func main() {
 func setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", ListenAndServe)
-	mux.HandleFunc("/import-events", app.ImportEventsHandler)
+	mux.HandleFunc("/import-results", api.ImportEvents)
+	mux.HandleFunc("/import-events", routes.ImportEvents)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("app/static"))))
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "app/static/img/favicon.ico")

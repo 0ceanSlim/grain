@@ -26,6 +26,26 @@
     <link href="/static/custom.min.css" rel="stylesheet" />
     <link rel="icon" href="/static/img/favicon.ico" type="image/x-icon" />
     <title>{{.Title}}</title>
+    <style>
+      .spinner {
+        display: none;
+        width: 50px;
+        height: 50px;
+        border: 5px solid lightgray;
+        border-top: 5px solid blue;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body class="font-mono text-center text-textPrimary bg-bgPrimary">
     {{template "header" .}} {{template "view" .}} {{template "footer" .}}
