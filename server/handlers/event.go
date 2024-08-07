@@ -9,7 +9,6 @@ import (
 	"grain/server/handlers/kinds"
 	"grain/server/handlers/response"
 	"grain/server/utils"
-	"strconv"
 
 	relay "grain/server/types"
 
@@ -74,13 +73,13 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventS
 	}
 
 	// Check if the kind is whitelisted
-	if config.GetConfig().KindWhitelist.Enabled && !isKindWhitelisted(evt.Kind) {
+	if config.GetConfig().KindWhitelist.Enabled && !utils.IsKindWhitelisted(evt.Kind) {
 		response.SendOK(ws, evt.ID, false, "not allowed: event kind is not whitelisted")
 		return
 	}
 
 	// Check pubkey/npub whitelist only if the kind is not whitelisted
-	if config.GetConfig().PubkeyWhitelist.Enabled && !isPubKeyWhitelisted(evt.PubKey) {
+	if config.GetConfig().PubkeyWhitelist.Enabled && !utils.IsPubKeyWhitelisted(evt.PubKey) {
 		response.SendOK(ws, evt.ID, false, "not allowed: pubkey or npub is not whitelisted")
 		return
 	}
@@ -148,52 +147,3 @@ func determineCategory(kind int) string {
 	}
 }
 
-// Helper function to check if a pubkey or npub is whitelisted
-func isPubKeyWhitelisted(pubKey string) bool {
-	cfg := config.GetConfig()
-	if !cfg.PubkeyWhitelist.Enabled {
-		return true
-	}
-
-	// Check pubkeys
-	for _, whitelistedKey := range cfg.PubkeyWhitelist.Pubkeys {
-		if pubKey == whitelistedKey {
-			return true
-		}
-	}
-
-	// Check npubs
-	for _, npub := range cfg.PubkeyWhitelist.Npubs {
-		decodedPubKey, err := utils.DecodeNpub(npub)
-		if err != nil {
-			fmt.Println("Error decoding npub:", err)
-			continue
-		}
-		if pubKey == decodedPubKey {
-			return true
-		}
-	}
-
-	return false
-}
-
-func isKindWhitelisted(kind int) bool {
-	cfg := config.GetConfig()
-	if !cfg.KindWhitelist.Enabled {
-		return true
-	}
-
-	// Check event kinds
-	for _, whitelistedKindStr := range cfg.KindWhitelist.Kinds {
-		whitelistedKind, err := strconv.Atoi(whitelistedKindStr)
-		if err != nil {
-			fmt.Println("Error converting whitelisted kind to int:", err)
-			continue
-		}
-		if kind == whitelistedKind {
-			return true
-		}
-	}
-
-	return false
-}

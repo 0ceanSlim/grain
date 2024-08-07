@@ -40,19 +40,30 @@ func ImportEvents(w http.ResponseWriter, r *http.Request) {
 
 		for _, url := range urls {
 			var events []map[string]interface{}
-			events, err = fetchEventsFromRelay(pubkey, url)
-			if err != nil {
-				errorChan <- fmt.Errorf("error fetching events from relay %s: %w", url, err)
-				return
-			}
+			var lastEventCreatedAt int64 = 0 // Track the timestamp of the last event fetched
 
-			err = sendEventsToRelay(events)
-			if err != nil {
-				errorChan <- fmt.Errorf("error sending events to relay: %w", err)
-				return
-			}
+			for {
+				events, err = fetchEventsFromRelay(pubkey, url, lastEventCreatedAt)
+				if err != nil {
+					errorChan <- fmt.Errorf("error fetching events from relay %s: %w", url, err)
+					return
+				}
 
-			totalEvents += len(events)
+				if len(events) == 0 {
+					break
+				}
+
+				err = sendEventsToRelay(events)
+				if err != nil {
+					errorChan <- fmt.Errorf("error sending events to relay: %w", err)
+					return
+				}
+
+				totalEvents += len(events)
+
+				// Update lastEventCreatedAt with the timestamp of the last event fetched
+				lastEventCreatedAt = int64(events[len(events)-1]["created_at"].(float64))
+			}
 		}
 
 		totalEventsChan <- totalEvents
@@ -92,7 +103,7 @@ func renderResult(w http.ResponseWriter, success bool, message string, count int
 	}
 }
 
-func fetchEventsFromRelay(pubkey, relayUrl string) ([]map[string]interface{}, error) {
+func fetchEventsFromRelay(pubkey, relayUrl string, lastEventCreatedAt int64) ([]map[string]interface{}, error) {
 	log.Printf("Connecting to relay: %s", relayUrl)
 	conn, err := websocket.Dial(relayUrl, "", "http://localhost/")
 	if err != nil {
@@ -102,7 +113,17 @@ func fetchEventsFromRelay(pubkey, relayUrl string) ([]map[string]interface{}, er
 	defer conn.Close()
 	log.Printf("Connected to relay: %s", relayUrl)
 
-	reqMessage := fmt.Sprintf(`["REQ", "import-sub", {"authors": ["%s"]}]`, pubkey)
+	filters := map[string]interface{}{
+		"authors": []string{pubkey},
+		"limit":   100,
+	}
+
+	if lastEventCreatedAt > 0 {
+		filters["until"] = lastEventCreatedAt - 1
+	}
+
+	filtersJSON, _ := json.Marshal(filters)
+	reqMessage := fmt.Sprintf(`["REQ", "import-sub", %s]`, filtersJSON)
 	log.Printf("Sending request: %s", reqMessage)
 	if _, err := conn.Write([]byte(reqMessage)); err != nil {
 		log.Printf("Error sending request to relay %s: %v", relayUrl, err)
@@ -156,7 +177,7 @@ func sendEventsToRelay(events []map[string]interface{}) error {
 
 	relayUrl := fmt.Sprintf("ws://localhost%s", cfg.Server.Port)
 
-	batchSize := 5 // Reduce the batch size to avoid connection issues
+	batchSize := 20 // Reduce the batch size to avoid connection issues
 	for i := 0; i < len(events); i += batchSize {
 		end := i + batchSize
 		if end > len(events) {
@@ -167,6 +188,9 @@ func sendEventsToRelay(events []map[string]interface{}) error {
 		if err := sendBatchToRelay(batch, relayUrl); err != nil {
 			return err
 		}
+
+		// Wait for a short period to avoid overloading the relay server
+		time.Sleep(1 * time.Second)
 	}
 
 	return nil
@@ -196,9 +220,8 @@ func sendBatchToRelay(events []map[string]interface{}, relayUrl string) error {
 		}
 		log.Printf("Sent event to local relay: %s", event["id"])
 	}
-
 	// Wait for a short period to avoid overloading the relay server
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	return nil
 }

@@ -23,7 +23,7 @@ func RootHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := PageData{
-		Title:  "GRAIN Relay",
+		Title:  "GRAIN Dashboard",
 		Events: events,
 	}
 
