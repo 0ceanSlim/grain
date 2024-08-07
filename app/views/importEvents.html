@@ -39,7 +39,7 @@
       </button>
     </form>
   </div>
-  <div id="spinner" class="spinner"></div>
+  <div id="spinner" class="spinner" style="display: none"></div>
   <div id="result" class="p-2 m-2 text-xl font-bold"></div>
   <button
     hx-get="/"
@@ -56,11 +56,13 @@
         document.getElementById("spinner").style.display = "block";
       });
 
-    document
-      .getElementById("result")
-      .addEventListener("htmx:afterRequest", function () {
-        document.getElementById("spinner").style.display = "none";
-      });
+    document.addEventListener("htmx:afterRequest", function () {
+      document.getElementById("spinner").style.display = "none";
+    });
+
+    document.addEventListener("htmx:requestError", function () {
+      document.getElementById("spinner").style.display = "none";
+    });
   </script>
 </main>
 {{end}}

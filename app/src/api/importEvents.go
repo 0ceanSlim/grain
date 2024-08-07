@@ -63,7 +63,7 @@ func ImportEvents(w http.ResponseWriter, r *http.Request) {
 		renderResult(w, true, "Events imported successfully", totalEvents)
 	case err := <-errorChan:
 		renderResult(w, false, err.Error(), 0)
-	case <-time.After(5 * time.Minute):
+	case <-time.After(10 * time.Minute): // Increase timeout for large imports
 		renderResult(w, false, "Timeout importing events", 0)
 	}
 }
