@@ -49,5 +49,18 @@
   >
     Return to Dashboard
   </button>
+  <script>
+    document
+      .getElementById("import-form")
+      .addEventListener("submit", function () {
+        document.getElementById("spinner").style.display = "block";
+      });
+
+    document
+      .getElementById("result")
+      .addEventListener("htmx:afterRequest", function () {
+        document.getElementById("spinner").style.display = "none";
+      });
+  </script>
 </main>
 {{end}}
