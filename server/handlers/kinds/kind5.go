@@ -29,6 +29,14 @@ func HandleKind5(ctx context.Context, evt relay.Event, dbClient *mongo.Client, w
 				kind := parts[0]
 				pubKey := parts[1]
 				dID := parts[2]
+
+				// Delete previous kind 5 events with the same "a" tag if they exist
+				if err := deletePreviousKind5Events(ctx, kind, pubKey, dID, dbClient); err != nil {
+					response.SendOK(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
+					return fmt.Errorf("error deleting previous kind 5 events: %v", err)
+				}
+
+				// Delete target events by kind, pubKey, and dID
 				if err := deleteEventByKindPubKeyDID(ctx, kind, pubKey, dID, evt.CreatedAt, dbClient); err != nil {
 					response.SendOK(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
 					return fmt.Errorf("error deleting events with kind %s, pubkey %s, and dID %s: %v", kind, pubKey, dID, err)
@@ -44,6 +52,26 @@ func HandleKind5(ctx context.Context, evt relay.Event, dbClient *mongo.Client, w
 	}
 
 	response.SendOK(ws, evt.ID, true, "")
+	return nil
+}
+
+func deletePreviousKind5Events(ctx context.Context, kind string, pubKey string, dID string, dbClient *mongo.Client) error {
+	collection := dbClient.Database("grain").Collection("event-kind5")
+	filter := bson.M{
+		"tags": bson.M{
+			"$elemMatch": bson.M{
+				"0": "a",
+				"1": fmt.Sprintf("%s:%s:%s", kind, pubKey, dID),
+			},
+		},
+	}
+
+	_, err := collection.DeleteMany(ctx, filter)
+	if err != nil {
+		return fmt.Errorf("error deleting previous kind 5 events from collection event-kind5: %v", err)
+	}
+
+	fmt.Printf("Deleted previous kind 5 events for kind %s, pubkey %s, and dID %s\n", kind, pubKey, dID)
 	return nil
 }
 
