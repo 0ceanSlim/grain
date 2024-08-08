@@ -4,6 +4,9 @@ mongodb:
 
 server:
   port: ":8080" # Port for the server to listen on
+  read_timeout: 10 # Read timeout in seconds
+  write_timeout: 10 # Write timeout in seconds
+  idle_timeout: 120 # Idle timeout in seconds
 pubkey_whitelist:
   enabled: false
   pubkeys: #["3fe0ab6cbdb7ee27148202249e3fb3b89423c6f6cda6ef43ea5057c3d93088e4",
