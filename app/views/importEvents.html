@@ -10,35 +10,39 @@
       hx-target="#result"
       hx-indicator="#spinner"
     >
-      <div class="content-right">
-        <div>
-          <label for="pubkey">Pubkey:</label>
-          <input
-            class="p-2 m-2 text-black rounded-md"
-            type="text"
-            id="pubkey"
-            name="pubkey"
-            required
-            maxlength="64"
-          />
-        </div>
-        <div>
-          <label for="relayUrls">Relay URLs (comma separated):</label>
-          <input
-            class="p-2 m-2 text-black rounded-md"
-            type="text"
-            id="relayUrls"
-            name="relayUrls"
-            required
-          />
-        </div>
+      <div>
+        <label for="pubkey">Pubkey:</label>
+        <input
+          class="p-2 m-2 text-black rounded-md"
+          type="text"
+          id="pubkey"
+          name="pubkey"
+          required
+          maxlength="64"
+        />
       </div>
-      <button
-        class="p-2 m-2 font-bold bg-green-500 rounded-md font-xl"
-        type="submit"
-      >
-        Import Events
-      </button>
+      <div>
+        <label for="relayUrls">Relay URLs (comma separated):</label>
+        <input
+          class="p-2 m-2 text-black rounded-md"
+          type="text"
+          id="relayUrls"
+          name="relayUrls"
+          required
+        />
+      </div>
+      <div class="flex items-center justify-center" style="height: 32px">
+        <!-- Adjust height as needed -->
+        <button
+          id="import-button"
+          class="p-2 m-2 font-bold bg-green-500 rounded-md font-xl"
+          type="submit"
+        >
+          Import Events
+        </button>
+        <div id="spinner" class="spinner"></div>
+      </div>
+      <div id="result" class="p-2 m-2 text-xl font-bold"></div>
       <div class="font-bold text-md">
         ⚠️ This Feature is Experimental<br />
         If you are whitelisted, this SHOULD capture all of your events<br />
@@ -46,12 +50,7 @@
       </div>
     </form>
   </div>
-  <div
-    id="spinner"
-    class="m-4 text-lg font-bold text-center spinner"
-    style="display: none"
-  ></div>
-  <div id="result" class="p-2 m-2 text-xl font-bold"></div>
+
   <button
     hx-get="/"
     hx-swap="outerHTML"
@@ -60,19 +59,23 @@
   >
     Return to Dashboard
   </button>
+
   <script>
     document
       .getElementById("import-form")
       .addEventListener("submit", function () {
+        document.getElementById("import-button").style.display = "none";
         document.getElementById("spinner").style.display = "block";
       });
 
     document.addEventListener("htmx:afterRequest", function () {
       document.getElementById("spinner").style.display = "none";
+      // No need to bring back the import button
     });
 
     document.addEventListener("htmx:requestError", function () {
       document.getElementById("spinner").style.display = "none";
+      document.getElementById("import-button").style.display = "block"; // Bring back the button only on error
     });
   </script>
 </main>
