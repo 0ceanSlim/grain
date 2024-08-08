@@ -62,9 +62,9 @@ func startServer(config *configTypes.ServerConfig, mux *http.ServeMux) {
 	server := &http.Server{
 		Addr:         config.Server.Port,
 		Handler:      mux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  time.Duration(config.Server.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(config.Server.WriteTimeout) * time.Second,
+		IdleTimeout:  time.Duration(config.Server.IdleTimeout) * time.Second,
 	}
 	fmt.Printf("Server is running on http://localhost%s\n", config.Server.Port)
 	err := server.ListenAndServe()
@@ -72,20 +72,21 @@ func startServer(config *configTypes.ServerConfig, mux *http.ServeMux) {
 		fmt.Println("Error starting server:", err)
 	}
 }
+
 var wsServer = &websocket.Server{
-    Handshake: func(config *websocket.Config, r *http.Request) error {
-        // Skip origin check
-        return nil
-    },
-    Handler: websocket.Handler(relay.WebSocketHandler),
+	Handshake: func(config *websocket.Config, r *http.Request) error {
+		// Skip origin check
+		return nil
+	},
+	Handler: websocket.Handler(relay.WebSocketHandler),
 }
 
 func ListenAndServe(w http.ResponseWriter, r *http.Request) {
-    if r.Header.Get("Upgrade") == "websocket" {
-        wsServer.ServeHTTP(w, r)
-    } else if r.Header.Get("Accept") == "application/nostr+json" {
-        nip.RelayInfoHandler(w, r)
-    } else {
-        app.RootHandler(w, r)
-    }
+	if r.Header.Get("Upgrade") == "websocket" {
+		wsServer.ServeHTTP(w, r)
+	} else if r.Header.Get("Accept") == "application/nostr+json" {
+		nip.RelayInfoHandler(w, r)
+	} else {
+		app.RootHandler(w, r)
+	}
 }
