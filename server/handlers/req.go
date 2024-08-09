@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"grain/config"
 	"grain/server/db"
 	"grain/server/handlers/response"
 	relay "grain/server/types"
 	"grain/server/utils"
+	"sync"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -16,6 +18,7 @@ import (
 )
 
 var subscriptions = make(map[string]relay.Subscription)
+var mu sync.Mutex // Protect concurrent access to subscriptions map
 
 func HandleReq(ws *websocket.Conn, message []interface{}, subscriptions map[string][]relay.Filter) {
 	if len(message) < 3 {
@@ -29,6 +32,21 @@ func HandleReq(ws *websocket.Conn, message []interface{}, subscriptions map[stri
 		fmt.Println("Invalid subscription ID format")
 		response.SendClosed(ws, "", "invalid: invalid subscription ID format")
 		return
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Check the current number of subscriptions for the client
+	if len(subscriptions) >= config.GetConfig().Server.MaxSubscriptionsPerClient {
+		// Find and remove the oldest subscription (FIFO)
+		var oldestSubID string
+		for id := range subscriptions {
+			oldestSubID = id
+			break
+		}
+		delete(subscriptions, oldestSubID)
+		fmt.Println("Dropped oldest subscription:", oldestSubID)
 	}
 
 	filters := make([]relay.Filter, len(message)-2)
@@ -52,7 +70,7 @@ func HandleReq(ws *websocket.Conn, message []interface{}, subscriptions map[stri
 		filters[i] = f
 	}
 
-	// Update or add the subscription for the given subID
+	// Add the new subscription or update the existing one
 	subscriptions[subID] = filters
 	fmt.Println("Subscription updated:", subID)
 
