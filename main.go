@@ -11,6 +11,10 @@ import (
 	"grain/server/utils"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/websocket"
@@ -20,28 +24,51 @@ func main() {
 	utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
 	utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
 
-	cfg, err := config.LoadConfig("config.yml")
-	if err != nil {
-		log.Fatal("Error loading config: ", err)
+	restartChan := make(chan struct{})
+	go utils.WatchConfigFile("config.yml", restartChan)
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	var wg sync.WaitGroup
+	for {
+		wg.Add(1)
+		cfg, err := config.LoadConfig("config.yml")
+		if err != nil {
+			log.Fatal("Error loading config: ", err)
+		}
+
+		client, err := db.InitDB(cfg)
+		if err != nil {
+			log.Fatal("Error initializing database: ", err)
+		}
+
+		config.SetupRateLimiter(cfg)
+		config.SetupSizeLimiter(cfg)
+
+		err = utils.LoadRelayMetadataJSON()
+		if err != nil {
+			log.Fatal("Failed to load relay metadata: ", err)
+		}
+
+		mux := setupRoutes()
+		server := startServer(cfg, mux, &wg)
+
+		select {
+		case <-restartChan:
+			log.Println("Restarting server...")
+			server.Close()
+			db.DisconnectDB(client)
+			wg.Wait()              // Wait for the server to fully shut down before restarting
+			time.Sleep(3 * time.Second) // Add a delay before restarting
+		case <-signalChan:
+			log.Println("Shutting down server...")
+			server.Close()
+			db.DisconnectDB(client)
+			wg.Wait() // Wait for the server to fully shut down before exiting
+			return
+		}
 	}
-
-	client, err := db.InitDB(cfg)
-	if err != nil {
-		log.Fatal("Error initializing database: ", err)
-	}
-	defer db.DisconnectDB(client)
-
-	config.SetupRateLimiter(cfg)
-	config.SetupSizeLimiter(cfg)
-
-	err = utils.LoadRelayMetadataJSON()
-	if err != nil {
-		log.Fatal("Failed to load relay metadata: ", err)
-	}
-
-	mux := setupRoutes()
-
-	startServer(cfg, mux)
 }
 
 func setupRoutes() *http.ServeMux {
@@ -56,7 +83,7 @@ func setupRoutes() *http.ServeMux {
 	return mux
 }
 
-func startServer(config *configTypes.ServerConfig, mux *http.ServeMux) {
+func startServer(config *configTypes.ServerConfig, mux *http.ServeMux, wg *sync.WaitGroup) *http.Server {
 	server := &http.Server{
 		Addr:         config.Server.Port,
 		Handler:      mux,
@@ -64,11 +91,16 @@ func startServer(config *configTypes.ServerConfig, mux *http.ServeMux) {
 		WriteTimeout: time.Duration(config.Server.WriteTimeout) * time.Second,
 		IdleTimeout:  time.Duration(config.Server.IdleTimeout) * time.Second,
 	}
-	fmt.Printf("Server is running on http://localhost%s\n", config.Server.Port)
-	err := server.ListenAndServe()
-	if err != nil {
-		fmt.Println("Error starting server:", err)
-	}
+
+	go func() {
+		defer wg.Done() // Notify that the server is done shutting down
+		fmt.Printf("Server is running on http://localhost%s\n", config.Server.Port)
+		err := server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			fmt.Println("Error starting server:", err)
+		}
+	}()
+	return server
 }
 
 var wsServer = &websocket.Server{
