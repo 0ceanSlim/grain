@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	app "grain/app/src"
 	"grain/app/src/api"
 	"grain/app/src/routes"
 	"grain/config"
@@ -86,6 +85,6 @@ func ListenAndServe(w http.ResponseWriter, r *http.Request) {
 	} else if r.Header.Get("Accept") == "application/nostr+json" {
 		utils.RelayInfoHandler(w, r)
 	} else {
-		app.RootHandler(w, r)
+		routes.IndexHandler(w, r)
 	}
 }

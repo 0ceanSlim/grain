@@ -1,7 +1,9 @@
 package routes
 
 import (
-	app "grain/app/src"
+	app "grain/app/src/types"
+	"grain/app/src/utils"
+
 	"net/http"
 )
 
@@ -11,5 +13,5 @@ func ImportEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Call RenderTemplate with the specific template for this route
-	app.RenderTemplate(w, data, "importEvents.html")
+	utils.RenderTemplate(w, data, "importEvents.html")
 }
