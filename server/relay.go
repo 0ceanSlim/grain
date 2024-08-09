@@ -40,7 +40,7 @@ func WebSocketHandler(ws *websocket.Conn) {
 	currentConnections++
 	mu.Unlock()
 
-	clientInfo := relay.ClientInfo{
+	clientInfo := utils.ClientInfo{
 		IP:        utils.GetClientIP(ws.Request()),
 		UserAgent: ws.Request().Header.Get("User-Agent"),
 		Origin:    ws.Request().Header.Get("Origin"),
