@@ -9,7 +9,6 @@ import (
 	configTypes "grain/config/types"
 	relay "grain/server"
 	"grain/server/db"
-	"grain/server/nip"
 	"grain/server/utils"
 	"log"
 	"net/http"
@@ -36,7 +35,7 @@ func main() {
 	config.SetupRateLimiter(cfg)
 	config.SetupSizeLimiter(cfg)
 
-	err = nip.LoadRelayMetadataJSON()
+	err = utils.LoadRelayMetadataJSON()
 	if err != nil {
 		log.Fatal("Failed to load relay metadata: ", err)
 	}
@@ -85,7 +84,7 @@ func ListenAndServe(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Upgrade") == "websocket" {
 		wsServer.ServeHTTP(w, r)
 	} else if r.Header.Get("Accept") == "application/nostr+json" {
-		nip.RelayInfoHandler(w, r)
+		utils.RelayInfoHandler(w, r)
 	} else {
 		app.RootHandler(w, r)
 	}

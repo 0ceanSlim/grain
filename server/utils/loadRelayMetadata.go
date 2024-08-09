@@ -1,4 +1,4 @@
-package nip
+package utils
 
 import (
 	"encoding/json"
