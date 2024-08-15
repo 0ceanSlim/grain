@@ -72,6 +72,12 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventS
 		}
 	}
 
+	// Check against manual blacklist
+	if blacklisted, msg := utils.CheckBlacklist(evt.PubKey, evt.Content); blacklisted {
+		response.SendOK(ws, evt.ID, false, msg)
+		return
+	}
+
 	// Check if the kind is whitelisted
 	if config.GetConfig().KindWhitelist.Enabled && !utils.IsKindWhitelisted(evt.Kind) {
 		response.SendOK(ws, evt.ID, false, "not allowed: event kind is not whitelisted")
@@ -81,13 +87,6 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventS
 	// Check pubkey/npub whitelist only if the kind is not whitelisted
 	if config.GetConfig().PubkeyWhitelist.Enabled && !utils.IsPubKeyWhitelisted(evt.PubKey) {
 		response.SendOK(ws, evt.ID, false, "not allowed: pubkey or npub is not whitelisted")
-		return
-	}
-
-	// Check against manual blacklist
-	blacklisted, msg := utils.CheckBlacklist(evt.PubKey, evt.Content)
-	if blacklisted {
-		response.SendOK(ws, evt.ID, false, msg)
 		return
 	}
 

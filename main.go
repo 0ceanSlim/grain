@@ -21,8 +21,7 @@ import (
 )
 
 func main() {
-	utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
-	utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
+	utils.ClearTemporaryBans()
 
 	restartChan := make(chan struct{})
 	go utils.WatchConfigFile("config.yml", restartChan)
@@ -46,6 +45,8 @@ func main() {
 		config.SetupRateLimiter(cfg)
 		config.SetupSizeLimiter(cfg)
 
+		utils.ClearTemporaryBans()
+
 		err = utils.LoadRelayMetadataJSON()
 		if err != nil {
 			log.Fatal("Failed to load relay metadata: ", err)
@@ -57,15 +58,17 @@ func main() {
 		select {
 		case <-restartChan:
 			log.Println("Restarting server...")
+
+			// Close server before restart
 			server.Close()
-			db.DisconnectDB(client)
-			wg.Wait()              // Wait for the server to fully shut down before restarting
-			time.Sleep(3 * time.Second) // Add a delay before restarting
+			wg.Wait()
+
+			time.Sleep(3 * time.Second)
 		case <-signalChan:
 			log.Println("Shutting down server...")
 			server.Close()
 			db.DisconnectDB(client)
-			wg.Wait() // Wait for the server to fully shut down before exiting
+			wg.Wait()
 			return
 		}
 	}
