@@ -84,6 +84,13 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventS
 		return
 	}
 
+	// Check against manual blacklist
+	blacklisted, msg := utils.CheckBlacklist(evt.PubKey, evt.Content)
+	if blacklisted {
+		response.SendOK(ws, evt.ID, false, msg)
+		return
+	}
+
 	category := determineCategory(evt.Kind)
 
 	if allowed, msg := rateLimiter.AllowEvent(evt.Kind, category); !allowed {

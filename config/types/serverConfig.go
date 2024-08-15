@@ -17,4 +17,5 @@ type ServerConfig struct {
 	PubkeyWhitelist PubkeyWhitelistConfig `yaml:"pubkey_whitelist"`
 	KindWhitelist   KindWhitelistConfig   `yaml:"kind_whitelist"`
 	DomainWhitelist DomainWhitelistConfig `yaml:"domain_whitelist"`
+	Blacklist       BlacklistConfig       `yaml:"blacklist"`
 }

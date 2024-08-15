@@ -1,17 +1,6 @@
 {{define "view"}}
 <main class="flex flex-col items-center justify-center p-8">
   <div class="mb-4">You are now viewing the {{.Title}}</div>
-  <!--<h2>Top Ten Most Recent Events</h2>
-  <ul>
-    {{range .Events}}
-    <li>
-      <strong>ID:</strong> {{.ID}}<br />
-      <strong>Content:</strong> {{.Content}}<br />
-      <strong>Created At:</strong> {{.CreatedAt}}<br />
-      <strong>PubKey:</strong> {{.PubKey}}
-    </li>
-    {{end}}
-  </ul>-->
   <button
     hx-get="/import-events"
     hx-swap="outerHTML"
