@@ -1,64 +1,85 @@
 mongodb:
-  uri: "mongodb://localhost:27017/" # MongoDB connection URI
-  database: "grain" # Database name
+  uri: mongodb://localhost:27017/
+  database: grain
 
 server:
-  port: ":8080" # Port for the server to listen on
-  read_timeout: 10 # Read timeout in seconds
-  write_timeout: 10 # Write timeout in seconds
-  idle_timeout: 120 # Idle timeout in seconds
-  max_connections: 100 # Maximum number of concurrent connections
-  max_subscriptions_per_client: 10 # Maximum number of concurrent subscriptions per client
+  port: :8181
+  read_timeout: 10 # in seconds
+  write_timeout: 10 # in seconds
+  idle_timeout: 120 # in seconds
+  max_connections: 100
+  max_subscriptions_per_client: 10
+
+rate_limit:
+  ws_limit: 100 # WebSocket messages per second
+  ws_burst: 200 # Allowed burst of WebSocket messages
+  event_limit: 50 # Events per second
+  event_burst: 100 # Allowed burst of events
+  req_limit: 50 # HTTP requests per second
+  req_burst: 100 # Allowed burst of HTTP requests
+  max_event_size: 51200 # Maximum size of an event in bytes
+
+  # Size limits for specific event kinds
+  kind_size_limits:
+    - kind: 0
+      max_size: 10240 # Maximum size in bytes for kind 0 events
+    - kind: 1
+      max_size: 25600 # Maximum size in bytes for kind 1 events
+
+  # Rate limits for different event categories
+  category_limits:
+    ephemeral:
+      kind: 0
+      limit: 100 # Events per second
+      burst: 200 # Allowed burst
+    parameterized_replaceable:
+      kind: 0
+      limit: 5
+      burst: 10
+    regular:
+      kind: 0
+      limit: 25
+      burst: 50
+    replaceable:
+      kind: 0
+      limit: 10
+      burst: 20
+
+  # Rate limits for specific event kinds
+  kind_limits:
+    - kind: 0
+      limit: 1 # Events per second
+      burst: 5 # Allowed burst
+    - kind: 1
+      limit: 25
+      burst: 50
+    - kind: 3
+      limit: 25
+      burst: 50
 
 pubkey_whitelist:
   enabled: false
-  pubkeys: #["3fe0ab6cbdb7ee27148202249e3fb3b89423c6f6cda6ef43ea5057c3d93088e4",
-  #"cac0e43235806da094f0787a5b04e29ad04cb1a3c7ea5cf61edc1c338734082b"]
-  npubs: #["npub18ls2km9aklhzw9yzqgjfu0anhz2z83hkeknw7sl22ptu8kfs3rjq54am44"]
+  pubkeys: [] # List of allowed public keys
+  npubs: [] # List of allowed npubs (Nostr public keys in bech32 format)
+
 kind_whitelist:
   enabled: false
-  kinds: #[0, 1]
-  #If pubkey_whitelist not enabled, domain_whitelist will be ignored
+  kinds: [] # List of allowed event kinds
+
 domain_whitelist:
   enabled: false
-  domains: #["happytavern.co", "nostrplebs.com"]
-rate_limit:
-  ws_limit: 100 # Global rate limit for WebSocket messages (50 messages per second)
-  ws_burst: 200 # Global burst limit for WebSocket messages (allows a burst of 100 messages)
+  domains: [] # List of allowed domains
 
-  event_limit: 50 # Global rate limit for events (25 events per second)
-  event_burst: 100 # Global burst limit for events (allows a burst of 50 events)
-  req_limit: 50 # Added limit for REQ messages
-  req_burst: 100 # Added burst limit for REQ messages
-
-  max_event_size: 51200 # Global maximum event size in bytes (50Kb)
-  kind_size_limits:
-    - kind: 0
-      max_size: 10240 # Maximum event size for kind 0 in bytes (10Kb)
-    - kind: 1
-      max_size: 25600 # Maximum event size for kind 1 in bytes (25Kb)
-
-  category_limits: # Rate limits based on event categories
-    regular:
-      limit: 25 # Rate limit for regular events (50 events per second)
-      burst: 50 # Burst limit for regular events (allows a burst of 100 events)
-    replaceable:
-      limit: 10 # Rate limit for replaceable events (10 events per second)
-      burst: 20 # Burst limit for replaceable events (allows a burst of 20 events)
-    parameterized_replaceable:
-      limit: 5 # Rate limit for parameterized replaceable events (5 events per second)
-      burst: 10 # Burst limit for parameterized replaceable events (allows a burst of 10 events)
-    ephemeral:
-      limit: 100 # Rate limit for ephemeral events (100 events per second)
-      burst: 200 # Burst limit for ephemeral events (allows a burst of 200 events)
-
-  kind_limits: # Specific rate limits for different kinds of events
-    - kind: 0
-      limit: 1 # Rate limit for events of kind 0 (1 event per second)
-      burst: 5 # Burst limit for events of kind 0 (allows a burst of 5 events)
-    - kind: 1
-      limit: 25 # Rate limit for events of kind 1 (100 events per second)
-      burst: 50 # Burst limit for events of kind 1 (allows a burst of 200 events)
-    - kind: 3
-      limit: 25 # Rate limit for events of kind 3 (25 events per second)
-      burst: 50 # Burst limit for events of kind 3 (allows a burst of 50 events)
+blacklist: #Removing a pubkey from the Blacklist requires a hard restart; Blacklist overides the Whitelist
+  enabled: true
+  permanent_ban_words: [] # Words that trigger a permanent ban
+  temp_ban_words: # Words that trigger a temporary ban
+    - crypto
+    - web3
+    - airdrop
+  max_temp_bans: 3 # Number of temporary bans before a permanent ban
+  temp_ban_duration: 3600 # Temporary ban duration in seconds
+  permanent_blacklist_pubkeys: # List of permanently banned public keys
+    - db0c9b8acd6101adb9b281c5321f98f6eebb33c5719d230ed1870997538a9765
+  permanent_blacklist_npubs: # List of permanently banned npubs
+    - npub1x0r5gflnk2mn6h3c70nvnywpy2j46gzqwg6k7uw6fxswyz0md9qqnhshtn
