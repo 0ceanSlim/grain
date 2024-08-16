@@ -115,7 +115,6 @@ func AddToTemporaryBlacklist(pubkey string) error {
         tempBannedPubkeys[pubkey] = entry
     } else {
         log.Printf("Updating existing temporary ban entry for pubkey %s. Current count: %d", pubkey, entry.count)
-        // If the ban has expired, we don't reset the count, just update the unban time
         if time.Now().After(entry.unbanTime) {
             log.Printf("Previous ban for pubkey %s has expired. Keeping count at %d", pubkey, entry.count)
         }
@@ -130,7 +129,12 @@ func AddToTemporaryBlacklist(pubkey string) error {
     if entry.count > cfg.MaxTempBans {
         log.Printf("Attempting to move pubkey %s to permanent blacklist", pubkey)
         delete(tempBannedPubkeys, pubkey)
+        
+        // Release the lock before calling AddToPermanentBlacklist
+        mu.Unlock()
         err := AddToPermanentBlacklist(pubkey)
+        mu.Lock() // Re-acquire the lock
+        
         if err != nil {
             log.Printf("Error adding pubkey %s to permanent blacklist: %v", pubkey, err)
             return err
@@ -172,21 +176,19 @@ func isPubKeyPermanentlyBlacklisted(pubKey string) bool {
 }
 
 func AddToPermanentBlacklist(pubkey string) error {
-	mu.Lock()
-	defer mu.Unlock()
+    // Remove the mutex lock from here
+    cfg := config.GetConfig().Blacklist
 
-	cfg := config.GetConfig().Blacklist
+    // Check if already blacklisted
+    if isPubKeyPermanentlyBlacklisted(pubkey) {
+        return fmt.Errorf("pubkey %s is already in the permanent blacklist", pubkey)
+    }
 
-	// Check if already blacklisted
-	if isPubKeyPermanentlyBlacklisted(pubkey) {
-		return fmt.Errorf("pubkey %s is already in the permanent blacklist", pubkey)
-	}
+    // Add pubkey to the blacklist
+    cfg.PermanentBlacklistPubkeys = append(cfg.PermanentBlacklistPubkeys, pubkey)
 
-	// Add pubkey to the blacklist
-	cfg.PermanentBlacklistPubkeys = append(cfg.PermanentBlacklistPubkeys, pubkey)
-
-	// Persist changes to config.yml
-	return saveBlacklistConfig(cfg)
+    // Persist changes to config.yml
+    return saveBlacklistConfig(cfg)
 }
 
 func saveBlacklistConfig(blacklistConfig cfg.BlacklistConfig) error {
