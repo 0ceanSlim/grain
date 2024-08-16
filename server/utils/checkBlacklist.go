@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"grain/config"
 	cfg "grain/config/types"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -12,41 +13,27 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// Structure to manage temporary bans with timestamps
-type tempBanEntry struct {
-	count     int       // Number of temporary bans
-	unbanTime time.Time // Time when the pubkey should be unbanned
-}
-
-var (
-	tempBannedPubkeys = make(map[string]*tempBanEntry)
-	mu                sync.Mutex
-)
-
-func ClearTemporaryBans() {
-	mu.Lock()
-	defer mu.Unlock()
-	tempBannedPubkeys = make(map[string]*tempBanEntry)
-}
-
-
 // CheckBlacklist checks if a pubkey is in the blacklist based on event content
 func CheckBlacklist(pubkey, eventContent string) (bool, string) {
-	cfg := config.GetConfig().Blacklist
+    cfg := config.GetConfig().Blacklist
 
-	if !cfg.Enabled {
-		return false, ""
-	}
+    if !cfg.Enabled {
+        return false, ""
+    }
 
-	// Check for permanent blacklist by pubkey or npub
-	if isPubKeyPermanentlyBlacklisted(pubkey) {
-		return true, fmt.Sprintf("pubkey %s is permanently blacklisted", pubkey)
-	}
+    log.Printf("Checking blacklist for pubkey: %s", pubkey)
 
-	// Check for temporary ban
-	if isPubKeyTemporarilyBlacklisted(pubkey) {
-		return true, fmt.Sprintf("pubkey %s is temporarily blacklisted", pubkey)
-	}
+    // Check for permanent blacklist by pubkey or npub
+    if isPubKeyPermanentlyBlacklisted(pubkey) {
+        log.Printf("Pubkey %s is permanently blacklisted", pubkey)
+        return true, fmt.Sprintf("pubkey %s is permanently blacklisted", pubkey)
+    }
+
+    // Check for temporary ban
+    if isPubKeyTemporarilyBlacklisted(pubkey) {
+        log.Printf("Pubkey %s is temporarily blacklisted", pubkey)
+        return true, fmt.Sprintf("pubkey %s is temporarily blacklisted", pubkey)
+    }
 
 	// Check for permanent ban based on wordlist
 	for _, word := range cfg.PermanentBanWords {
@@ -76,51 +63,82 @@ func CheckBlacklist(pubkey, eventContent string) (bool, string) {
 
 // Checks if a pubkey is temporarily blacklisted
 func isPubKeyTemporarilyBlacklisted(pubkey string) bool {
+    mu.Lock()
+    defer mu.Unlock()
+
+    entry, exists := tempBannedPubkeys[pubkey]
+    if !exists {
+        log.Printf("Pubkey %s not found in temporary blacklist", pubkey)
+        return false
+    }
+
+    now := time.Now()
+    if now.After(entry.unbanTime) {
+        log.Printf("Temporary ban for pubkey %s has expired. Count: %d", pubkey, entry.count)
+        return false
+    }
+
+    log.Printf("Pubkey %s is currently temporarily blacklisted. Count: %d, Unban time: %s", pubkey, entry.count, entry.unbanTime)
+    return true
+}
+
+func ClearTemporaryBans() {
 	mu.Lock()
 	defer mu.Unlock()
+	tempBannedPubkeys = make(map[string]*tempBanEntry)
+}
 
-	entry, exists := tempBannedPubkeys[pubkey]
-	if !exists {
-		return false
-	}
+var (
+    tempBannedPubkeys = make(map[string]*tempBanEntry)
+    mu sync.Mutex
+)
 
-	// If the ban has expired, remove it from the temporary ban list
-	if time.Now().After(entry.unbanTime) {
-		delete(tempBannedPubkeys, pubkey)
-		return false
-	}
-
-	return true
+type tempBanEntry struct {
+    count     int
+    unbanTime time.Time
 }
 
 // Adds a pubkey to the temporary blacklist
 func AddToTemporaryBlacklist(pubkey string) error {
-	mu.Lock()
-	defer mu.Unlock()
+    mu.Lock()
+    defer mu.Unlock()
 
-	cfg := config.GetConfig().Blacklist
+    cfg := config.GetConfig().Blacklist
 
-	// Check if the pubkey is already temporarily banned
-	entry, exists := tempBannedPubkeys[pubkey]
-	if !exists {
-		entry = &tempBanEntry{
-			count:     1,
-			unbanTime: time.Now().Add(time.Duration(cfg.TempBanDuration) * time.Second),
-		}
-		tempBannedPubkeys[pubkey] = entry
-	}
+    entry, exists := tempBannedPubkeys[pubkey]
+    if !exists {
+        log.Printf("Creating new temporary ban entry for pubkey %s", pubkey)
+        entry = &tempBanEntry{
+            count:     0,
+            unbanTime: time.Now(),
+        }
+        tempBannedPubkeys[pubkey] = entry
+    } else {
+        log.Printf("Updating existing temporary ban entry for pubkey %s. Current count: %d", pubkey, entry.count)
+        // If the ban has expired, we don't reset the count, just update the unban time
+        if time.Now().After(entry.unbanTime) {
+            log.Printf("Previous ban for pubkey %s has expired. Keeping count at %d", pubkey, entry.count)
+        }
+    }
 
-	// Increment the temporary ban count and set the unban time
-	entry.count++
-	entry.unbanTime = time.Now().Add(time.Duration(cfg.TempBanDuration) * time.Second)
+    // Increment the count
+    entry.count++
+    entry.unbanTime = time.Now().Add(time.Duration(cfg.TempBanDuration) * time.Second)
 
-	// If the count exceeds max_temp_bans, move to permanent blacklist
-	if entry.count >= cfg.MaxTempBans {
-		delete(tempBannedPubkeys, pubkey)
-		return AddToPermanentBlacklist(pubkey)
-	}
+    log.Printf("Pubkey %s temporary ban count updated to: %d, MaxTempBans: %d, New unban time: %s", pubkey, entry.count, cfg.MaxTempBans, entry.unbanTime)
 
-	return nil
+    if entry.count > cfg.MaxTempBans {
+        log.Printf("Attempting to move pubkey %s to permanent blacklist", pubkey)
+        delete(tempBannedPubkeys, pubkey)
+        err := AddToPermanentBlacklist(pubkey)
+        if err != nil {
+            log.Printf("Error adding pubkey %s to permanent blacklist: %v", pubkey, err)
+            return err
+        }
+        log.Printf("Successfully added pubkey %s to permanent blacklist", pubkey)
+    }
+
+    return nil
 }
 
 // Checks if a pubkey is permanently blacklisted (only using config.yml)
