@@ -42,7 +42,7 @@ func CheckBlacklist(pubkey, eventContent string) (bool, string) {
 			if err != nil {
 				return true, fmt.Sprintf("pubkey %s is permanently banned and failed to save: %v", pubkey, err)
 			}
-			return true, fmt.Sprintf("pubkey %s is permanently banned for containing forbidden words", pubkey)
+			return true, "blocked: pubkey is permanently banned"
 		}
 	}
 
@@ -53,7 +53,7 @@ func CheckBlacklist(pubkey, eventContent string) (bool, string) {
 			if err != nil {
 				return true, fmt.Sprintf("pubkey %s is temporarily banned and failed to save: %v", pubkey, err)
 			}
-			return true, fmt.Sprintf("pubkey %s is temporarily banned for containing forbidden words", pubkey)
+			return true, "blocked: pubkey is temporarily banned"
 		}
 	}
 
