@@ -9,6 +9,11 @@ GRAIN is an open-source Nostr relay implementation written in Go. This project a
 - **Dynamic Event Handling**: Capable of processing a wide range of events, categorized by type and kind, including support for event deletion as per NIP-09.
 - **Configurable and Extensible**: Easily customizable through configuration files, with plans for future GUI-based configuration management to streamline server adjustments.
 - **Efficient Rate Limiting**: Implements sophisticated rate limiting strategies to manage WebSocket messages, - events, and requests, ensuring fair resource allocation and protection against abuse.
+- **Extensive Blacklist and Whitelist Functions**:
+  - Implements a robust blacklisting system with support for temporary and permanent bans based on content, pubkeys, or npubs.
+  - Features word-based content filtering for automatic temporary or permanent bans.
+  - Includes a configurable system for escalating temporary bans to permanent bans after a set number of violations.
+  - Offers whitelist capabilities for pubkeys, npubs, event kinds, and domains, allowing fine-grained control over permitted content and users.
 - **Flexible Event Size Management**: Configurable size limits for events, with optional constraints based on - event kind, to maintain performance and prevent oversized data handling.
 - **MongoDB Integration 🍃**: Utilizes MongoDB for high-performance storage and management of events, ensuring data integrity and efficient query capabilities.
 - **Scalable Architecture**: Built with Go, leveraging its concurrency model to provide high throughput and scalability, suitable for handling large volumes of data and connections.
@@ -20,6 +25,7 @@ GRAIN is an open-source Nostr relay implementation written in Go. This project a
 
 ### MongoDB Server 🍃
 
+_I plan to add multiple other database types in the future (postgress, sqlite)_
 GRAIN 🌾 leverages MongoDB for efficient storage and management of events. MongoDB, known for its high performance and scalability, is an ideal choice for handling large volumes of real-time data. GRAIN 🌾 uses MongoDB collections to store events categorized by kind and ensures quick retrieval and manipulation of these events through its robust querying capabilities.
 
 You can get the free Community Server edition of MongoDB from the official MongoDB website:
@@ -30,7 +36,7 @@ MongoDB provides extensive documentation and support to help you get started wit
 
 Grain will automatically create the configurations and relay metadata files necessary if they do not already exist when you first run the program.
 
-They are created in the root directory of Grain. You can change configurations and relay_metadata here. The relay must be restarted for new configurations to take effect.
+They are created in the root directory of Grain. You can change configurations and relay_metadata here and the server will automatically restart and use the new configurations. The relay must be restarted manually for new blacklist configurations to take effect.
 
 ## Development
 
