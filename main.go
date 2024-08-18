@@ -21,7 +21,8 @@ import (
 )
 
 func main() {
-	utils.ClearTemporaryBans()
+	utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
+	utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
 
 	restartChan := make(chan struct{})
 	go utils.WatchConfigFile("config.yml", restartChan)
