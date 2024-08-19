@@ -25,18 +25,21 @@ func main() {
 	utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
 
 	restartChan := make(chan struct{})
-	go utils.WatchConfigFile("config.yml", restartChan)
+	go utils.WatchConfigFile("config.yml", restartChan) // Critical goroutine
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	var wg sync.WaitGroup
 	for {
-		wg.Add(1)
+		wg.Add(1) // Add to WaitGroup for the server goroutine
+
 		cfg, err := config.LoadConfig("config.yml")
 		if err != nil {
 			log.Fatal("Error loading config: ", err)
 		}
+
+		utils.ApplyResourceLimits(&cfg.ResourceLimits) // Apply limits once before starting the server
 
 		client, err := db.InitDB(cfg)
 		if err != nil {
@@ -54,22 +57,22 @@ func main() {
 		}
 
 		mux := setupRoutes()
+
+		// Start the server
 		server := startServer(cfg, mux, &wg)
 
 		select {
 		case <-restartChan:
 			log.Println("Restarting server...")
-
-			// Close server before restart
-			server.Close()
-			wg.Wait()
-
+			server.Close() // Stop the current server instance
+			wg.Wait()      // Wait for the server goroutine to finish
 			time.Sleep(3 * time.Second)
+
 		case <-signalChan:
 			log.Println("Shutting down server...")
-			server.Close()
-			db.DisconnectDB(client)
-			wg.Wait()
+			server.Close()              // Stop the server
+			db.DisconnectDB(client)     // Disconnect from MongoDB
+			wg.Wait()                   // Wait for all goroutines to finish
 			return
 		}
 	}
@@ -97,13 +100,14 @@ func startServer(config *configTypes.ServerConfig, mux *http.ServeMux, wg *sync.
 	}
 
 	go func() {
-		defer wg.Done() // Notify that the server is done shutting down
+		defer wg.Done() // Notify that the server goroutine is done
 		fmt.Printf("Server is running on http://localhost%s\n", config.Server.Port)
 		err := server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
 			fmt.Println("Error starting server:", err)
 		}
 	}()
+
 	return server
 }
 

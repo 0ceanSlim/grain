@@ -16,37 +16,39 @@ import (
 )
 
 func HandleEvent(ws *websocket.Conn, message []interface{}) {
-	if len(message) != 2 {
-		fmt.Println("Invalid EVENT message format")
-		response.SendNotice(ws, "", "Invalid EVENT message format")
-		return
-	}
+	utils.LimitedGoRoutine(func() {
+		if len(message) != 2 {
+			fmt.Println("Invalid EVENT message format")
+			response.SendNotice(ws, "", "Invalid EVENT message format")
+			return
+		}
 
-	eventData, ok := message[1].(map[string]interface{})
-	if !ok {
-		fmt.Println("Invalid event data format")
-		response.SendNotice(ws, "", "Invalid event data format")
-		return
-	}
-	eventBytes, err := json.Marshal(eventData)
-	if err != nil {
-		fmt.Println("Error marshaling event data:", err)
-		response.SendNotice(ws, "", "Error marshaling event data")
-		return
-	}
+		eventData, ok := message[1].(map[string]interface{})
+		if !ok {
+			fmt.Println("Invalid event data format")
+			response.SendNotice(ws, "", "Invalid event data format")
+			return
+		}
+		eventBytes, err := json.Marshal(eventData)
+		if err != nil {
+			fmt.Println("Error marshaling event data:", err)
+			response.SendNotice(ws, "", "Error marshaling event data")
+			return
+		}
 
-	var evt relay.Event
-	err = json.Unmarshal(eventBytes, &evt)
-	if err != nil {
-		fmt.Println("Error unmarshaling event data:", err)
-		response.SendNotice(ws, "", "Error unmarshaling event data")
-		return
-	}
+		var evt relay.Event
+		err = json.Unmarshal(eventBytes, &evt)
+		if err != nil {
+			fmt.Println("Error unmarshaling event data:", err)
+			response.SendNotice(ws, "", "Error unmarshaling event data")
+			return
+		}
 
-	eventSize := len(eventBytes) // Calculate event size
-	HandleKind(context.TODO(), evt, ws, eventSize)
+		eventSize := len(eventBytes) // Calculate event size
+		HandleKind(context.TODO(), evt, ws, eventSize)
 
-	fmt.Println("Event processed:", evt.ID)
+		fmt.Println("Event processed:", evt.ID)
+	})
 }
 
 func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventSize int) {
@@ -152,4 +154,3 @@ func determineCategory(kind int) string {
 		return "unknown"
 	}
 }
-

@@ -10,6 +10,12 @@ server:
   max_connections: 100
   max_subscriptions_per_client: 10
 
+resource_limits:
+  cpu_cores: 2 # Limit the number of CPU cores the application can use
+  memory_mb: 1024 # Cap the maximum amount of RAM in MB the application can use
+  heap_size_mb: 512 # Set a limit on the Go garbage collector's heap size in MB
+  max_goroutines: 100 # Limit the maximum number of concurrently running Go routines
+
 rate_limit:
   ws_limit: 100 # WebSocket messages per second
   ws_burst: 200 # Allowed burst of WebSocket messages

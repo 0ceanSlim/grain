@@ -18,4 +18,5 @@ type ServerConfig struct {
 	KindWhitelist   KindWhitelistConfig   `yaml:"kind_whitelist"`
 	DomainWhitelist DomainWhitelistConfig `yaml:"domain_whitelist"`
 	Blacklist       BlacklistConfig       `yaml:"blacklist"`
+	ResourceLimits  ResourceLimits        `yaml:"resource_limits"`
 }
