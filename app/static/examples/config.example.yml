@@ -2,6 +2,10 @@ mongodb:
   uri: mongodb://localhost:27017/
   database: grain
 
+auth:
+  enabled: false # Enable or disable AUTH handling
+  relay_url: "wss://relay.example.com/" # Specify the relay URL
+
 server:
   port: :8181
   read_timeout: 10 # in seconds

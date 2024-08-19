@@ -105,6 +105,12 @@ func WebSocketHandler(ws *websocket.Conn) {
 				return
 			}
 			handlers.HandleReq(ws, message, subscriptions)
+		case "AUTH":
+			if config.GetConfig().Auth.Enabled {
+				handlers.HandleAuth(ws, message)
+			} else {
+				fmt.Println("Received AUTH message, but AUTH is disabled")
+			}
 		case "CLOSE":
 			handlers.HandleClose(ws, message)
 		default:

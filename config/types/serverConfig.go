@@ -19,4 +19,5 @@ type ServerConfig struct {
 	DomainWhitelist DomainWhitelistConfig `yaml:"domain_whitelist"`
 	Blacklist       BlacklistConfig       `yaml:"blacklist"`
 	ResourceLimits  ResourceLimits        `yaml:"resource_limits"`
+	Auth            AuthConfig            `yaml:"auth"`
 }
