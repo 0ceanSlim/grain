@@ -130,17 +130,17 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 			}
 		}
 		if filter.Since != nil {
-			filterBson["createdat"] = bson.M{"$gte": *filter.Since}
+			filterBson["created_at"] = bson.M{"$gte": *filter.Since}
 		}
 		if filter.Until != nil {
-			if filterBson["createdat"] == nil {
-				filterBson["createdat"] = bson.M{"$lte": *filter.Until}
+			if filterBson["created_at"] == nil {
+				filterBson["created_at"] = bson.M{"$lte": *filter.Until}
 			} else {
-				filterBson["createdat"].(bson.M)["$lte"] = *filter.Until
+				filterBson["created_at"].(bson.M)["$lte"] = *filter.Until
 			}
 		}
 
-		opts := options.Find().SetSort(bson.D{{Key: "createdat", Value: -1}})
+		opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
 		if filter.Limit != nil {
 			opts.SetLimit(int64(*filter.Limit))
 		}
