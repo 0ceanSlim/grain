@@ -45,10 +45,69 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 		}
 
 		eventSize := len(eventBytes) // Calculate event size
+
+		if !handleBlacklistAndWhitelist(ws, evt) {
+			return
+		}
+
+		if !handleRateAndSizeLimits(ws, evt, eventSize) {
+			return
+		}
+
 		HandleKind(context.TODO(), evt, ws, eventSize)
 
 		fmt.Println("Event processed:", evt.ID)
 	})
+}
+
+func handleBlacklistAndWhitelist(ws *websocket.Conn, evt relay.Event) bool {
+	if config.GetConfig().DomainWhitelist.Enabled {
+		domains := config.GetConfig().DomainWhitelist.Domains
+		pubkeys, err := utils.FetchPubkeysFromDomains(domains)
+		if err != nil {
+			fmt.Println("Error fetching pubkeys from domains:", err)
+			response.SendNotice(ws, "", "Error fetching pubkeys from domains")
+			return false
+		}
+		for _, pubkey := range pubkeys {
+			config.GetConfig().PubkeyWhitelist.Pubkeys = append(config.GetConfig().PubkeyWhitelist.Pubkeys, pubkey)
+		}
+	}
+
+	if blacklisted, msg := utils.CheckBlacklist(evt.PubKey, evt.Content); blacklisted {
+		response.SendOK(ws, evt.ID, false, msg)
+		return false
+	}
+
+	if config.GetConfig().KindWhitelist.Enabled && !utils.IsKindWhitelisted(evt.Kind) {
+		response.SendOK(ws, evt.ID, false, "not allowed: event kind is not whitelisted")
+		return false
+	}
+
+	if config.GetConfig().PubkeyWhitelist.Enabled && !utils.IsPubKeyWhitelisted(evt.PubKey) {
+		response.SendOK(ws, evt.ID, false, "not allowed: pubkey or npub is not whitelisted")
+		return false
+	}
+
+	return true
+}
+
+func handleRateAndSizeLimits(ws *websocket.Conn, evt relay.Event, eventSize int) bool {
+	rateLimiter := config.GetRateLimiter()
+	sizeLimiter := config.GetSizeLimiter()
+	category := determineCategory(evt.Kind)
+
+	if allowed, msg := rateLimiter.AllowEvent(evt.Kind, category); !allowed {
+		response.SendOK(ws, evt.ID, false, msg)
+		return false
+	}
+
+	if allowed, msg := sizeLimiter.AllowSize(evt.Kind, eventSize); !allowed {
+		response.SendOK(ws, evt.ID, false, msg)
+		return false
+	}
+
+	return true
 }
 
 func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventSize int) {
@@ -58,51 +117,6 @@ func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventS
 	}
 
 	collection := db.GetCollection(evt.Kind)
-	rateLimiter := config.GetRateLimiter()
-	sizeLimiter := config.GetSizeLimiter()
-
-	if config.GetConfig().DomainWhitelist.Enabled {
-		domains := config.GetConfig().DomainWhitelist.Domains
-		pubkeys, err := utils.FetchPubkeysFromDomains(domains)
-		if err != nil {
-			fmt.Println("Error fetching pubkeys from domains:", err)
-			response.SendNotice(ws, "", "Error fetching pubkeys from domains")
-			return
-		}
-		for _, pubkey := range pubkeys {
-			config.GetConfig().PubkeyWhitelist.Pubkeys = append(config.GetConfig().PubkeyWhitelist.Pubkeys, pubkey)
-		}
-	}
-
-	// Check against manual blacklist
-	if blacklisted, msg := utils.CheckBlacklist(evt.PubKey, evt.Content); blacklisted {
-		response.SendOK(ws, evt.ID, false, msg)
-		return
-	}
-
-	// Check if the kind is whitelisted
-	if config.GetConfig().KindWhitelist.Enabled && !utils.IsKindWhitelisted(evt.Kind) {
-		response.SendOK(ws, evt.ID, false, "not allowed: event kind is not whitelisted")
-		return
-	}
-
-	// Check pubkey/npub whitelist only if the kind is not whitelisted
-	if config.GetConfig().PubkeyWhitelist.Enabled && !utils.IsPubKeyWhitelisted(evt.PubKey) {
-		response.SendOK(ws, evt.ID, false, "not allowed: pubkey or npub is not whitelisted")
-		return
-	}
-
-	category := determineCategory(evt.Kind)
-
-	if allowed, msg := rateLimiter.AllowEvent(evt.Kind, category); !allowed {
-		response.SendOK(ws, evt.ID, false, msg)
-		return
-	}
-
-	if allowed, msg := sizeLimiter.AllowSize(evt.Kind, eventSize); !allowed {
-		response.SendOK(ws, evt.ID, false, msg)
-		return
-	}
 
 	var err error
 	switch {
