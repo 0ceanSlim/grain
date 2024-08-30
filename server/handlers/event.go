@@ -44,6 +44,12 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 			return
 		}
 
+		// Signature check moved here
+		if !utils.CheckSignature(evt) {
+			response.SendOK(ws, evt.ID, false, "invalid: signature verification failed")
+			return
+		}
+
 		eventSize := len(eventBytes) // Calculate event size
 
 		if !handleBlacklistAndWhitelist(ws, evt) {
@@ -54,7 +60,7 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 			return
 		}
 
-		HandleKind(context.TODO(), evt, ws, eventSize)
+		storeEvent(context.TODO(), evt, ws)
 
 		fmt.Println("Event processed:", evt.ID)
 	})
@@ -110,12 +116,7 @@ func handleRateAndSizeLimits(ws *websocket.Conn, evt relay.Event, eventSize int)
 	return true
 }
 
-func HandleKind(ctx context.Context, evt relay.Event, ws *websocket.Conn, eventSize int) {
-	if !utils.CheckSignature(evt) {
-		response.SendOK(ws, evt.ID, false, "invalid: signature verification failed")
-		return
-	}
-
+func storeEvent(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
 	collection := db.GetCollection(evt.Kind)
 
 	var err error
