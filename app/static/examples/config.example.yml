@@ -39,19 +39,15 @@ rate_limit:
   # Rate limits for different event categories
   category_limits:
     ephemeral:
-      kind: 0
       limit: 100 # Events per second
       burst: 200 # Allowed burst
     parameterized_replaceable:
-      kind: 0
       limit: 5
       burst: 10
     regular:
-      kind: 0
       limit: 25
       burst: 50
     replaceable:
-      kind: 0
       limit: 10
       burst: 20
 
