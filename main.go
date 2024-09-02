@@ -49,7 +49,7 @@ func main() {
 		config.SetupRateLimiter(cfg)
 		config.SetupSizeLimiter(cfg)
 
-		utils.ClearTemporaryBans()
+		config.ClearTemporaryBans()
 
 		err = utils.LoadRelayMetadataJSON()
 		if err != nil {
@@ -70,9 +70,9 @@ func main() {
 
 		case <-signalChan:
 			log.Println("Shutting down server...")
-			server.Close()              // Stop the server
-			db.DisconnectDB(client)     // Disconnect from MongoDB
-			wg.Wait()                   // Wait for all goroutines to finish
+			server.Close()          // Stop the server
+			db.DisconnectDB(client) // Disconnect from MongoDB
+			wg.Wait()               // Wait for all goroutines to finish
 			return
 		}
 	}

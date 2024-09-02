@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"grain/config"
 	"grain/server/db"
-	"grain/server/handlers/kinds"
+
 	"grain/server/handlers/response"
 	"grain/server/utils"
 
-	relay "grain/server/types"
+	nostr "grain/server/types"
 
 	"golang.org/x/net/websocket"
 )
@@ -36,7 +36,7 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 			return
 		}
 
-		var evt relay.Event
+		var evt nostr.Event
 		err = json.Unmarshal(eventBytes, &evt)
 		if err != nil {
 			fmt.Println("Error unmarshaling event data:", err)
@@ -60,13 +60,14 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 			return
 		}
 
-		storeEvent(context.TODO(), evt, ws)
+		// This is where I'll handle storage for multiple database types in the future
+		db.StoreMongoEvent(context.TODO(), evt, ws)
 
 		fmt.Println("Event processed:", evt.ID)
 	})
 }
 
-func handleBlacklistAndWhitelist(ws *websocket.Conn, evt relay.Event) bool {
+func handleBlacklistAndWhitelist(ws *websocket.Conn, evt nostr.Event) bool {
 	if config.GetConfig().DomainWhitelist.Enabled {
 		domains := config.GetConfig().DomainWhitelist.Domains
 		pubkeys, err := utils.FetchPubkeysFromDomains(domains)
@@ -80,17 +81,17 @@ func handleBlacklistAndWhitelist(ws *websocket.Conn, evt relay.Event) bool {
 		}
 	}
 
-	if blacklisted, msg := utils.CheckBlacklist(evt.PubKey, evt.Content); blacklisted {
+	if blacklisted, msg := config.CheckBlacklist(evt.PubKey, evt.Content); blacklisted {
 		response.SendOK(ws, evt.ID, false, msg)
 		return false
 	}
 
-	if config.GetConfig().KindWhitelist.Enabled && !utils.IsKindWhitelisted(evt.Kind) {
+	if config.GetConfig().KindWhitelist.Enabled && !config.IsKindWhitelisted(evt.Kind) {
 		response.SendOK(ws, evt.ID, false, "not allowed: event kind is not whitelisted")
 		return false
 	}
 
-	if config.GetConfig().PubkeyWhitelist.Enabled && !utils.IsPubKeyWhitelisted(evt.PubKey) {
+	if config.GetConfig().PubkeyWhitelist.Enabled && !config.IsPubKeyWhitelisted(evt.PubKey) {
 		response.SendOK(ws, evt.ID, false, "not allowed: pubkey or npub is not whitelisted")
 		return false
 	}
@@ -98,7 +99,7 @@ func handleBlacklistAndWhitelist(ws *websocket.Conn, evt relay.Event) bool {
 	return true
 }
 
-func handleRateAndSizeLimits(ws *websocket.Conn, evt relay.Event, eventSize int) bool {
+func handleRateAndSizeLimits(ws *websocket.Conn, evt nostr.Event, eventSize int) bool {
 	rateLimiter := config.GetRateLimiter()
 	sizeLimiter := config.GetSizeLimiter()
 	category := determineCategory(evt.Kind)
@@ -114,43 +115,6 @@ func handleRateAndSizeLimits(ws *websocket.Conn, evt relay.Event, eventSize int)
 	}
 
 	return true
-}
-
-func storeEvent(ctx context.Context, evt relay.Event, ws *websocket.Conn) {
-	collection := db.GetCollection(evt.Kind)
-
-	var err error
-	switch {
-	case evt.Kind == 0:
-		err = kinds.HandleKind0(ctx, evt, collection, ws)
-	case evt.Kind == 1:
-		err = kinds.HandleKind1(ctx, evt, collection, ws)
-	case evt.Kind == 2:
-		err = kinds.HandleKind2(ctx, evt, ws)
-	case evt.Kind == 3:
-		err = kinds.HandleReplaceableKind(ctx, evt, collection, ws)
-	case evt.Kind == 5:
-		err = kinds.HandleKind5(ctx, evt, db.GetClient(), ws)
-	case evt.Kind >= 4 && evt.Kind < 45:
-		err = kinds.HandleRegularKind(ctx, evt, collection, ws)
-	case evt.Kind >= 1000 && evt.Kind < 10000:
-		err = kinds.HandleRegularKind(ctx, evt, collection, ws)
-	case evt.Kind >= 10000 && evt.Kind < 20000:
-		err = kinds.HandleReplaceableKind(ctx, evt, collection, ws)
-	case evt.Kind >= 20000 && evt.Kind < 30000:
-		fmt.Println("Ephemeral event received and ignored:", evt.ID)
-	case evt.Kind >= 30000 && evt.Kind < 40000:
-		err = kinds.HandleParameterizedReplaceableKind(ctx, evt, collection, ws)
-	default:
-		err = kinds.HandleUnknownKind(ctx, evt, collection, ws)
-	}
-
-	if err != nil {
-		response.SendOK(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
-		return
-	}
-
-	response.SendOK(ws, evt.ID, true, "")
 }
 
 func determineCategory(kind int) string {

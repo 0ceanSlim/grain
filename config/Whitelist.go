@@ -1,14 +1,14 @@
-package utils
+package config
 
 import (
 	"fmt"
-	"grain/config"
+	"grain/server/utils"
 	"strconv"
 )
 
 // Helper function to check if a pubkey or npub is whitelisted
 func IsPubKeyWhitelisted(pubKey string) bool {
-	cfg := config.GetConfig()
+	cfg := GetConfig()
 	if !cfg.PubkeyWhitelist.Enabled {
 		return true
 	}
@@ -22,7 +22,7 @@ func IsPubKeyWhitelisted(pubKey string) bool {
 
 	// Check npubs
 	for _, npub := range cfg.PubkeyWhitelist.Npubs {
-		decodedPubKey, err := DecodeNpub(npub)
+		decodedPubKey, err := utils.DecodeNpub(npub)
 		if err != nil {
 			fmt.Println("Error decoding npub:", err)
 			continue
@@ -36,7 +36,7 @@ func IsPubKeyWhitelisted(pubKey string) bool {
 }
 
 func IsKindWhitelisted(kind int) bool {
-	cfg := config.GetConfig()
+	cfg := GetConfig()
 	if !cfg.KindWhitelist.Enabled {
 		return true
 	}
