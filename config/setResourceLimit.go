@@ -17,7 +17,7 @@ var (
 	goroutineQueueMutex sync.Mutex
 )
 
-func ApplyResourceLimits(cfg *configTypes.ResourceLimits) {
+func SetResourceLimit(cfg *configTypes.ResourceLimits) {
 	// Set CPU cores
 	runtime.GOMAXPROCS(cfg.CPUCores)
 
