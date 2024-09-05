@@ -46,8 +46,8 @@ func main() {
 			log.Fatal("Error initializing database: ", err)
 		}
 
-		config.SetupRateLimiter(cfg)
-		config.SetupSizeLimiter(cfg)
+		config.SetRateLimit(cfg)
+		config.SetSizeLimit(cfg)
 
 		config.ClearTemporaryBans()
 

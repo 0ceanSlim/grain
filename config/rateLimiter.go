@@ -32,7 +32,7 @@ type RateLimiter struct {
 var rateLimiterInstance *RateLimiter
 var rateOnce sync.Once
 
-func SetupRateLimiter(cfg *config.ServerConfig) {
+func SetRateLimit(cfg *config.ServerConfig) {
 	rateLimiter := NewRateLimiter(
 		rate.Limit(cfg.RateLimit.WsLimit),
 		cfg.RateLimit.WsBurst,

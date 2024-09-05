@@ -12,13 +12,13 @@ type SizeLimiter struct {
 	mu             sync.RWMutex
 }
 
-func SetupSizeLimiter(cfg *config.ServerConfig) {
+func SetSizeLimit(cfg *config.ServerConfig) {
 	sizeLimiter := NewSizeLimiter(cfg.RateLimit.MaxEventSize)
 	for _, kindSizeLimit := range cfg.RateLimit.KindSizeLimits {
 		sizeLimiter.AddKindSizeLimit(kindSizeLimit.Kind, kindSizeLimit.MaxSize)
 	}
 
-	SetSizeLimit(sizeLimiter)
+	SizeLimit(sizeLimiter)
 }
 
 func NewSizeLimiter(globalMaxSize int) *SizeLimiter {
@@ -35,7 +35,7 @@ func GetSizeLimiter() *SizeLimiter {
 	return sizeLimiterInstance
 }
 
-func SetSizeLimit(sl *SizeLimiter) {
+func SizeLimit(sl *SizeLimiter) {
 	sizeOnce.Do(func() {
 		sizeLimiterInstance = sl
 	})
