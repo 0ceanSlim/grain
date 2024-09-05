@@ -25,7 +25,7 @@ func main() {
 	utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
 
 	restartChan := make(chan struct{})
-	go utils.WatchConfigFile("config.yml", restartChan) // Critical goroutine
+	go config.WatchConfigFile("config.yml", restartChan) // Critical goroutine
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
