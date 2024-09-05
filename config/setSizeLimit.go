@@ -18,7 +18,7 @@ func SetupSizeLimiter(cfg *config.ServerConfig) {
 		sizeLimiter.AddKindSizeLimit(kindSizeLimit.Kind, kindSizeLimit.MaxSize)
 	}
 
-	SetSizeLimiter(sizeLimiter)
+	SetSizeLimit(sizeLimiter)
 }
 
 func NewSizeLimiter(globalMaxSize int) *SizeLimiter {
@@ -35,7 +35,7 @@ func GetSizeLimiter() *SizeLimiter {
 	return sizeLimiterInstance
 }
 
-func SetSizeLimiter(sl *SizeLimiter) {
+func SetSizeLimit(sl *SizeLimiter) {
 	sizeOnce.Do(func() {
 		sizeLimiterInstance = sl
 	})
