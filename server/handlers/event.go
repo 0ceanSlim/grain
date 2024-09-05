@@ -16,7 +16,7 @@ import (
 )
 
 func HandleEvent(ws *websocket.Conn, message []interface{}) {
-	utils.LimitedGoRoutine(func() {
+	config.LimitedGoRoutine(func() {
 		if len(message) != 2 {
 			fmt.Println("Invalid EVENT message format")
 			response.SendNotice(ws, "", "Invalid EVENT message format")

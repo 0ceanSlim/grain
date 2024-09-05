@@ -17,7 +17,7 @@ var subscriptions = make(map[string]relay.Subscription)
 var mu sync.Mutex // Protect concurrent access to subscriptions map
 
 func HandleReq(ws *websocket.Conn, message []interface{}, subscriptions map[string][]relay.Filter) {
-	utils.LimitedGoRoutine(func() {
+	config.LimitedGoRoutine(func() {
 		if len(message) < 3 {
 			fmt.Println("Invalid REQ message format")
 			response.SendClosed(ws, "", "invalid: invalid REQ message format")

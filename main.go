@@ -39,7 +39,7 @@ func main() {
 			log.Fatal("Error loading config: ", err)
 		}
 
-		utils.ApplyResourceLimits(&cfg.ResourceLimits) // Apply limits once before starting the server
+		config.ApplyResourceLimits(&cfg.ResourceLimits) // Apply limits once before starting the server
 
 		client, err := db.InitDB(cfg)
 		if err != nil {
