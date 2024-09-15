@@ -16,55 +16,55 @@ import (
 )
 
 func HandleEvent(ws *websocket.Conn, message []interface{}) {
-	config.LimitedGoRoutine(func() {
-		if len(message) != 2 {
-			fmt.Println("Invalid EVENT message format")
-			response.SendNotice(ws, "", "Invalid EVENT message format")
-			return
-		}
 
-		eventData, ok := message[1].(map[string]interface{})
-		if !ok {
-			fmt.Println("Invalid event data format")
-			response.SendNotice(ws, "", "Invalid event data format")
-			return
-		}
-		eventBytes, err := json.Marshal(eventData)
-		if err != nil {
-			fmt.Println("Error marshaling event data:", err)
-			response.SendNotice(ws, "", "Error marshaling event data")
-			return
-		}
+	if len(message) != 2 {
+		fmt.Println("Invalid EVENT message format")
+		response.SendNotice(ws, "", "Invalid EVENT message format")
+		return
+	}
 
-		var evt nostr.Event
-		err = json.Unmarshal(eventBytes, &evt)
-		if err != nil {
-			fmt.Println("Error unmarshaling event data:", err)
-			response.SendNotice(ws, "", "Error unmarshaling event data")
-			return
-		}
+	eventData, ok := message[1].(map[string]interface{})
+	if !ok {
+		fmt.Println("Invalid event data format")
+		response.SendNotice(ws, "", "Invalid event data format")
+		return
+	}
+	eventBytes, err := json.Marshal(eventData)
+	if err != nil {
+		fmt.Println("Error marshaling event data:", err)
+		response.SendNotice(ws, "", "Error marshaling event data")
+		return
+	}
 
-		// Signature check moved here
-		if !utils.CheckSignature(evt) {
-			response.SendOK(ws, evt.ID, false, "invalid: signature verification failed")
-			return
-		}
+	var evt nostr.Event
+	err = json.Unmarshal(eventBytes, &evt)
+	if err != nil {
+		fmt.Println("Error unmarshaling event data:", err)
+		response.SendNotice(ws, "", "Error unmarshaling event data")
+		return
+	}
 
-		eventSize := len(eventBytes) // Calculate event size
+	// Signature check moved here
+	if !utils.CheckSignature(evt) {
+		response.SendOK(ws, evt.ID, false, "invalid: signature verification failed")
+		return
+	}
 
-		if !handleBlacklistAndWhitelist(ws, evt) {
-			return
-		}
+	eventSize := len(eventBytes) // Calculate event size
 
-		if !handleRateAndSizeLimits(ws, evt, eventSize) {
-			return
-		}
+	if !handleBlacklistAndWhitelist(ws, evt) {
+		return
+	}
 
-		// This is where I'll handle storage for multiple database types in the future
-		db.StoreMongoEvent(context.TODO(), evt, ws)
+	if !handleRateAndSizeLimits(ws, evt, eventSize) {
+		return
+	}
 
-		fmt.Println("Event processed:", evt.ID)
-	})
+	// This is where I'll handle storage for multiple database types in the future
+	db.StoreMongoEvent(context.TODO(), evt, ws)
+
+	fmt.Println("Event processed:", evt.ID)
+
 }
 
 func handleBlacklistAndWhitelist(ws *websocket.Conn, evt nostr.Event) bool {
