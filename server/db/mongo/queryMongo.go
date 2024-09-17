@@ -55,62 +55,56 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 		query["$or"] = combinedFilters
 	}
 
+	// Apply sorting by creation date (descending)
 	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
 
-	// Apply limit if set for initial query
+	// Apply limit if set in any filter
 	for _, filter := range filters {
 		if filter.Limit != nil {
 			opts.SetLimit(int64(*filter.Limit))
 		}
 	}
 
-	// If no specific kinds are specified, query all collections
-	if len(filters[0].Kinds) == 0 {
-		collections, err := client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
-		if err != nil {
-			return nil, fmt.Errorf("error listing collections: %v", err)
-		}
-
-		for _, collectionName := range collections {
-			collection := client.Database(databaseName).Collection(collectionName)
-			cursor, err := collection.Find(context.TODO(), query, opts)
-			if err != nil {
-				return nil, fmt.Errorf("error querying collection %s: %v", collectionName, err)
-			}
-			defer cursor.Close(context.TODO())
-
-			for cursor.Next(context.TODO()) {
-				var event relay.Event
-				if err := cursor.Decode(&event); err != nil {
-					return nil, fmt.Errorf("error decoding event from collection %s: %v", collectionName, err)
-				}
-				results = append(results, event)
-			}
-			if err := cursor.Err(); err != nil {
-				return nil, fmt.Errorf("cursor error in collection %s: %v", collectionName, err)
-			}
-		}
+	// If no kinds are specified in any filter, query all collections
+	var collections []string
+	if len(filters) > 0 && len(filters[0].Kinds) == 0 {
+		collections, _ = client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
 	} else {
-		// Query specific collections based on kinds
-		for _, kind := range filters[0].Kinds {
-			collectionName := fmt.Sprintf("event-kind%d", kind)
-			collection := client.Database(databaseName).Collection(collectionName)
-			cursor, err := collection.Find(context.TODO(), query, opts)
-			if err != nil {
-				return nil, fmt.Errorf("error querying collection %s: %v", collectionName, err)
+		// Collect all kinds from filters and query those collections
+		kindsMap := make(map[int]bool)
+		for _, filter := range filters {
+			for _, kind := range filter.Kinds {
+				kindsMap[kind] = true
 			}
-			defer cursor.Close(context.TODO())
+		}
 
-			for cursor.Next(context.TODO()) {
-				var event relay.Event
-				if err := cursor.Decode(&event); err != nil {
-					return nil, fmt.Errorf("error decoding event from collection %s: %v", collectionName, err)
-				}
-				results = append(results, event)
+		// Construct collection names based on kinds
+		for kind := range kindsMap {
+			collectionName := fmt.Sprintf("event-kind%d", kind)
+			collections = append(collections, collectionName)
+		}
+	}
+
+	// Query each collection
+	for _, collectionName := range collections {
+		collection := client.Database(databaseName).Collection(collectionName)
+		cursor, err := collection.Find(context.TODO(), query, opts)
+		if err != nil {
+			return nil, fmt.Errorf("error querying collection %s: %v", collectionName, err)
+		}
+		defer cursor.Close(context.TODO())
+
+		for cursor.Next(context.TODO()) {
+			var event relay.Event
+			if err := cursor.Decode(&event); err != nil {
+				return nil, fmt.Errorf("error decoding event from collection %s: %v", collectionName, err)
 			}
-			if err := cursor.Err(); err != nil {
-				return nil, fmt.Errorf("cursor error in collection %s: %v", collectionName, err)
-			}
+			results = append(results, event)
+		}
+
+		// Handle cursor errors
+		if err := cursor.Err(); err != nil {
+			return nil, fmt.Errorf("cursor error in collection %s: %v", collectionName, err)
 		}
 	}
 
