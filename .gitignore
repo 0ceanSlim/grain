@@ -3,3 +3,4 @@ config.yml
 relay_metadata.json
 grain.exe
 /build
+/logs

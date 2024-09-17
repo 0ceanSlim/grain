@@ -13,11 +13,12 @@ import (
 // QueryEvents queries events from the MongoDB collection(s) based on filters
 func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName string) ([]relay.Event, error) {
 	var results []relay.Event
+	var combinedFilters []bson.M
 
+	// Build MongoDB filters for each relay.Filter
 	for _, filter := range filters {
 		filterBson := bson.M{}
 
-		// Construct the BSON query based on the filters
 		if len(filter.IDs) > 0 {
 			filterBson["id"] = bson.M{"$in": filter.IDs}
 		}
@@ -45,62 +46,70 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 			}
 		}
 
-		opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
+		combinedFilters = append(combinedFilters, filterBson)
+	}
+
+	// Combine all filter conditions using the $or operator
+	query := bson.M{}
+	if len(combinedFilters) > 0 {
+		query["$or"] = combinedFilters
+	}
+
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
+
+	// Apply limit if set for initial query
+	for _, filter := range filters {
 		if filter.Limit != nil {
 			opts.SetLimit(int64(*filter.Limit))
 		}
+	}
 
-		// If no specific kinds are specified, query all collections in the database
-		if len(filter.Kinds) == 0 {
-			collections, err := client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
+	// If no specific kinds are specified, query all collections
+	if len(filters[0].Kinds) == 0 {
+		collections, err := client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
+		if err != nil {
+			return nil, fmt.Errorf("error listing collections: %v", err)
+		}
+
+		for _, collectionName := range collections {
+			collection := client.Database(databaseName).Collection(collectionName)
+			cursor, err := collection.Find(context.TODO(), query, opts)
 			if err != nil {
-				return nil, fmt.Errorf("error listing collections: %v", err)
+				return nil, fmt.Errorf("error querying collection %s: %v", collectionName, err)
 			}
+			defer cursor.Close(context.TODO())
 
-			for _, collectionName := range collections {
-				fmt.Printf("Querying collection: %s with query: %v\n", collectionName, filterBson)
-
-				collection := client.Database(databaseName).Collection(collectionName)
-				cursor, err := collection.Find(context.TODO(), filterBson, opts)
-				if err != nil {
-					return nil, fmt.Errorf("error querying collection %s: %v", collectionName, err)
+			for cursor.Next(context.TODO()) {
+				var event relay.Event
+				if err := cursor.Decode(&event); err != nil {
+					return nil, fmt.Errorf("error decoding event from collection %s: %v", collectionName, err)
 				}
-				defer cursor.Close(context.TODO())
-
-				for cursor.Next(context.TODO()) {
-					var event relay.Event
-					if err := cursor.Decode(&event); err != nil {
-						return nil, fmt.Errorf("error decoding event from collection %s: %v", collectionName, err)
-					}
-					results = append(results, event)
-				}
-				if err := cursor.Err(); err != nil {
-					return nil, fmt.Errorf("cursor error in collection %s: %v", collectionName, err)
-				}
+				results = append(results, event)
 			}
-		} else {
-			// Query specific collections based on kinds
-			for _, kind := range filter.Kinds {
-				collectionName := fmt.Sprintf("event-kind%d", kind)
-				fmt.Printf("Querying collection: %s with query: %v\n", collectionName, filterBson)
+			if err := cursor.Err(); err != nil {
+				return nil, fmt.Errorf("cursor error in collection %s: %v", collectionName, err)
+			}
+		}
+	} else {
+		// Query specific collections based on kinds
+		for _, kind := range filters[0].Kinds {
+			collectionName := fmt.Sprintf("event-kind%d", kind)
+			collection := client.Database(databaseName).Collection(collectionName)
+			cursor, err := collection.Find(context.TODO(), query, opts)
+			if err != nil {
+				return nil, fmt.Errorf("error querying collection %s: %v", collectionName, err)
+			}
+			defer cursor.Close(context.TODO())
 
-				collection := client.Database(databaseName).Collection(collectionName)
-				cursor, err := collection.Find(context.TODO(), filterBson, opts)
-				if err != nil {
-					return nil, fmt.Errorf("error querying collection %s: %v", collectionName, err)
+			for cursor.Next(context.TODO()) {
+				var event relay.Event
+				if err := cursor.Decode(&event); err != nil {
+					return nil, fmt.Errorf("error decoding event from collection %s: %v", collectionName, err)
 				}
-				defer cursor.Close(context.TODO())
-
-				for cursor.Next(context.TODO()) {
-					var event relay.Event
-					if err := cursor.Decode(&event); err != nil {
-						return nil, fmt.Errorf("error decoding event from collection %s: %v", collectionName, err)
-					}
-					results = append(results, event)
-				}
-				if err := cursor.Err(); err != nil {
-					return nil, fmt.Errorf("cursor error in collection %s: %v", collectionName, err)
-				}
+				results = append(results, event)
+			}
+			if err := cursor.Err(); err != nil {
+				return nil, fmt.Errorf("cursor error in collection %s: %v", collectionName, err)
 			}
 		}
 	}
