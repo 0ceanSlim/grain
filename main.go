@@ -7,7 +7,7 @@ import (
 	"grain/config"
 	configTypes "grain/config/types"
 	relay "grain/server"
-	"grain/server/db"
+	"grain/server/db/mongo"
 	"grain/server/utils"
 	"log"
 	"net/http"
@@ -41,7 +41,7 @@ func main() {
 
 		config.SetResourceLimit(&cfg.ResourceLimits) // Apply limits once before starting the server
 
-		client, err := db.InitDB(cfg)
+		client, err := mongo.InitDB(cfg)
 		if err != nil {
 			log.Fatal("Error initializing database: ", err)
 		}
@@ -71,7 +71,7 @@ func main() {
 		case <-signalChan:
 			log.Println("Shutting down server...")
 			server.Close()          // Stop the server
-			db.DisconnectDB(client) // Disconnect from MongoDB
+			mongo.DisconnectDB(client) // Disconnect from MongoDB
 			wg.Wait()               // Wait for all goroutines to finish
 			return
 		}

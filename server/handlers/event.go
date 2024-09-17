@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"grain/config"
-	"grain/server/db"
+	"grain/server/db/mongo"
 
 	"grain/server/handlers/response"
 	"grain/server/utils"
@@ -61,7 +61,7 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 	}
 
 	// This is where I'll handle storage for multiple database types in the future
-	db.StoreMongoEvent(context.TODO(), evt, ws)
+	mongo.StoreMongoEvent(context.TODO(), evt, ws)
 
 	fmt.Println("Event processed:", evt.ID)
 

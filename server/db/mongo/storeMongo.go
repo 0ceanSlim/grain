@@ -1,9 +1,9 @@
-package db
+package mongo
 
 import (
 	"context"
 	"fmt"
-	"grain/server/handlers/kinds"
+	"grain/server/db/mongo/kinds"
 	"grain/server/handlers/response"
 	nostr "grain/server/types"
 
@@ -16,15 +16,15 @@ func StoreMongoEvent(ctx context.Context, evt nostr.Event, ws *websocket.Conn) {
 	var err error
 	switch {
 	case evt.Kind == 0:
-		err = kinds.HandleKind0(ctx, evt, collection, ws)
+		err = kinds.HandleReplaceableKind(ctx, evt, collection, ws)
 	case evt.Kind == 1:
-		err = kinds.HandleKind1(ctx, evt, collection, ws)
+		err = kinds.HandleRegularKind(ctx, evt, collection, ws)
 	case evt.Kind == 2:
-		err = kinds.HandleKind2(ctx, evt, ws)
+		err = kinds.HandleDeprecatedKind(ctx, evt, ws)
 	case evt.Kind == 3:
 		err = kinds.HandleReplaceableKind(ctx, evt, collection, ws)
 	case evt.Kind == 5:
-		err = kinds.HandleKind5(ctx, evt, GetClient(), ws)
+		err = kinds.HandleDeleteKind(ctx, evt, GetClient(), ws)
 	case evt.Kind >= 4 && evt.Kind < 45:
 		err = kinds.HandleRegularKind(ctx, evt, collection, ws)
 	case evt.Kind >= 1000 && evt.Kind < 10000:

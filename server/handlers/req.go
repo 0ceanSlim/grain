@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"grain/config"
-	"grain/server/db"
+	"grain/server/db/mongo"
 	"grain/server/handlers/response"
 	relay "grain/server/types"
 	"grain/server/utils"
@@ -113,7 +113,7 @@ func processRequest(ws *websocket.Conn, message []interface{}) {
     fmt.Printf("Subscription updated: %s with %d filters\n", subID, len(filters))
 
     // Query the database with filters and send back the results
-    queriedEvents, err := db.QueryEvents(filters, db.GetClient(), "grain")
+    queriedEvents, err := mongo.QueryEvents(filters, mongo.GetClient(), "grain")
     if err != nil {
         fmt.Println("Error querying events:", err)
         response.SendClosed(ws, subID, "error: could not query events")

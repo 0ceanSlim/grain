@@ -12,7 +12,7 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-func HandleKind5(ctx context.Context, evt relay.Event, dbClient *mongo.Client, ws *websocket.Conn) error {
+func HandleDeleteKind(ctx context.Context, evt relay.Event, dbClient *mongo.Client, ws *websocket.Conn) error {
 	for _, tag := range evt.Tags {
 		if len(tag) < 2 {
 			continue
