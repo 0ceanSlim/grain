@@ -13,17 +13,31 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
 
-// SerializeEvent manually constructs the JSON string for event serialization
+// EscapeSpecialChars escapes special characters in the content according to NIP-01
+func EscapeSpecialChars(content string) string {
+	content = strings.ReplaceAll(content, "\\", "\\\\")
+	content = strings.ReplaceAll(content, "\"", "\\\"")
+	content = strings.ReplaceAll(content, "\n", "\\n")
+	content = strings.ReplaceAll(content, "\r", "\\r")
+	content = strings.ReplaceAll(content, "\t", "\\t")
+	content = strings.ReplaceAll(content, "\b", "\\b")
+	content = strings.ReplaceAll(content, "\f", "\\f")
+	return content
+}
+
+// SerializeEvent manually constructs the JSON string for event serialization according to NIP-01
 func SerializeEvent(evt relay.Event) string {
+	// Escape special characters in the content
+	escapedContent := EscapeSpecialChars(evt.Content)
+
 	// Manually construct the event data as a JSON array string
-	// Avoid escaping special characters like "&"
 	return fmt.Sprintf(
 		`[0,"%s",%d,%d,%s,"%s"]`,
 		evt.PubKey,
 		evt.CreatedAt,
 		evt.Kind,
 		serializeTags(evt.Tags),
-		evt.Content, // Special characters like "&" are not escaped here
+		escapedContent, // Special characters are escaped
 	)
 }
 
@@ -75,19 +89,16 @@ func CheckSignature(evt relay.Event) bool {
 		return false
 	}
 
-	// Parse the public key based on its length
-	var pubKey *btcec.PublicKey
+	// Since the public key is 32 bytes, prepend 0x02 (assuming y-coordinate is even)
 	if len(pubKeyBytes) == 32 {
-		// Handle 32-byte compressed public key (x-coordinate only)
-		pubKey, err = btcec.ParsePubKey(append([]byte{0x02}, pubKeyBytes...))
-	} else if len(pubKeyBytes) == 33 || len(pubKeyBytes) == 65 {
-		// Handle standard compressed (33-byte) or uncompressed (65-byte) public key
-		pubKey, err = btcec.ParsePubKey(pubKeyBytes)
+		pubKeyBytes = append([]byte{0x02}, pubKeyBytes...)
 	} else {
 		log.Printf("Malformed public key: invalid length: %d", len(pubKeyBytes))
 		return false
 	}
 
+	// Parse the public key
+	pubKey, err := btcec.ParsePubKey(pubKeyBytes)
 	if err != nil {
 		log.Printf("Error parsing public key: %v", err)
 		return false
