@@ -14,7 +14,7 @@ import (
 
 // HandleParameterizedReplaceableKind handles parameterized replaceable events based on NIP-01 rules
 func HandleParameterizedReplaceableKind(ctx context.Context, evt relay.Event, collection *mongo.Collection, ws *websocket.Conn) error {
-	// Step 1: Find dTag from the event's tags
+	// Step 1: Extract the dTag from the event's tags
 	var dTag string
 	for _, tag := range evt.Tags {
 		if len(tag) > 0 && tag[0] == "d" {
@@ -23,7 +23,7 @@ func HandleParameterizedReplaceableKind(ctx context.Context, evt relay.Event, co
 		}
 	}
 
-	// Step 2: Create filter to find the existing event based on pubkey, kind, and dTag
+	// Step 2: Create a filter to find the existing event based on pubkey, kind, and dTag
 	filter := bson.M{"pubkey": evt.PubKey, "kind": evt.Kind, "tags.d": dTag}
 
 	// Step 3: Find the existing event from the database
@@ -33,16 +33,15 @@ func HandleParameterizedReplaceableKind(ctx context.Context, evt relay.Event, co
 		return fmt.Errorf("error finding existing event: %v", err)
 	}
 
-	// Step 4: Handle event replacement logic (NIP-01 rules)
-	// If we found an existing event and the new event is older, reject the update
+	// Step 4: If an existing event is found, check if it should be replaced based on created_at
 	if err != mongo.ErrNoDocuments {
 		if existingEvent.CreatedAt > evt.CreatedAt || (existingEvent.CreatedAt == evt.CreatedAt && existingEvent.ID < evt.ID) {
 			response.SendOK(ws, evt.ID, false, "blocked: relay already has a newer event for this pubkey and dTag")
 			return nil
 		}
 
-		// Step 5: Delete the older event if the new event is valid
-		_, err := collection.DeleteOne(ctx, bson.M{"_id": existingEvent.ID})
+		// Step 5: If the new event is valid, delete the older event before inserting the new one
+		_, err := collection.DeleteOne(ctx, filter)
 		if err != nil {
 			return fmt.Errorf("error deleting the older event: %v", err)
 		}
