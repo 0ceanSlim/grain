@@ -8,7 +8,6 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/net/websocket"
 )
 
@@ -48,18 +47,14 @@ func HandleParameterizedReplaceableKind(ctx context.Context, evt relay.Event, co
 		fmt.Printf("Deleted older event with ID: %s\n", existingEvent.ID)
 	}
 
-	// Step 6: Upsert the new event (insert if not existing, or update if newer)
-	opts := options.Update().SetUpsert(true)
-	update := bson.M{
-		"$set": evt,
-	}
-	_, err = collection.UpdateOne(ctx, filter, update, opts)
+	// Step 6: Insert the new event (replaceable)
+	_, err = collection.InsertOne(ctx, evt)
 	if err != nil {
 		response.SendOK(ws, evt.ID, false, "error: could not connect to the database")
-		return fmt.Errorf("error updating/inserting event kind %d into MongoDB: %v", evt.Kind, err)
+		return fmt.Errorf("error inserting event kind %d into MongoDB: %v", evt.Kind, err)
 	}
 
-	fmt.Printf("Upserted event kind %d into MongoDB: %s\n", evt.Kind, evt.ID)
+	fmt.Printf("Inserted event kind %d into MongoDB: %s\n", evt.Kind, evt.ID)
 	response.SendOK(ws, evt.ID, true, "")
 	return nil
 }
