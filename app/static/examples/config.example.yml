@@ -89,3 +89,20 @@ blacklist: #Removing a pubkey from the Blacklist requires a hard restart; Blackl
     - db0c9b8acd6101adb9b281c5321f98f6eebb33c5719d230ed1870997538a9765
   permanent_blacklist_npubs: # List of permanently banned npubs
     - npub1x0r5gflnk2mn6h3c70nvnywpy2j46gzqwg6k7uw6fxswyz0md9qqnhshtn
+
+event_purge:
+  enabled: true # Toggle to enable/disable event purging
+  keep_duration_days: 2 # Number of days to keep events
+  purge_interval_hours: 24 # Runs every 24 hours
+  purge_by_category: # Configure purging based on categories
+    parameterized_replaceable: false
+    regular: true
+    replaceable: false
+  purge_by_kind: # Configure purging based on event kind
+    - kind: 0
+      enabled: false
+    - kind: 1
+      enabled: true
+    - kind: 3
+      enabled: false
+  exclude_whitelisted: true # Exclude events from whitelisted pubkeys during purging

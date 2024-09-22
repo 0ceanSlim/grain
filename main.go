@@ -39,6 +39,9 @@ func main() {
 			log.Fatal("Error loading config: ", err)
 		}
 
+		// Start event purging in the background
+		go mongo.ScheduleEventPurging(cfg)
+
 		config.SetResourceLimit(&cfg.ResourceLimits) // Apply limits once before starting the server
 
 		client, err := mongo.InitDB(cfg)
@@ -70,9 +73,9 @@ func main() {
 
 		case <-signalChan:
 			log.Println("Shutting down server...")
-			server.Close()          // Stop the server
+			server.Close()             // Stop the server
 			mongo.DisconnectDB(client) // Disconnect from MongoDB
-			wg.Wait()               // Wait for all goroutines to finish
+			wg.Wait()                  // Wait for all goroutines to finish
 			return
 		}
 	}

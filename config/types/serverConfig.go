@@ -20,4 +20,5 @@ type ServerConfig struct {
 	Blacklist       BlacklistConfig       `yaml:"blacklist"`
 	ResourceLimits  ResourceLimits        `yaml:"resource_limits"`
 	Auth            AuthConfig            `yaml:"auth"`
+	EventPurge      EventPurgeConfig      `yaml:"event_purge"`
 }
