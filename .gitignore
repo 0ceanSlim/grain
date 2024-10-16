@@ -1,5 +1,6 @@
 /tmp
 config.yml
+whitelist.yml
 relay_metadata.json
 grain.exe
 /build

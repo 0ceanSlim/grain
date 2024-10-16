@@ -13,12 +13,9 @@ type ServerConfig struct {
 		MaxConnections            int    `yaml:"max_connections"`              // Maximum number of concurrent connections
 		MaxSubscriptionsPerClient int    `yaml:"max_subscriptions_per_client"` // Maximum number of subscriptions per client
 	} `yaml:"server"`
-	RateLimit       RateLimitConfig       `yaml:"rate_limit"`
-	PubkeyWhitelist PubkeyWhitelistConfig `yaml:"pubkey_whitelist"`
-	KindWhitelist   KindWhitelistConfig   `yaml:"kind_whitelist"`
-	DomainWhitelist DomainWhitelistConfig `yaml:"domain_whitelist"`
-	Blacklist       BlacklistConfig       `yaml:"blacklist"`
-	ResourceLimits  ResourceLimits        `yaml:"resource_limits"`
-	Auth            AuthConfig            `yaml:"auth"`
-	EventPurge      EventPurgeConfig      `yaml:"event_purge"`
+	RateLimit      RateLimitConfig  `yaml:"rate_limit"`
+	Blacklist      BlacklistConfig  `yaml:"blacklist"`
+	ResourceLimits ResourceLimits   `yaml:"resource_limits"`
+	Auth           AuthConfig       `yaml:"auth"`
+	EventPurge     EventPurgeConfig `yaml:"event_purge"`
 }

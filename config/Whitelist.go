@@ -6,52 +6,50 @@ import (
 	"strconv"
 )
 
-// Helper function to check if a pubkey or npub is whitelisted
+// Check if a pubkey or npub is whitelisted
 func IsPubKeyWhitelisted(pubKey string) bool {
-	cfg := GetConfig()
-	if !cfg.PubkeyWhitelist.Enabled {
-		return true
-	}
+    cfg := GetWhitelistConfig()
+    if !cfg.PubkeyWhitelist.Enabled {
+        return true
+    }
 
-	// Check pubkeys
-	for _, whitelistedKey := range cfg.PubkeyWhitelist.Pubkeys {
-		if pubKey == whitelistedKey {
-			return true
-		}
-	}
+    for _, whitelistedKey := range cfg.PubkeyWhitelist.Pubkeys {
+        if pubKey == whitelistedKey {
+            return true
+        }
+    }
 
-	// Check npubs
-	for _, npub := range cfg.PubkeyWhitelist.Npubs {
-		decodedPubKey, err := utils.DecodeNpub(npub)
-		if err != nil {
-			fmt.Println("Error decoding npub:", err)
-			continue
-		}
-		if pubKey == decodedPubKey {
-			return true
-		}
-	}
+    for _, npub := range cfg.PubkeyWhitelist.Npubs {
+        decodedPubKey, err := utils.DecodeNpub(npub)
+        if err != nil {
+            fmt.Println("Error decoding npub:", err)
+            continue
+        }
+        if pubKey == decodedPubKey {
+            return true
+        }
+    }
 
-	return false
+    return false
 }
 
+// Check if a kind is whitelisted
 func IsKindWhitelisted(kind int) bool {
-	cfg := GetConfig()
-	if !cfg.KindWhitelist.Enabled {
-		return true
-	}
+    cfg := GetWhitelistConfig()
+    if !cfg.KindWhitelist.Enabled {
+        return true
+    }
 
-	// Check event kinds
-	for _, whitelistedKindStr := range cfg.KindWhitelist.Kinds {
-		whitelistedKind, err := strconv.Atoi(whitelistedKindStr)
-		if err != nil {
-			fmt.Println("Error converting whitelisted kind to int:", err)
-			continue
-		}
-		if kind == whitelistedKind {
-			return true
-		}
-	}
+    for _, whitelistedKindStr := range cfg.KindWhitelist.Kinds {
+        whitelistedKind, err := strconv.Atoi(whitelistedKindStr)
+        if err != nil {
+            fmt.Println("Error converting whitelisted kind to int:", err)
+            continue
+        }
+        if kind == whitelistedKind {
+            return true
+        }
+    }
 
-	return false
+    return false
 }

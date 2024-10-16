@@ -21,64 +21,64 @@ import (
 )
 
 func main() {
-	utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
-	utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
+    utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
+    utils.EnsureFileExists("whitelist.yml", "app/static/examples/whitelist.example.yml")
+    utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
 
-	restartChan := make(chan struct{})
-	go config.WatchConfigFile("config.yml", restartChan) // Critical goroutine
+    restartChan := make(chan struct{})
+    go config.WatchConfigFile("config.yml", restartChan)
 
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+    signalChan := make(chan os.Signal, 1)
+    signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
-	var wg sync.WaitGroup
-	for {
-		wg.Add(1) // Add to WaitGroup for the server goroutine
+    var wg sync.WaitGroup
+    for {
+        wg.Add(1)
 
-		cfg, err := config.LoadConfig("config.yml")
-		if err != nil {
-			log.Fatal("Error loading config: ", err)
-		}
+        cfg, err := config.LoadConfig("config.yml")
+        if err != nil {
+            log.Fatal("Error loading config: ", err)
+        }
 
-		// Start event purging in the background
-		go mongo.ScheduleEventPurging(cfg)
+        _, err = config.LoadWhitelistConfig("whitelist.yml")
+        if err != nil {
+            log.Fatal("Error loading whitelist config: ", err)
+        }
 
-		config.SetResourceLimit(&cfg.ResourceLimits) // Apply limits once before starting the server
+        go mongo.ScheduleEventPurging(cfg)
 
-		client, err := mongo.InitDB(cfg)
-		if err != nil {
-			log.Fatal("Error initializing database: ", err)
-		}
+        config.SetResourceLimit(&cfg.ResourceLimits)
+        client, err := mongo.InitDB(cfg)
+        if err != nil {
+            log.Fatal("Error initializing database: ", err)
+        }
 
-		config.SetRateLimit(cfg)
-		config.SetSizeLimit(cfg)
+        config.SetRateLimit(cfg)
+        config.SetSizeLimit(cfg)
+        config.ClearTemporaryBans()
 
-		config.ClearTemporaryBans()
+        err = utils.LoadRelayMetadataJSON()
+        if err != nil {
+            log.Fatal("Failed to load relay metadata: ", err)
+        }
 
-		err = utils.LoadRelayMetadataJSON()
-		if err != nil {
-			log.Fatal("Failed to load relay metadata: ", err)
-		}
+        mux := setupRoutes()
+        server := startServer(cfg, mux, &wg)
 
-		mux := setupRoutes()
-
-		// Start the server
-		server := startServer(cfg, mux, &wg)
-
-		select {
-		case <-restartChan:
-			log.Println("Restarting server...")
-			server.Close() // Stop the current server instance
-			wg.Wait()      // Wait for the server goroutine to finish
-			time.Sleep(3 * time.Second)
-
-		case <-signalChan:
-			log.Println("Shutting down server...")
-			server.Close()             // Stop the server
-			mongo.DisconnectDB(client) // Disconnect from MongoDB
-			wg.Wait()                  // Wait for all goroutines to finish
-			return
-		}
-	}
+        select {
+        case <-restartChan:
+            log.Println("Restarting server...")
+            server.Close()
+            wg.Wait()
+            time.Sleep(3 * time.Second)
+        case <-signalChan:
+            log.Println("Shutting down server...")
+            server.Close()
+            mongo.DisconnectDB(client)
+            wg.Wait()
+            return
+        }
+    }
 }
 
 func setupRoutes() *http.ServeMux {

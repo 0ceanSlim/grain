@@ -63,19 +63,6 @@ rate_limit:
       limit: 25
       burst: 50
 
-pubkey_whitelist:
-  enabled: false
-  pubkeys: [] # List of allowed public keys
-  npubs: [] # List of allowed npubs (Nostr public keys in bech32 format)
-
-kind_whitelist:
-  enabled: false
-  kinds: [] # List of allowed event kinds
-
-domain_whitelist:
-  enabled: false
-  domains: [] # List of allowed domains
-
 blacklist: #Removing a pubkey from the Blacklist requires a hard restart; Blacklist overides the Whitelist
   enabled: true
   permanent_ban_words: [] # Words that trigger a permanent ban

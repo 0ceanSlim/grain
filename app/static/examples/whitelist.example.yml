@@ -1,0 +1,20 @@
+pubkey_whitelist:
+  enabled: false
+  pubkeys:
+    - pubkey1
+    - pubkey2
+  npubs:
+    - npub18ls2km9aklhzw9yzqgjfu0anhz2z83hkeknw7sl22ptu8kfs3rjq54am44
+    - npub2
+
+kind_whitelist:
+  enabled: false
+  kinds:
+    - "1"
+    - "2"
+
+domain_whitelist:
+  enabled: false
+  domains:
+    - "example.com"
+    - "anotherdomain.com"
