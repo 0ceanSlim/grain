@@ -12,8 +12,10 @@ import (
 var (
     cfg            *configTypes.ServerConfig
     whitelistCfg   *configTypes.WhitelistConfig
+    blacklistCfg   *configTypes.BlacklistConfig
     once           sync.Once
     whitelistOnce  sync.Once
+    blacklistOnce  sync.Once
 )
 
 // LoadConfig loads the server configuration from config.yml
@@ -62,4 +64,28 @@ func GetConfig() *configTypes.ServerConfig {
 
 func GetWhitelistConfig() *configTypes.WhitelistConfig {
     return whitelistCfg
+}
+
+// LoadBlacklistConfig loads the blacklist configuration from blacklist.yml
+func LoadBlacklistConfig(filename string) (*configTypes.BlacklistConfig, error) {
+    data, err := os.ReadFile(filename)
+    if err != nil {
+        return nil, err
+    }
+
+    var config configTypes.BlacklistConfig
+    err = yaml.Unmarshal(data, &config)
+    if err != nil {
+        return nil, err
+    }
+
+    blacklistOnce.Do(func() {
+        blacklistCfg = &config
+    })
+
+    return blacklistCfg, nil
+}
+
+func GetBlacklistConfig() *configTypes.BlacklistConfig {
+    return blacklistCfg
 }

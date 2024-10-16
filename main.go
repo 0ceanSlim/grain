@@ -23,6 +23,7 @@ import (
 func main() {
     utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
     utils.EnsureFileExists("whitelist.yml", "app/static/examples/whitelist.example.yml")
+	utils.EnsureFileExists("blacklist.yml", "app/static/examples/blacklist.example.yml")
     utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
 
     restartChan := make(chan struct{})
@@ -43,6 +44,11 @@ func main() {
         _, err = config.LoadWhitelistConfig("whitelist.yml")
         if err != nil {
             log.Fatal("Error loading whitelist config: ", err)
+        }
+
+		_, err = config.LoadBlacklistConfig("blacklist.yml")
+        if err != nil {
+            log.Fatal("Error loading blacklist config: ", err)
         }
 
         go mongo.ScheduleEventPurging(cfg)

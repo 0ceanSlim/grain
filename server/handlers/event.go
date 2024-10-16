@@ -68,7 +68,13 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 }
 
 func handleBlacklistAndWhitelist(ws *websocket.Conn, evt nostr.Event) bool {
+    // Get the current whitelist configuration
     whitelistCfg := config.GetWhitelistConfig()
+    if whitelistCfg == nil {
+        fmt.Println("Whitelist configuration is not loaded.")
+        response.SendNotice(ws, "", "Internal server error: whitelist configuration is missing")
+        return false
+    }
 
     // If domain whitelisting is enabled, dynamically fetch pubkeys from domains
     if whitelistCfg.DomainWhitelist.Enabled {
@@ -103,6 +109,7 @@ func handleBlacklistAndWhitelist(ws *websocket.Conn, evt nostr.Event) bool {
 
     return true
 }
+
 func handleRateAndSizeLimits(ws *websocket.Conn, evt nostr.Event, eventSize int) bool {
 	rateLimiter := config.GetRateLimiter()
 	sizeLimiter := config.GetSizeLimiter()

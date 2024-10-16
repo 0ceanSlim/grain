@@ -1,0 +1,13 @@
+enabled: true
+permanent_ban_words:
+  - nigger
+temp_ban_words:
+  - crypto
+  - web3
+  - airdrop
+max_temp_bans: 3
+temp_ban_duration: 3600
+permanent_blacklist_pubkeys:
+  - db0c9b8acd6101adb9b281c5321f98f6eebb33c5719d230ed1870997538a9765
+permanent_blacklist_npubs:
+  - npub1x0r5gflnk2mn6h3c70nvnywpy2j46gzqwg6k7uw6fxswyz0md9qqnhshtn

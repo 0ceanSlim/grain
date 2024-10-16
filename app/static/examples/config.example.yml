@@ -63,20 +63,6 @@ rate_limit:
       limit: 25
       burst: 50
 
-blacklist: #Removing a pubkey from the Blacklist requires a hard restart; Blacklist overides the Whitelist
-  enabled: true
-  permanent_ban_words: [] # Words that trigger a permanent ban
-  temp_ban_words: # Words that trigger a temporary ban
-    - crypto
-    - web3
-    - airdrop
-  max_temp_bans: 3 # Number of temporary bans before a permanent ban
-  temp_ban_duration: 3600 # Temporary ban duration in seconds
-  permanent_blacklist_pubkeys: # List of permanently banned public keys
-    - db0c9b8acd6101adb9b281c5321f98f6eebb33c5719d230ed1870997538a9765
-  permanent_blacklist_npubs: # List of permanently banned npubs
-    - npub1x0r5gflnk2mn6h3c70nvnywpy2j46gzqwg6k7uw6fxswyz0md9qqnhshtn
-
 event_purge:
   enabled: true # Toggle to enable/disable event purging
   keep_duration_days: 2 # Number of days to keep events

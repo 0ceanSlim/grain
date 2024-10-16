@@ -15,50 +15,50 @@ import (
 
 // CheckBlacklist checks if a pubkey is in the blacklist based on event content
 func CheckBlacklist(pubkey, eventContent string) (bool, string) {
-	blacklistConfig := GetConfig().Blacklist
+    blacklistConfig := GetBlacklistConfig()
+    if blacklistConfig == nil || !blacklistConfig.Enabled {
+        return false, ""
+    }
 
-	if !blacklistConfig.Enabled {
-		return false, ""
-	}
+    log.Printf("Checking blacklist for pubkey: %s", pubkey)
 
-	log.Printf("Checking blacklist for pubkey: %s", pubkey)
+    // Check for permanent blacklist by pubkey or npub.
+    if isPubKeyPermanentlyBlacklisted(pubkey, blacklistConfig) {
+        log.Printf("Pubkey %s is permanently blacklisted", pubkey)
+        return true, fmt.Sprintf("pubkey %s is permanently blacklisted", pubkey)
+    }
 
-	// Check for permanent blacklist by pubkey or npub
-	if isPubKeyPermanentlyBlacklisted(pubkey, blacklistConfig) {
-		log.Printf("Pubkey %s is permanently blacklisted", pubkey)
-		return true, fmt.Sprintf("pubkey %s is permanently blacklisted", pubkey)
-	}
+    // Check for temporary ban.
+    if isPubKeyTemporarilyBlacklisted(pubkey) {
+        log.Printf("Pubkey %s is temporarily blacklisted", pubkey)
+        return true, fmt.Sprintf("pubkey %s is temporarily blacklisted", pubkey)
+    }
 
-	// Check for temporary ban
-	if isPubKeyTemporarilyBlacklisted(pubkey) {
-		log.Printf("Pubkey %s is temporarily blacklisted", pubkey)
-		return true, fmt.Sprintf("pubkey %s is temporarily blacklisted", pubkey)
-	}
+    // Check for permanent ban based on wordlist.
+    for _, word := range blacklistConfig.PermanentBanWords {
+        if strings.Contains(eventContent, word) {
+            err := AddToPermanentBlacklist(pubkey)
+            if err != nil {
+                return true, fmt.Sprintf("pubkey %s is permanently banned and failed to save: %v", pubkey, err)
+            }
+            return true, "blocked: pubkey is permanently banned"
+        }
+    }
 
-	// Check for permanent ban based on wordlist
-	for _, word := range blacklistConfig.PermanentBanWords {
-		if strings.Contains(eventContent, word) {
-			err := AddToPermanentBlacklist(pubkey)
-			if err != nil {
-				return true, fmt.Sprintf("pubkey %s is permanently banned and failed to save: %v", pubkey, err)
-			}
-			return true, "blocked: pubkey is permanently banned"
-		}
-	}
+    // Check for temporary ban based on wordlist.
+    for _, word := range blacklistConfig.TempBanWords {
+        if strings.Contains(eventContent, word) {
+            err := AddToTemporaryBlacklist(pubkey, *blacklistConfig)
+            if err != nil {
+                return true, fmt.Sprintf("pubkey %s is temporarily banned and failed to save: %v", pubkey, err)
+            }
+            return true, "blocked: pubkey is temporarily banned"
+        }
+    }
 
-	// Check for temporary ban based on wordlist
-	for _, word := range blacklistConfig.TempBanWords {
-		if strings.Contains(eventContent, word) {
-			err := AddToTemporaryBlacklist(pubkey, blacklistConfig)
-			if err != nil {
-				return true, fmt.Sprintf("pubkey %s is temporarily banned and failed to save: %v", pubkey, err)
-			}
-			return true, "blocked: pubkey is temporarily banned"
-		}
-	}
-
-	return false, ""
+    return false, ""
 }
+
 
 // Checks if a pubkey is temporarily blacklisted
 func isPubKeyTemporarilyBlacklisted(pubkey string) bool {
@@ -142,63 +142,61 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig types.BlacklistConfi
 	return nil
 }
 
-// Checks if a pubkey is permanently blacklisted (only using config.yml)
-func isPubKeyPermanentlyBlacklisted(pubKey string, blacklistConfig types.BlacklistConfig) bool {
-	if !blacklistConfig.Enabled {
-		return false
-	}
+func isPubKeyPermanentlyBlacklisted(pubKey string, blacklistConfig *types.BlacklistConfig) bool {
+    if blacklistConfig == nil || !blacklistConfig.Enabled {
+        return false
+    }
 
-	// Check pubkeys
-	for _, blacklistedKey := range blacklistConfig.PermanentBlacklistPubkeys {
-		if pubKey == blacklistedKey {
-			return true
-		}
-	}
+    // Check pubkeys.
+    for _, blacklistedKey := range blacklistConfig.PermanentBlacklistPubkeys {
+        if pubKey == blacklistedKey {
+            return true
+        }
+    }
 
-	// Check npubs
-	for _, npub := range blacklistConfig.PermanentBlacklistNpubs {
-		decodedPubKey, err := utils.DecodeNpub(npub)
-		if err != nil {
-			fmt.Println("Error decoding npub:", err)
-			continue
-		}
-		if pubKey == decodedPubKey {
-			return true
-		}
-	}
+    // Check npubs.
+    for _, npub := range blacklistConfig.PermanentBlacklistNpubs {
+        decodedPubKey, err := utils.DecodeNpub(npub)
+        if err != nil {
+            fmt.Println("Error decoding npub:", err)
+            continue
+        }
+        if pubKey == decodedPubKey {
+            return true
+        }
+    }
 
-	return false
+    return false
 }
 
 func AddToPermanentBlacklist(pubkey string) error {
-	// Remove the mutex lock from here
-	blacklistConfig := GetConfig().Blacklist
+    blacklistConfig := GetBlacklistConfig()
+    if blacklistConfig == nil {
+        return fmt.Errorf("blacklist configuration is not loaded")
+    }
 
-	// Check if already blacklisted
-	if isPubKeyPermanentlyBlacklisted(pubkey, blacklistConfig) {
-		return fmt.Errorf("pubkey %s is already in the permanent blacklist", pubkey)
-	}
+    // Check if already blacklisted.
+    if isPubKeyPermanentlyBlacklisted(pubkey, blacklistConfig) {
+        return fmt.Errorf("pubkey %s is already in the permanent blacklist", pubkey)
+    }
 
-	// Add pubkey to the blacklist
-	blacklistConfig.PermanentBlacklistPubkeys = append(blacklistConfig.PermanentBlacklistPubkeys, pubkey)
+    // Add pubkey to the permanent blacklist.
+    blacklistConfig.PermanentBlacklistPubkeys = append(blacklistConfig.PermanentBlacklistPubkeys, pubkey)
 
-	// Persist changes to config.yml
-	return saveBlacklistConfig(blacklistConfig)
+    // Persist changes to blacklist.yml.
+    return saveBlacklistConfig(*blacklistConfig)
 }
 
 func saveBlacklistConfig(blacklistConfig types.BlacklistConfig) error {
-	configData := GetConfig()
-	configData.Blacklist = blacklistConfig
+    data, err := yaml.Marshal(blacklistConfig)
+    if err != nil {
+        return fmt.Errorf("failed to marshal blacklist config: %v", err)
+    }
 
-	data, err := yaml.Marshal(configData)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %v", err)
-	}
+    err = os.WriteFile("blacklist.yml", data, 0644)
+    if err != nil {
+        return fmt.Errorf("failed to write config to file: %v", err)
+    }
 
-	err = os.WriteFile("config.yml", data, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write config to file: %v", err)
-	}
-
-	return nil
+    return nil
 }
