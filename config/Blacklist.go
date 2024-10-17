@@ -5,6 +5,7 @@ import (
 	"fmt"
 	types "grain/config/types"
 	"grain/server/utils"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -273,13 +274,27 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListEventIDs []stri
                 if err != nil {
                     log.Printf("Failed to marshal close request: %v", err)
                 } else {
-                    err = conn.WriteMessage(websocket.TextMessage, closeReqJSON)
-                    if err != nil {
+                    if err = conn.WriteMessage(websocket.TextMessage, closeReqJSON); err != nil {
                         log.Printf("Failed to send close request to relay %s: %v", localRelayURL, err)
                     } else {
                         log.Println("Sent CLOSE request to end subscription.")
+                        
+                        // Wait for a potential response or timeout
+                        conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+                        _, _, err = conn.ReadMessage()
+                        if err != nil {
+                            if err == io.EOF {
+                                log.Println("Connection closed by the server after CLOSE request (EOF)")
+                            } else if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+                                log.Println("WebSocket closed normally after CLOSE request")
+                            } else {
+                                log.Printf("Unexpected error after CLOSE request: %v", err)
+                            }
+                        }
                     }
                 }
+                
+                // Ensure we break the loop after handling EOSE
                 break
             }
 
@@ -342,33 +357,4 @@ func extractPubkeysFromMuteListEvent(eventData map[string]interface{}) []string 
 
     log.Printf("Extracted pubkeys: %v", pubkeys)
     return pubkeys
-}
-
-// AppendFetchedPubkeysToBlacklist fetches pubkeys from the local relay and appends them to the blacklist.
-func AppendFetchedPubkeysToBlacklist() error {
-    // Get the server configuration to determine the local relay URL.
-    cfg := GetConfig()
-    if cfg == nil {
-        return fmt.Errorf("server configuration is not loaded")
-    }
-
-    blacklistCfg := GetBlacklistConfig()
-    if blacklistCfg == nil {
-        return fmt.Errorf("blacklist configuration is not loaded")
-    }
-
-    // Construct the local relay WebSocket URL using the configured port.
-    localRelayURL := fmt.Sprintf("ws://localhost%s", cfg.Server.Port)
-
-    // Fetch pubkeys from the mute list events.
-    pubkeys, err := FetchPubkeysFromLocalMuteList(localRelayURL, blacklistCfg.MuteListEventIDs)
-    if err != nil {
-        return fmt.Errorf("failed to fetch pubkeys from mute list: %v", err)
-    }
-
-    // Add the fetched pubkeys to the permanent blacklist.
-    blacklistCfg.PermanentBlacklistPubkeys = append(blacklistCfg.PermanentBlacklistPubkeys, pubkeys...)
-
-    // Save the updated blacklist configuration.
-    return saveBlacklistConfig(*blacklistCfg)
 }

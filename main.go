@@ -72,17 +72,6 @@ func main() {
         mux := setupRoutes()
         server := startServer(cfg, mux, &wg)
 
-        // Append pubkeys from mute list events to the blacklist after the server starts.
-        go func() {
-            // Sleep for a short time to ensure the server is fully up.
-            time.Sleep(2 * time.Second)
-            
-            err := config.AppendFetchedPubkeysToBlacklist()
-            if err != nil {
-                log.Printf("Failed to update blacklist: %v", err)
-            }
-        }()
-
         // Monitor for server restart or shutdown signals.
         select {
         case <-restartChan:

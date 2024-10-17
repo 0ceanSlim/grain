@@ -95,6 +95,41 @@ func handleBlacklistAndWhitelist(ws *websocket.Conn, evt nostr.Event) bool {
         return false
     }
 
+    // Check mutelist blacklist
+cfg := config.GetConfig()
+if cfg == nil {
+    fmt.Println("Server configuration is not loaded")
+    response.SendNotice(ws, "", "Internal server error: server configuration is missing")
+    return false
+}
+
+blacklistCfg := config.GetBlacklistConfig()
+if blacklistCfg == nil {
+    fmt.Println("Blacklist configuration is not loaded")
+    response.SendNotice(ws, "", "Internal server error: blacklist configuration is missing")
+    return false
+}
+
+// Only proceed if there are mutelist event IDs specified
+if len(blacklistCfg.MuteListEventIDs) > 0 {
+    localRelayURL := fmt.Sprintf("ws://localhost%s", cfg.Server.Port)
+    mutelistedPubkeys, err := config.FetchPubkeysFromLocalMuteList(localRelayURL, blacklistCfg.MuteListEventIDs)
+    if err != nil {
+        fmt.Println("Error fetching pubkeys from mutelist:", err)
+        response.SendNotice(ws, "", "Error fetching pubkeys from mutelist")
+        return false
+    }
+
+    for _, mutelistedPubkey := range mutelistedPubkeys {
+        if evt.PubKey == mutelistedPubkey {
+            response.SendOK(ws, evt.ID, false, "not allowed: pubkey is in mutelist")
+            return false
+        }
+    }
+} else {
+    fmt.Println("No mutelist event IDs specified in the blacklist configuration")
+}
+
     // Check if the event's kind is whitelisted
     if whitelistCfg.KindWhitelist.Enabled && !config.IsKindWhitelisted(evt.Kind) {
         response.SendOK(ws, evt.ID, false, "not allowed: event kind is not whitelisted")
