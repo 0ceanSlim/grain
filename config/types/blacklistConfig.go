@@ -8,4 +8,5 @@ type BlacklistConfig struct {
 	TempBanDuration           int      `yaml:"temp_ban_duration"`
 	PermanentBlacklistPubkeys []string `yaml:"permanent_blacklist_pubkeys"`
 	PermanentBlacklistNpubs   []string `yaml:"permanent_blacklist_npubs"`
+	MuteListEventIDs          []string `yaml:"mute_list_event_ids"`
 }

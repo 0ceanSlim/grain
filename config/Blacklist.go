@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	types "grain/config/types"
 	"grain/server/utils"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"gopkg.in/yaml.v2"
 )
 
@@ -199,4 +201,174 @@ func saveBlacklistConfig(blacklistConfig types.BlacklistConfig) error {
     }
 
     return nil
+}
+
+// FetchPubkeysFromLocalMuteList sends a REQ to the local relay for mute list events.
+func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListEventIDs []string) ([]string, error) {
+    var wg sync.WaitGroup
+    var mu sync.Mutex
+    var allPubkeys []string
+    results := make(chan []string, 1)
+
+    wg.Add(1)
+    go func() {
+        defer wg.Done()
+
+        conn, _, err := websocket.DefaultDialer.Dial(localRelayURL, nil)
+        if err != nil {
+            log.Printf("Failed to connect to local relay %s: %v", localRelayURL, err)
+            return
+        }
+        defer conn.Close()
+
+        subscriptionID := "mutelist-fetch"
+
+        // Create the REQ message to fetch the mute list events by IDs.
+        req := []interface{}{"REQ", subscriptionID, map[string]interface{}{
+            "ids": muteListEventIDs,
+            "kinds": []int{10000}, // Mute list events kind.
+        }}
+
+        reqJSON, err := json.Marshal(req)
+        if err != nil {
+            log.Printf("Failed to marshal request: %v", err)
+            return
+        }
+
+        err = conn.WriteMessage(websocket.TextMessage, reqJSON)
+        if err != nil {
+            log.Printf("Failed to send request to local relay %s: %v", localRelayURL, err)
+            return
+        }
+
+        // Listen for messages from the local relay.
+        for {
+            _, message, err := conn.ReadMessage()
+            if err != nil {
+                log.Printf("Error reading message from local relay %s: %v", localRelayURL, err)
+                break
+            }
+
+            // Log the raw message for debugging.
+            log.Printf("Received raw message: %s", message)
+
+            var response []interface{}
+            err = json.Unmarshal(message, &response)
+            if err != nil || len(response) < 2 {
+                log.Printf("Invalid message format or failed to unmarshal: %v", err)
+                continue
+            }
+
+            // Check for "EVENT" type messages.
+            eventType, ok := response[0].(string)
+            if !ok {
+                log.Printf("Unexpected event type: %v", response[0])
+                continue
+            }
+
+            if eventType == "EOSE" {
+                // End of subscription events; send a "CLOSE" message to the relay.
+                closeReq := []interface{}{"CLOSE", subscriptionID}
+                closeReqJSON, err := json.Marshal(closeReq)
+                if err != nil {
+                    log.Printf("Failed to marshal close request: %v", err)
+                } else {
+                    err = conn.WriteMessage(websocket.TextMessage, closeReqJSON)
+                    if err != nil {
+                        log.Printf("Failed to send close request to relay %s: %v", localRelayURL, err)
+                    } else {
+                        log.Println("Sent CLOSE request to end subscription.")
+                    }
+                }
+                break
+            }
+
+            if eventType == "EVENT" {
+                // Safely cast the event data from the third element.
+                if len(response) < 3 {
+                    log.Printf("Unexpected event format with insufficient data: %v", response)
+                    continue
+                }
+
+                eventData, ok := response[2].(map[string]interface{})
+                if !ok {
+                    log.Printf("Expected event data to be a map, got: %T", response[2])
+                    continue
+                }
+
+                // Log event data for debugging.
+                log.Printf("Event data received: %+v", eventData)
+
+                pubkeys := extractPubkeysFromMuteListEvent(eventData)
+                results <- pubkeys
+            }
+        }
+    }()
+
+    go func() {
+        wg.Wait()
+        close(results)
+    }()
+
+    // Collect results from the relay.
+    for pubkeys := range results {
+        mu.Lock()
+        allPubkeys = append(allPubkeys, pubkeys...)
+        mu.Unlock()
+    }
+
+    return allPubkeys, nil
+}
+
+// extractPubkeysFromMuteListEvent extracts pubkeys from a mute list event.
+func extractPubkeysFromMuteListEvent(eventData map[string]interface{}) []string {
+    var pubkeys []string
+
+    tags, ok := eventData["tags"].([]interface{})
+    if !ok {
+        log.Println("Tags field is missing or not an array")
+        return pubkeys
+    }
+
+    for _, tag := range tags {
+        tagArray, ok := tag.([]interface{})
+        if ok && len(tagArray) > 1 && tagArray[0] == "p" {
+            pubkey, ok := tagArray[1].(string)
+            if ok {
+                pubkeys = append(pubkeys, pubkey)
+            }
+        }
+    }
+
+    log.Printf("Extracted pubkeys: %v", pubkeys)
+    return pubkeys
+}
+
+// AppendFetchedPubkeysToBlacklist fetches pubkeys from the local relay and appends them to the blacklist.
+func AppendFetchedPubkeysToBlacklist() error {
+    // Get the server configuration to determine the local relay URL.
+    cfg := GetConfig()
+    if cfg == nil {
+        return fmt.Errorf("server configuration is not loaded")
+    }
+
+    blacklistCfg := GetBlacklistConfig()
+    if blacklistCfg == nil {
+        return fmt.Errorf("blacklist configuration is not loaded")
+    }
+
+    // Construct the local relay WebSocket URL using the configured port.
+    localRelayURL := fmt.Sprintf("ws://localhost%s", cfg.Server.Port)
+
+    // Fetch pubkeys from the mute list events.
+    pubkeys, err := FetchPubkeysFromLocalMuteList(localRelayURL, blacklistCfg.MuteListEventIDs)
+    if err != nil {
+        return fmt.Errorf("failed to fetch pubkeys from mute list: %v", err)
+    }
+
+    // Add the fetched pubkeys to the permanent blacklist.
+    blacklistCfg.PermanentBlacklistPubkeys = append(blacklistCfg.PermanentBlacklistPubkeys, pubkeys...)
+
+    // Save the updated blacklist configuration.
+    return saveBlacklistConfig(*blacklistCfg)
 }

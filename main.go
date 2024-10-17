@@ -23,7 +23,7 @@ import (
 func main() {
     utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
     utils.EnsureFileExists("whitelist.yml", "app/static/examples/whitelist.example.yml")
-	utils.EnsureFileExists("blacklist.yml", "app/static/examples/blacklist.example.yml")
+    utils.EnsureFileExists("blacklist.yml", "app/static/examples/blacklist.example.yml")
     utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
 
     restartChan := make(chan struct{})
@@ -46,11 +46,12 @@ func main() {
             log.Fatal("Error loading whitelist config: ", err)
         }
 
-		_, err = config.LoadBlacklistConfig("blacklist.yml")
+        _, err = config.LoadBlacklistConfig("blacklist.yml")
         if err != nil {
             log.Fatal("Error loading blacklist config: ", err)
         }
 
+        // Start event purging in the background.
         go mongo.ScheduleEventPurging(cfg)
 
         config.SetResourceLimit(&cfg.ResourceLimits)
@@ -71,6 +72,18 @@ func main() {
         mux := setupRoutes()
         server := startServer(cfg, mux, &wg)
 
+        // Append pubkeys from mute list events to the blacklist after the server starts.
+        go func() {
+            // Sleep for a short time to ensure the server is fully up.
+            time.Sleep(2 * time.Second)
+            
+            err := config.AppendFetchedPubkeysToBlacklist()
+            if err != nil {
+                log.Printf("Failed to update blacklist: %v", err)
+            }
+        }()
+
+        // Monitor for server restart or shutdown signals.
         select {
         case <-restartChan:
             log.Println("Restarting server...")
