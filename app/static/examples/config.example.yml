@@ -16,6 +16,7 @@ server:
 
 event_time_constraints:
   min_created_at: 1577836800 # January 1, 2020, as Unix timestamp
+  # min_created_at_string: now-5m  # Custom value to indicate 5 minutes in the past
   # max_created_at: 0 # Set to 0 to use the default behavior of 'now'
   max_created_at_string: now+5m # Use a string to set a date for max created at in the future or past from current time
 
