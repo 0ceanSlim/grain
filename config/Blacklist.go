@@ -205,7 +205,7 @@ func saveBlacklistConfig(blacklistConfig types.BlacklistConfig) error {
 }
 
 // FetchPubkeysFromLocalMuteList sends a REQ to the local relay for mute list events.
-func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListEventIDs []string) ([]string, error) {
+func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []string) ([]string, error) {
     var wg sync.WaitGroup
     var mu sync.Mutex
     var allPubkeys []string
@@ -226,7 +226,7 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListEventIDs []stri
 
         // Create the REQ message to fetch the mute list events by IDs.
         req := []interface{}{"REQ", subscriptionID, map[string]interface{}{
-            "ids": muteListEventIDs,
+            "authors": muteListAuthors,
             "kinds": []int{10000}, // Mute list events kind.
         }}
 

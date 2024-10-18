@@ -11,6 +11,6 @@ permanent_blacklist_pubkeys:
   - db0c9b8acd6101adb9b281c5321f98f6eebb33c5719d230ed1870997538a9765
 permanent_blacklist_npubs:
   - npub1x0r5gflnk2mn6h3c70nvnywpy2j46gzqwg6k7uw6fxswyz0md9qqnhshtn
-mute_list_event_ids:
-# - 76be64157af3e00cf50fae5fda63170cd4636065adf34960a4bec84a2022610b
+mutelist_authors:
+  - 3fe0ab6cbdb7ee27148202249e3fb3b89423c6f6cda6ef43ea5057c3d93088e4
 # mutelist Event MUST be stored in this relay for it to be retrieved.

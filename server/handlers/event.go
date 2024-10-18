@@ -111,9 +111,9 @@ if blacklistCfg == nil {
 }
 
 // Only proceed if there are mutelist event IDs specified
-if len(blacklistCfg.MuteListEventIDs) > 0 {
+if len(blacklistCfg.MuteListAuthors) > 0 {
     localRelayURL := fmt.Sprintf("ws://localhost%s", cfg.Server.Port)
-    mutelistedPubkeys, err := config.FetchPubkeysFromLocalMuteList(localRelayURL, blacklistCfg.MuteListEventIDs)
+    mutelistedPubkeys, err := config.FetchPubkeysFromLocalMuteList(localRelayURL, blacklistCfg.MuteListAuthors)
     if err != nil {
         fmt.Println("Error fetching pubkeys from mutelist:", err)
         response.SendNotice(ws, "", "Error fetching pubkeys from mutelist")
