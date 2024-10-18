@@ -28,6 +28,9 @@ func main() {
 
     restartChan := make(chan struct{})
     go config.WatchConfigFile("config.yml", restartChan)
+    go config.WatchConfigFile("whitelist.yml", restartChan)
+    go config.WatchConfigFile("blacklist.yml", restartChan)
+    go config.WatchConfigFile("relay_metadata.json", restartChan)
 
     signalChan := make(chan os.Signal, 1)
     signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)

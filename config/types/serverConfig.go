@@ -1,5 +1,11 @@
 package config
 
+type EventTimeConstraints struct {
+	MinCreatedAt       int64  `yaml:"min_created_at"`        // Minimum allowed timestamp
+	MaxCreatedAt       int64  `yaml:"max_created_at"`        // Maximum allowed timestamp
+	MaxCreatedAtString string `yaml:"max_created_at_string"` // Original string value for parsing (e.g., "now+5m")
+}
+
 type ServerConfig struct {
 	MongoDB struct {
 		URI      string `yaml:"uri"`
@@ -7,15 +13,16 @@ type ServerConfig struct {
 	} `yaml:"mongodb"`
 	Server struct {
 		Port                      string `yaml:"port"`
-		ReadTimeout               int    `yaml:"read_timeout"`                 // Timeout in seconds
-		WriteTimeout              int    `yaml:"write_timeout"`                // Timeout in seconds
-		IdleTimeout               int    `yaml:"idle_timeout"`                 // Timeout in seconds
-		MaxConnections            int    `yaml:"max_connections"`              // Maximum number of concurrent connections
-		MaxSubscriptionsPerClient int    `yaml:"max_subscriptions_per_client"` // Maximum number of subscriptions per client
+		ReadTimeout               int    `yaml:"read_timeout"`
+		WriteTimeout              int    `yaml:"write_timeout"`
+		IdleTimeout               int    `yaml:"idle_timeout"`
+		MaxConnections            int    `yaml:"max_connections"`
+		MaxSubscriptionsPerClient int    `yaml:"max_subscriptions_per_client"`
 	} `yaml:"server"`
-	RateLimit      RateLimitConfig  `yaml:"rate_limit"`
-	Blacklist      BlacklistConfig  `yaml:"blacklist"`
-	ResourceLimits ResourceLimits   `yaml:"resource_limits"`
-	Auth           AuthConfig       `yaml:"auth"`
-	EventPurge     EventPurgeConfig `yaml:"event_purge"`
+	RateLimit            RateLimitConfig      `yaml:"rate_limit"`
+	Blacklist            BlacklistConfig      `yaml:"blacklist"`
+	ResourceLimits       ResourceLimits       `yaml:"resource_limits"`
+	Auth                 AuthConfig           `yaml:"auth"`
+	EventPurge           EventPurgeConfig     `yaml:"event_purge"`
+	EventTimeConstraints EventTimeConstraints `yaml:"event_time_constraints"` // Added this field
 }

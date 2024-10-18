@@ -6,6 +6,8 @@ import (
 
 	configTypes "grain/config/types"
 
+	"grain/server/utils"
+
 	"gopkg.in/yaml.v2"
 )
 
@@ -30,6 +32,9 @@ func LoadConfig(filename string) (*configTypes.ServerConfig, error) {
     if err != nil {
         return nil, err
     }
+
+    // Adjust event time constraints after loading
+	utils.AdjustEventTimeConstraints(&config)
 
     once.Do(func() {
         cfg = &config

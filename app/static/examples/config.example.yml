@@ -14,6 +14,11 @@ server:
   max_connections: 100
   max_subscriptions_per_client: 10
 
+event_time_constraints:
+  min_created_at: 1577836800 # January 1, 2020, as Unix timestamp
+  # max_created_at: 0 # Set to 0 to use the default behavior of 'now'
+  max_created_at_string: now+5m # Use a string to set a date for max created at in the future or past from current time
+
 resource_limits:
   cpu_cores: 2 # Limit the number of CPU cores the application can use
   memory_mb: 1024 # Cap the maximum amount of RAM in MB the application can use
