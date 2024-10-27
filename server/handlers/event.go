@@ -79,6 +79,9 @@ func validateEventTimestamp(evt nostr.Event) bool {
 		return false
 	}
 
+	// Adjust event time constraints in the configuration
+	utils.AdjustEventTimeConstraints(cfg)
+
 	// Use current time for max and a fixed date for min if not specified
 	now := time.Now().Unix()
 	minCreatedAt := cfg.EventTimeConstraints.MinCreatedAt
