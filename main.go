@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	blossom "grain/app/src"
 	"grain/app/src/api"
 	"grain/app/src/routes"
 	"grain/config"
@@ -72,9 +73,10 @@ func main() {
 			log.Fatal("Failed to load relay metadata: ", err)
 		}
 
-		// Initialize the Blossom server
-		//blossom.InitBlossom() // Add this line to initialize Blossom
-
+		err = blossom.InitBlossom(cfg)
+		if err != nil {
+			log.Fatal("Error initializing Blossom:", err)
+		}
 		mux := setupRoutes()
 		server := startServer(cfg, mux, &wg)
 
