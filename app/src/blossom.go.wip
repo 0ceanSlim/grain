@@ -1,0 +1,111 @@
+package blossom
+
+import (
+	"context"
+	"log"
+
+	"grain/config"
+	"grain/server/db/mongo"
+	"grain/server/utils"
+
+	"github.com/fiatjaf/khatru"
+	"github.com/nbd-wtf/go-nostr"
+	"github.com/spf13/afero"
+)
+
+var (
+	cfg = config.GetConfig() // Load configuration globally once
+	fs  = afero.NewOsFs()    // File system abstraction using afero
+)
+
+// InitBlossom initializes the Blossom server with the configured settings.
+func InitBlossom() {
+	blossomPath := cfg.Blossom.BlossomPath
+	err := fs.MkdirAll(blossomPath, 0755)
+	if err != nil {
+		log.Fatal("Error creating blossom directory:", err)
+	}
+
+	relay := khatru.NewRelay() // Initialize the Khatru relay
+
+	// Initialize MongoDB connection
+	dbClient, err := mongo.InitDB(cfg)
+	if err != nil {
+		log.Fatal("Error initializing MongoDB:", err)
+	}
+
+	// Store events in MongoDB using StoreMongoEvent
+	relay.StoreEvent = append(relay.StoreEvent, func(ctx context.Context, event *nostr.Event) error {
+		mongo.StoreMongoEvent(ctx, *event, nil) // Call your StoreMongoEvent without WebSocket, modify if needed
+		return nil
+	})
+
+	// Query events from MongoDB
+	relay.QueryEvents = append(relay.QueryEvents, func(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
+		filters := []nostr.Filter{filter}
+		results, err := mongo.QueryEvents(filters, dbClient, cfg.MongoDB.Database)
+		if err != nil {
+			return nil, err
+		}
+
+		ch := make(chan *nostr.Event)
+		go func() {
+			for _, evt := range results {
+				ch <- &evt
+			}
+			close(ch)
+		}()
+		return ch, nil
+	})
+
+	// Handle deletions via kind 5 events using HandleDeleteKind
+	relay.DeleteEvent = append(relay.DeleteEvent, func(ctx context.Context, event *types.Event) error {
+		if event.Kind == 5 {
+			err := mongo.HandleDeleteKind(ctx, *event, dbClient, nil) // Modify WebSocket logic if not needed
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	// Reject uploads if pubkey is not whitelisted
+	relay.RejectEvent = append(relay.RejectEvent, func(ctx context.Context, event *types.Event) (bool, string) {
+		if !isPubKeyWhitelisted(event.PubKey) {
+			return true, "pubkey is not whitelisted"
+		}
+		return false, ""
+	})
+}
+
+// Check if the event's pubkey is whitelisted
+func isPubKeyWhitelisted(pubkey string) bool {
+	whitelistCfg := config.GetWhitelistConfig()
+	if whitelistCfg == nil {
+		log.Println("Whitelist configuration not loaded.")
+		return false
+	}
+
+	// Check static whitelist first
+	for _, whitelistedPubKey := range whitelistCfg.PubkeyWhitelist.Pubkeys {
+		if pubkey == whitelistedPubKey {
+			return true
+		}
+	}
+
+	// Dynamically fetch pubkeys from whitelisted domains, if configured
+	if whitelistCfg.DomainWhitelist.Enabled {
+		domainPubkeys, err := utils.FetchPubkeysFromDomains(whitelistCfg.DomainWhitelist.Domains)
+		if err != nil {
+			log.Println("Error fetching pubkeys from domains:", err)
+			return false
+		}
+		for _, domainPubkey := range domainPubkeys {
+			if pubkey == domainPubkey {
+				return true
+			}
+		}
+	}
+
+	return false
+}

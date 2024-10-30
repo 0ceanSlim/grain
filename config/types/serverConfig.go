@@ -26,4 +26,8 @@ type ServerConfig struct {
 	Auth                 AuthConfig           `yaml:"auth"`
 	EventPurge           EventPurgeConfig     `yaml:"event_purge"`
 	EventTimeConstraints EventTimeConstraints `yaml:"event_time_constraints"` // Added this field
+	Blossom              struct {
+		BlossomPath string `yaml:"blossom_path"`  // Path to store blossom files
+		MaxFileSize int    `yaml:"max_file_size"` // Optional: Max file size for uploads
+	} `yaml:"blossom"`
 }
