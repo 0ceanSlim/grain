@@ -59,6 +59,31 @@ func CheckBlacklist(pubkey, eventContent string) (bool, string) {
         }
     }
 
+    // Check mutelist blacklist
+    if len(blacklistConfig.MuteListAuthors) > 0 {
+        cfg := GetConfig()
+        if cfg == nil {
+            log.Println("Server configuration is not loaded")
+            return true, "Internal server error: server configuration is missing"
+        }
+
+        localRelayURL := fmt.Sprintf("ws://localhost%s", cfg.Server.Port)
+        mutelistedPubkeys, err := FetchPubkeysFromLocalMuteList(localRelayURL, blacklistConfig.MuteListAuthors)
+        if err != nil {
+            log.Printf("Error fetching pubkeys from mutelist: %v", err)
+            return true, "Error fetching pubkeys from mutelist"
+        }
+
+        for _, mutelistedPubkey := range mutelistedPubkeys {
+            if pubkey == mutelistedPubkey {
+                log.Printf("Pubkey %s is in the mutelist", pubkey)
+                return true, "not allowed: pubkey is in mutelist"
+            }
+        }
+    } else {
+        log.Println("No mutelist event IDs specified in the blacklist configuration")
+    }
+
     return false, ""
 }
 

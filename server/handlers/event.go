@@ -106,77 +106,16 @@ func validateEventTimestamp(evt nostr.Event) bool {
 }
 
 func handleBlacklistAndWhitelist(ws *websocket.Conn, evt nostr.Event) bool {
-    // Get the current whitelist configuration
-    whitelistCfg := config.GetWhitelistConfig()
-    if whitelistCfg == nil {
-        fmt.Println("Whitelist configuration is not loaded.")
-        response.SendNotice(ws, "", "Internal server error: whitelist configuration is missing")
-        return false
-    }
-
-    // If domain whitelisting is enabled, dynamically fetch pubkeys from domains
-    if whitelistCfg.DomainWhitelist.Enabled {
-        domains := whitelistCfg.DomainWhitelist.Domains
-        pubkeys, err := utils.FetchPubkeysFromDomains(domains)
-        if err != nil {
-            fmt.Println("Error fetching pubkeys from domains:", err)
-            response.SendNotice(ws, "", "Error fetching pubkeys from domains")
-            return false
-        }
-        // Update the whitelisted pubkeys dynamically
-        whitelistCfg.PubkeyWhitelist.Pubkeys = append(whitelistCfg.PubkeyWhitelist.Pubkeys, pubkeys...)
-    }
-
-    // Check if the event's pubkey or content is blacklisted
+    // Use the updated CheckBlacklist function
     if blacklisted, msg := config.CheckBlacklist(evt.PubKey, evt.Content); blacklisted {
         response.SendOK(ws, evt.ID, false, msg)
         return false
     }
 
-    // Check mutelist blacklist
-cfg := config.GetConfig()
-if cfg == nil {
-    fmt.Println("Server configuration is not loaded")
-    response.SendNotice(ws, "", "Internal server error: server configuration is missing")
-    return false
-}
-
-blacklistCfg := config.GetBlacklistConfig()
-if blacklistCfg == nil {
-    fmt.Println("Blacklist configuration is not loaded")
-    response.SendNotice(ws, "", "Internal server error: blacklist configuration is missing")
-    return false
-}
-
-// Only proceed if there are mutelist event IDs specified
-if len(blacklistCfg.MuteListAuthors) > 0 {
-    localRelayURL := fmt.Sprintf("ws://localhost%s", cfg.Server.Port)
-    mutelistedPubkeys, err := config.FetchPubkeysFromLocalMuteList(localRelayURL, blacklistCfg.MuteListAuthors)
-    if err != nil {
-        fmt.Println("Error fetching pubkeys from mutelist:", err)
-        response.SendNotice(ws, "", "Error fetching pubkeys from mutelist")
-        return false
-    }
-
-    for _, mutelistedPubkey := range mutelistedPubkeys {
-        if evt.PubKey == mutelistedPubkey {
-            response.SendOK(ws, evt.ID, false, "not allowed: pubkey is in mutelist")
-            return false
-        }
-    }
-} else {
-    fmt.Println("No mutelist event IDs specified in the blacklist configuration")
-}
-
-    // Check if the event's kind is whitelisted
-    if whitelistCfg.KindWhitelist.Enabled && !config.IsKindWhitelisted(evt.Kind) {
-        response.SendOK(ws, evt.ID, false, "not allowed: event kind is not whitelisted")
-        return false
-    }
-
-    // Check if the event's pubkey is whitelisted
-    if whitelistCfg.PubkeyWhitelist.Enabled && !config.IsPubKeyWhitelisted(evt.PubKey) {
-        response.SendOK(ws, evt.ID, false, "not allowed: pubkey or npub is not whitelisted")
+    // Check the whitelist using CheckWhitelist function
+    isWhitelisted, msg := config.CheckWhitelist(evt)
+    if !isWhitelisted {
+        response.SendOK(ws, evt.ID, false, msg)
         return false
     }
 
