@@ -4,26 +4,15 @@ import (
 	"fmt"
 	nostr "grain/server/types"
 	"grain/server/utils"
+	"log"
 	"strconv"
 )
 
 // CheckWhitelist checks if an event meets the whitelist criteria.
 func CheckWhitelist(evt nostr.Event) (bool, string) {
-    // Get the current whitelist configuration
     whitelistCfg := GetWhitelistConfig()
     if whitelistCfg == nil {
         return false, "Internal server error: whitelist configuration is missing"
-    }
-
-    // If domain whitelisting is enabled, fetch pubkeys from domains
-    if whitelistCfg.DomainWhitelist.Enabled {
-        domains := whitelistCfg.DomainWhitelist.Domains
-        pubkeys, err := utils.FetchPubkeysFromDomains(domains)
-        if err != nil {
-            return false, "Error fetching pubkeys from domains"
-        }
-        // Update the whitelisted pubkeys dynamically
-        whitelistCfg.PubkeyWhitelist.Pubkeys = append(whitelistCfg.PubkeyWhitelist.Pubkeys, pubkeys...)
     }
 
     // Check if the event's kind is whitelisted
@@ -39,27 +28,45 @@ func CheckWhitelist(evt nostr.Event) (bool, string) {
     return true, ""
 }
 
-// Check if a pubkey or npub is whitelisted
+// IsPubKeyWhitelisted checks if a pubkey or npub is whitelisted, considering pubkeys from domains.
 func IsPubKeyWhitelisted(pubKey string) bool {
     cfg := GetWhitelistConfig()
-    if !cfg.PubkeyWhitelist.Enabled {
-        return true
+    if cfg == nil || !cfg.PubkeyWhitelist.Enabled {
+        return true // Whitelisting is not enforced if the configuration is missing or disabled
     }
 
+    // Check statically defined pubkeys
     for _, whitelistedKey := range cfg.PubkeyWhitelist.Pubkeys {
         if pubKey == whitelistedKey {
             return true
         }
     }
 
+    // Check statically defined npubs after decoding them to pubkeys
     for _, npub := range cfg.PubkeyWhitelist.Npubs {
         decodedPubKey, err := utils.DecodeNpub(npub)
         if err != nil {
-            fmt.Println("Error decoding npub:", err)
+            log.Printf("Error decoding npub: %v", err)
             continue
         }
         if pubKey == decodedPubKey {
             return true
+        }
+    }
+
+    // Fetch and check pubkeys from domains if domain whitelisting is enabled
+    if cfg.DomainWhitelist.Enabled {
+        domains := cfg.DomainWhitelist.Domains
+        pubkeys, err := utils.FetchPubkeysFromDomains(domains)
+        if err != nil {
+            log.Printf("Error fetching pubkeys from domains: %v", err)
+            return false // Consider returning true or handling based on your application's needs
+        }
+
+        for _, domainPubKey := range pubkeys {
+            if pubKey == domainPubKey {
+                return true
+            }
         }
     }
 
