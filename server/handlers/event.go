@@ -66,6 +66,19 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
+	// Check for duplicate event
+	isDuplicate, err := mongo.CheckDuplicateEvent(context.TODO(), evt)
+	if err != nil {
+		fmt.Printf("Error checking for duplicate event: %v\n", err)
+		response.SendOK(ws, evt.ID, false, "error: internal server error during duplicate check")
+		return
+	}
+
+	if isDuplicate {
+		response.SendOK(ws, evt.ID, false, "blocked: the database already contains this event")
+		return
+	}
+
 	// Store the event in MongoDB or other storage
 	mongo.StoreMongoEvent(context.TODO(), evt, ws)
 	fmt.Println("Event processed:", evt.ID)
@@ -106,20 +119,20 @@ func validateEventTimestamp(evt nostr.Event) bool {
 }
 
 func handleBlacklistAndWhitelist(ws *websocket.Conn, evt nostr.Event) bool {
-    // Use the updated CheckBlacklist function
-    if blacklisted, msg := config.CheckBlacklist(evt.PubKey, evt.Content); blacklisted {
-        response.SendOK(ws, evt.ID, false, msg)
-        return false
-    }
+	// Use the updated CheckBlacklist function
+	if blacklisted, msg := config.CheckBlacklist(evt.PubKey, evt.Content); blacklisted {
+		response.SendOK(ws, evt.ID, false, msg)
+		return false
+	}
 
-    // Check the whitelist using CheckWhitelist function
-    isWhitelisted, msg := config.CheckWhitelist(evt)
-    if !isWhitelisted {
-        response.SendOK(ws, evt.ID, false, msg)
-        return false
-    }
+	// Check the whitelist using CheckWhitelist function
+	isWhitelisted, msg := config.CheckWhitelist(evt)
+	if !isWhitelisted {
+		response.SendOK(ws, evt.ID, false, msg)
+		return false
+	}
 
-    return true
+	return true
 }
 
 func handleRateAndSizeLimits(ws *websocket.Conn, evt nostr.Event, eventSize int) bool {
