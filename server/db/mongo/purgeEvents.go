@@ -4,7 +4,7 @@ import (
 	"context"
 	"grain/config"
 	types "grain/config/types"
-	"grain/server/utils"
+	nostr "grain/server/types"
 	"log"
 	"time"
 
@@ -12,7 +12,7 @@ import (
 )
 
 // PurgeOldEvents removes old events based on the configuration and a list of whitelisted pubkeys.
-func PurgeOldEvents(cfg *types.EventPurgeConfig, whitelist []string) {
+func PurgeOldEvents(cfg *types.EventPurgeConfig) {
 	if !cfg.Enabled {
 		return
 	}
@@ -23,78 +23,49 @@ func PurgeOldEvents(cfg *types.EventPurgeConfig, whitelist []string) {
 	// Calculate the cutoff time
 	cutoff := time.Now().AddDate(0, 0, -cfg.KeepDurationDays).Unix()
 
-	// Create the filter for purging old events
-	filter := bson.M{
-		"created_at": bson.M{"$lt": cutoff}, // Filter older events
+	// Create the base filter for fetching old events
+	baseFilter := bson.M{
+		"created_at": bson.M{"$lt": cutoff}, // Filter for events older than the cutoff
 	}
 
-	// Exclude whitelisted pubkeys if specified in the config
-	if cfg.ExcludeWhitelisted && len(whitelist) > 0 {
-		filter["pubkey"] = bson.M{"$nin": whitelist} // Exclude whitelisted pubkeys
+	cursor, err := collection.Find(context.TODO(), baseFilter)
+	if err != nil {
+		log.Printf("Error fetching old events for purging: %v", err)
+		return
 	}
+	defer cursor.Close(context.TODO())
 
-	// Handle purging by category
-	for category, purge := range cfg.PurgeByCategory {
-		if purge {
-			filter["category"] = category
-			_, err := collection.DeleteMany(context.TODO(), filter)
-			if err != nil {
-				log.Printf("Error purging events by category %s: %v", category, err)
-			}
+	for cursor.Next(context.TODO()) {
+		var evt nostr.Event
+		if err := cursor.Decode(&evt); err != nil {
+			log.Printf("Error decoding event: %v", err)
+			continue
 		}
-	}
 
-	// Handle purging by kind
-	for _, kindRule := range cfg.PurgeByKind {
-		if kindRule.Enabled {
-			filter["kind"] = kindRule.Kind
-			_, err := collection.DeleteMany(context.TODO(), filter)
-			if err != nil {
-				log.Printf("Error purging events by kind %d: %v", kindRule.Kind, err)
-			}
+		// Check if the event's pubkey is whitelisted and skip purging if configured to do so
+		if cfg.ExcludeWhitelisted && config.IsPubKeyWhitelisted(evt.PubKey) {
+			log.Printf("Skipping purging for whitelisted event ID: %s, pubkey: %s", evt.ID, evt.PubKey)
+			continue
+		}
+
+		// Proceed with deleting the event if it is not whitelisted
+		_, err := collection.DeleteOne(context.TODO(), bson.M{"id": evt.ID})
+		if err != nil {
+			log.Printf("Error purging event ID %s: %v", evt.ID, err)
+		} else {
+			log.Printf("Purged event ID: %s", evt.ID)
 		}
 	}
 }
 
 // ScheduleEventPurging runs the event purging at a configurable interval.
 func ScheduleEventPurging(cfg *types.ServerConfig) {
-	// Use the purge interval from the configuration
 	purgeInterval := time.Duration(cfg.EventPurge.PurgeIntervalHours) * time.Hour
 	ticker := time.NewTicker(purgeInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		// Fetch the whitelisted pubkeys without passing cfg directly
-		whitelist := getWhitelistedPubKeys()
-		PurgeOldEvents(&cfg.EventPurge, whitelist)
-		log.Printf("Purged old events, keeping whitelisted pubkeys: %v", whitelist)
+		PurgeOldEvents(&cfg.EventPurge)
+		log.Println("Scheduled purging completed.")
 	}
-}
-
-// Fetch whitelisted pubkeys from both the whitelist config and any additional domains.
-func getWhitelistedPubKeys() []string {
-	// Get the whitelist configuration
-	whitelistCfg := config.GetWhitelistConfig()
-	if whitelistCfg == nil {
-		log.Println("whitelistCfg is nil, returning an empty list of whitelisted pubkeys.")
-		return []string{}
-	}
-
-	// Start with the statically defined pubkeys
-	whitelistedPubkeys := whitelistCfg.PubkeyWhitelist.Pubkeys
-
-	// Fetch pubkeys from domains if domain whitelist is enabled
-	if whitelistCfg.DomainWhitelist.Enabled {
-		domains := whitelistCfg.DomainWhitelist.Domains
-		pubkeys, err := utils.FetchPubkeysFromDomains(domains)
-		if err != nil {
-			log.Printf("Error fetching pubkeys from domains: %v", err)
-			// Return the existing statically whitelisted pubkeys in case of an error
-			return whitelistedPubkeys
-		}
-		// Append fetched pubkeys from domains to the whitelisted pubkeys
-		whitelistedPubkeys = append(whitelistedPubkeys, pubkeys...)
-	}
-
-	return whitelistedPubkeys
 }
