@@ -26,4 +26,8 @@ type ServerConfig struct {
 	Auth                 AuthConfig           `yaml:"auth"`
 	EventPurge           EventPurgeConfig     `yaml:"event_purge"`
 	EventTimeConstraints EventTimeConstraints `yaml:"event_time_constraints"` // Added this field
+	BackupRelay          struct {
+		Enabled bool   `yaml:"enabled"`
+		URL     string `yaml:"url"`
+	} `yaml:"backup_relay"`
 }

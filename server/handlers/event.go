@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"grain/config"
 	"grain/server/db/mongo"
+	"log"
 	"time"
 
 	"grain/server/handlers/response"
@@ -82,6 +83,50 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 	// Store the event in MongoDB or other storage
 	mongo.StoreMongoEvent(context.TODO(), evt, ws)
 	fmt.Println("Event processed:", evt.ID)
+
+	// Load the config and check for errors
+	cfg, err := config.LoadConfig("config.yml")
+	if err != nil {
+		log.Printf("Error loading configuration: %v", err)
+		return
+	}
+
+	// Send the event to the backup relay if configured
+	if cfg.BackupRelay.Enabled {
+		go func() {
+			err := sendToBackupRelay(cfg.BackupRelay.URL, evt)
+			if err != nil {
+				log.Printf("Failed to send event %s to backup relay: %v", evt.ID, err)
+			} else {
+				log.Printf("Event %s successfully sent to backup relay", evt.ID)
+			}
+		}()
+	}
+}
+
+func sendToBackupRelay(backupURL string, evt nostr.Event) error {
+	conn, err := websocket.Dial(backupURL, "", "http://localhost/")
+	if err != nil {
+		return fmt.Errorf("error connecting to backup relay %s: %w", backupURL, err)
+	}
+	defer conn.Close()
+
+	// Create the message to send
+	eventMessage := []interface{}{"EVENT", evt}
+	eventMessageBytes, err := json.Marshal(eventMessage)
+	if err != nil {
+		return fmt.Errorf("error marshaling event message: %w", err)
+	}
+
+	if _, err := conn.Write(eventMessageBytes); err != nil {
+		return fmt.Errorf("error sending event message to backup relay: %w", err)
+	}
+
+	// Log and return
+	log.Printf("Event %s sent to backup relay %s", evt.ID, backupURL)
+	time.Sleep(500 * time.Millisecond) // Optional: small delay to avoid rapid successive sends
+
+	return nil
 }
 
 // Validate event timestamps against the configured min and max values
