@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"grain/config"
+	nostr "grain/server/types"
 
 	"golang.org/x/net/websocket"
 )
@@ -53,13 +54,20 @@ func ImportEvents(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 
-				err = sendEventsToRelay(events)
+				// Filter events based on the whitelist
+				whitelistedEvents := filterWhitelistedEvents(events)
+				if len(whitelistedEvents) == 0 {
+					log.Printf("No whitelisted events to import from relay %s", url)
+					break
+				}
+
+				err = sendEventsToRelay(whitelistedEvents)
 				if err != nil {
 					errorChan <- fmt.Errorf("error sending events to relay: %w", err)
 					return
 				}
 
-				totalEvents += len(events)
+				totalEvents += len(whitelistedEvents)
 
 				// Update lastEventCreatedAt with the timestamp of the last event fetched
 				lastEventCreatedAt = int64(events[len(events)-1]["created_at"].(float64))
@@ -77,6 +85,40 @@ func ImportEvents(w http.ResponseWriter, r *http.Request) {
 	case <-time.After(10 * time.Minute): // Increase timeout for large imports
 		renderResult(w, false, "Timeout importing events", 0)
 	}
+}
+
+// filterWhitelistedEvents filters events based on the whitelist configuration.
+func filterWhitelistedEvents(events []map[string]interface{}) []map[string]interface{} {
+	var whitelistedEvents []map[string]interface{}
+
+	// Load the whitelist configuration
+	whitelistCfg := config.GetWhitelistConfig()
+	if whitelistCfg == nil {
+		log.Println("Whitelist configuration is not loaded. Allowing all events.")
+		return events
+	}
+
+	for _, event := range events {
+		evt := nostr.Event{
+			ID:        event["id"].(string),
+			PubKey:    event["pubkey"].(string),
+			CreatedAt: int64(event["created_at"].(float64)),
+			Kind:      int(event["kind"].(float64)),
+			Content:   event["content"].(string),
+			Tags:      event["tags"].([][]string),
+			Sig:       event["sig"].(string),
+		}
+
+		// Check the whitelist criteria
+		isWhitelisted, _ := config.CheckWhitelist(evt)
+		if isWhitelisted {
+			whitelistedEvents = append(whitelistedEvents, event)
+		} else {
+			log.Printf("Event ID %s blocked due to whitelist rules", evt.ID)
+		}
+	}
+
+	return whitelistedEvents
 }
 
 func renderResult(w http.ResponseWriter, success bool, message string, count int) {
