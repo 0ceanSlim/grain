@@ -1,15 +1,11 @@
 package config
 
 type EventPurgeConfig struct {
-	Enabled            bool            `yaml:"enabled"`
-	KeepDurationDays   int             `yaml:"keep_duration_days"`
-	PurgeIntervalHours int             `yaml:"purge_interval_hours"`
-	PurgeByCategory    map[string]bool `yaml:"purge_by_category"`
-	PurgeByKind        []KindPurgeRule `yaml:"purge_by_kind"`
-	ExcludeWhitelisted bool            `yaml:"exclude_whitelisted"`
-}
-
-type KindPurgeRule struct {
-	Kind    int  `yaml:"kind"`
-	Enabled bool `yaml:"enabled"`
+	Enabled              bool            `yaml:"enabled"`
+	KeepIntervalHours    int             `yaml:"keep_interval_hours"`
+	PurgeIntervalMinutes int             `yaml:"purge_interval_minutes"`
+	PurgeByCategory      map[string]bool `yaml:"purge_by_category"`
+	PurgeByKindEnabled   bool            `yaml:"purge_by_kind_enabled"`
+	KindsToPurge         []int           `yaml:"kinds_to_purge"`
+	ExcludeWhitelisted   bool            `yaml:"exclude_whitelisted"`
 }

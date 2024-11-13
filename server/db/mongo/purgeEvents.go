@@ -5,10 +5,13 @@ import (
 	"grain/config"
 	types "grain/config/types"
 	nostr "grain/server/types"
+	"grain/server/utils"
 	"log"
+	"strconv"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // PurgeOldEvents removes old events based on the configuration and a list of whitelisted pubkeys.
@@ -18,49 +21,77 @@ func PurgeOldEvents(cfg *types.EventPurgeConfig) {
 	}
 
 	client := GetClient()
-	collection := client.Database("grain").Collection("events")
+	cutoff := time.Now().Add(-time.Duration(cfg.KeepIntervalHours) * time.Hour).Unix()
+	var collectionsToPurge []string
 
-	// Calculate the cutoff time
-	cutoff := time.Now().AddDate(0, 0, -cfg.KeepDurationDays).Unix()
-
-	// Create the base filter for fetching old events
-	baseFilter := bson.M{
-		"created_at": bson.M{"$lt": cutoff}, // Filter for events older than the cutoff
+	// Determine collections to purge
+	if cfg.PurgeByKindEnabled {
+		for _, kind := range cfg.KindsToPurge {
+			collectionsToPurge = append(collectionsToPurge, "event-kind"+strconv.Itoa(kind))
+		}
+	} else {
+		// If `purge_by_kind_enabled` is false, add all potential event kinds or find dynamically
+		collectionsToPurge = getAllEventCollections(client)
 	}
 
-	cursor, err := collection.Find(context.TODO(), baseFilter)
-	if err != nil {
-		log.Printf("Error fetching old events for purging: %v", err)
-		return
-	}
-	defer cursor.Close(context.TODO())
+	for _, collectionName := range collectionsToPurge {
+		collection := client.Database("grain").Collection(collectionName)
+		baseFilter := bson.M{"created_at": bson.M{"$lt": cutoff}}
 
-	for cursor.Next(context.TODO()) {
-		var evt nostr.Event
-		if err := cursor.Decode(&evt); err != nil {
-			log.Printf("Error decoding event: %v", err)
-			continue
-		}
-
-		// Check if the event's pubkey is whitelisted and skip purging if configured to do so
-		if cfg.ExcludeWhitelisted && config.IsPubKeyWhitelisted(evt.PubKey) {
-			log.Printf("Skipping purging for whitelisted event ID: %s, pubkey: %s", evt.ID, evt.PubKey)
-			continue
-		}
-
-		// Proceed with deleting the event if it is not whitelisted
-		_, err := collection.DeleteOne(context.TODO(), bson.M{"id": evt.ID})
+		cursor, err := collection.Find(context.TODO(), baseFilter)
 		if err != nil {
-			log.Printf("Error purging event ID %s: %v", evt.ID, err)
-		} else {
-			log.Printf("Purged event ID: %s", evt.ID)
+			log.Printf("Error fetching old events for purging from %s: %v", collectionName, err)
+			continue
+		}
+		defer cursor.Close(context.TODO())
+
+		for cursor.Next(context.TODO()) {
+			var evt nostr.Event
+			if err := cursor.Decode(&evt); err != nil {
+				log.Printf("Error decoding event from %s: %v", collectionName, err)
+				continue
+			}
+
+			// Skip if the pubkey is whitelisted
+			if cfg.ExcludeWhitelisted && config.IsPubKeyWhitelisted(evt.PubKey) {
+				log.Printf("Skipping purging for whitelisted event ID: %s, pubkey: %s", evt.ID, evt.PubKey)
+				continue
+			}
+
+			// Check if purging by category is enabled and if the event matches the allowed category
+			category := utils.DetermineEventCategory(evt.Kind)
+			if purge, exists := cfg.PurgeByCategory[category]; exists && purge {
+				_, err := collection.DeleteOne(context.TODO(), bson.M{"id": evt.ID})
+				if err != nil {
+					log.Printf("Error purging event ID %s from %s: %v", evt.ID, collectionName, err)
+				} else {
+					log.Printf("Purged event ID: %s from %s", evt.ID, collectionName)
+				}
+			}
 		}
 	}
 }
 
+// getAllEventCollections returns a list of all event collections if purging all kinds.
+func getAllEventCollections(client *mongo.Client) []string {
+	var collections []string
+	collectionNames, err := client.Database("grain").ListCollectionNames(context.TODO(), bson.M{})
+	if err != nil {
+		log.Printf("Error listing collection names: %v", err)
+		return collections
+	}
+
+	for _, name := range collectionNames {
+		if len(name) > 10 && name[:10] == "event-kind" {
+			collections = append(collections, name)
+		}
+	}
+	return collections
+}
+
 // ScheduleEventPurging runs the event purging at a configurable interval.
 func ScheduleEventPurging(cfg *types.ServerConfig) {
-	purgeInterval := time.Duration(cfg.EventPurge.PurgeIntervalHours) * time.Hour
+	purgeInterval := time.Duration(cfg.EventPurge.PurgeIntervalMinutes) * time.Minute
 	ticker := time.NewTicker(purgeInterval)
 	defer ticker.Stop()
 
