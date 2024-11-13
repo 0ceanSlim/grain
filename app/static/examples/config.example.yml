@@ -75,17 +75,16 @@ rate_limit:
 
 event_purge:
   enabled: true # Toggle to enable/disable event purging
-  keep_duration_days: 2 # Number of days to keep events
-  purge_interval_hours: 24 # Runs every 24 hours
+  keep_interval_hours: 24 # Number of hours to keep events before purging
+  purge_interval_minutes: 1 # Interval in minutes for running the purge
   purge_by_category: # Configure purging based on categories
-    parameterized_replaceable: false
     regular: true
     replaceable: false
-  purge_by_kind: # Configure purging based on event kind
-    - kind: 0
-      enabled: false
-    - kind: 1
-      enabled: true
-    - kind: 3
-      enabled: false
+    parameterized_replaceable: false
+    deprecated: true
+  purge_by_kind_enabled: false # Enable purging by specific kinds, if false, all collections will be purged
+  kinds_to_purge: # List of event kinds to explicitly purge
+    - 1
+    - 2
+    - 1000
   exclude_whitelisted: true # Exclude events from whitelisted pubkeys during purging
