@@ -74,9 +74,9 @@ rate_limit:
       burst: 50
 
 event_purge:
-  enabled: true # Toggle to enable/disable event purging
+  enabled: false # Toggle to enable/disable event purging
   keep_interval_hours: 24 # Number of hours to keep events before purging
-  purge_interval_minutes: 1 # Interval in minutes for running the purge
+  purge_interval_minutes: 240 # Interval in minutes for running the purge
   purge_by_category: # Configure purging based on categories
     regular: true
     replaceable: false
