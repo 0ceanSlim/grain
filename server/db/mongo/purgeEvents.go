@@ -21,8 +21,14 @@ func PurgeOldEvents(cfg *types.EventPurgeConfig) {
 	}
 
 	client := GetClient()
-	cutoff := time.Now().Add(-time.Duration(cfg.KeepIntervalHours) * time.Hour).Unix()
+
+	// Calculate the cutoff time
+	currentTime := time.Now().Unix()
+	cutoff := currentTime - int64(cfg.KeepIntervalHours*3600) // Convert hours to seconds
+
 	var collectionsToPurge []string
+	totalPurged := 0
+	totalKept := 0
 
 	// Determine collections to purge
 	if cfg.PurgeByKindEnabled {
@@ -30,7 +36,6 @@ func PurgeOldEvents(cfg *types.EventPurgeConfig) {
 			collectionsToPurge = append(collectionsToPurge, "event-kind"+strconv.Itoa(kind))
 		}
 	} else {
-		// If `purge_by_kind_enabled` is false, add all potential event kinds or find dynamically
 		collectionsToPurge = getAllEventCollections(client)
 	}
 
@@ -49,27 +54,45 @@ func PurgeOldEvents(cfg *types.EventPurgeConfig) {
 			var evt nostr.Event
 			if err := cursor.Decode(&evt); err != nil {
 				log.Printf("Error decoding event from %s: %v", collectionName, err)
+				totalKept++
 				continue
 			}
 
-			// Skip if the pubkey is whitelisted
-			if cfg.ExcludeWhitelisted && config.IsPubKeyWhitelisted(evt.PubKey) {
-				log.Printf("Skipping purging for whitelisted event ID: %s, pubkey: %s", evt.ID, evt.PubKey)
+			// Debug log to check created_at and cutoff
+			//log.Printf("Processing event ID: %s, pubkey: %s, created_at: %d, cutoff: %d", evt.ID, evt.PubKey, evt.CreatedAt, cutoff)
+
+			// If the event is not older than the cutoff, mark it as kept
+			if evt.CreatedAt >= cutoff {
+				totalKept++
 				continue
 			}
 
-			// Check if purging by category is enabled and if the event matches the allowed category
+			// Skip purging if the pubkey is whitelisted
+			if cfg.ExcludeWhitelisted && config.IsPubKeyWhitelisted(evt.PubKey, true) {
+				//log.Printf("Event ID: %s is kept because the pubkey is whitelisted.", evt.ID)
+				totalKept++
+				continue
+			}
+
+			// Check if purging by category is enabled and matches the event's category
 			category := utils.DetermineEventCategory(evt.Kind)
-			if purge, exists := cfg.PurgeByCategory[category]; exists && purge {
-				_, err := collection.DeleteOne(context.TODO(), bson.M{"id": evt.ID})
-				if err != nil {
-					log.Printf("Error purging event ID %s from %s: %v", evt.ID, collectionName, err)
-				} else {
-					log.Printf("Purged event ID: %s from %s", evt.ID, collectionName)
-				}
+			if purge, exists := cfg.PurgeByCategory[category]; !exists || !purge {
+				totalKept++
+				continue
+			}
+
+			// Proceed to delete the event
+			_, err = collection.DeleteOne(context.TODO(), bson.M{"id": evt.ID})
+			if err != nil {
+				log.Printf("Error purging event ID %s from %s: %v", evt.ID, collectionName, err)
+				totalKept++
+			} else {
+				totalPurged++
 			}
 		}
 	}
+
+	log.Printf("Purging completed: Total events purged = %d, Total events kept = %d", totalPurged, totalKept)
 }
 
 // getAllEventCollections returns a list of all event collections if purging all kinds.
@@ -97,6 +120,6 @@ func ScheduleEventPurging(cfg *types.ServerConfig) {
 
 	for range ticker.C {
 		PurgeOldEvents(&cfg.EventPurge)
-		log.Println("Scheduled purging completed.")
+		//log.Println("Scheduled purging completed.")
 	}
 }
