@@ -1,6 +1,6 @@
 enabled: true
 permanent_ban_words:
-  - nigger
+  - really bad word
 temp_ban_words:
   - crypto
   - web3
