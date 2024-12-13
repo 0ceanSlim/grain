@@ -1,6 +1,6 @@
 # GRAIN 🌾
 
-## Go Relay Archetecture for Implementing Nostr
+## Go Relay Architecture for Implementing Nostr
 
 GRAIN is an open-source Nostr relay implementation written in Go. This project aims to provide an efficient and configurable Nostr relay.
 
