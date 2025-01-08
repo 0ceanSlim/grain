@@ -1,7 +1,11 @@
 {{define "header"}}
-<header>
-  <h1 class="mt-8 mb-8 text-3xl font-bold text-textSecondary">
+<header class="flex justify-between items-center mt-8 mb-8 mx-4">
+  <h1 class="text-3xl font-bold text-textSecondary">
     Welcome to the GRAIN Frontend 🌾
   </h1>
+  <div id="profile-container">
+    {{if .CustomData.publicKey}} {{template "profile-container" .CustomData}}
+    {{else}} {{template "login-button"}} {{end}}
+  </div>
 </header>
 {{end}}

@@ -1,0 +1,57 @@
+{{define "login-button"}}
+<div id="login-container" class="flex flex-col items-center justify-center">
+  <button
+    id="login-button"
+    class="p-2 text-2xl font-bold bg-yellow-300 rounded-md text-black"
+  >
+    Sign In with Nostr
+  </button>
+  <div id="spinner" class="spinner" style="display: none"></div>
+</div>
+
+<script>
+  document.getElementById("login-button").onclick = async function () {
+    const loginButton = document.getElementById("login-button");
+    const spinner = document.getElementById("spinner");
+    const profileContainer = document.getElementById("profile-container");
+
+    if (window.nostr) {
+      loginButton.style.display = "none";
+      spinner.style.display = "block";
+
+      try {
+        const publicKey = await window.nostr.getPublicKey();
+
+        // Fetch metadata from the server
+        const response = await fetch("/do-login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({ publicKey }).toString(),
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          window.location.reload();
+
+          // Replace login container with user profile dropdown
+          profileContainer.innerHTML = `
+            {{template "profile-container" .}}
+          `;
+        } else {
+          console.error("Login failed.");
+          loginButton.style.display = "block";
+        }
+      } catch (err) {
+        console.error("Failed to get public key:", err);
+        loginButton.style.display = "block";
+      } finally {
+        spinner.style.display = "none";
+      }
+    } else {
+      alert("Nostr extension not available.");
+    }
+  };
+</script>
+{{end}}

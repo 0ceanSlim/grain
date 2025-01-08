@@ -47,8 +47,10 @@
       }
     </style>
   </head>
+  {{template "header" .}}
   <body class="font-mono text-center text-textPrimary bg-bgPrimary">
-    {{template "header" .}} {{template "view" .}} {{template "footer" .}}
+    {{template "view" .}}
   </body>
+  {{template "footer" .}}
 </html>
 {{end}}

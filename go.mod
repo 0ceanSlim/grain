@@ -1,9 +1,12 @@
 module grain
 
-go 1.22.2
+go 1.23
+
+toolchain go1.23.4
 
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
+	github.com/gorilla/sessions v1.4.0
 	github.com/gorilla/websocket v1.5.3
 	go.mongodb.org/mongo-driver v1.16.0
 	golang.org/x/net v0.27.0
@@ -12,6 +15,7 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	golang.org/x/sys v0.22.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect

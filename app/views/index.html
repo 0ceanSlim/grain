@@ -1,6 +1,7 @@
 {{define "view"}}
 <main class="flex flex-col items-center justify-center p-8">
   <div class="mb-4">You are now viewing the {{.Title}}</div>
+
   <button
     hx-get="/import-events"
     hx-swap="outerHTML"
@@ -9,5 +10,6 @@
   >
     Import Events
   </button>
+  <div></div>
 </main>
 {{end}}
