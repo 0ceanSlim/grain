@@ -47,24 +47,35 @@
 </div>
 
 <script>
-  const profileNav = document.getElementById("profileNav");
-  const dropdown = document.getElementById("dropdown");
+  function initializeProfileNav() {
+    const profileNav = document.getElementById("profileNav");
+    const dropdown = document.getElementById("dropdown");
 
-  profileNav.addEventListener("mouseover", () => {
-    dropdown.classList.remove("hidden");
-  });
+    if (profileNav && dropdown) {
+      profileNav.addEventListener("mouseover", () => {
+        dropdown.classList.remove("hidden");
+      });
 
-  profileNav.addEventListener("mouseout", (event) => {
-    const rect = profileNav.getBoundingClientRect();
-    const inBounds =
-      event.clientX >= rect.left &&
-      event.clientX <= rect.right &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom;
+      profileNav.addEventListener("mouseout", (event) => {
+        const rect = profileNav.getBoundingClientRect();
+        const inBounds =
+          event.clientX >= rect.left &&
+          event.clientX <= rect.right &&
+          event.clientY >= rect.top &&
+          event.clientY <= rect.bottom;
 
-    if (!inBounds) {
-      dropdown.classList.add("hidden");
+        if (!inBounds) {
+          dropdown.classList.add("hidden");
+        }
+      });
     }
-  });
+  }
+
+  // Reinitialize profile navigation on DOM load
+  document.addEventListener("DOMContentLoaded", initializeProfileNav);
+
+  // Reinitialize profile navigation after htmx content swaps
+  document.addEventListener("htmx:afterSwap", initializeProfileNav);
 </script>
+
 {{end}}
