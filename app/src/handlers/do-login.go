@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/sessions"
 )
 
+// TODO NEED TO MAKE THIS SECRET KEY DYNAMICALLY FOR EACH SESSION
 var User = sessions.NewCookieStore([]byte("your-secret-key"))
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
