@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"fmt"
+	"grain/config"
+
 	"encoding/json"
 	"log"
 	"net/http"
@@ -22,8 +25,16 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Relay address
-	relays := []string{"ws://localhost:8181"}
+	// Load the current configuration
+	cfg, err := config.LoadConfig("config.yml")
+	if err != nil {
+		log.Printf("Failed to load config: %v\n", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Relay address using the port from config
+	relays := []string{fmt.Sprintf("ws://localhost%s", cfg.Server.Port)}
 
 	// Fetch user metadata
 	userContent, err := FetchUserMetadata(publicKey, relays)
