@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"grain/app/src/api"
 	"grain/app/src/handlers"
+	"grain/app/src/middleware"
 	"grain/app/src/routes"
 	"grain/config"
 	configTypes "grain/config/types"
@@ -93,7 +94,7 @@ func main() {
 	}
 }
 
-func setupRoutes() *http.ServeMux {
+func setupRoutes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/do-login", handlers.LoginHandler)
 	mux.HandleFunc("/logout", handlers.LogoutHandler) // Logout process
@@ -104,13 +105,14 @@ func setupRoutes() *http.ServeMux {
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "app/static/img/favicon.ico")
 	})
-	return mux
+	// Wrap with middleware
+	return middleware.UserMiddleware(mux)
 }
 
-func startServer(config *configTypes.ServerConfig, mux *http.ServeMux, wg *sync.WaitGroup) *http.Server {
+func startServer(config *configTypes.ServerConfig, handler http.Handler, wg *sync.WaitGroup) *http.Server {
 	server := &http.Server{
 		Addr:         config.Server.Port,
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  time.Duration(config.Server.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(config.Server.WriteTimeout) * time.Second,
 		IdleTimeout:  time.Duration(config.Server.IdleTimeout) * time.Second,
