@@ -2,15 +2,6 @@ package main
 
 import (
 	"fmt"
-	"grain/app/src/api"
-	"grain/app/src/handlers"
-	"grain/app/src/middleware"
-	"grain/app/src/routes"
-	"grain/config"
-	configTypes "grain/config/types"
-	relay "grain/server"
-	"grain/server/db/mongo"
-	"grain/server/utils"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +9,17 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	configTypes "grain/config/types"
+	relay "grain/server"
+
+	"grain/app/src/api"
+	"grain/app/src/handlers"
+	"grain/app/src/middleware"
+	"grain/app/src/routes"
+	"grain/config"
+	"grain/server/db/mongo"
+	"grain/server/utils"
 
 	"golang.org/x/net/websocket"
 )
@@ -56,14 +58,15 @@ func main() {
 			log.Fatal("Error loading blacklist config: ", err)
 		}
 
-		// Start event purging in the background.
-		go mongo.ScheduleEventPurging(cfg)
-
-		config.SetResourceLimit(&cfg.ResourceLimits)
 		client, err := mongo.InitDB(cfg)
 		if err != nil {
 			log.Fatal("Error initializing database: ", err)
 		}
+
+		config.SetResourceLimit(&cfg.ResourceLimits)
+
+		// Start event purging in the background.
+		go mongo.ScheduleEventPurging(cfg)
 
 		config.SetRateLimit(cfg)
 		config.SetSizeLimit(cfg)
@@ -74,8 +77,8 @@ func main() {
 			log.Fatal("Failed to load relay metadata: ", err)
 		}
 
-		mux := setupRoutes()
-		server := startServer(cfg, mux, &wg)
+		mux := initApp()
+		server := initRelay(cfg, mux, &wg)
 
 		// Monitor for server restart or shutdown signals.
 		select {
@@ -94,13 +97,17 @@ func main() {
 	}
 }
 
-func setupRoutes() http.Handler {
+func initApp() http.Handler {
 	mux := http.NewServeMux()
+	// Listen for ws messages or upgrade to http
+	mux.HandleFunc("/", initRoot)
+
+	// Handlers for Frontend
 	mux.HandleFunc("/do-login", handlers.LoginHandler)
 	mux.HandleFunc("/logout", handlers.LogoutHandler) // Logout process
-	mux.HandleFunc("/", ListenAndServe)
 	mux.HandleFunc("/import-results", api.ImportEvents)
 	mux.HandleFunc("/import-events", routes.ImportEvents)
+	// Serve static directory and favicon
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("app/static"))))
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "app/static/img/favicon.ico")
@@ -109,7 +116,25 @@ func setupRoutes() http.Handler {
 	return middleware.UserMiddleware(mux)
 }
 
-func startServer(config *configTypes.ServerConfig, handler http.Handler, wg *sync.WaitGroup) *http.Server {
+var wsServer = &websocket.Server{
+	Handshake: func(config *websocket.Config, r *http.Request) error {
+		// Skip origin check
+		return nil
+	},
+	Handler: websocket.Handler(relay.WebSocketHandler),
+}
+
+func initRoot(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Upgrade") == "websocket" {
+		wsServer.ServeHTTP(w, r)
+	} else if r.Header.Get("Accept") == "application/nostr+json" {
+		utils.RelayInfoHandler(w, r)
+	} else {
+		routes.IndexHandler(w, r)
+	}
+}
+
+func initRelay(config *configTypes.ServerConfig, handler http.Handler, wg *sync.WaitGroup) *http.Server {
 	server := &http.Server{
 		Addr:         config.Server.Port,
 		Handler:      handler,
@@ -128,22 +153,4 @@ func startServer(config *configTypes.ServerConfig, handler http.Handler, wg *syn
 	}()
 
 	return server
-}
-
-var wsServer = &websocket.Server{
-	Handshake: func(config *websocket.Config, r *http.Request) error {
-		// Skip origin check
-		return nil
-	},
-	Handler: websocket.Handler(relay.WebSocketHandler),
-}
-
-func ListenAndServe(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Upgrade") == "websocket" {
-		wsServer.ServeHTTP(w, r)
-	} else if r.Header.Get("Accept") == "application/nostr+json" {
-		utils.RelayInfoHandler(w, r)
-	} else {
-		routes.IndexHandler(w, r)
-	}
 }
