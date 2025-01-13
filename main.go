@@ -84,6 +84,9 @@ func main() {
 		select {
 		case <-restartChan:
 			log.Println("Restarting server...")
+			config.ResetConfig()
+			config.ResetWhitelistConfig()
+			config.ResetBlacklistConfig()
 			server.Close()
 			wg.Wait()
 			time.Sleep(3 * time.Second)

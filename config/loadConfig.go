@@ -18,21 +18,49 @@ var (
 	once          sync.Once
 	whitelistOnce sync.Once
 	blacklistOnce sync.Once
+	mu            sync.Mutex
 )
 
+// GetConfig returns the server configuration.
 func GetConfig() *configTypes.ServerConfig {
 	return cfg
 }
 
+// GetWhitelistConfig returns the whitelist configuration.
 func GetWhitelistConfig() *configTypes.WhitelistConfig {
 	return whitelistCfg
 }
 
+// GetBlacklistConfig returns the blacklist configuration.
 func GetBlacklistConfig() *configTypes.BlacklistConfig {
 	return blacklistCfg
 }
 
-// LoadConfig loads the server configuration from config.yml
+// ResetConfig clears the existing server configuration.
+func ResetConfig() {
+	mu.Lock()
+	defer mu.Unlock()
+	cfg = nil
+	once = sync.Once{}
+}
+
+// ResetWhitelistConfig clears the existing whitelist configuration.
+func ResetWhitelistConfig() {
+	mu.Lock()
+	defer mu.Unlock()
+	whitelistCfg = nil
+	whitelistOnce = sync.Once{}
+}
+
+// ResetBlacklistConfig clears the existing blacklist configuration.
+func ResetBlacklistConfig() {
+	mu.Lock()
+	defer mu.Unlock()
+	blacklistCfg = nil
+	blacklistOnce = sync.Once{}
+}
+
+// LoadConfig loads the server configuration from config.yml.
 func LoadConfig(filename string) (*configTypes.ServerConfig, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -45,7 +73,6 @@ func LoadConfig(filename string) (*configTypes.ServerConfig, error) {
 		return nil, err
 	}
 
-	// Adjust event time constraints after loading
 	utils.AdjustEventTimeConstraints(&config)
 
 	once.Do(func() {
@@ -55,7 +82,7 @@ func LoadConfig(filename string) (*configTypes.ServerConfig, error) {
 	return cfg, nil
 }
 
-// LoadWhitelistConfig loads the whitelist configuration from whitelist.yml
+// LoadWhitelistConfig loads the whitelist configuration from whitelist.yml.
 func LoadWhitelistConfig(filename string) (*configTypes.WhitelistConfig, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -75,7 +102,7 @@ func LoadWhitelistConfig(filename string) (*configTypes.WhitelistConfig, error) 
 	return whitelistCfg, nil
 }
 
-// LoadBlacklistConfig loads the blacklist configuration from blacklist.yml
+// LoadBlacklistConfig loads the blacklist configuration from blacklist.yml.
 func LoadBlacklistConfig(filename string) (*configTypes.BlacklistConfig, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
