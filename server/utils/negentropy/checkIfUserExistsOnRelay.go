@@ -27,9 +27,10 @@ func CheckIfUserExistsOnRelay(pubKey string, relays []string) (bool, error) {
 			Authors: []string{pubKey}, // Filter by the author (pubkey)
 		}
 
+		subID := "sub_check_user" // Unique subscription identifier
 		subRequest := []interface{}{
 			"REQ",
-			"sub_check_user", // Unique subscription identifier
+			subID,
 			filter,
 		}
 
@@ -48,43 +49,100 @@ func CheckIfUserExistsOnRelay(pubKey string, relays []string) (bool, error) {
 		// Channels for response handling
 		msgChan := make(chan []byte)
 		errChan := make(chan error)
+		done := make(chan struct{})
+		eventReceived := false // Track if any events are received
+		loggedOnce := false    // Avoid logging multiple times
 
 		// Goroutine to listen for WebSocket responses
 		go func() {
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				errChan <- err
-			} else {
+			defer close(done) // Signal that the goroutine is finished
+			for {
+				_, message, err := conn.ReadMessage()
+				if err != nil {
+					errChan <- err
+					return
+				}
 				msgChan <- message
 			}
 		}()
 
-		// Wait for response or timeout
-		select {
-		case message := <-msgChan:
-			var response []interface{}
-			if err := json.Unmarshal(message, &response); err != nil {
-				log.Printf("Failed to unmarshal response: %v\n", err)
+		// Process messages until EOSE is received
+		for {
+			select {
+			case message := <-msgChan:
+				var response []interface{}
+				if err := json.Unmarshal(message, &response); err != nil {
+					log.Printf("Failed to unmarshal response: %v\n", err)
+					return false, err
+				}
+
+				// Process response
+				if len(response) > 0 {
+					switch response[0] {
+					case "EVENT":
+						eventReceived = true
+						if !loggedOnce {
+							log.Printf("User exists: Found events for pubkey %s\n", pubKey)
+							loggedOnce = true
+						}
+
+					case "EOSE":
+						log.Printf("End of subscription signal received for pubkey %s\n", pubKey)
+
+						// Send CLOSE message
+						closeRequest := []interface{}{"CLOSE", subID}
+						closeJSON, err := json.Marshal(closeRequest)
+						if err != nil {
+							log.Printf("Failed to marshal CLOSE message: %v\n", err)
+							return false, err
+						}
+
+						if err := conn.WriteMessage(websocket.TextMessage, closeJSON); err != nil {
+							log.Printf("Failed to send CLOSE message: %v\n", err)
+							return false, err
+						}
+
+						// Wait for CLOSED response
+						select {
+						case closedMsg := <-msgChan:
+							var closedResponse []interface{}
+							if err := json.Unmarshal(closedMsg, &closedResponse); err != nil {
+								log.Printf("Failed to unmarshal CLOSED response: %v\n", err)
+								return false, err
+							}
+
+							if len(closedResponse) > 0 && closedResponse[0] == "CLOSED" {
+								log.Printf("Subscription closed successfully: %s\n", subID)
+								return !eventReceived, nil // Return true if no events were received (new user)
+							}
+
+						case err := <-errChan:
+							log.Printf("Error waiting for CLOSED response: %v\n", err)
+							return false, err
+
+						case <-time.After(WebSocketTimeout):
+							log.Printf("Timeout waiting for CLOSED response for subscription %s\n", subID)
+							return false, nil
+						}
+
+					default:
+						log.Printf("Unexpected response: %v\n", response)
+					}
+				}
+
+			case err := <-errChan:
+				if err.Error() == "EOF" {
+					log.Printf("Connection closed cleanly by remote host.")
+					return !eventReceived, nil // Gracefully handle EOF
+				}
+				log.Printf("Error reading WebSocket message: %v\n", err)
 				return false, err
-			}
 
-			// Look for "EVENT" messages indicating user existence
-			if len(response) > 0 && response[0] == "EVENT" {
-				log.Printf("User exists: Found event from pubkey %s\n", pubKey)
+			case <-time.After(WebSocketTimeout):
+				log.Printf("WebSocket response timeout for pubkey %s\n", pubKey)
 				return false, nil
-			} else if len(response) > 0 && response[0] == "EOSE" {
-				log.Printf("No events found for pubkey %s\n", pubKey)
-				return true, nil
 			}
-
-		case err := <-errChan:
-			log.Printf("Error reading WebSocket message: %v\n", err)
-			return false, err
-
-		case <-time.After(WebSocketTimeout):
-			log.Printf("WebSocket response timeout for pubkey %s\n", pubKey)
-			return false, nil
 		}
 	}
-	return false, nil
+	return true, nil // Default to new user if no relays respond
 }
