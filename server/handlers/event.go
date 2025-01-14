@@ -11,6 +11,7 @@ import (
 
 	"grain/server/handlers/response"
 	"grain/server/utils"
+	"grain/server/utils/negentropy"
 
 	nostr "grain/server/types"
 
@@ -102,6 +103,8 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 			}
 		}()
 	}
+	// Trigger Negentropy sync for the event's pubkey
+	go negentropy.HandleEventSync(evt, cfg)
 }
 
 func sendToBackupRelay(backupURL string, evt nostr.Event) error {

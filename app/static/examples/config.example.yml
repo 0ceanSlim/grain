@@ -14,6 +14,15 @@ server:
   max_connections: 100
   max_subscriptions_per_client: 10
 
+negentropy:
+  user_sync: true
+  initial_sync_relays: []
+  kinds: []
+  categories: ""
+  limit: 0
+  exclude_non_whitelisted: false
+  interval: 0
+
 backup_relay:
   enabled: false # Set to true to enable sending events to the backup relay
   url: "wss://some-relay.com" # URL of the backup relay
