@@ -71,10 +71,10 @@ func CheckIfUserExistsOnRelay(pubKey string, relays []string) (bool, error) {
 			// Look for "EVENT" messages indicating user existence
 			if len(response) > 0 && response[0] == "EVENT" {
 				log.Printf("User exists: Found event from pubkey %s\n", pubKey)
-				return true, nil
+				return false, nil
 			} else if len(response) > 0 && response[0] == "EOSE" {
 				log.Printf("No events found for pubkey %s\n", pubKey)
-				return false, nil
+				return true, nil
 			}
 
 		case err := <-errChan:
