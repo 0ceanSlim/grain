@@ -30,19 +30,19 @@ func userSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) {
 		return
 	}
 
-	// Check if non-whitelisted users are excluded
+	// Enforce whitelist check if ExcludeNonWhitelisted is true
 	if cfg.Negentropy.ExcludeNonWhitelisted {
-		isWhitelisted, _ := config.CheckWhitelist(evt)
+		isWhitelisted := config.IsPubKeyWhitelisted(evt.PubKey, true) // Correctly call with forPurgeSync=true
 		if !isWhitelisted {
-			log.Printf("Pubkey %s is not whitelisted. Skipping sync.", evt.PubKey)
+			log.Printf("Pubkey %s is not whitelisted. Skipping sync due to ExcludeNonWhitelisted.", evt.PubKey)
 			return
 		}
 	}
 
 	log.Printf("Starting initial sync for new user %s.", evt.PubKey)
 
-	// Trigger the sync process (to be implemented next)
-	triggerUserSync() //(evt.PubKey, cfg)
+	// Trigger the sync process
+	triggerUserSync()
 }
 
 func HandleEventSync(evt nostr.Event, cfg *configTypes.ServerConfig) {
