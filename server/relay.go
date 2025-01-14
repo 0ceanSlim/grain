@@ -7,6 +7,7 @@ import (
 	"grain/server/handlers"
 	relay "grain/server/types"
 	"grain/server/utils"
+	"io"
 	"log"
 	"sync"
 
@@ -57,7 +58,9 @@ func WebSocketHandler(ws *websocket.Conn) {
 	for {
 		err := websocket.Message.Receive(ws, &msg)
 		if err != nil {
-			fmt.Println("Error receiving message:", err)
+			if err != io.EOF {
+				fmt.Println("Error receiving message:", err)
+			}
 			ws.Close()
 			return
 		}
