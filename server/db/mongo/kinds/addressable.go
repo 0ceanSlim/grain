@@ -11,12 +11,12 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-// HandleParameterizedReplaceableKind handles parameterized replaceable events based on NIP-01 rules
-func HandleParameterizedReplaceableKind(ctx context.Context, evt relay.Event, collection *mongo.Collection, ws *websocket.Conn) error {
+// HandleAddressableKind handles parameterized replaceable events based on NIP-01 rules
+func HandleAddressableKind(ctx context.Context, evt relay.Event, collection *mongo.Collection, ws *websocket.Conn) error {
 	// Step 1: Extract the dTag from the event's tags
 	var dTag string
 	for _, tag := range evt.Tags {
-		if len(tag) > 0 && tag[0] == "d" {
+		if len(tag) >= 2 && tag[0] == "d" {
 			dTag = tag[1]
 			break
 		}
