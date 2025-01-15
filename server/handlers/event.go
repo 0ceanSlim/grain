@@ -81,16 +81,19 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
-	// Store the event in MongoDB or other storage
-	mongo.StoreMongoEvent(context.TODO(), evt, ws)
-	fmt.Println("Event processed:", evt.ID)
-
 	// Load the config and check for errors
 	cfg, err := config.LoadConfig("config.yml")
 	if err != nil {
 		log.Printf("Error loading configuration: %v", err)
 		return
 	}
+
+	// Trigger Negentropy sync for the event's pubkey
+	go negentropy.HandleEventSync(evt, cfg)
+
+	// Store the event in MongoDB or other storage
+	mongo.StoreMongoEvent(context.TODO(), evt, ws)
+	fmt.Println("Event processed:", evt.ID)
 
 	// Send the event to the backup relay if configured
 	if cfg.BackupRelay.Enabled {
@@ -103,8 +106,7 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 			}
 		}()
 	}
-	// Trigger Negentropy sync for the event's pubkey
-	go negentropy.HandleEventSync(evt, cfg)
+
 }
 
 func sendToBackupRelay(backupURL string, evt nostr.Event) error {
