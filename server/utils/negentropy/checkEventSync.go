@@ -19,7 +19,7 @@ func userSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) {
 	relays := []string{fmt.Sprintf("ws://localhost%s", cfg.Server.Port)}
 
 	// Check if this is a new user
-	isNewUser, err := CheckIfUserExistsOnRelay(evt.PubKey, evt.ID, relays)
+	isNewUser, err := CheckIfUserExistsOnRelay(evt.PubKey, relays)
 	if err != nil {
 		log.Printf("Error checking if user exists: %v", err)
 		return
