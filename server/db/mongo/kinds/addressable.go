@@ -22,6 +22,10 @@ func HandleAddressableKind(ctx context.Context, evt relay.Event, collection *mon
 		}
 	}
 
+	if dTag == "" {
+		return fmt.Errorf("no d tag is present in addressable event")
+	}
+
 	// Step 2: Create a filter to find the existing event based on pubkey, kind, and dTag
 	filter := bson.M{"pubkey": evt.PubKey, "kind": evt.Kind, "tags": bson.M{"$elemMatch": bson.M{"0": "d", "1": dTag}}}
 
