@@ -88,8 +88,19 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
-	// Trigger Negentropy sync for the event's pubkey
-	go negentropy.HandleEventSync(evt, cfg)
+	// Perform Negentropy sync check BEFORE storing the event
+	isNewUser, err := negentropy.UserSyncCheck(evt, cfg)
+	if err != nil {
+		log.Printf("Error during Negentropy sync: %v", err)
+		response.SendOK(ws, evt.ID, false, "error: internal server error during Negentropy sync")
+		return
+	}
+
+	if isNewUser {
+		log.Printf("New user detected: %s. Negentropy sync completed.", evt.PubKey)
+	} else {
+		log.Printf("User %s is already known. Skipping Negentropy sync.", evt.PubKey)
+	}
 
 	// Store the event in MongoDB or other storage
 	mongo.StoreMongoEvent(context.TODO(), evt, ws)

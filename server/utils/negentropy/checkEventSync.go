@@ -8,26 +8,26 @@ import (
 	"log"
 )
 
-// userSyncCheck determines if a user is new and triggers initial sync if necessary.
-func userSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) {
+// UserSyncCheck determines if a user is new and triggers the initial sync if necessary.
+func UserSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, error) {
 	if !cfg.Negentropy.UserSync {
 		log.Printf("Negentropy syncing is disabled. Skipping sync for event %s.", evt.ID)
-		return
+		return false, nil
 	}
 
 	// Relay address using the port from config
 	relays := []string{fmt.Sprintf("ws://localhost%s", cfg.Server.Port)}
 
 	// Check if this is a new user
-	isNewUser, err := CheckIfUserExistsOnRelay(evt.PubKey, relays)
+	isNewUser, err := CheckIfUserExistsOnRelay(evt.PubKey, evt.ID, relays)
 	if err != nil {
 		log.Printf("Error checking if user exists: %v", err)
-		return
+		return false, err
 	}
 
 	if !isNewUser {
 		log.Printf("User %s is known. Skipping initial sync.", evt.PubKey)
-		return
+		return false, nil
 	}
 
 	// Enforce whitelist check if ExcludeNonWhitelisted is true
@@ -35,7 +35,7 @@ func userSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) {
 		isWhitelisted := config.IsPubKeyWhitelisted(evt.PubKey, true)
 		if !isWhitelisted {
 			log.Printf("Pubkey %s is not whitelisted. Skipping sync due to ExcludeNonWhitelisted.", evt.PubKey)
-			return
+			return false, nil
 		}
 	}
 
@@ -43,9 +43,11 @@ func userSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) {
 
 	// Trigger the sync process
 	triggerUserSync(evt.PubKey, &cfg.Negentropy)
+
+	return true, nil // New user
 }
 
 // HandleEventSync is the entry point to handle Negentropy sync for an event.
 func HandleEventSync(evt nostr.Event, cfg *configTypes.ServerConfig) {
-	go userSyncCheck(evt, cfg) // Run in a goroutine for asynchronous processing
+	UserSyncCheck(evt, cfg) // Run in a goroutine for asynchronous processing
 }
