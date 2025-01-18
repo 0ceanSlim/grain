@@ -1,18 +1,18 @@
 package negentropy
 
 import (
-	configTypes "grain/config/types"
 	"log"
 	"sort"
 
+	configTypes "grain/config/types"
 	nostr "grain/server/types"
 )
 
 // triggerUserSync fetches Kind 10002 events and stores the latest one.
-func triggerUserSync(pubKey string, cfg *configTypes.NegentropyConfig) {
+func triggerUserSync(pubKey string, negentropyCfg *configTypes.NegentropyConfig, serverCfg *configTypes.ServerConfig) {
 	log.Printf("Starting user sync for pubkey: %s", pubKey)
 
-	initialRelays := cfg.InitialSyncRelays
+	initialRelays := negentropyCfg.InitialSyncRelays
 	if len(initialRelays) == 0 {
 		log.Println("No initial relays configured for user sync.")
 		return
@@ -34,10 +34,10 @@ func triggerUserSync(pubKey string, cfg *configTypes.NegentropyConfig) {
 	latestEvent := events[0]
 	log.Printf("Selected latest Kind 10002 event: ID=%s, CreatedAt=%d", latestEvent.ID, latestEvent.CreatedAt)
 
-	// Store the event in the local relay
-	err := storeEventInLocalRelay(latestEvent)
+	// Forward the event to the local relay using ServerConfig for port
+	err := storeUserRelays(latestEvent, serverCfg)
 	if err != nil {
-		log.Printf("Failed to store Kind 10002 event: %v", err)
+		log.Printf("Failed to forward Kind 10002 event to local relay: %v", err)
 		return
 	}
 
@@ -45,14 +45,6 @@ func triggerUserSync(pubKey string, cfg *configTypes.NegentropyConfig) {
 
 	// Trigger the next step to aggregate user outbox events
 	aggregateUserOutbox(pubKey, latestEvent)
-}
-
-// storeEventInLocalRelay stores an event in the local relay.
-func storeEventInLocalRelay(event nostr.Event) error {
-	// Placeholder: Implement storing logic in your local relay
-	log.Printf("Storing event with ID: %s in local relay", event.ID)
-	// Example: Call your database store method here
-	return nil
 }
 
 // aggregateUserOutbox starts the process of aggregating user outbox events.

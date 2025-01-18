@@ -3,9 +3,10 @@ package negentropy
 import (
 	"fmt"
 	"grain/config"
+	"log"
+
 	configTypes "grain/config/types"
 	nostr "grain/server/types"
-	"log"
 )
 
 // UserSyncCheck determines if a user is new and triggers the initial sync if necessary.
@@ -42,12 +43,7 @@ func UserSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, error)
 	log.Printf("Starting initial sync for new user %s.", evt.PubKey)
 
 	// Trigger the sync process
-	triggerUserSync(evt.PubKey, &cfg.Negentropy)
+	triggerUserSync(evt.PubKey, &cfg.Negentropy, cfg)
 
 	return true, nil // New user
-}
-
-// HandleEventSync is the entry point to handle Negentropy sync for an event.
-func HandleEventSync(evt nostr.Event, cfg *configTypes.ServerConfig) {
-	UserSyncCheck(evt, cfg) // Run in a goroutine for asynchronous processing
 }
