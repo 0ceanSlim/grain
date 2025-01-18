@@ -11,7 +11,7 @@ func DetermineEventCategory(kind int) string {
 	case kind >= 20000 && kind < 30000:
 		return "ephemeral"
 	case kind >= 30000 && kind < 40000:
-		return "parameterized_replaceable"
+		return "addressable"
 	default:
 		return "unknown"
 	}

@@ -34,7 +34,7 @@ func StoreMongoEvent(ctx context.Context, evt nostr.Event, ws *websocket.Conn) {
 	case evt.Kind >= 20000 && evt.Kind < 30000:
 		fmt.Println("Ephemeral event received and ignored:", evt.ID)
 	case evt.Kind >= 30000 && evt.Kind < 40000:
-		err = kinds.HandleParameterizedReplaceableKind(ctx, evt, collection, ws)
+		err = kinds.HandleAddressableKind(ctx, evt, collection, ws)
 	default:
 		err = kinds.HandleUnknownKind(ctx, evt, collection, ws)
 	}
