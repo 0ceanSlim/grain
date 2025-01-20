@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	configTypes "grain/config/types"
-	nostr "grain/server/types"
 )
 
 // triggerUserSync fetches Kind 10002 events and stores the latest one.
@@ -44,19 +43,5 @@ func triggerUserSync(pubKey string, negentropyCfg *configTypes.NegentropyConfig,
 	log.Printf("Kind 10002 event successfully stored for pubkey: %s", pubKey)
 
 	// Trigger the next step to aggregate user outbox events
-	aggregateUserOutbox(pubKey, latestEvent)
-}
-
-// aggregateUserOutbox starts the process of aggregating user outbox events.
-func aggregateUserOutbox(pubKey string, relayEvent nostr.Event) {
-	// Extract relay URLs from the tags of the Kind 10002 event
-	var relayURLs []string
-	for _, tag := range relayEvent.Tags {
-		if len(tag) > 1 && tag[0] == "r" {
-			relayURLs = append(relayURLs, tag[1])
-		}
-	}
-
-	log.Printf("Triggering aggregation of user outbox events for pubkey: %s from relays: %v", pubKey, relayURLs)
-	// Placeholder: Implement logic for aggregating user outbox events
+	aggregateUserOutboxEvents(pubKey, latestEvent)
 }
