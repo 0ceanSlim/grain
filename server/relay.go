@@ -2,6 +2,7 @@ package relay
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"grain/config"
 	"grain/server/handlers"
@@ -58,35 +59,33 @@ func WebSocketHandler(ws *websocket.Conn) {
 	for {
 		err := websocket.Message.Receive(ws, &msg)
 		if err != nil {
-			if err != io.EOF {
-				fmt.Println("Error receiving message:", err)
-			}
-			ws.Close()
+			handleReadError(err, ws)
 			return
 		}
-		fmt.Println("Received message:", msg)
 
-		if allowed, msg := rateLimiter.AllowWs(); !allowed {
-			websocket.Message.Send(ws, fmt.Sprintf(`{"error": "%s"}`, msg))
-			ws.Close()
+		log.Printf("Received message: %s", msg)
+
+		// Check rate limits for WebSocket
+		if allowed, errMsg := rateLimiter.AllowWs(); !allowed {
+			sendErrorMessage(ws, errMsg)
 			return
 		}
 
 		var message []interface{}
 		err = json.Unmarshal([]byte(msg), &message)
 		if err != nil {
-			fmt.Println("Error parsing message:", err)
+			log.Printf("[ERROR] Failed to parse message: %v", err)
 			continue
 		}
 
 		if len(message) < 2 {
-			fmt.Println("Invalid message format")
+			log.Println("[WARN] Invalid message format")
 			continue
 		}
 
 		messageType, ok := message[0].(string)
 		if !ok {
-			fmt.Println("Invalid message type")
+			log.Println("[WARN] Invalid message type")
 			continue
 		}
 
@@ -94,30 +93,57 @@ func WebSocketHandler(ws *websocket.Conn) {
 		case "EVENT":
 			handlers.HandleEvent(ws, message)
 		case "REQ":
-			mu.Lock()
-			if clientSubscriptions[ws] >= config.GetConfig().Server.MaxSubscriptionsPerClient {
-				websocket.Message.Send(ws, `{"error": "too many subscriptions"}`)
-				mu.Unlock()
-				continue
-			}
-			clientSubscriptions[ws]++
-			mu.Unlock()
-			if allowed, msg := rateLimiter.AllowReq(); !allowed {
-				websocket.Message.Send(ws, fmt.Sprintf(`{"error": "%s"}`, msg))
-				ws.Close()
-				return
-			}
-			handlers.HandleReq(ws, message, subscriptions)
+			handleSubscription(ws, message, rateLimiter, subscriptions)
 		case "AUTH":
 			if config.GetConfig().Auth.Enabled {
 				handlers.HandleAuth(ws, message)
 			} else {
-				fmt.Println("Received AUTH message, but AUTH is disabled")
+				log.Println("[WARN] Received AUTH message, but AUTH is disabled")
 			}
 		case "CLOSE":
 			handlers.HandleClose(ws, message)
 		default:
-			fmt.Println("Unknown message type:", messageType)
+			log.Printf("[WARN] Unknown message type: %s", messageType)
 		}
 	}
+}
+
+// handleReadError handles errors during message reception.
+func handleReadError(err error, ws *websocket.Conn) {
+	if errors.Is(err, io.EOF) {
+		log.Println("[INFO] Client closed the connection gracefully.")
+	} else if errors.Is(err, io.ErrUnexpectedEOF) {
+		log.Println("[ERROR] Unexpected EOF during message read.")
+	} else if errors.Is(err, io.ErrClosedPipe) {
+		log.Println("[ERROR] Read/write attempted on a closed WebSocket pipe.")
+	} else {
+		log.Printf("[ERROR] Unexpected WebSocket error: %v", err)
+	}
+	ws.Close()
+}
+
+// sendErrorMessage sends a formatted error message to the client and closes the WebSocket.
+func sendErrorMessage(ws *websocket.Conn, errMsg string) {
+	errMessage := fmt.Sprintf(`{"error": "%s"}`, errMsg)
+	_ = websocket.Message.Send(ws, errMessage)
+	ws.Close()
+}
+
+// handleSubscription handles WebSocket subscriptions.
+func handleSubscription(ws *websocket.Conn, message []interface{}, rateLimiter *config.RateLimiter, subscriptions map[string][]relay.Filter) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if clientSubscriptions[ws] >= config.GetConfig().Server.MaxSubscriptionsPerClient {
+		sendErrorMessage(ws, "too many subscriptions")
+		return
+	}
+	clientSubscriptions[ws]++
+
+	if allowed, errMsg := rateLimiter.AllowReq(); !allowed {
+		sendErrorMessage(ws, errMsg)
+		return
+	}
+
+	handlers.HandleReq(ws, message, subscriptions)
 }
