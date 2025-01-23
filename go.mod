@@ -8,6 +8,7 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/gorilla/sessions v1.4.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/illuzen/go-negentropy v0.0.0-20240715064232-a46d8ae31fc0
 	go.mongodb.org/mongo-driver v1.16.0
 	golang.org/x/net v0.27.0
 	gopkg.in/yaml.v2 v2.4.0
