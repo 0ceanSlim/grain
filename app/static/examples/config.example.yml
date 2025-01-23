@@ -14,6 +14,15 @@ server:
   max_connections: 100
   max_subscriptions_per_client: 10
 
+negentropy:
+  user_sync: true
+  initial_sync_relays: []
+  kinds: []
+  categories: ""
+  limit: 0
+  exclude_non_whitelisted: false
+  interval: 0
+
 backup_relay:
   enabled: false # Set to true to enable sending events to the backup relay
   url: "wss://some-relay.com" # URL of the backup relay
@@ -51,7 +60,7 @@ rate_limit:
     ephemeral:
       limit: 100 # Events per second
       burst: 200 # Allowed burst
-    parameterized_replaceable:
+    addressable:
       limit: 5
       burst: 10
     regular:
@@ -80,7 +89,7 @@ event_purge:
   purge_by_category: # Configure purging based on categories
     regular: true
     replaceable: false
-    parameterized_replaceable: false
+    addressable: false
     deprecated: true
   purge_by_kind_enabled: false # Enable purging by specific kinds, if false, all collections will be purged
   kinds_to_purge: # List of event kinds to explicitly purge

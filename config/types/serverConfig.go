@@ -7,6 +7,16 @@ type EventTimeConstraints struct {
 	MaxCreatedAtString string `yaml:"max_created_at_string"` // Original string value for parsing (e.g., "now+5m")
 }
 
+type NegentropyConfig struct {
+	UserSync              bool     `yaml:"user_sync"`               // Enable/disable syncing
+	InitialSyncRelays     []string `yaml:"initial_sync_relays"`     // Relays for initial kind10002 fetch
+	Kinds                 []int    `yaml:"kinds"`                   // Kinds to sync
+	Categories            string   `yaml:"categories"`              // Categories to sync
+	Limit                 int      `yaml:"limit"`                   // Limit per kind
+	ExcludeNonWhitelisted bool     `yaml:"exclude_non_whitelisted"` // Sync only whitelisted users
+	Interval              int      `yaml:"interval"`                // Resync interval in hours
+}
+
 type ServerConfig struct {
 	MongoDB struct {
 		URI      string `yaml:"uri"`
@@ -30,4 +40,5 @@ type ServerConfig struct {
 		Enabled bool   `yaml:"enabled"`
 		URL     string `yaml:"url"`
 	} `yaml:"backup_relay"`
+	Negentropy NegentropyConfig `yaml:"negentropy"`
 }

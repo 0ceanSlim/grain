@@ -29,15 +29,15 @@ func CheckWhitelist(evt nostr.Event) (bool, string) {
 }
 
 // IsPubKeyWhitelisted checks if a pubkey or npub is whitelisted, considering pubkeys from domains.
-// The `forPurge` flag indicates if the check is for purging purposes.
-func IsPubKeyWhitelisted(pubKey string, forPurge bool) bool {
+// The `forPurgeSync` flag indicates if the check is for purging or syncing purposes.
+func IsPubKeyWhitelisted(pubKey string, forPurgeSync bool) bool {
 	cfg := GetWhitelistConfig()
 	if cfg == nil {
 		return false // No configuration means no whitelisting.
 	}
 
 	// If the whitelist is disabled but this check is for purging, we still evaluate it.
-	if !cfg.PubkeyWhitelist.Enabled && !forPurge {
+	if !cfg.PubkeyWhitelist.Enabled && !forPurgeSync {
 		return true // Whitelisting is not enforced for posting if disabled.
 	}
 
