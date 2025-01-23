@@ -11,8 +11,6 @@ import (
 	nostr "grain/server/types"
 )
 
-const WebSocketTimeout = 2 * time.Second // Timeout for WebSocket responses
-
 // CheckIfUserExistsOnRelay checks if a user exists on the relay by their pubkey.
 func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, error) {
 	for _, url := range relays {

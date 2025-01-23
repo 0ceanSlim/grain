@@ -26,14 +26,14 @@ func aggregateUserOutboxEvents(pubKey string, relayEvent nostr.Event) {
 	log.Printf("Fetching events for pubkey: %s from outbox relays: %v", pubKey, relayURLs)
 
 	// Fetch events from each outbox relay
-	//events := fetchAllUserEvents(pubKey, relayURLs)
+	events := fetchAllUserEvents(pubKey, relayURLs)
 
-	//if len(events) == 0 {
-	//	log.Printf("No events found for pubkey: %s from any outbox relay", pubKey)
-	//	return
-	//}
+	if len(events) == 0 {
+		log.Printf("No events found for pubkey: %s from any outbox relay", pubKey)
+		return
+	}
 
-	//log.Printf("Fetched %d events for pubkey: %s. Ready for further processing.", len(events), pubKey)
+	log.Printf("Fetched %d events for pubkey: %s. Ready for further processing.", len(events), pubKey)
 
 	// Placeholder for the next step: compare the sets using Negentropy sync logic
 	// processNegentropyComparison(events)
