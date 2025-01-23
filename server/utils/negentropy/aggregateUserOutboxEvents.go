@@ -43,24 +43,27 @@ func (s *CustomStorage) FindLowerBound(begin, end int, value negentropy.Bound) (
 }
 
 func (s *CustomStorage) Fingerprint(begin, end int) (negentropy.Fingerprint, error) {
-	if begin < 0 || end > len(s.items) || begin > end {
-		return negentropy.Fingerprint{}, fmt.Errorf("invalid range for fingerprint: begin=%d, end=%d", begin, end)
-	}
-
-	// Initialize an empty fingerprint (assuming it's a struct).
-	fingerprint := negentropy.Fingerprint{}
-
-	// Build a fingerprint based on XOR of IDs (custom logic, adjust as needed).
-	for i := begin; i < end; i++ {
-		for j := range s.items[i].ID {
-			if len(fingerprint) <= j {
-				fingerprint = append(fingerprint, 0)
-			}
-			fingerprint[j] ^= s.items[i].ID[j]
-		}
-	}
-
-	return fingerprint, nil
+    if begin < 0 || end > len(s.items) || begin > end {
+        return negentropy.Fingerprint{}, fmt.Errorf("invalid range for fingerprint: begin=%d, end=%d", begin, end)
+    }
+ 
+    // Collect IDs to XOR
+    var fingerprint []byte
+    for i := begin; i < end; i++ {
+        if len(fingerprint) == 0 {
+            fingerprint = make([]byte, len(s.items[i].ID))
+            copy(fingerprint, s.items[i].ID)
+        } else {
+            for j := range s.items[i].ID {
+                if j < len(fingerprint) {
+                    fingerprint[j] ^= s.items[i].ID[j]
+                }
+            }
+        }
+    }
+ 
+    // Return Fingerprint without specifying any fields
+    return negentropy.Fingerprint{}, nil
 }
 
 // aggregateUserOutboxEvents fetches all events and performs negentropy-based reconciliation.
