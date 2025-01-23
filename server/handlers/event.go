@@ -19,21 +19,23 @@ import (
 )
 
 func HandleEvent(ws *websocket.Conn, message []interface{}) {
+	//log.Print("[DEBUG] EVENT Received")
 	if len(message) != 2 {
-		fmt.Println("Invalid EVENT message format")
+		log.Print("[ERROR] Invalid EVENT message format")
 		response.SendNotice(ws, "", "Invalid EVENT message format")
 		return
 	}
 
 	eventData, ok := message[1].(map[string]interface{})
 	if !ok {
-		fmt.Println("Invalid event data format")
+		log.Print("[ERROR] Invalid event data format")
 		response.SendNotice(ws, "", "Invalid event data format")
 		return
 	}
+
 	eventBytes, err := json.Marshal(eventData)
 	if err != nil {
-		fmt.Println("Error marshaling event data:", err)
+		log.Printf("[ERROR] Error marshaling event data: %v", err)
 		response.SendNotice(ws, "", "Error marshaling event data")
 		return
 	}
@@ -41,84 +43,99 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 	var evt nostr.Event
 	err = json.Unmarshal(eventBytes, &evt)
 	if err != nil {
-		fmt.Println("Error unmarshaling event data:", err)
+		log.Printf("[ERROR] Error unmarshaling event data: %v", err)
 		response.SendNotice(ws, "", "Error unmarshaling event data")
 		return
 	}
 
+	//log.Printf("[DEBUG] EVENT Unmarshaled: ID=%s, Kind=%d, PubKey=%s", evt.ID, evt.Kind, evt.PubKey)
+
 	// Validate event timestamps
 	if !validateEventTimestamp(evt) {
+		log.Printf("[ERROR] Invalid timestamp for event: ID=%s", evt.ID)
 		response.SendOK(ws, evt.ID, false, "invalid: event created_at timestamp is out of allowed range")
 		return
 	}
 
-	// Signature check moved here
+	//log.Printf("[DEBUG] Timestamp validation passed for event: ID=%s", evt.ID)
+
+	// Signature check
 	if !utils.CheckSignature(evt) {
+		log.Printf("[ERROR] Signature verification failed for event: ID=%s", evt.ID)
 		response.SendOK(ws, evt.ID, false, "invalid: signature verification failed")
 		return
 	}
 
+	//log.Printf("[DEBUG] Signature verification passed for event: ID=%s", evt.ID)
+
 	eventSize := len(eventBytes)
 
+	// Blacklist/Whitelist check
+	//log.Printf("[DEBUG] Checking blacklist/whitelist for PubKey=%s", evt.PubKey)
 	if !handleBlacklistAndWhitelist(ws, evt) {
+		log.Printf("[INFO] Event rejected by blacklist/whitelist: ID=%s", evt.ID)
 		return
 	}
+	//log.Printf("[DEBUG] Blacklist/whitelist checks passed for PubKey=%s", evt.PubKey)
 
+	// Rate and size limit checks
+	//log.Printf("[DEBUG] Checking rate and size limits for event: ID=%s", evt.ID)
 	if !handleRateAndSizeLimits(ws, evt, eventSize) {
+		log.Printf("[INFO] Event rejected by rate/size limits: ID=%s", evt.ID)
 		return
 	}
+	//log.Printf("[DEBUG] Rate/size limits passed for event: ID=%s", evt.ID)
 
-	// Check for duplicate event
+	// Duplicate event check
+	//log.Printf("[DEBUG] Checking for duplicate event: ID=%s", evt.ID)
 	isDuplicate, err := mongo.CheckDuplicateEvent(context.TODO(), evt)
 	if err != nil {
-		fmt.Printf("Error checking for duplicate event: %v\n", err)
+		log.Printf("[ERROR] Error checking for duplicate event: ID=%s, Error=%v", evt.ID, err)
 		response.SendOK(ws, evt.ID, false, "error: internal server error during duplicate check")
 		return
 	}
-
 	if isDuplicate {
+		log.Printf("[INFO] Duplicate event detected: ID=%s", evt.ID)
 		response.SendOK(ws, evt.ID, false, "blocked: the database already contains this event")
 		return
 	}
+	//log.Printf("[DEBUG] Duplicate check passed for event: ID=%s", evt.ID)
 
-	// Load the config and check for errors
+	// Load config
+	//log.Print("[DEBUG] Loading configuration")
 	cfg, err := config.LoadConfig("config.yml")
 	if err != nil {
-		log.Printf("Error loading configuration: %v", err)
+		log.Printf("[ERROR] Error loading configuration: %v", err)
 		return
 	}
+	//log.Print("[DEBUG] Configuration loaded successfully")
 
-	// Perform Negentropy sync check BEFORE storing the event
-	isNewUser, err := negentropy.UserSyncCheck(evt, cfg)
-	if err != nil {
-		log.Printf("Error during Negentropy sync: %v", err)
-		response.SendOK(ws, evt.ID, false, "error: internal server error during Negentropy sync")
-		return
-	}
+	// Trigger Negentropy sync
+	//log.Printf("[DEBUG] Triggering Negentropy sync for PubKey=%s", evt.PubKey)
+	go negentropy.UserSyncCheck(evt, cfg)
 
-	if isNewUser {
-		log.Printf("New user detected: %s. Negentropy sync completed.", evt.PubKey)
-	} else {
-		log.Printf("User %s is already known. Skipping Negentropy sync.", evt.PubKey)
-	}
-
-	// Store the event in MongoDB or other storage
+	// Store event in MongoDB
+	// Call StoreMongoEvent directly without expecting a return value
 	mongo.StoreMongoEvent(context.TODO(), evt, ws)
-	fmt.Println("Event processed:", evt.ID)
+	log.Printf("[INFO] Event stored successfully: ID=%s", evt.ID)
 
-	// Send the event to the backup relay if configured
+
+	// Send to backup relay
 	if cfg.BackupRelay.Enabled {
+		//log.Printf("[DEBUG] Sending event to backup relay: ID=%s, RelayURL=%s", evt.ID, cfg.BackupRelay.URL)
 		go func() {
 			err := sendToBackupRelay(cfg.BackupRelay.URL, evt)
 			if err != nil {
-				log.Printf("Failed to send event %s to backup relay: %v", evt.ID, err)
+				log.Printf("[ERROR] Failed to send event %s to backup relay: %v", evt.ID, err)
 			} else {
-				log.Printf("Event %s successfully sent to backup relay", evt.ID)
+				log.Printf("[INFO] Event %s successfully sent to backup relay", evt.ID)
 			}
 		}()
 	}
 
+	log.Printf("[INFO] Event processing completed: ID=%s", evt.ID)
 }
+
 
 func sendToBackupRelay(backupURL string, evt nostr.Event) error {
 	conn, err := websocket.Dial(backupURL, "", "http://localhost/")

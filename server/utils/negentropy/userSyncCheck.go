@@ -43,7 +43,7 @@ func UserSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, error)
 	log.Printf("Starting initial sync for new user %s.", evt.PubKey)
 
 	// Trigger the sync process
-	triggerUserSync(evt.PubKey, &cfg.Negentropy, cfg)
+	go triggerUserSync(evt.PubKey, &cfg.Negentropy, cfg)
 
 	return true, nil // New user
 }

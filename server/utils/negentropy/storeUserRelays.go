@@ -60,4 +60,3 @@ func storeUserRelays(event nostr.Event, serverCfg *configTypes.ServerConfig) err
 	log.Printf("Event with ID: %s successfully sent to local relay via WebSocket at %s", event.ID, localRelayURL)
 	return nil
 }
-
