@@ -2,8 +2,9 @@ package negentropy
 
 import (
 	"fmt"
-	nostr "grain/server/types"
 	"log"
+
+	nostr "grain/server/types"
 
 	"github.com/illuzen/go-negentropy"
 )
@@ -13,10 +14,12 @@ type CustomStorage struct {
 	items []negentropy.Item
 }
 
+// Size returns the number of items in storage.
 func (s *CustomStorage) Size() int {
 	return len(s.items)
 }
 
+// GetItem retrieves the item at a specific index.
 func (s *CustomStorage) GetItem(i uint64) (negentropy.Item, error) {
 	if int(i) >= len(s.items) {
 		return negentropy.Item{}, fmt.Errorf("index out of bounds")
@@ -24,6 +27,7 @@ func (s *CustomStorage) GetItem(i uint64) (negentropy.Item, error) {
 	return s.items[i], nil
 }
 
+// Iterate iterates over a range of items and applies a callback function.
 func (s *CustomStorage) Iterate(begin, end int, cb func(item negentropy.Item, i int) bool) error {
 	for i := begin; i < end; i++ {
 		if !cb(s.items[i], i) {
@@ -33,6 +37,7 @@ func (s *CustomStorage) Iterate(begin, end int, cb func(item negentropy.Item, i 
 	return nil
 }
 
+// FindLowerBound finds the first item in the range [begin, end) greater than or equal to the value.
 func (s *CustomStorage) FindLowerBound(begin, end int, value negentropy.Bound) (int, error) {
 	for i := begin; i < end; i++ {
 		if !s.items[i].LessThan(value.Item) {
@@ -42,28 +47,26 @@ func (s *CustomStorage) FindLowerBound(begin, end int, value negentropy.Bound) (
 	return end, nil
 }
 
+// Fingerprint calculates the fingerprint for a range of items.
 func (s *CustomStorage) Fingerprint(begin, end int) (negentropy.Fingerprint, error) {
-    if begin < 0 || end > len(s.items) || begin > end {
-        return negentropy.Fingerprint{}, fmt.Errorf("invalid range for fingerprint: begin=%d, end=%d", begin, end)
-    }
- 
-    // Collect IDs to XOR
-    var fingerprint []byte
-    for i := begin; i < end; i++ {
-        if len(fingerprint) == 0 {
-            fingerprint = make([]byte, len(s.items[i].ID))
-            copy(fingerprint, s.items[i].ID)
-        } else {
-            for j := range s.items[i].ID {
-                if j < len(fingerprint) {
-                    fingerprint[j] ^= s.items[i].ID[j]
-                }
-            }
-        }
-    }
- 
-    // Return Fingerprint without specifying any fields
-    return negentropy.Fingerprint{}, nil
+	// Validate range
+	if begin < 0 || end > len(s.items) || begin > end {
+		return negentropy.Fingerprint{}, fmt.Errorf("invalid range for fingerprint: begin=%d, end=%d", begin, end)
+	}
+
+	// Initialize the fingerprint as a 16-byte array (Buf is [16]byte)
+	var fingerprint [negentropy.FingerprintSize]byte
+
+	// Compute the XOR fingerprint across all items in the range
+	for i := begin; i < end; i++ {
+		itemID := s.items[i].ID
+		for j := 0; j < len(fingerprint) && j < len(itemID); j++ {
+			fingerprint[j] ^= itemID[j] // XOR operation
+		}
+	}
+
+	// Return the computed fingerprint
+	return negentropy.Fingerprint{Buf: fingerprint}, nil
 }
 
 // aggregateUserOutboxEvents fetches all events and performs negentropy-based reconciliation.
@@ -92,31 +95,54 @@ func aggregateUserOutboxEvents(pubKey string, relayEvent nostr.Event) {
 
 	log.Printf("Fetched %d events for pubkey: %s. Starting reconciliation.", len(events), pubKey)
 
-	// Prepare custom storage for reconciliation
-	storage := &CustomStorage{}
-	for _, evt := range events {
-		item := negentropy.NewItem(uint64(evt.CreatedAt), []byte(evt.ID))
-		storage.items = append(storage.items, *item)
+	for attempt := 1; ; attempt++ {
+		// Prepare a fresh custom storage for reconciliation
+		storage := &CustomStorage{}
+		for _, evt := range events {
+			item := negentropy.NewItem(uint64(evt.CreatedAt), []byte(evt.ID))
+			storage.items = append(storage.items, *item)
+		}
+
+		// Create a fresh Negentropy instance
+		neg, err := negentropy.NewNegentropy(storage, 4096) // Frame size: 4096
+		if err != nil {
+			log.Fatalf("Failed to create Negentropy instance: %v", err)
+		}
+
+		// Explicitly set the initiator flag
+		if attempt == 1 {
+			neg.SetInitiator()
+		}
+
+		// Initiate reconciliation
+		query, err := neg.Initiate()
+		if err != nil {
+			if err.Error() == "already initiated" && attempt < 3 {
+				log.Printf("Reconciliation initiation failed: %v. Retrying attempt %d.", err, attempt)
+				continue
+			}
+			log.Fatalf("Failed to initiate reconciliation: %v", err)
+		}
+		log.Printf("Generated query for reconciliation: %+v", query)
+
+		// Perform reconciliation
+		var haveIds, needIds []string
+		response, err := neg.ReconcileWithIDs(query, &haveIds, &needIds)
+		if err != nil {
+			log.Printf("Reconciliation failed on attempt %d: %v", attempt, err)
+			if attempt < 3 {
+				log.Println("Retrying reconciliation with a new instance.")
+				continue
+			}
+			log.Fatalf("Reconciliation failed after %d attempts: %v", attempt, err)
+		}
+
+		// Log success
+		log.Printf("Reconciliation completed successfully. Have IDs: %v, Need IDs: %v", haveIds, needIds)
+		log.Printf("Final response from reconciliation: %v", response)
+		break
 	}
 
-	// Create a Negentropy instance
-	neg, err := negentropy.NewNegentropy(storage, 4096) // Frame size: 4096
-	if err != nil {
-		log.Fatalf("Failed to create Negentropy instance: %v", err)
-	}
-
-	// Initiate reconciliation
-	query, err := neg.Initiate()
-	if err != nil {
-		log.Fatalf("Failed to initiate reconciliation: %v", err)
-	}
-	log.Printf("Generated query for reconciliation: %+v", query)
-
-	// Perform reconciliation
-	response, err := neg.Reconcile(query)
-	if err != nil {
-		log.Fatalf("Reconciliation failed: %v", err)
-	}
-
-	log.Printf("Reconciliation completed successfully. Synced events: %v", response)
+	// Process synced events (if necessary)
+	// You can fetch the "need IDs" and update the database or perform additional operations here.
 }
