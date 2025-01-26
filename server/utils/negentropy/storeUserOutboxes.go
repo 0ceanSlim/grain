@@ -12,8 +12,8 @@ import (
 	nostr "grain/server/types"
 )
 
-// storeUserRelays forwards the event to the local relay via WebSocket and ensures graceful closure.
-func storeUserRelays(event nostr.Event, serverCfg *configTypes.ServerConfig) error {
+// storeUserOutboxes forwards the event to the local relay via WebSocket and ensures graceful closure.
+func storeUserOutboxes(event nostr.Event, serverCfg *configTypes.ServerConfig) error {
 	// Construct the WebSocket URL for the local relay
 	localRelayURL := fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port)
 

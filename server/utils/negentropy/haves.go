@@ -12,8 +12,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Needs to be added to triggerUserSync
-
 // fetchLocalRelayEvents queries the local relay for events by the user.
 func fetchHaves(pubKey, localRelayURL string) ([]nostr.Event, error) {
 	log.Printf("Connecting to local relay: %s", localRelayURL)
