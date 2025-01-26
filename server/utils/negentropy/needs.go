@@ -1,6 +1,5 @@
 package negentropy
 
-//
 import (
 	"encoding/json"
 	"log"
