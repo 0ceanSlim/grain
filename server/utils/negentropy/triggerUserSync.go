@@ -17,7 +17,7 @@ func triggerUserSync(pubKey string, negentropyCfg *configTypes.NegentropyConfig,
 		return
 	}
 
-	events := fetchKind10002Events(pubKey, initialRelays)
+	events := fetchUserOutboxes(pubKey, initialRelays)
 
 	if len(events) == 0 {
 		log.Printf("No Kind 10002 events found for pubkey: %s", pubKey)
@@ -43,5 +43,7 @@ func triggerUserSync(pubKey string, negentropyCfg *configTypes.NegentropyConfig,
 	log.Printf("Kind 10002 event successfully stored for pubkey: %s", pubKey)
 
 	// Trigger the next step to aggregate user outbox events
-	aggregateUserOutboxEvents(pubKey, latestEvent)
+	reconcile(pubKey, latestEvent)
+
+	//Return the Reconciled dataset and create a function call here storeNeededEvents
 }

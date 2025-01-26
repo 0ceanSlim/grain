@@ -8,8 +8,8 @@ import (
 	"github.com/illuzen/go-negentropy"
 )
 
-// aggregateUserOutboxEvents fetches all events and performs negentropy-based reconciliation.
-func aggregateUserOutboxEvents(pubKey string, relayEvent nostr.Event) {
+// reconcile fetches all events and performs negentropy-based reconciliation.
+func reconcile(pubKey string, relayEvent nostr.Event) {
 	// Extract relay URLs from the Kind 10002 event
 	var relayURLs []string
 	for _, tag := range relayEvent.Tags {
@@ -26,7 +26,7 @@ func aggregateUserOutboxEvents(pubKey string, relayEvent nostr.Event) {
 	log.Printf("Fetching events for pubkey: %s from outbox relays: %v", pubKey, relayURLs)
 
 	// Fetch events from the outbox relays
-	events := fetchAllUserEvents(pubKey, relayURLs)
+	events := fetchNeeds(pubKey, relayURLs)
 	if len(events) == 0 {
 		log.Printf("No events found for pubkey: %s from any outbox relay", pubKey)
 		return

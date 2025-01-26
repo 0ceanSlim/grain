@@ -13,8 +13,10 @@ import (
 	nostr "grain/server/types"
 )
 
-// fetchAllUserEvents fetches all events authored by the user from the provided relays concurrently.
-func fetchAllUserEvents(pubKey string, relays []string) []nostr.Event {
+// This needs to move into triggerUserSync and out of reconcile
+
+// fetchNeeds fetches all events authored by the user from the provided relays concurrently.
+func fetchNeeds(pubKey string, relays []string) []nostr.Event {
 	var (
 		allEvents []nostr.Event
 		mu        sync.Mutex // Protects access to `allEvents`

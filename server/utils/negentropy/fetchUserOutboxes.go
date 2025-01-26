@@ -11,8 +11,8 @@ import (
 	nostr "grain/server/types"
 )
 
-// fetchKind10002Events fetches Kind 10002 events from a set of relays.
-func fetchKind10002Events(pubKey string, relays []string) []nostr.Event {
+// fetchUserOutboxes fetches Kind 10002 events from a set of relays.
+func fetchUserOutboxes(pubKey string, relays []string) []nostr.Event {
 	var events []nostr.Event
 
 	for _, relay := range relays {
