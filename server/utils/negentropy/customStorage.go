@@ -27,16 +27,24 @@ func (s *CustomStorage) GetItem(i uint64) (negentropy.Item, error) {
 
 func (s *CustomStorage) FindLowerBound(begin, end int, value negentropy.Bound) (int, error) {
 	log.Printf("FindLowerBound called: begin=%d, end=%d, value=%+v", begin, end, value)
+	if begin < 0 || end > len(s.items) || begin > end {
+		return end, fmt.Errorf("invalid range for FindLowerBound: begin=%d, end=%d", begin, end)
+	}
 	for i := begin; i < end; i++ {
 		if !s.items[i].LessThan(value.Item) {
+			log.Printf("FindLowerBound found match at index %d", i)
 			return i, nil
 		}
 	}
+	log.Printf("FindLowerBound reached end: returning %d", end)
 	return end, nil
 }
 
 func (s *CustomStorage) Iterate(begin, end int, cb func(item negentropy.Item, i int) bool) error {
 	log.Printf("Iterate called: begin=%d, end=%d", begin, end)
+	if begin < 0 || end > len(s.items) || begin > end {
+		return fmt.Errorf("invalid range for Iterate: begin=%d, end=%d", begin, end)
+	}
 	for i := begin; i < end; i++ {
 		if !cb(s.items[i], i) {
 			log.Printf("Iteration stopped early at index %d", i)
@@ -48,10 +56,10 @@ func (s *CustomStorage) Iterate(begin, end int, cb func(item negentropy.Item, i 
 
 // Fingerprint calculates the fingerprint for a range of items.
 func (s *CustomStorage) Fingerprint(begin, end int) (negentropy.Fingerprint, error) {
+	log.Printf("Fingerprint called: begin=%d, end=%d", begin, end)
 	if begin < 0 || end > len(s.items) || begin > end {
-		return negentropy.Fingerprint{}, fmt.Errorf("invalid range for fingerprint: begin=%d, end=%d", begin, end)
+		return negentropy.Fingerprint{}, fmt.Errorf("invalid range for Fingerprint: begin=%d, end=%d", begin, end)
 	}
-
 	var fingerprint [negentropy.FingerprintSize]byte
 	for i := begin; i < end; i++ {
 		itemID := s.items[i].ID
@@ -59,7 +67,7 @@ func (s *CustomStorage) Fingerprint(begin, end int) (negentropy.Fingerprint, err
 			fingerprint[j] ^= itemID[j]
 		}
 	}
-
+	log.Printf("Computed fingerprint: %x", fingerprint)
 	return negentropy.Fingerprint{Buf: fingerprint}, nil
 }
 
