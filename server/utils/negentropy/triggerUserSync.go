@@ -6,6 +6,8 @@ import (
 	"sort"
 
 	configTypes "grain/config/types"
+
+	"github.com/illuzen/go-negentropy"
 )
 
 // triggerUserSync fetches Kind 10002 events and stores the latest one.
@@ -62,12 +64,31 @@ func triggerUserSync(pubKey string, negentropyCfg *configTypes.NegentropyConfig,
 		log.Printf("Failed to fetch haves from local relay: %v", err)
 		return
 	}
+	log.Printf("Fetched %d events from the local relay (haves).", len(haves))
 
 	// Fetch "needs" from the user outbox relays
 	needs := fetchNeeds(pubKey, userOutboxes)
+	log.Printf("Fetched %d events from the user outbox relays (needs).", len(needs))
+
+	// Populate custom storages
+	haveStorage := &CustomStorage{}
+	needStorage := &CustomStorage{}
+
+	for _, evt := range haves {
+		item := negentropy.NewItem(uint64(evt.CreatedAt), []byte(evt.ID))
+		haveStorage.items = append(haveStorage.items, *item)
+	}
+
+	for _, evt := range needs {
+		item := negentropy.NewItem(uint64(evt.CreatedAt), []byte(evt.ID))
+		needStorage.items = append(needStorage.items, *item)
+	}
+
+	log.Printf("Populated custom storage: haveStorage (%d items), needStorage (%d items).",
+		len(haveStorage.items), len(needStorage.items))
 
 	// Perform reconciliation
-	reconciledEvents := reconcile(haves, needs)
+	reconciledEvents := reconcileStorage(haveStorage, needStorage)
 
 	// Log the reconciled dataset for debugging
 	log.Printf("Reconciled dataset for pubkey %s: %+v", pubKey, reconciledEvents)

@@ -8,24 +8,8 @@ import (
 	"github.com/illuzen/go-negentropy"
 )
 
-// reconcile processes "haves" and "needs" datasets using Negentropy for reconciliation.
-func reconcile(haves, needs []nostr.Event) []nostr.Event {
-	// Prepare a fresh custom storage for Negentropy
-	haveStorage := &CustomStorage{}
-	needStorage := &CustomStorage{}
-
-	// Populate "haves" into the storage
-	for _, evt := range haves {
-		item := negentropy.NewItem(uint64(evt.CreatedAt), []byte(evt.ID))
-		haveStorage.items = append(haveStorage.items, *item)
-	}
-
-	// Populate "needs" into the storage
-	for _, evt := range needs {
-		item := negentropy.NewItem(uint64(evt.CreatedAt), []byte(evt.ID))
-		needStorage.items = append(needStorage.items, *item)
-	}
-
+// reconcileStorage performs reconciliation using populated custom storage.
+func reconcileStorage(haveStorage, needStorage *CustomStorage) []nostr.Event {
 	// Create a Negentropy instance
 	neg, err := negentropy.NewNegentropy(haveStorage, 4096) // Frame size: 4096
 	if err != nil {
@@ -35,9 +19,13 @@ func reconcile(haves, needs []nostr.Event) []nostr.Event {
 	// Initiate reconciliation
 	query, err := neg.Initiate()
 	if err != nil {
-		log.Fatalf("Failed to initiate reconciliation: %v", err)
+		if err.Error() == "already initiated" {
+			log.Printf("Reconciliation already initiated. Skipping initiation.")
+		} else {
+			log.Fatalf("Failed to initiate reconciliation: %v", err)
+		}
 	}
-	log.Printf("Generated query for reconciliation: %+v", query)
+	log.Printf("Generated query for reconciliation: %x", query)
 
 	// Perform reconciliation
 	var haveIds, needIds []string
@@ -49,9 +37,12 @@ func reconcile(haves, needs []nostr.Event) []nostr.Event {
 
 	// Generate the reconciled dataset
 	var reconciledEvents []nostr.Event
-	for _, evt := range needs {
-		if contains(needIds, evt.ID) {
-			reconciledEvents = append(reconciledEvents, evt)
+	for _, evt := range needStorage.items {
+		if contains(needIds, string(evt.ID)) {
+			reconciledEvents = append(reconciledEvents, nostr.Event{
+				ID:        string(evt.ID),
+				CreatedAt: int64(evt.Timestamp),
+			})
 		}
 	}
 
