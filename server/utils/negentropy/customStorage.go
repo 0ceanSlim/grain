@@ -2,6 +2,7 @@ package negentropy
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/illuzen/go-negentropy"
 )
@@ -24,18 +25,8 @@ func (s *CustomStorage) GetItem(i uint64) (negentropy.Item, error) {
 	return s.items[i], nil
 }
 
-// Iterate iterates over a range of items and applies a callback function.
-func (s *CustomStorage) Iterate(begin, end int, cb func(item negentropy.Item, i int) bool) error {
-	for i := begin; i < end; i++ {
-		if !cb(s.items[i], i) {
-			break
-		}
-	}
-	return nil
-}
-
-// FindLowerBound finds the first item in the range [begin, end) greater than or equal to the value.
 func (s *CustomStorage) FindLowerBound(begin, end int, value negentropy.Bound) (int, error) {
+	log.Printf("FindLowerBound called: begin=%d, end=%d, value=%+v", begin, end, value)
 	for i := begin; i < end; i++ {
 		if !s.items[i].LessThan(value.Item) {
 			return i, nil
@@ -44,24 +35,39 @@ func (s *CustomStorage) FindLowerBound(begin, end int, value negentropy.Bound) (
 	return end, nil
 }
 
+func (s *CustomStorage) Iterate(begin, end int, cb func(item negentropy.Item, i int) bool) error {
+	log.Printf("Iterate called: begin=%d, end=%d", begin, end)
+	for i := begin; i < end; i++ {
+		if !cb(s.items[i], i) {
+			log.Printf("Iteration stopped early at index %d", i)
+			break
+		}
+	}
+	return nil
+}
+
 // Fingerprint calculates the fingerprint for a range of items.
 func (s *CustomStorage) Fingerprint(begin, end int) (negentropy.Fingerprint, error) {
-	// Validate range
 	if begin < 0 || end > len(s.items) || begin > end {
 		return negentropy.Fingerprint{}, fmt.Errorf("invalid range for fingerprint: begin=%d, end=%d", begin, end)
 	}
 
-	// Initialize the fingerprint as a 16-byte array (Buf is [16]byte)
 	var fingerprint [negentropy.FingerprintSize]byte
-
-	// Compute the XOR fingerprint across all items in the range
 	for i := begin; i < end; i++ {
 		itemID := s.items[i].ID
 		for j := 0; j < len(fingerprint) && j < len(itemID); j++ {
-			fingerprint[j] ^= itemID[j] // XOR operation
+			fingerprint[j] ^= itemID[j]
 		}
 	}
 
-	// Return the computed fingerprint
 	return negentropy.Fingerprint{Buf: fingerprint}, nil
+}
+
+func (s *CustomStorage) ValidateIDs() error {
+	for _, item := range s.items {
+		if len(item.ID) != 32 { // 32 bytes for raw binary
+			return fmt.Errorf("invalid ID length: expected 32, got %d (ID: %x)", len(item.ID), item.ID)
+		}
+	}
+	return nil
 }

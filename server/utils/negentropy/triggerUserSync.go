@@ -75,17 +75,32 @@ func triggerUserSync(pubKey string, negentropyCfg *configTypes.NegentropyConfig,
 	needStorage := &CustomStorage{}
 
 	for _, evt := range haves {
-		item := negentropy.NewItem(uint64(evt.CreatedAt), []byte(evt.ID))
+		decodedID, err := decodeHexID(evt.ID)
+		if err != nil {
+			log.Fatalf("Failed to decode ID in haves: %v", err)
+		}
+		item := negentropy.NewItem(uint64(evt.CreatedAt), decodedID)
 		haveStorage.items = append(haveStorage.items, *item)
 	}
 
 	for _, evt := range needs {
-		item := negentropy.NewItem(uint64(evt.CreatedAt), []byte(evt.ID))
+		decodedID, err := decodeHexID(evt.ID)
+		if err != nil {
+			log.Fatalf("Failed to decode ID in needs: %v", err)
+		}
+		item := negentropy.NewItem(uint64(evt.CreatedAt), decodedID)
 		needStorage.items = append(needStorage.items, *item)
 	}
 
 	log.Printf("Populated custom storage: haveStorage (%d items), needStorage (%d items).",
 		len(haveStorage.items), len(needStorage.items))
+
+	if err := haveStorage.ValidateIDs(); err != nil {
+		log.Fatalf("Invalid ID in haveStorage: %v", err)
+	}
+	if err := needStorage.ValidateIDs(); err != nil {
+		log.Fatalf("Invalid ID in needStorage: %v", err)
+	}
 
 	// Perform reconciliation
 	reconciledEvents := reconcileStorage(haveStorage, needStorage)

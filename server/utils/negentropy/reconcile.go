@@ -2,6 +2,7 @@ package negentropy
 
 import (
 	"encoding/hex"
+	"fmt"
 	"log"
 
 	nostr "grain/server/types"
@@ -67,4 +68,12 @@ func contains(slice []string, value string) bool {
 		}
 	}
 	return false
+}
+
+// decodeHexID decodes a 64-character hexadecimal string into a 32-byte binary slice.
+func decodeHexID(hexID string) ([]byte, error) {
+	if len(hexID) != 64 {
+		return nil, fmt.Errorf("invalid hex ID length: expected 64, got %d (ID: %s)", len(hexID), hexID)
+	}
+	return hex.DecodeString(hexID)
 }
