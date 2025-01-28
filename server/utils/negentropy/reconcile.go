@@ -1,6 +1,7 @@
 package negentropy
 
 import (
+	"encoding/hex"
 	"log"
 
 	nostr "grain/server/types"
@@ -16,6 +17,9 @@ func reconcileStorage(haveStorage, needStorage *CustomStorage) []nostr.Event {
 		log.Fatalf("Failed to create Negentropy instance: %v", err)
 	}
 
+	// Set initiator mode explicitly
+	neg.SetInitiator()
+
 	// Initiate reconciliation
 	query, err := neg.Initiate()
 	if err != nil {
@@ -24,16 +28,22 @@ func reconcileStorage(haveStorage, needStorage *CustomStorage) []nostr.Event {
 		} else {
 			log.Fatalf("Failed to initiate reconciliation: %v", err)
 		}
+	} else {
+		log.Printf("Generated query for reconciliation: length=%d, hex=%s", len(query), hex.EncodeToString(query))
 	}
-	log.Printf("Generated query for reconciliation: %x", query)
+
+	// Log an overview of storage
+	log.Printf("haveStorage: %d items, needStorage: %d items", len(haveStorage.items), len(needStorage.items))
 
 	// Perform reconciliation
 	var haveIds, needIds []string
 	_, err = neg.ReconcileWithIDs(query, &haveIds, &needIds)
 	if err != nil {
+		log.Printf("Reconciliation failed. Query: %s", hex.EncodeToString(query))
 		log.Fatalf("Reconciliation failed: %v", err)
 	}
-	log.Printf("Reconciliation completed. Have IDs: %v, Need IDs: %v", haveIds, needIds)
+
+	log.Printf("Reconciliation completed. Have IDs: %d, Need IDs: %d", len(haveIds), len(needIds))
 
 	// Generate the reconciled dataset
 	var reconciledEvents []nostr.Event
