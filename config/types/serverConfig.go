@@ -7,7 +7,7 @@ type EventTimeConstraints struct {
 	MaxCreatedAtString string `yaml:"max_created_at_string"` // Original string value for parsing (e.g., "now+5m")
 }
 
-type NegentropyConfig struct {
+type UserSyncConfig struct {
 	UserSync              bool     `yaml:"user_sync"`               // Enable/disable syncing
 	InitialSyncRelays     []string `yaml:"initial_sync_relays"`     // Relays for initial kind10002 fetch
 	Kinds                 []int    `yaml:"kinds"`                   // Kinds to sync
@@ -40,5 +40,5 @@ type ServerConfig struct {
 		Enabled bool   `yaml:"enabled"`
 		URL     string `yaml:"url"`
 	} `yaml:"backup_relay"`
-	Negentropy NegentropyConfig `yaml:"negentropy"`
+	UserSync UserSyncConfig `yaml:"UserSync"`
 }

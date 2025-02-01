@@ -1,4 +1,4 @@
-package negentropy
+package userSync
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 
 // UserSyncCheck determines if a user is new and triggers the initial sync if necessary.
 func UserSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, error) {
-	if !cfg.Negentropy.UserSync {
+	if !cfg.UserSync.UserSync {
 		log.Printf("Negentropy syncing is disabled. Skipping sync for event %s.", evt.ID)
 		return false, nil
 	}
@@ -32,7 +32,7 @@ func UserSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, error)
 	}
 
 	// Enforce whitelist check if ExcludeNonWhitelisted is true
-	if cfg.Negentropy.ExcludeNonWhitelisted {
+	if cfg.UserSync.ExcludeNonWhitelisted {
 		isWhitelisted := config.IsPubKeyWhitelisted(evt.PubKey, true)
 		if !isWhitelisted {
 			log.Printf("Pubkey %s is not whitelisted. Skipping sync due to ExcludeNonWhitelisted.", evt.PubKey)
@@ -43,7 +43,7 @@ func UserSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, error)
 	log.Printf("Starting initial sync for new user %s.", evt.PubKey)
 
 	// Trigger the sync process
-	go triggerUserSync(evt.PubKey, &cfg.Negentropy, cfg)
+	go triggerUserSync(evt.PubKey, &cfg.UserSync, cfg)
 
 	return true, nil // New user
 }

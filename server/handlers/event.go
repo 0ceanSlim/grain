@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"grain/config"
 	"grain/server/db/mongo"
+	"grain/server/utils/userSync"
 	"log"
 	"time"
 
 	"grain/server/handlers/response"
 	"grain/server/utils"
-	"grain/server/utils/negentropy"
 
 	nostr "grain/server/types"
 
@@ -112,13 +112,12 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 
 	// Trigger Negentropy sync
 	//log.Printf("[DEBUG] Triggering Negentropy sync for PubKey=%s", evt.PubKey)
-	go negentropy.UserSyncCheck(evt, cfg)
+	go userSync.UserSyncCheck(evt, cfg)
 
 	// Store event in MongoDB
 	// Call StoreMongoEvent directly without expecting a return value
 	mongo.StoreMongoEvent(context.TODO(), evt, ws)
 	log.Printf("[INFO] Event stored successfully: ID=%s", evt.ID)
-
 
 	// Send to backup relay
 	if cfg.BackupRelay.Enabled {
@@ -135,7 +134,6 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 
 	log.Printf("[INFO] Event processing completed: ID=%s", evt.ID)
 }
-
 
 func sendToBackupRelay(backupURL string, evt nostr.Event) error {
 	conn, err := websocket.Dial(backupURL, "", "http://localhost/")

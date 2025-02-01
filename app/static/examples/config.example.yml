@@ -14,7 +14,7 @@ server:
   max_connections: 100
   max_subscriptions_per_client: 10
 
-negentropy:
+UserSync:
   user_sync: true
   initial_sync_relays: []
   kinds: []

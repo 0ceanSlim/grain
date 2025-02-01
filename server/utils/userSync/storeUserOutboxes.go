@@ -1,4 +1,4 @@
-package negentropy
+package userSync
 
 import (
 	"encoding/json"
