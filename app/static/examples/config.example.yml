@@ -15,13 +15,16 @@ server:
   max_subscriptions_per_client: 10
 
 UserSync:
-  user_sync: true
-  initial_sync_relays: []
-  kinds: []
-  categories: ""
-  limit: 0
-  exclude_non_whitelisted: false
-  interval: 0
+  user_sync: false
+  initial_sync_relays: [
+      "wss://purplepag.es",
+      "wss://nos.lol",
+      "wss://relay.damus.io",
+    ] # These relays are used to initially fetch user Outboxes.
+  kinds: [] #not implemented yet
+  limit: 100 #not implemented yet
+  exclude_non_whitelisted: true # if set to true, only pubkeys on the whitelist will be synced.
+  interval: 60 # in minutes
 
 backup_relay:
   enabled: false # Set to true to enable sending events to the backup relay

@@ -20,6 +20,7 @@ import (
 	"grain/config"
 	"grain/server/db/mongo"
 	"grain/server/utils"
+	"grain/server/utils/userSync"
 
 	"golang.org/x/net/websocket"
 )
@@ -76,6 +77,9 @@ func main() {
 		if err != nil {
 			log.Fatal("Failed to load relay metadata: ", err)
 		}
+
+		// Start periodic user sync in a goroutine
+		go userSync.StartPeriodicUserSync(cfg)
 
 		mux := initApp()
 		server := initRelay(cfg, mux, &wg)
