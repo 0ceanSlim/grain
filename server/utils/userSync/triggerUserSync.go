@@ -90,14 +90,19 @@ func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
 	}
 
 	var missing []nostr.Event
+	var kind5Events []nostr.Event
 	for _, evt := range needs {
 		if _, exists := haveIDs[evt.ID]; !exists {
-			missing = append(missing, evt)
+			if evt.Kind == 5 {
+				kind5Events = append(kind5Events, evt)
+			} else {
+				missing = append(missing, evt)
+			}
 		}
 	}
 
-	log.Printf("Missing events: %d (Needs: %d, Haves: %d)", len(missing), len(needs), len(haves))
-	return missing
+	log.Printf("Missing events: %d (Needs: %d, Haves: %d)", len(missing)+len(kind5Events), len(needs), len(haves))
+	return append(missing, kind5Events...)
 }
 
 // batchAndSendEvents batches and sends events with progress updates.
@@ -109,6 +114,22 @@ func batchAndSendEvents(events []nostr.Event, serverCfg *configTypes.ServerConfi
 	rateLimit := int(serverCfg.RateLimit.EventLimit)
 	batchSize := rateLimit / 2 // Send in batches of half the rate limit
 
+	nonKind5Events := []nostr.Event{}
+	kind5Events := []nostr.Event{}
+
+	for _, evt := range events {
+		if evt.Kind == 5 {
+			kind5Events = append(kind5Events, evt)
+		} else {
+			nonKind5Events = append(nonKind5Events, evt)
+		}
+	}
+
+	processBatches(nonKind5Events, batchSize, serverCfg)
+	processBatches(kind5Events, batchSize, serverCfg)
+}
+
+func processBatches(events []nostr.Event, batchSize int, serverCfg *configTypes.ServerConfig) {
 	totalEvents := len(events)
 	successCount := 0
 	failureCount := 0
