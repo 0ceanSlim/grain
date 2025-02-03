@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"sync"
 	"time"
 
 	configTypes "grain/config/types"
@@ -81,7 +82,7 @@ func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, ser
 	batchAndSendEvents(missingEvents, serverCfg)
 }
 
-// findMissingEvents compares have and need event lists by ID.
+// findMissingEvents compares 'have' and 'need' event lists by ID.
 func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
 	haveIDs := make(map[string]struct{})
 	for _, evt := range haves {
@@ -94,45 +95,50 @@ func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
 			missing = append(missing, evt)
 		}
 	}
+
+	log.Printf("Missing events: %d (Needs: %d, Haves: %d)", len(missing), len(needs), len(haves))
 	return missing
 }
 
-// batchAndSendEvents batches missing events based on rate limits and sends them.
+// batchAndSendEvents batches and sends events with progress updates.
 func batchAndSendEvents(events []nostr.Event, serverCfg *configTypes.ServerConfig) {
 	sort.Slice(events, func(i, j int) bool {
 		return events[i].CreatedAt < events[j].CreatedAt
 	})
 
 	rateLimit := int(serverCfg.RateLimit.EventLimit)
-	burstLimit := serverCfg.RateLimit.EventBurst
+	batchSize := rateLimit / 2 // Send in batches of half the rate limit
 
-	batchSize := rateLimit
-	if batchSize > burstLimit {
-		batchSize = burstLimit
-	}
+	totalEvents := len(events)
+	successCount := 0
+	failureCount := 0
+	var mu sync.Mutex
 
-	for i := 0; i < len(events); i += batchSize {
+	for i := 0; i < totalEvents; i += batchSize {
 		end := i + batchSize
-		if end > len(events) {
-			end = len(events)
+		if end > totalEvents {
+			end = totalEvents
 		}
 		batch := events[i:end]
 
-		if err := sendEventsToRelay(batch, serverCfg); err != nil {
-			log.Printf("Failed to send event batch: %v", err)
+		if err := sendEventsToRelay(batch, serverCfg, &successCount, &failureCount, &mu); err != nil {
+			log.Printf("Failed to send batch starting at index %d: %v", i, err)
 		}
 
-		time.Sleep(time.Second / time.Duration(rateLimit)) // Rate limiting
+		log.Printf("Progress: Sent %d/%d events", i+len(batch), totalEvents)
+		time.Sleep(time.Second) // Wait 1 second between batches
 	}
+
+	log.Printf("Sending complete. Success: %d, Failed: %d", successCount, failureCount)
 }
 
-// sendEventsToRelay sends a batch of events to the relay via WebSocket.
-func sendEventsToRelay(events []nostr.Event, serverCfg *configTypes.ServerConfig) error {
+// sendEventsToRelay sends a batch of events and tracks response statuses.
+func sendEventsToRelay(events []nostr.Event, serverCfg *configTypes.ServerConfig, successCount, failureCount *int, mu *sync.Mutex) error {
 	localRelayURL := fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port)
 
 	conn, _, err := websocket.DefaultDialer.Dial(localRelayURL, nil)
 	if err != nil {
-		return fmt.Errorf("failed to connect to local relay WebSocket: %w", err)
+		return fmt.Errorf("failed to connect to relay WebSocket: %w", err)
 	}
 	defer func() {
 		closeMessage := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "closing connection")
@@ -153,7 +159,31 @@ func sendEventsToRelay(events []nostr.Event, serverCfg *configTypes.ServerConfig
 			return fmt.Errorf("failed to send event: %w", err)
 		}
 
-		log.Printf("Event with ID: %s successfully sent to local relay.", event.ID)
+		// Read response
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			return fmt.Errorf("failed to read relay response: %w", err)
+		}
+
+		var response []interface{}
+		if err := json.Unmarshal(message, &response); err != nil || len(response) < 3 {
+			log.Printf("[ERROR] Invalid response format: %s", message)
+			mu.Lock()
+			*failureCount++
+			mu.Unlock()
+			continue
+		}
+
+		ok, okCast := response[2].(bool)
+		if okCast && ok {
+			mu.Lock()
+			*successCount++
+			mu.Unlock()
+		} else {
+			mu.Lock()
+			*failureCount++
+			mu.Unlock()
+		}
 	}
 
 	return nil
