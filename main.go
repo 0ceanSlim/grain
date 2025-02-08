@@ -78,11 +78,11 @@ func main() {
 			log.Fatal("Failed to load relay metadata: ", err)
 		}
 
-		// Start periodic user sync in a goroutine
-		go userSync.StartPeriodicUserSync(cfg)
-
 		mux := initApp()
 		server := initRelay(cfg, mux, &wg)
+
+		// Start periodic user sync in a goroutine
+		go userSync.StartPeriodicUserSync(cfg)
 
 		// Monitor for server restart or shutdown signals.
 		select {
