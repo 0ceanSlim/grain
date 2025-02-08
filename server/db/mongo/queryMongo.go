@@ -58,11 +58,18 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 	// Apply sorting by creation date (descending)
 	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
 
-	// Apply limit if set in any filter
+	var queryLimit int64 = -1 // Default: no limit
+
 	for _, filter := range filters {
 		if filter.Limit != nil {
-			opts.SetLimit(int64(*filter.Limit))
+			if queryLimit == -1 || int64(*filter.Limit) < queryLimit {
+				queryLimit = int64(*filter.Limit)
+			}
 		}
+	}
+
+	if queryLimit > 0 {
+		opts.SetLimit(queryLimit) // Apply the lowest limit found
 	}
 
 	// If no kinds are specified in any filter, query all collections
