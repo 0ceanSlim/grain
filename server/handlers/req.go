@@ -111,8 +111,11 @@ func processRequest(ws *websocket.Conn, message []interface{}) {
 	subscriptions[subID] = relay.Subscription{Filters: filters}
 	fmt.Printf("Subscription updated: %s with %d filters\n", subID, len(filters))
 
+	// ✅ Get database name dynamically from config
+	dbName := config.GetConfig().MongoDB.Database
+
 	// Query the database with filters and send back the results
-	queriedEvents, err := mongo.QueryEvents(filters, mongo.GetClient(), "grain")
+	queriedEvents, err := mongo.QueryEvents(filters, mongo.GetClient(), dbName)
 	if err != nil {
 		fmt.Println("Error querying events:", err)
 		response.SendClosed(ws, subID, "error: could not query events")

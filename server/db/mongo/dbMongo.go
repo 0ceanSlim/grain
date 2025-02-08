@@ -19,6 +19,9 @@ var collections = make(map[int]*mongo.Collection)
 func GetClient() *mongo.Client {
 	return client
 }
+
+var databaseName string // Store the database name globally
+
 func InitDB(cfg *config.ServerConfig) (*mongo.Client, error) {
 	clientOptions := options.Client().ApplyURI(cfg.MongoDB.URI)
 	var err error
@@ -33,13 +36,21 @@ func InitDB(cfg *config.ServerConfig) (*mongo.Client, error) {
 	}
 	fmt.Println("Connected to MongoDB!")
 
+	// ✅ Store database name globally
+	databaseName = cfg.MongoDB.Database
+
 	// ✅ Ensure indexes on all collections
-	err = EnsureIndexes(client, "grain")
+	err = EnsureIndexes(client, databaseName)
 	if err != nil {
 		fmt.Println("Error ensuring indexes:", err)
 	}
 
 	return client, nil
+}
+
+// GetDatabaseName returns the database name from config
+func GetDatabaseName() string {
+	return databaseName
 }
 
 func GetCollection(kind int) *mongo.Collection {
@@ -48,7 +59,7 @@ func GetCollection(kind int) *mongo.Collection {
 	}
 	client := GetClient()
 	collectionName := fmt.Sprintf("event-kind%d", kind)
-	collection := client.Database("grain").Collection(collectionName)
+	collection := client.Database(GetDatabaseName()).Collection(collectionName)
 	collections[kind] = collection
 
 	indexes := []mongo.IndexModel{

@@ -7,18 +7,21 @@ import (
 	"grain/server/handlers/response"
 	nostr "grain/server/types"
 
+	"grain/config"
+
 	"golang.org/x/net/websocket"
 )
 
 func StoreMongoEvent(ctx context.Context, evt nostr.Event, ws *websocket.Conn) {
 	collection := GetCollection(evt.Kind)
+	dbName := config.GetConfig().MongoDB.Database // ✅ Get database name from config
 
 	var err error
 	switch {
 	case evt.Kind == 2:
 		err = kinds.HandleDeprecatedKind(ctx, evt, ws)
 	case evt.Kind == 5:
-		err = kinds.HandleDeleteKind(ctx, evt, GetClient(), ws)
+		err = kinds.HandleDeleteKind(ctx, evt, GetClient(), dbName, ws) // ✅ Pass dbName
 	case (evt.Kind >= 1000 && evt.Kind < 10000) ||
 		(evt.Kind >= 4 && evt.Kind < 45) || evt.Kind == 1:
 		err = kinds.HandleRegularKind(ctx, evt, collection, ws)

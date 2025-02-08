@@ -2,12 +2,13 @@ package mongo
 
 import (
 	"context"
+	"fmt"
 	"grain/config"
 	types "grain/config/types"
 	nostr "grain/server/types"
 	"grain/server/utils"
 	"log"
-	"strconv"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -21,8 +22,8 @@ func PurgeOldEvents(cfg *types.EventPurgeConfig) {
 	}
 
 	client := GetClient()
+	dbName := GetDatabaseName() // ✅ Use dynamic database name
 
-	// Calculate the cutoff time
 	currentTime := time.Now().Unix()
 	cutoff := currentTime - int64(cfg.KeepIntervalHours*3600) // Convert hours to seconds
 
@@ -33,14 +34,14 @@ func PurgeOldEvents(cfg *types.EventPurgeConfig) {
 	// Determine collections to purge
 	if cfg.PurgeByKindEnabled {
 		for _, kind := range cfg.KindsToPurge {
-			collectionsToPurge = append(collectionsToPurge, "event-kind"+strconv.Itoa(kind))
+			collectionsToPurge = append(collectionsToPurge, fmt.Sprintf("event-kind%d", kind))
 		}
 	} else {
 		collectionsToPurge = getAllEventCollections(client)
 	}
 
 	for _, collectionName := range collectionsToPurge {
-		collection := client.Database("grain").Collection(collectionName)
+		collection := client.Database(dbName).Collection(collectionName) // ✅ Use dynamic DB name
 		baseFilter := bson.M{"created_at": bson.M{"$lt": cutoff}}
 
 		cursor, err := collection.Find(context.TODO(), baseFilter)
@@ -58,30 +59,22 @@ func PurgeOldEvents(cfg *types.EventPurgeConfig) {
 				continue
 			}
 
-			// Debug log to check created_at and cutoff
-			//log.Printf("Processing event ID: %s, pubkey: %s, created_at: %d, cutoff: %d", evt.ID, evt.PubKey, evt.CreatedAt, cutoff)
-
-			// If the event is not older than the cutoff, mark it as kept
 			if evt.CreatedAt >= cutoff {
 				totalKept++
 				continue
 			}
 
-			// Skip purging if the pubkey is whitelisted
 			if cfg.ExcludeWhitelisted && config.IsPubKeyWhitelisted(evt.PubKey, true) {
-				//log.Printf("Event ID: %s is kept because the pubkey is whitelisted.", evt.ID)
 				totalKept++
 				continue
 			}
 
-			// Check if purging by category is enabled and matches the event's category
 			category := utils.DetermineEventCategory(evt.Kind)
 			if purge, exists := cfg.PurgeByCategory[category]; !exists || !purge {
 				totalKept++
 				continue
 			}
 
-			// Proceed to delete the event
 			_, err = collection.DeleteOne(context.TODO(), bson.M{"id": evt.ID})
 			if err != nil {
 				log.Printf("Error purging event ID %s from %s: %v", evt.ID, collectionName, err)
@@ -98,14 +91,16 @@ func PurgeOldEvents(cfg *types.EventPurgeConfig) {
 // getAllEventCollections returns a list of all event collections if purging all kinds.
 func getAllEventCollections(client *mongo.Client) []string {
 	var collections []string
-	collectionNames, err := client.Database("grain").ListCollectionNames(context.TODO(), bson.M{})
+	dbName := GetDatabaseName() // ✅ Use dynamic database name
+
+	collectionNames, err := client.Database(dbName).ListCollectionNames(context.TODO(), bson.M{})
 	if err != nil {
 		log.Printf("Error listing collection names: %v", err)
 		return collections
 	}
 
 	for _, name := range collectionNames {
-		if len(name) > 10 && name[:10] == "event-kind" {
+		if strings.HasPrefix(name, "event-kind") {
 			collections = append(collections, name)
 		}
 	}
