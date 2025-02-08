@@ -21,10 +21,10 @@ UserSync:
       "wss://nos.lol",
       "wss://relay.damus.io",
     ] # These relays are used to initially fetch user Outboxes.
-  kinds: [] #not implemented yet
-  limit: 100 #not implemented yet
+  kinds: [] # If kinds is left empty, no kind is applied to the filter and any event is retrieved
+  limit: 100 # If limit is left empty, no limit will be applied to the filter
   exclude_non_whitelisted: true # if set to true, only pubkeys on the whitelist will be synced.
-  interval: 60 # in minutes
+  interval: 360 # in minutes
 
 backup_relay:
   enabled: false # Set to true to enable sending events to the backup relay
