@@ -9,19 +9,20 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"grain/app/src/types"
+	config "grain/config/types"
 	nostr "grain/server/types"
 )
 
-// This needs to move into triggerUserSync and out of reconcile
-
 // fetchNeeds fetches all events authored by the user from the provided relays concurrently.
-func fetchNeeds(pubKey string, relays []string) []nostr.Event {
+func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig) []nostr.Event {
 	var (
 		allEvents []nostr.Event
-		mu        sync.Mutex // Protects access to `allEvents`
+		mu        sync.Mutex
 		wg        sync.WaitGroup
 	)
+
+	// Generate the filter based on UserSyncConfig
+	filter := generateUserSyncFilter(pubKey, syncConfig)
 
 	for _, relay := range relays {
 		wg.Add(1)
@@ -37,13 +38,10 @@ func fetchNeeds(pubKey string, relays []string) []nostr.Event {
 			}
 			defer conn.Close()
 
-			// Create a subscription request to fetch all events by the author (pubKey)
-			filter := types.SubscriptionFilter{
-				Authors: []string{pubKey},
-			}
+			// Create subscription request
 			subRequest := []interface{}{
 				"REQ",
-				"sub_outbox", // Unique subscription ID
+				"sub_outbox",
 				filter,
 			}
 
@@ -62,7 +60,7 @@ func fetchNeeds(pubKey string, relays []string) []nostr.Event {
 
 		outer:
 			for {
-				conn.SetReadDeadline(time.Now().Add(WebSocketTimeout)) // Set a timeout for each read operation
+				conn.SetReadDeadline(time.Now().Add(WebSocketTimeout))
 				_, message, err := conn.ReadMessage()
 				if err != nil {
 					log.Printf("Error reading from relay %s: %v", relay, err)
@@ -87,7 +85,6 @@ func fetchNeeds(pubKey string, relays []string) []nostr.Event {
 						relayEvents = append(relayEvents, event)
 
 					case "EOSE":
-						// End of subscription signal
 						log.Printf("EOSE received from relay: %s", relay)
 						_ = conn.WriteMessage(websocket.TextMessage, []byte(`["CLOSE", "sub_outbox"]`))
 						break outer
@@ -95,7 +92,7 @@ func fetchNeeds(pubKey string, relays []string) []nostr.Event {
 				}
 			}
 
-			// Append relayEvents to allEvents
+			// Append filtered events to allEvents
 			mu.Lock()
 			allEvents = append(allEvents, relayEvents...)
 			mu.Unlock()

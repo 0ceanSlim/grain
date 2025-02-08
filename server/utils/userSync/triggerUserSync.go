@@ -63,7 +63,7 @@ func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, ser
 	}
 
 	// Fetch "haves" from the local relay
-	haves, err := fetchHaves(pubKey, fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port))
+	haves, err := fetchHaves(pubKey, fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port), *userSyncCfg)
 	if err != nil {
 		log.Printf("Failed to fetch haves from local relay: %v", err)
 		return
@@ -71,7 +71,7 @@ func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, ser
 	log.Printf("Fetched %d events from the local relay (haves).", len(haves))
 
 	// Fetch "needs" from the user outbox relays
-	needs := fetchNeeds(pubKey, userOutboxes)
+	needs := fetchNeeds(pubKey, userOutboxes, *userSyncCfg)
 	log.Printf("Fetched %d events from the user outbox relays (needs).", len(needs))
 
 	// Identify missing events

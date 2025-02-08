@@ -12,7 +12,7 @@ type UserSyncConfig struct {
 	InitialSyncRelays     []string `yaml:"initial_sync_relays"`     // Relays for initial kind10002 fetch
 	Kinds                 []int    `yaml:"kinds"`                   // Kinds to sync
 	Categories            string   `yaml:"categories"`              // Categories to sync
-	Limit                 int      `yaml:"limit"`                   // Limit per kind
+	Limit                 *int     `yaml:"limit"`                   // Limit per kind
 	ExcludeNonWhitelisted bool     `yaml:"exclude_non_whitelisted"` // Sync only whitelisted users
 	Interval              int      `yaml:"interval"`                // Resync interval in hours
 }

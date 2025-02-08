@@ -6,14 +6,14 @@ import (
 	"log"
 	"time"
 
-	"grain/app/src/types"
+	config "grain/config/types"
 	nostr "grain/server/types"
 
 	"github.com/gorilla/websocket"
 )
 
 // fetchLocalRelayEvents queries the local relay for events by the user.
-func fetchHaves(pubKey, localRelayURL string) ([]nostr.Event, error) {
+func fetchHaves(pubKey, localRelayURL string, syncConfig config.UserSyncConfig) ([]nostr.Event, error) {
 	log.Printf("Connecting to local relay: %s", localRelayURL)
 
 	conn, _, err := websocket.DefaultDialer.Dial(localRelayURL, nil)
@@ -22,13 +22,12 @@ func fetchHaves(pubKey, localRelayURL string) ([]nostr.Event, error) {
 	}
 	defer conn.Close()
 
-	// Create a subscription request
-	filter := types.SubscriptionFilter{
-		Authors: []string{pubKey},
-	}
+	// Generate the filter based on UserSyncConfig
+	filter := generateUserSyncFilter(pubKey, syncConfig)
+
 	subRequest := []interface{}{
 		"REQ",
-		"sub_local", // Unique subscription ID
+		"sub_local",
 		filter,
 	}
 
