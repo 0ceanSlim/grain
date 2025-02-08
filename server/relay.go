@@ -10,6 +10,7 @@ import (
 	"grain/server/utils"
 	"io"
 	"log"
+	"strings"
 	"sync"
 
 	"golang.org/x/net/websocket"
@@ -50,22 +51,36 @@ func WebSocketHandler(ws *websocket.Conn) {
 
 	log.Printf("New connection from IP: %s, User-Agent: %s, Origin: %s", clientInfo.IP, clientInfo.UserAgent, clientInfo.Origin)
 
-	var msg string
+	var messageBuffer strings.Builder // Buffer to accumulate full JSON messages
 	rateLimiter := config.GetRateLimiter()
-
-	subscriptions := make(map[string][]relay.Filter) // Subscription map scoped to the connection
+	subscriptions := make(map[string][]relay.Filter)
 	clientSubscriptions[ws] = 0
 
 	for {
-		err := websocket.Message.Receive(ws, &msg)
+		var chunk string
+		err := websocket.Message.Receive(ws, &chunk)
 		if err != nil {
 			handleReadError(err, ws)
 			return
 		}
 
-		log.Printf("Received message: %s", msg)
+		// ✅ Append received chunk to buffer
+		messageBuffer.WriteString(chunk)
 
-		// Check rate limits for WebSocket
+		// ✅ Check if the accumulated data is a valid JSON
+		fullMessage := messageBuffer.String()
+		if !isValidJSON(fullMessage) {
+			log.Println("[INFO] Received fragmented message, waiting for more data...")
+			continue // Wait for the next chunk
+		}
+
+		// ✅ Now we have a complete JSON message, process it
+		msg := fullMessage
+		messageBuffer.Reset() // Clear buffer for next message
+
+		log.Printf("Received complete message: %s", msg)
+
+		// ✅ Check rate limits
 		if allowed, errMsg := rateLimiter.AllowWs(); !allowed {
 			sendErrorMessage(ws, errMsg)
 			return
@@ -106,6 +121,12 @@ func WebSocketHandler(ws *websocket.Conn) {
 			log.Printf("[WARN] Unknown message type: %s", messageType)
 		}
 	}
+}
+
+// ✅ Helper function to check if a string is valid JSON
+func isValidJSON(s string) bool {
+	var js interface{}
+	return json.Unmarshal([]byte(s), &js) == nil
 }
 
 // handleReadError handles errors during message reception.

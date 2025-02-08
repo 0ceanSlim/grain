@@ -43,12 +43,20 @@ func StartPeriodicUserSync(cfg *configTypes.ServerConfig) {
 // Runs user sync for all relevant authors.
 func runUserSync(cfg *configTypes.ServerConfig) {
 	authors := mongo.GetAllAuthorsFromRelay(cfg)
+
+	// Filter authors if required
 	if cfg.UserSync.ExcludeNonWhitelisted {
 		authors = filterWhitelistedAuthors(authors)
 	}
 
 	for _, author := range authors {
-		go triggerUserSync(author, &cfg.UserSync, cfg) // Run sync concurrently
+		log.Printf("Starting user sync for author: %s", author)
+
+		// Run sync sequentially (removes concurrency to avoid rate limiting)
+		triggerUserSync(author, &cfg.UserSync, cfg)
+
+		// Optional: Small delay between each author's sync to further reduce load
+		time.Sleep(2 * time.Second)
 	}
 }
 

@@ -84,17 +84,21 @@ func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, ser
 
 // findMissingEvents compares 'have' and 'need' event lists by ID.
 func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
-	haveIDs := make(map[string]struct{})
+	haveIDs := make(map[string]struct{}, len(haves)) // Pre-allocate for efficiency
+
+	// Store all existing event IDs
 	for _, evt := range haves {
 		haveIDs[evt.ID] = struct{}{}
 	}
 
 	var missing []nostr.Event
 	var kind5Events []nostr.Event
+
+	// Identify missing events
 	for _, evt := range needs {
-		if _, exists := haveIDs[evt.ID]; !exists {
+		if _, exists := haveIDs[evt.ID]; !exists { // If not found, it's missing
 			if evt.Kind == 5 {
-				kind5Events = append(kind5Events, evt)
+				kind5Events = append(kind5Events, evt) // Store Kind 5 separately
 			} else {
 				missing = append(missing, evt)
 			}
@@ -102,7 +106,7 @@ func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
 	}
 
 	log.Printf("Missing events: %d (Needs: %d, Haves: %d)", len(missing)+len(kind5Events), len(needs), len(haves))
-	return append(missing, kind5Events...)
+	return append(missing, kind5Events...) // Append Kind 5 events at the end
 }
 
 // batchAndSendEvents batches and sends events with progress updates.
