@@ -13,7 +13,7 @@ import (
 	configTypes "grain/config/types"
 	relay "grain/server"
 
-	"grain/app/src/api"
+	//"grain/app/src/api"
 	"grain/app/src/handlers"
 	"grain/app/src/middleware"
 	"grain/app/src/routes"
@@ -112,8 +112,7 @@ func initApp() http.Handler {
 	// Handlers for Frontend
 	mux.HandleFunc("/do-login", handlers.LoginHandler)
 	mux.HandleFunc("/logout", handlers.LogoutHandler) // Logout process
-	mux.HandleFunc("/import-results", api.ImportEvents)
-	mux.HandleFunc("/import-events", routes.ImportEvents)
+	mux.HandleFunc("/profile", routes.ProfileHandler)
 	// Serve static directory and favicon
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("app/static"))))
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {

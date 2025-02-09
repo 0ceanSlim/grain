@@ -13,7 +13,6 @@
   document.getElementById("login-button").onclick = async function () {
     const loginButton = document.getElementById("login-button");
     const spinner = document.getElementById("spinner");
-    const profileContainer = document.getElementById("profile-nav");
 
     if (window.nostr) {
       loginButton.style.display = "none";
@@ -31,14 +30,12 @@
         });
 
         if (response.ok) {
-          const userData = await response.json();
-          window.location.reload();
-          profileContainer.innerHTML = `{{template "profile-nav" .}}`;
+          // Redirect to /profile after successful login
+          window.location.href = "/profile";
         } else {
-          // **🚀 Detects different failure cases**
           const errorMessage = await response.text();
           if (response.status === 404) {
-            showErrorPopup(errorMessage); // ✅ Correctly notify Kind 0 is missing
+            showErrorPopup(errorMessage);
           } else {
             showErrorPopup("Server error: " + errorMessage);
           }
@@ -47,7 +44,6 @@
       } catch (err) {
         console.error("Failed to fetch:", err);
 
-        // **🚀 Detect network failure (server crash or no response)**
         if (err.message.includes("Failed to fetch")) {
           showErrorPopup("Cannot connect to relay. Please try again later.");
         } else {

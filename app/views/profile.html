@@ -1,0 +1,43 @@
+{{define "view"}}
+<main
+  class="flex flex-col items-center justify-center p-8"
+  style="
+    background-color: var(--color-bgPrimary);
+    color: var(--color-textPrimary);
+  "
+>
+  <div
+    class="text-center max-w-md w-full p-6 rounded-lg"
+    style="background-color: var(--color-bgSecondary)"
+  >
+    <div class="relative mb-16">
+      <img
+        src="{{if .CustomData.picture}}{{.CustomData.picture}}{{else}}/default-avatar.png{{end}}"
+        alt="Profile Picture"
+        class="w-32 h-32 object-cover rounded-lg mx-auto border-4"
+        style="border-color: var(--color-bgInverted)"
+      />
+    </div>
+
+    <h1 class="text-2xl font-bold mb-4">
+      {{if
+      .CustomData.displayName}}{{.CustomData.displayName}}{{else}}Anonymous{{end}}
+    </h1>
+
+    {{if .CustomData.about}}
+    <div class="mb-6">
+      <p style="color: var(--color-textSecondary)">{{.CustomData.about}}</p>
+    </div>
+    {{end}}
+
+    <div class="mt-8">
+      <p class="italic" style="color: var(--color-textMuted)">
+        Profile page with Details and Event list Coming Soon
+      </p>
+      <p class="text-sm mt-2" style="color: var(--color-textMuted)">
+        API First
+      </p>
+    </div>
+  </div>
+</main>
+{{end}}

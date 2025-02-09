@@ -3,17 +3,16 @@ package routes
 import (
 	"grain/app/src/middleware"
 	"grain/app/src/utils"
-
 	"net/http"
 )
 
-func ImportEvents(w http.ResponseWriter, r *http.Request) {
+func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 	userData := middleware.GetUserFromContext(r.Context())
 
 	data := utils.PageData{
-		Title:      "Import Events",
+		Title:      "nostr Profile",
 		CustomData: userData,
 	}
 
-	utils.RenderTemplate(w, data, "importEvents.html", false)
+	utils.RenderTemplate(w, data, "profile.html", false)
 }
