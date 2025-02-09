@@ -26,7 +26,6 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load the current configuration
 	cfg, err := config.LoadConfig("config.yml")
 	if err != nil {
 		log.Printf("Failed to load config: %v\n", err)
@@ -34,14 +33,27 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Relay address using the port from config
 	relays := []string{fmt.Sprintf("ws://localhost%s", cfg.Server.Port)}
 
 	// Fetch user metadata
 	userContent, err := FetchUserMetadata(publicKey, relays)
 	if err != nil {
-		log.Printf("Failed to fetch user metadata: %v\n", err)
-		http.Error(w, "Failed to fetch user metadata", http.StatusInternalServerError)
+		log.Printf("Error fetching metadata for %s: %v\n", publicKey, err)
+		http.Error(w, "Failed to fetch user metadata from relay", http.StatusInternalServerError)
+		return
+	}
+
+	// **🚀 Fix the panic issue**
+	if userContent == nil {
+		log.Printf("User metadata for %s is nil\n", publicKey)
+		http.Error(w, "Relay responded but no Kind 0 metadata found. You may not be whitelisted or your Kind 0 is not synced. Try using a client to write your Kind 0 to this relay.", http.StatusNotFound)
+		return
+	}
+
+	// **🚀 Prevent accessing nil fields**
+	if userContent.DisplayName == "" {
+		log.Printf("Kind 0 metadata missing for %s\n", publicKey)
+		http.Error(w, "Kind 0 metadata not found. Try writing your Kind 0 event to this relay.", http.StatusNotFound)
 		return
 	}
 
@@ -59,11 +71,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Respond with metadata
-	response := map[string]string{
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
 		"displayName": userContent.DisplayName,
 		"picture":     userContent.Picture,
 		"about":       userContent.About,
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	})
 }

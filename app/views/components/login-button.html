@@ -22,7 +22,6 @@
       try {
         const publicKey = await window.nostr.getPublicKey();
 
-        // Fetch metadata from the server
         const response = await fetch("/do-login", {
           method: "POST",
           headers: {
@@ -34,24 +33,55 @@
         if (response.ok) {
           const userData = await response.json();
           window.location.reload();
-
-          // Replace login container with user profile dropdown
-          profileContainer.innerHTML = `
-            {{template "profile-nav" .}}
-          `;
+          profileContainer.innerHTML = `{{template "profile-nav" .}}`;
         } else {
-          console.error("Login failed.");
+          // **🚀 Detects different failure cases**
+          const errorMessage = await response.text();
+          if (response.status === 404) {
+            showErrorPopup(errorMessage); // ✅ Correctly notify Kind 0 is missing
+          } else {
+            showErrorPopup("Server error: " + errorMessage);
+          }
           loginButton.style.display = "block";
         }
       } catch (err) {
-        console.error("Failed to get public key:", err);
+        console.error("Failed to fetch:", err);
+
+        // **🚀 Detect network failure (server crash or no response)**
+        if (err.message.includes("Failed to fetch")) {
+          showErrorPopup("Cannot connect to relay. Please try again later.");
+        } else {
+          showErrorPopup("An unexpected error occurred.");
+        }
         loginButton.style.display = "block";
       } finally {
         spinner.style.display = "none";
       }
     } else {
-      alert("Nostr extension not available.");
+      showErrorPopup(
+        "Nostr extension not available. Please install and try again."
+      );
     }
   };
+
+  function showErrorPopup(message) {
+    const popup = document.createElement("div");
+    popup.innerHTML = `
+      <div class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-bgPrimary p-6 rounded-lg shadow-lg w-80 text-center">
+          <p class="text-red-600 font-semibold">${message}</p>
+          <button onclick="closePopup()" class="mt-4 px-4 py-2 bg-bgPrimary border-2 border-bgInverted hover:text-textInverted hover:border-bgPrimary rounded hover:bg-bgInverted">
+            OK
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(popup);
+  }
+
+  function closePopup() {
+    document.querySelector(".fixed.inset-0").remove();
+  }
 </script>
+
 {{end}}
