@@ -3,7 +3,8 @@ package relay
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+
+	//"fmt"
 	"grain/config"
 	"grain/server/handlers"
 	relay "grain/server/types"
@@ -16,45 +17,91 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-// Global connection count
+// Client implements ClientInterface
+type Client struct {
+	ws            *websocket.Conn
+	sendCh        chan string
+	subscriptions map[string][]relay.Filter
+	rateLimiter   *config.RateLimiter
+	messageBuffer strings.Builder
+	mu            sync.Mutex
+}
+
+// Track active clients
 var (
 	currentConnections int
 	mu                 sync.Mutex
+	clients            = make(map[*websocket.Conn]*Client)
+	clientsMu          sync.Mutex
 )
 
-// Client subscription count
-var clientSubscriptions = make(map[*websocket.Conn]int)
-
 func WebSocketHandler(ws *websocket.Conn) {
-	defer func() {
-		mu.Lock()
-		currentConnections--
-		delete(clientSubscriptions, ws)
-		mu.Unlock()
-		ws.Close()
-	}()
-
 	mu.Lock()
 	if currentConnections >= config.GetConfig().Server.MaxConnections {
-		websocket.Message.Send(ws, `{"error": "too many connections"}`)
+		_ = websocket.Message.Send(ws, `{"error": "too many connections"}`)
 		mu.Unlock()
+		ws.Close()
 		return
 	}
 	currentConnections++
 	mu.Unlock()
 
-	clientInfo := utils.ClientInfo{
-		IP:        utils.GetClientIP(ws.Request()),
-		UserAgent: ws.Request().Header.Get("User-Agent"),
-		Origin:    ws.Request().Header.Get("Origin"),
+	client := &Client{
+		ws:            ws,
+		sendCh:        make(chan string, 100),
+		subscriptions: make(map[string][]relay.Filter),
+		rateLimiter:   config.GetRateLimiter(),
 	}
 
-	log.Printf("New connection from IP: %s, User-Agent: %s, Origin: %s", clientInfo.IP, clientInfo.UserAgent, clientInfo.Origin)
+	clientsMu.Lock()
+	clients[ws] = client
+	clientsMu.Unlock()
 
-	var messageBuffer strings.Builder // Buffer to accumulate full JSON messages
-	rateLimiter := config.GetRateLimiter()
-	subscriptions := make(map[string][]relay.Filter)
-	clientSubscriptions[ws] = 0
+	log.Printf("New connection from IP: %s", utils.GetClientIP(ws.Request()))
+
+	// Start goroutine to handle outgoing messages
+	go clientWriter(client)
+
+	// Start processing incoming messages
+	clientReader(client)
+}
+
+// ✅ Implement `ClientInterface` methods
+func (c *Client) SendMessage(msg interface{}) {
+	jsonMsg, _ := json.Marshal(msg)
+	select {
+	case c.sendCh <- string(jsonMsg):
+	default:
+		log.Println("[WARN] Client send buffer full, dropping message")
+	}
+}
+
+func (c *Client) GetWS() *websocket.Conn {
+	return c.ws
+}
+
+func (c *Client) GetSubscriptions() map[string][]relay.Filter {
+	return c.subscriptions
+}
+
+func (c *Client) CloseClient() {
+	c.ws.Close()
+	close(c.sendCh)
+}
+
+func clientReader(client *Client) {
+	ws := client.ws
+	defer func() {
+		clientsMu.Lock()
+		delete(clients, ws)
+		clientsMu.Unlock()
+
+		mu.Lock()
+		currentConnections--
+		mu.Unlock()
+
+		client.CloseClient()
+	}()
 
 	for {
 		var chunk string
@@ -64,107 +111,90 @@ func WebSocketHandler(ws *websocket.Conn) {
 			return
 		}
 
-		// ✅ Append received chunk to buffer
-		messageBuffer.WriteString(chunk)
+		client.messageBuffer.WriteString(chunk)
+		fullMessage := client.messageBuffer.String()
 
-		// ✅ Check if the accumulated data is a valid JSON
-		fullMessage := messageBuffer.String()
 		if !isValidJSON(fullMessage) {
-			log.Println("[INFO] Received fragmented message, waiting for more data...")
-			continue // Wait for the next chunk
+			log.Println("[INFO] Waiting for full JSON...")
+			continue
 		}
 
-		// ✅ Now we have a complete JSON message, process it
-		msg := fullMessage
-		messageBuffer.Reset() // Clear buffer for next message
-
-		log.Printf("Received complete message: %s", msg)
-
-		// ✅ Check rate limits
-		if allowed, errMsg := rateLimiter.AllowWs(); !allowed {
-			sendErrorMessage(ws, errMsg)
-			return
-		}
+		client.messageBuffer.Reset()
 
 		var message []interface{}
-		err = json.Unmarshal([]byte(msg), &message)
+		err = json.Unmarshal([]byte(fullMessage), &message)
 		if err != nil {
-			log.Printf("[ERROR] Failed to parse message: %v", err)
+			log.Printf("[ERROR] JSON parse error: %v", err)
 			continue
 		}
 
-		if len(message) < 2 {
-			log.Println("[WARN] Invalid message format")
-			continue
-		}
-
-		messageType, ok := message[0].(string)
-		if !ok {
-			log.Println("[WARN] Invalid message type")
-			continue
-		}
+		messageType := message[0].(string)
 
 		switch messageType {
-		case "EVENT":
-			handlers.HandleEvent(ws, message)
 		case "REQ":
-			handleSubscription(ws, message, rateLimiter, subscriptions)
+			handlers.HandleReq(client, message)
+		case "CLOSE":
+			handlers.HandleClose(client, message)
 		case "AUTH":
 			if config.GetConfig().Auth.Enabled {
-				handlers.HandleAuth(ws, message)
+				handlers.HandleAuth(client, message)
 			} else {
 				log.Println("[WARN] Received AUTH message, but AUTH is disabled")
 			}
-		case "CLOSE":
-			handlers.HandleClose(ws, message)
+		case "EVENT":
+			handlers.HandleEvent(client, message)
 		default:
 			log.Printf("[WARN] Unknown message type: %s", messageType)
 		}
 	}
 }
 
-// ✅ Helper function to check if a string is valid JSON
+func clientWriter(client *Client) {
+	ws := client.ws
+	for msg := range client.sendCh {
+		if err := websocket.Message.Send(ws, msg); err != nil {
+			log.Println("[ERROR] Failed to send:", err)
+			return
+		}
+	}
+}
+
 func isValidJSON(s string) bool {
 	var js interface{}
 	return json.Unmarshal([]byte(s), &js) == nil
 }
 
-// handleReadError handles errors during message reception.
 func handleReadError(err error, ws *websocket.Conn) {
 	if errors.Is(err, io.EOF) {
 		log.Println("[INFO] Client closed the connection gracefully.")
-	} else if errors.Is(err, io.ErrUnexpectedEOF) {
-		log.Println("[ERROR] Unexpected EOF during message read.")
-	} else if errors.Is(err, io.ErrClosedPipe) {
-		log.Println("[ERROR] Read/write attempted on a closed WebSocket pipe.")
 	} else {
-		log.Printf("[ERROR] Unexpected WebSocket error: %v", err)
+		log.Printf("[ERROR] WebSocket error: %v", err)
 	}
 	ws.Close()
 }
 
 // sendErrorMessage sends a formatted error message to the client and closes the WebSocket.
-func sendErrorMessage(ws *websocket.Conn, errMsg string) {
-	errMessage := fmt.Sprintf(`{"error": "%s"}`, errMsg)
-	_ = websocket.Message.Send(ws, errMessage)
-	ws.Close()
-}
-
-// handleSubscription handles WebSocket subscriptions.
-func handleSubscription(ws *websocket.Conn, message []interface{}, rateLimiter *config.RateLimiter, subscriptions map[string][]relay.Filter) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	if clientSubscriptions[ws] >= config.GetConfig().Server.MaxSubscriptionsPerClient {
-		sendErrorMessage(ws, "too many subscriptions")
-		return
-	}
-	clientSubscriptions[ws]++
-
-	if allowed, errMsg := rateLimiter.AllowReq(); !allowed {
-		sendErrorMessage(ws, errMsg)
-		return
-	}
-
-	handlers.HandleReq(ws, message, subscriptions)
-}
+//func sendErrorMessage(ws *websocket.Conn, errMsg string) {
+//	errMessage := fmt.Sprintf(`{"error": "%s"}`, errMsg)
+//	_ = websocket.Message.Send(ws, errMessage)
+//	ws.Close()
+//}
+//
+//// handleSubscription handles WebSocket subscriptions.
+//func handleSubscription(ws *websocket.Conn, message []interface{}, rateLimiter *config.RateLimiter, subscriptions map[string][]relay.Filter) {
+//	mu.Lock()
+//	defer mu.Unlock()
+//
+//	if clientSubscriptions[ws] >= config.GetConfig().Server.MaxSubscriptionsPerClient {
+//		sendErrorMessage(ws, "too many subscriptions")
+//		return
+//	}
+//	clientSubscriptions[ws]++
+//
+//	if allowed, errMsg := rateLimiter.AllowReq(); !allowed {
+//		sendErrorMessage(ws, errMsg)
+//		return
+//	}
+//
+//	handlers.HandleReq(ws, message, subscriptions)
+//}

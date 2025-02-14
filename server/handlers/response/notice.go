@@ -1,13 +1,11 @@
 package response
 
 import (
-	"encoding/json"
-
-	"golang.org/x/net/websocket"
+	relay "grain/server/types"
 )
 
-func SendNotice(ws *websocket.Conn, pubKey, message string) {
+// SendNotice sends a notice message to the client
+func SendNotice(client relay.ClientInterface, pubKey, message string) {
 	notice := []interface{}{"NOTICE", pubKey, message}
-	noticeBytes, _ := json.Marshal(notice)
-	websocket.Message.Send(ws, string(noticeBytes))
+	client.SendMessage(notice)
 }

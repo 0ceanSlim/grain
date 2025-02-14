@@ -13,115 +13,98 @@ import (
 	"grain/server/handlers/response"
 	"grain/server/utils"
 
-	nostr "grain/server/types"
+	relay "grain/server/types"
 
 	"golang.org/x/net/websocket"
 )
 
-func HandleEvent(ws *websocket.Conn, message []interface{}) {
-	//log.Print("[DEBUG] EVENT Received")
+// HandleEvent processes an "EVENT" message
+func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	if len(message) != 2 {
 		log.Print("[ERROR] Invalid EVENT message format")
-		response.SendNotice(ws, "", "Invalid EVENT message format")
+		response.SendNotice(client, "", "Invalid EVENT message format")
 		return
 	}
 
 	eventData, ok := message[1].(map[string]interface{})
 	if !ok {
 		log.Print("[ERROR] Invalid event data format")
-		response.SendNotice(ws, "", "Invalid event data format")
+		response.SendNotice(client, "", "Invalid event data format")
 		return
 	}
 
 	eventBytes, err := json.Marshal(eventData)
 	if err != nil {
 		log.Printf("[ERROR] Error marshaling event data: %v", err)
-		response.SendNotice(ws, "", "Error marshaling event data")
+		response.SendNotice(client, "", "Error marshaling event data")
 		return
 	}
 
-	var evt nostr.Event
+	var evt relay.Event
 	err = json.Unmarshal(eventBytes, &evt)
 	if err != nil {
 		log.Printf("[ERROR] Error unmarshaling event data: %v", err)
-		response.SendNotice(ws, "", "Error unmarshaling event data")
+		response.SendNotice(client, "", "Error unmarshaling event data")
 		return
 	}
-
-	//log.Printf("[DEBUG] EVENT Unmarshaled: ID=%s, Kind=%d, PubKey=%s", evt.ID, evt.Kind, evt.PubKey)
 
 	// Validate event timestamps
 	if !validateEventTimestamp(evt) {
 		log.Printf("[ERROR] Invalid timestamp for event: ID=%s", evt.ID)
-		response.SendOK(ws, evt.ID, false, "invalid: event created_at timestamp is out of allowed range")
+		response.SendOK(client, evt.ID, false, "invalid: event created_at timestamp is out of allowed range")
 		return
 	}
-
-	//log.Printf("[DEBUG] Timestamp validation passed for event: ID=%s", evt.ID)
 
 	// Signature check
 	if !utils.CheckSignature(evt) {
 		log.Printf("[ERROR] Signature verification failed for event: ID=%s", evt.ID)
-		response.SendOK(ws, evt.ID, false, "invalid: signature verification failed")
+		response.SendOK(client, evt.ID, false, "invalid: signature verification failed")
 		return
 	}
-
-	//log.Printf("[DEBUG] Signature verification passed for event: ID=%s", evt.ID)
 
 	eventSize := len(eventBytes)
 
 	// Blacklist/Whitelist check
-	//log.Printf("[DEBUG] Checking blacklist/whitelist for PubKey=%s", evt.PubKey)
-	if !handleBlacklistAndWhitelist(ws, evt) {
+	if !handleBlacklistAndWhitelist(client, evt) {
 		log.Printf("[INFO] Event rejected by blacklist/whitelist: ID=%s", evt.ID)
 		return
 	}
-	//log.Printf("[DEBUG] Blacklist/whitelist checks passed for PubKey=%s", evt.PubKey)
 
 	// Rate and size limit checks
-	//log.Printf("[DEBUG] Checking rate and size limits for event: ID=%s", evt.ID)
-	if !handleRateAndSizeLimits(ws, evt, eventSize) {
+	if !handleRateAndSizeLimits(client, evt, eventSize) {
 		log.Printf("[INFO] Event rejected by rate/size limits: ID=%s", evt.ID)
 		return
 	}
-	//log.Printf("[DEBUG] Rate/size limits passed for event: ID=%s", evt.ID)
 
 	// Duplicate event check
-	//log.Printf("[DEBUG] Checking for duplicate event: ID=%s", evt.ID)
 	isDuplicate, err := mongo.CheckDuplicateEvent(context.TODO(), evt)
 	if err != nil {
 		log.Printf("[ERROR] Error checking for duplicate event: ID=%s, Error=%v", evt.ID, err)
-		response.SendOK(ws, evt.ID, false, "error: internal server error during duplicate check")
+		response.SendOK(client, evt.ID, false, "error: internal server error during duplicate check")
 		return
 	}
 	if isDuplicate {
 		log.Printf("[INFO] Duplicate event detected: ID=%s", evt.ID)
-		response.SendOK(ws, evt.ID, false, "blocked: the database already contains this event")
+		response.SendOK(client, evt.ID, false, "blocked: the database already contains this event")
 		return
 	}
-	//log.Printf("[DEBUG] Duplicate check passed for event: ID=%s", evt.ID)
 
 	// Load config
-	//log.Print("[DEBUG] Loading configuration")
 	cfg, err := config.LoadConfig("config.yml")
 	if err != nil {
 		log.Printf("[ERROR] Error loading configuration: %v", err)
 		return
 	}
-	//log.Print("[DEBUG] Configuration loaded successfully")
 
 	// Trigger Negentropy sync
-	//log.Printf("[DEBUG] Triggering Negentropy sync for PubKey=%s", evt.PubKey)
 	go userSync.UserSyncCheck(evt, cfg)
 
 	// Store event in MongoDB
-	// Call StoreMongoEvent directly without expecting a return value
-	mongo.StoreMongoEvent(context.TODO(), evt, ws)
+	mongo.StoreMongoEvent(context.TODO(), evt, client)
 	log.Printf("[INFO] Event stored successfully: ID=%s", evt.ID)
 
 	// Send to backup relay
 	if cfg.BackupRelay.Enabled {
-		//log.Printf("[DEBUG] Sending event to backup relay: ID=%s, RelayURL=%s", evt.ID, cfg.BackupRelay.URL)
 		go func() {
 			err := sendToBackupRelay(cfg.BackupRelay.URL, evt)
 			if err != nil {
@@ -135,7 +118,7 @@ func HandleEvent(ws *websocket.Conn, message []interface{}) {
 	log.Printf("[INFO] Event processing completed: ID=%s", evt.ID)
 }
 
-func sendToBackupRelay(backupURL string, evt nostr.Event) error {
+func sendToBackupRelay(backupURL string, evt relay.Event) error {
 	conn, err := websocket.Dial(backupURL, "", "http://localhost/")
 	if err != nil {
 		return fmt.Errorf("error connecting to backup relay %s: %w", backupURL, err)
@@ -161,7 +144,7 @@ func sendToBackupRelay(backupURL string, evt nostr.Event) error {
 }
 
 // Validate event timestamps against the configured min and max values
-func validateEventTimestamp(evt nostr.Event) bool {
+func validateEventTimestamp(evt relay.Event) bool {
 	cfg := config.GetConfig()
 	if cfg == nil {
 		fmt.Println("Server configuration is not loaded")
@@ -194,35 +177,32 @@ func validateEventTimestamp(evt nostr.Event) bool {
 	return true
 }
 
-func handleBlacklistAndWhitelist(ws *websocket.Conn, evt nostr.Event) bool {
-	// Use the updated CheckBlacklist function
+func handleBlacklistAndWhitelist(client relay.ClientInterface, evt relay.Event) bool {
 	if blacklisted, msg := config.CheckBlacklist(evt.PubKey, evt.Content); blacklisted {
-		response.SendOK(ws, evt.ID, false, msg)
+		response.SendOK(client, evt.ID, false, msg)
 		return false
 	}
 
-	// Check the whitelist using CheckWhitelist function
-	isWhitelisted, msg := config.CheckWhitelist(evt)
-	if !isWhitelisted {
-		response.SendOK(ws, evt.ID, false, msg)
+	if isWhitelisted, msg := config.CheckWhitelist(evt); !isWhitelisted {
+		response.SendOK(client, evt.ID, false, msg)
 		return false
 	}
 
 	return true
 }
 
-func handleRateAndSizeLimits(ws *websocket.Conn, evt nostr.Event, eventSize int) bool {
+func handleRateAndSizeLimits(client relay.ClientInterface, evt relay.Event, eventSize int) bool {
 	rateLimiter := config.GetRateLimiter()
 	sizeLimiter := config.GetSizeLimiter()
 	category := utils.DetermineEventCategory(evt.Kind)
 
 	if allowed, msg := rateLimiter.AllowEvent(evt.Kind, category); !allowed {
-		response.SendOK(ws, evt.ID, false, msg)
+		response.SendOK(client, evt.ID, false, msg)
 		return false
 	}
 
 	if allowed, msg := sizeLimiter.AllowSize(evt.Kind, eventSize); !allowed {
-		response.SendOK(ws, evt.ID, false, msg)
+		response.SendOK(client, evt.ID, false, msg)
 		return false
 	}
 
