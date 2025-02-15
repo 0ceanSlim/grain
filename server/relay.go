@@ -201,11 +201,6 @@ func clientWriter(client *Client) {
 	}
 }
 
-func isValidJSON(s string) bool {
-	var js interface{}
-	return json.Unmarshal([]byte(s), &js) == nil
-}
-
 func handleReadError(err error, ws *websocket.Conn) {
 	if errors.Is(err, io.EOF) {
 		log.Println("[INFO] Client closed the connection gracefully.")
@@ -213,4 +208,9 @@ func handleReadError(err error, ws *websocket.Conn) {
 		log.Printf("[ERROR] WebSocket error: %v", err)
 	}
 	ws.Close()
+}
+
+func isValidJSON(s string) bool {
+	var js interface{}
+	return json.Unmarshal([]byte(s), &js) == nil
 }
