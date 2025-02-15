@@ -24,7 +24,6 @@ type Client struct {
 	subscriptions map[string][]relay.Filter
 	rateLimiter   *config.RateLimiter
 	messageBuffer strings.Builder
-	mu            sync.Mutex
 }
 
 // Track active clients
@@ -46,9 +45,52 @@ func WebSocketHandler(ws *websocket.Conn) {
 	currentConnections++
 	mu.Unlock()
 
+	// Get resource limits from config
+	resourceLimits := config.GetConfig().ResourceLimits
+
+	maxClients := config.GetConfig().Server.MaxConnections
+	maxSubs := config.GetConfig().Server.MaxSubscriptionsPerClient
+	memoryMBLimit := resourceLimits.MemoryMB
+	heapSizeMBLimit := resourceLimits.HeapSizeMB
+	maxGoroutinesLimit := resourceLimits.MaxGoroutines
+
+	// Base buffer size calculation (based on max clients and subs)
+	baseBufferSize := maxClients * maxSubs * 2
+
+	// Get current system resource usage
+	currentMemoryUsage := utils.GetCurrentMemoryUsageMB()
+	currentHeapUsage := utils.GetCurrentHeapUsageMB()
+	currentGoroutines := utils.GetCurrentGoroutineCount()
+
+	// Calculate resource usage percentages
+	memoryUsagePercent := float64(currentMemoryUsage) / float64(memoryMBLimit)
+	heapUsagePercent := float64(currentHeapUsage) / float64(heapSizeMBLimit)
+	goroutineUsagePercent := float64(currentGoroutines) / float64(maxGoroutinesLimit)
+
+	// Adjust buffer size dynamically based on usage
+	scalingFactor := 1.0
+	if memoryUsagePercent > 0.75 {
+		scalingFactor *= 0.5
+	}
+	if heapUsagePercent > 0.75 {
+		scalingFactor *= 0.5
+	}
+	if goroutineUsagePercent > 0.75 {
+		scalingFactor *= 0.5
+	}
+
+	// Apply scaling
+	dynamicBufferSize := int(float64(baseBufferSize) * scalingFactor)
+
+	// Ensure a reasonable minimum buffer size
+	if dynamicBufferSize < 1000 {
+		dynamicBufferSize = 1000
+	}
+
+	// Create a new client with dynamic buffer size
 	client := &Client{
 		ws:            ws,
-		sendCh:        make(chan string, 100),
+		sendCh:        make(chan string, dynamicBufferSize),
 		subscriptions: make(map[string][]relay.Filter),
 		rateLimiter:   config.GetRateLimiter(),
 	}
@@ -57,7 +99,7 @@ func WebSocketHandler(ws *websocket.Conn) {
 	clients[ws] = client
 	clientsMu.Unlock()
 
-	log.Printf("New connection from IP: %s", utils.GetClientIP(ws.Request()))
+	log.Printf("New connection from IP: %s (Buffer Size: %d)", utils.GetClientIP(ws.Request()), dynamicBufferSize)
 
 	// Start goroutine to handle outgoing messages
 	go clientWriter(client)
@@ -172,29 +214,3 @@ func handleReadError(err error, ws *websocket.Conn) {
 	}
 	ws.Close()
 }
-
-// sendErrorMessage sends a formatted error message to the client and closes the WebSocket.
-//func sendErrorMessage(ws *websocket.Conn, errMsg string) {
-//	errMessage := fmt.Sprintf(`{"error": "%s"}`, errMsg)
-//	_ = websocket.Message.Send(ws, errMessage)
-//	ws.Close()
-//}
-//
-//// handleSubscription handles WebSocket subscriptions.
-//func handleSubscription(ws *websocket.Conn, message []interface{}, rateLimiter *config.RateLimiter, subscriptions map[string][]relay.Filter) {
-//	mu.Lock()
-//	defer mu.Unlock()
-//
-//	if clientSubscriptions[ws] >= config.GetConfig().Server.MaxSubscriptionsPerClient {
-//		sendErrorMessage(ws, "too many subscriptions")
-//		return
-//	}
-//	clientSubscriptions[ws]++
-//
-//	if allowed, errMsg := rateLimiter.AllowReq(); !allowed {
-//		sendErrorMessage(ws, errMsg)
-//		return
-//	}
-//
-//	handlers.HandleReq(ws, message, subscriptions)
-//}

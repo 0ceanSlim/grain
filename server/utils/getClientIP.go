@@ -5,12 +5,6 @@ import (
 	"strings"
 )
 
-type ClientInfo struct {
-	IP        string
-	UserAgent string
-	Origin    string
-}
-
 func GetClientIP(r *http.Request) string {
 	xff := r.Header.Get("X-Forwarded-For")
 	if xff != "" {
