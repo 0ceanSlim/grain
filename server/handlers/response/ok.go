@@ -1,13 +1,11 @@
 package response
 
 import (
-	"encoding/json"
-
-	"golang.org/x/net/websocket"
+	relay "grain/server/types"
 )
 
-func SendOK(ws *websocket.Conn, eventID string, status bool, message string) {
+// SendOK sends an "OK" response to the client
+func SendOK(client relay.ClientInterface, eventID string, status bool, message string) {
 	response := []interface{}{"OK", eventID, status, message}
-	responseBytes, _ := json.Marshal(response)
-	websocket.Message.Send(ws, string(responseBytes))
+	client.SendMessage(response)
 }

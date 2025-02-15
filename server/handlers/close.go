@@ -1,13 +1,13 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
-
-	"golang.org/x/net/websocket"
+	"grain/server/handlers/response"
+	relay "grain/server/types"
 )
 
-func HandleClose(ws *websocket.Conn, message []interface{}) {
+// HandleClose processes a "CLOSE" message from a client
+func HandleClose(client relay.ClientInterface, message []interface{}) {
 	if len(message) != 2 {
 		fmt.Println("Invalid CLOSE message format")
 		return
@@ -19,14 +19,13 @@ func HandleClose(ws *websocket.Conn, message []interface{}) {
 		return
 	}
 
+	// Get the client's subscription map
+	subscriptions := client.GetSubscriptions()
+
+	// Remove the subscription
 	delete(subscriptions, subID)
 	fmt.Println("Subscription closed:", subID)
 
-	closeMsg := []interface{}{"CLOSED", subID, "Subscription closed"}
-	closeBytes, _ := json.Marshal(closeMsg)
-	err := websocket.Message.Send(ws, string(closeBytes))
-	if err != nil {
-		fmt.Println("Error sending CLOSE message:", err)
-		return
-	}
+	// Send "CLOSED" response to client
+	response.SendClosed(client, subID, "Subscription closed")
 }

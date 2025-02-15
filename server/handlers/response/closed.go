@@ -1,13 +1,11 @@
 package response
 
 import (
-	"encoding/json"
-
-	"golang.org/x/net/websocket"
+	relay "grain/server/types"
 )
 
-func SendClosed(ws *websocket.Conn, subID string, message string) {
+// SendClosed sends a "CLOSED" response to the client
+func SendClosed(client relay.ClientInterface, subID string, message string) {
 	closeMsg := []interface{}{"CLOSED", subID, message}
-	closeBytes, _ := json.Marshal(closeMsg)
-	websocket.Message.Send(ws, string(closeBytes))
+	client.SendMessage(closeMsg)
 }
