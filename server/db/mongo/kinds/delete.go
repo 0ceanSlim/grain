@@ -9,10 +9,10 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"golang.org/x/net/websocket"
 )
 
-func HandleDeleteKind(ctx context.Context, evt relay.Event, dbClient *mongo.Client, dbName string, ws *websocket.Conn) error {
+// HandleDeleteKind processes kind 5 delete events and removes matching events from the database
+func HandleDeleteKind(ctx context.Context, evt relay.Event, dbClient *mongo.Client, dbName string, client relay.ClientInterface) error {
 	for _, tag := range evt.Tags {
 		if len(tag) < 2 {
 			continue
@@ -20,7 +20,7 @@ func HandleDeleteKind(ctx context.Context, evt relay.Event, dbClient *mongo.Clie
 		if tag[0] == "e" {
 			eventID := tag[1]
 			if err := deleteEventByID(ctx, dbName, eventID, evt.PubKey, dbClient); err != nil {
-				response.SendOK(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
+				response.SendOK(client, evt.ID, false, fmt.Sprintf("error: %v", err))
 				return fmt.Errorf("error deleting event with ID %s: %v", eventID, err)
 			}
 		} else if tag[0] == "a" {
@@ -31,12 +31,12 @@ func HandleDeleteKind(ctx context.Context, evt relay.Event, dbClient *mongo.Clie
 				dID := parts[2]
 
 				if err := deletePreviousKind5Events(ctx, dbName, kind, pubKey, dID, dbClient); err != nil {
-					response.SendOK(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
+					response.SendOK(client, evt.ID, false, fmt.Sprintf("error: %v", err))
 					return fmt.Errorf("error deleting previous kind 5 events: %v", err)
 				}
 
 				if err := deleteEventByKindPubKeyDID(ctx, dbName, kind, pubKey, dID, evt.CreatedAt, dbClient); err != nil {
-					response.SendOK(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
+					response.SendOK(client, evt.ID, false, fmt.Sprintf("error: %v", err))
 					return fmt.Errorf("error deleting events with kind %s, pubkey %s, and dID %s: %v", kind, pubKey, dID, err)
 				}
 			}
@@ -44,11 +44,11 @@ func HandleDeleteKind(ctx context.Context, evt relay.Event, dbClient *mongo.Clie
 	}
 
 	if err := storeEvent(ctx, dbName, evt, dbClient); err != nil {
-		response.SendOK(ws, evt.ID, false, fmt.Sprintf("error: %v", err))
+		response.SendOK(client, evt.ID, false, fmt.Sprintf("error: %v", err))
 		return fmt.Errorf("error storing deletion event: %v", err)
 	}
 
-	response.SendOK(ws, evt.ID, true, "")
+	response.SendOK(client, evt.ID, true, "")
 	return nil
 }
 

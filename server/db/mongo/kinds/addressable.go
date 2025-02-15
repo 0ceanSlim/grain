@@ -8,11 +8,10 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"golang.org/x/net/websocket"
 )
 
 // HandleAddressableKind handles parameterized replaceable events based on NIP-01 rules
-func HandleAddressableKind(ctx context.Context, evt relay.Event, collection *mongo.Collection, ws *websocket.Conn) error {
+func HandleAddressableKind(ctx context.Context, evt relay.Event, collection *mongo.Collection, client relay.ClientInterface) error {
 	// Step 1: Extract the dTag from the event's tags
 	var dTag string
 	for _, tag := range evt.Tags {
@@ -39,7 +38,7 @@ func HandleAddressableKind(ctx context.Context, evt relay.Event, collection *mon
 	// Step 4: If an existing event is found, compare created_at and id to decide if it should be replaced
 	if err != mongo.ErrNoDocuments {
 		if existingEvent.CreatedAt > evt.CreatedAt || (existingEvent.CreatedAt == evt.CreatedAt && existingEvent.ID < evt.ID) {
-			response.SendOK(ws, evt.ID, false, "blocked: relay already has a newer event for this pubkey and dTag")
+			response.SendOK(client, evt.ID, false, "blocked: relay already has a newer event for this pubkey and dTag")
 			return nil
 		}
 
@@ -54,11 +53,11 @@ func HandleAddressableKind(ctx context.Context, evt relay.Event, collection *mon
 	// Step 6: Insert the new event (without upsert since we already deleted the old one)
 	_, err = collection.InsertOne(ctx, evt)
 	if err != nil {
-		response.SendOK(ws, evt.ID, false, "error: could not insert the new event into the database")
+		response.SendOK(client, evt.ID, false, "error: could not insert the new event into the database")
 		return fmt.Errorf("error inserting event kind %d into MongoDB: %v", evt.Kind, err)
 	}
 
 	fmt.Printf("Inserted event kind %d into MongoDB: %s\n", evt.Kind, evt.ID)
-	response.SendOK(ws, evt.ID, true, "")
+	response.SendOK(client, evt.ID, true, "")
 	return nil
 }
