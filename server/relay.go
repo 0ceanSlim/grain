@@ -3,6 +3,8 @@ package relay
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"time"
 
 	//"fmt"
 	"grain/config"
@@ -24,6 +26,12 @@ type Client struct {
 	subscriptions map[string][]relay.Filter
 	rateLimiter   *config.RateLimiter
 	messageBuffer strings.Builder
+
+	// Debugging Information
+	ip          string
+	userAgent   string
+	origin      string
+	connectedAt time.Time
 }
 
 // Track active clients
@@ -44,6 +52,13 @@ func WebSocketHandler(ws *websocket.Conn) {
 	}
 	currentConnections++
 	mu.Unlock()
+
+	// Capture client info
+	ip := utils.GetClientIP(ws.Request())
+	userAgent := ws.Request().Header.Get("User-Agent")
+	origin := ws.Request().Header.Get("Origin")
+
+	log.Printf("New connection: IP=%s, User-Agent=%s, Origin=%s", ip, userAgent, origin)
 
 	// Get resource limits from config
 	resourceLimits := config.GetConfig().ResourceLimits
@@ -93,6 +108,10 @@ func WebSocketHandler(ws *websocket.Conn) {
 		sendCh:        make(chan string, dynamicBufferSize),
 		subscriptions: make(map[string][]relay.Filter),
 		rateLimiter:   config.GetRateLimiter(),
+		ip:            ip,
+		userAgent:     userAgent,
+		origin:        origin,
+		connectedAt:   time.Now(),
 	}
 
 	clientsMu.Lock()
@@ -122,13 +141,38 @@ func (c *Client) GetWS() *websocket.Conn {
 	return c.ws
 }
 
+func (c *Client) ClientInfo() string {
+	return fmt.Sprintf(
+		"Client Info - IP: %s, User-Agent: %s, Origin: %s, Connected At: %s, Active Subscriptions: %d",
+		c.ip,
+		c.userAgent,
+		c.origin,
+		c.connectedAt.Format(time.RFC3339),
+		len(c.subscriptions),
+	)
+}
+
 func (c *Client) GetSubscriptions() map[string][]relay.Filter {
 	return c.subscriptions
 }
 
 func (c *Client) CloseClient() {
+	clientsMu.Lock()
+	_, exists := clients[c.ws]
+	if exists {
+		delete(clients, c.ws)
+	}
+	clientsMu.Unlock()
+
+	// Safely close WebSocket
 	c.ws.Close()
-	close(c.sendCh)
+
+	// Prevent closing `sendCh` multiple times
+	select {
+	case <-c.sendCh: // Check if already closed
+	default:
+		close(c.sendCh)
+	}
 }
 
 func clientReader(client *Client) {
@@ -195,19 +239,32 @@ func clientWriter(client *Client) {
 	ws := client.ws
 	for msg := range client.sendCh {
 		if err := websocket.Message.Send(ws, msg); err != nil {
-			log.Println("[ERROR] Failed to send:", err)
-			return
+			log.Printf("[ERROR] Failed to send message: %v | %s", err, client.ClientInfo())
+			return // Don't call CloseClient() here, let WebSocketHandler handle it
 		}
 	}
 }
 
 func handleReadError(err error, ws *websocket.Conn) {
-	if errors.Is(err, io.EOF) {
-		log.Println("[INFO] Client closed the connection gracefully.")
-	} else {
-		log.Printf("[ERROR] WebSocket error: %v", err)
+	clientsMu.Lock()
+	client, exists := clients[ws]
+	clientsMu.Unlock()
+
+	clientInfo := "Unknown Client"
+	if exists {
+		clientInfo = client.ClientInfo()
 	}
-	ws.Close()
+
+	if errors.Is(err, io.EOF) {
+		log.Printf("[INFO] Client disconnected: %s", clientInfo)
+	} else {
+		log.Printf("[ERROR] WebSocket read error: %v | %s", err, clientInfo)
+	}
+
+	// Avoid closing WebSocket multiple times
+	if exists {
+		client.CloseClient()
+	}
 }
 
 func isValidJSON(s string) bool {
