@@ -184,22 +184,19 @@ func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mute
 		eventMessage := []interface{}{"EVENT", event}
 		messageJSON, err := json.Marshal(eventMessage)
 		if err != nil {
-			failureCount++
-			failedEventsLog = append(failedEventsLog, map[string]interface{}{
-				"error": fmt.Sprintf("Failed to marshal event: %v", err),
-				"event": event,
-			})
+			log.Printf("[ERROR] Failed to marshal event: %v", err)
 			continue
 		}
 
+		// Write event to WebSocket (locked to prevent race conditions)
 		mu.Lock()
 		err = conn.WriteMessage(websocket.TextMessage, messageJSON)
 		mu.Unlock()
 
 		if err != nil {
+			log.Printf("[ERROR] Failed to send event: %v", err)
 			failureCount++
 			failedEventsLog = append(failedEventsLog, map[string]interface{}{
-				"error": fmt.Sprintf("Failed to send event: %v", err),
 				"event": event,
 			})
 			continue
@@ -208,40 +205,43 @@ func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mute
 		// Read response
 		_, message, err := conn.ReadMessage()
 		if err != nil {
+			log.Printf("[ERROR] Failed to read relay response: %v", err)
 			failureCount++
 			failedEventsLog = append(failedEventsLog, map[string]interface{}{
-				"error": fmt.Sprintf("Failed to read relay response: %v", err),
 				"event": event,
 			})
 			continue
 		}
 
+		// Parse response
 		var response []interface{}
 		if err := json.Unmarshal(message, &response); err != nil || len(response) < 3 {
+			log.Printf("[ERROR] Invalid response format: %s", string(message))
 			failureCount++
 			failedEventsLog = append(failedEventsLog, map[string]interface{}{
-				"error":    "Invalid response format",
-				"response": string(message),
 				"event":    event,
+				"response": string(message),
 			})
 			continue
 		}
 
-		ok, okCast := response[2].(bool)
-		if okCast && ok {
+		// Log response along with event
+		failedEventsLog = append(failedEventsLog, map[string]interface{}{
+			"event":    event,
+			"response": response,
+		})
+
+		// Check if the relay accepted the event
+		if ok, okCast := response[2].(bool); okCast && ok {
 			successCount++
 		} else {
 			failureCount++
-			failedEventsLog = append(failedEventsLog, map[string]interface{}{
-				"error":    "Relay rejected event",
-				"response": response,
-				"event":    event,
-			})
 		}
 	}
 
 	return successCount, failureCount, failedEventsLog
 }
+
 
 // writeFailuresToFile logs all failed events to a file in JSON format.
 func writeFailuresToFile(failedEventsLog []map[string]interface{}) {
