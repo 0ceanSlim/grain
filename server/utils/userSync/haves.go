@@ -47,8 +47,28 @@ func fetchHaves(pubKey, localRelayURL string, syncConfig config.UserSyncConfig) 
 			switch response[0] {
 			case "EVENT":
 				var event nostr.Event
-				_ = json.Unmarshal([]byte(response[2].(string)), &event)
+			
+				eventMap, ok := response[2].(map[string]interface{})
+				if !ok {
+					log.Printf("Unexpected event data format from relay: %+v", response[2])
+					continue
+				}
+			
+				// Convert map to JSON and unmarshal into event struct
+				eventJSON, err := json.Marshal(eventMap)
+				if err != nil {
+					log.Printf("Failed to marshal event data: %v", err)
+					continue
+				}
+			
+				err = json.Unmarshal(eventJSON, &event)
+				if err != nil {
+					log.Printf("Failed to parse event from local relay: %v", err)
+					continue
+				}
+			
 				localEvents = append(localEvents, event)
+			
 			case "EOSE":
 				eoseReceived = true
 			}
