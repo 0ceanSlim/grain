@@ -70,9 +70,14 @@ func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, ser
 
 	needs := fetchNeeds(pubKey, userOutboxes, *userSyncCfg)
 
-	// Sort before comparing
+	log.Printf("[HAVES] Before Sorting: %d events", len(haves))
+	log.Printf("[NEEDS] Before Sorting: %d events", len(needs))
+
 	sort.Slice(haves, func(i, j int) bool { return haves[i].ID < haves[j].ID })
 	sort.Slice(needs, func(i, j int) bool { return needs[i].ID < needs[j].ID })
+
+	log.Printf("[HAVES] After Sorting: %d events", len(haves))
+	log.Printf("[NEEDS] After Sorting: %d events", len(needs))
 
 	// Identify missing events
 	missingEvents := findMissingEvents(haves, needs)
@@ -84,30 +89,27 @@ func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, ser
 
 // findMissingEvents compares 'have' and 'need' event lists by ID.
 func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
-	// Convert haves to a set for quick lookups
 	haveIDs := make(map[string]struct{}, len(haves))
 	for _, evt := range haves {
 		haveIDs[evt.ID] = struct{}{}
 	}
 
-	// Identify missing events without duplicates
 	missingSet := make(map[string]nostr.Event)
-
 	for _, evt := range needs {
 		if _, exists := haveIDs[evt.ID]; !exists {
 			missingSet[evt.ID] = evt
 		}
 	}
 
-	// Convert to slice
 	missing := make([]nostr.Event, 0, len(missingSet))
 	for _, evt := range missingSet {
 		missing = append(missing, evt)
 	}
 
-	log.Printf("Missing events to store: %d (Needs: %d, Haves: %d)", len(missing), len(needs), len(haves))
+	log.Printf("[MISSING] Identified %d missing events (Needs: %d, Haves: %d)", len(missing), len(needs), len(haves))
 	return missing
 }
+
 
 // batchAndSendEvents sends events in controlled batches.
 func batchAndSendEvents(events []nostr.Event, serverCfg *configTypes.ServerConfig) {
@@ -175,6 +177,7 @@ func processBatches(events []nostr.Event, batchSize int, serverCfg *configTypes.
 }
 
 // sendEventsToRelay sends a batch of events and returns success/failure counts.
+// sendEventsToRelay sends a batch of events and returns success/failure counts.
 func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mutex) (int, int, []map[string]interface{}) {
 	successCount := 0
 	failureCount := 0
@@ -197,7 +200,8 @@ func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mute
 			log.Printf("[ERROR] Failed to send event: %v", err)
 			failureCount++
 			failedEventsLog = append(failedEventsLog, map[string]interface{}{
-				"event": event,
+				"response": fmt.Sprintf("Failed to send: %v", err),
+				"event":    event,
 			})
 			continue
 		}
@@ -208,7 +212,8 @@ func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mute
 			log.Printf("[ERROR] Failed to read relay response: %v", err)
 			failureCount++
 			failedEventsLog = append(failedEventsLog, map[string]interface{}{
-				"event": event,
+				"response": fmt.Sprintf("Failed to read response: %v", err),
+				"event":    event,
 			})
 			continue
 		}
@@ -219,28 +224,36 @@ func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mute
 			log.Printf("[ERROR] Invalid response format: %s", string(message))
 			failureCount++
 			failedEventsLog = append(failedEventsLog, map[string]interface{}{
-				"event":    event,
 				"response": string(message),
+				"event":    event,
 			})
 			continue
 		}
 
-		// Log response along with event
-		failedEventsLog = append(failedEventsLog, map[string]interface{}{
-			"event":    event,
-			"response": response,
-		})
-
 		// Check if the relay accepted the event
-		if ok, okCast := response[2].(bool); okCast && ok {
-			successCount++
+		if ok, okCast := response[2].(bool); okCast {
+			if ok {
+				successCount++
+			} else {
+				failureCount++
+				// Only log failures (ok == false)
+				failedEventsLog = append(failedEventsLog, map[string]interface{}{
+					"response": response,
+					"event":    event,
+				})
+			}
 		} else {
 			failureCount++
+			failedEventsLog = append(failedEventsLog, map[string]interface{}{
+				"response": response,
+				"event":    event,
+			})
 		}
 	}
 
 	return successCount, failureCount, failedEventsLog
 }
+
 
 
 // writeFailuresToFile logs all failed events to a file in JSON format.

@@ -27,7 +27,7 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 
 			conn, _, err := websocket.DefaultDialer.Dial(relay, nil)
 			if err != nil {
-				log.Printf("Failed to connect to relay %s: %v", relay, err)
+				log.Printf("[ERROR] Failed to connect to relay %s: %v", relay, err)
 				return
 			}
 			defer conn.Close()
@@ -41,6 +41,7 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 				conn.SetReadDeadline(time.Now().Add(WebSocketTimeout))
 				_, message, err := conn.ReadMessage()
 				if err != nil {
+					log.Printf("[ERROR] Failed to read from relay %s: %v", relay, err)
 					break
 				}
 
@@ -51,31 +52,33 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 					switch response[0] {
 					case "EVENT":
 						var event nostr.Event
-					
-						eventMap, ok := response[2].(map[string]interface{})
+
+						eventMapData, ok := response[2].(map[string]interface{})
 						if !ok {
-							log.Printf("[ERROR] Unexpected event data format from relay: %+v", response[2])
+							log.Printf("[ERROR] Unexpected event format in needs from %s: %+v", relay, response[2])
 							continue
 						}
-					
-						// Convert map to JSON and unmarshal into event struct
-						eventJSON, err := json.Marshal(eventMap)
+
+						eventJSON, err := json.Marshal(eventMapData)
 						if err != nil {
-							log.Printf("[ERROR] Failed to marshal event data: %v", err)
+							log.Printf("[ERROR] Failed to marshal event in needs from %s: %v", relay, err)
 							continue
 						}
-					
+
 						err = json.Unmarshal(eventJSON, &event)
 						if err != nil {
-							log.Printf("[ERROR] Failed to parse event from relay: %v", err)
+							log.Printf("[ERROR] Failed to parse event in needs from %s: %v", relay, err)
 							continue
 						}
-					
+
+						log.Printf("[NEEDS] Relay %s received event ID: %s", relay, event.ID)
+
 						mu.Lock()
 						eventMap[event.ID] = event
 						mu.Unlock()
-					
+
 					case "EOSE":
+						log.Printf("[NEEDS] EOSE received from relay: %s", relay)
 						eoseReceived = true
 					}
 				}
@@ -84,11 +87,12 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 	}
 
 	wg.Wait()
+
 	allEvents := make([]nostr.Event, 0, len(eventMap))
 	for _, evt := range eventMap {
 		allEvents = append(allEvents, evt)
 	}
 
+	log.Printf("[NEEDS] Total events received: %d", len(allEvents))
 	return allEvents
 }
-

@@ -47,36 +47,38 @@ func fetchHaves(pubKey, localRelayURL string, syncConfig config.UserSyncConfig) 
 			switch response[0] {
 			case "EVENT":
 				var event nostr.Event
-			
+
 				eventMap, ok := response[2].(map[string]interface{})
 				if !ok {
-					log.Printf("Unexpected event data format from relay: %+v", response[2])
+					log.Printf("[ERROR] Unexpected event format in haves: %+v", response[2])
 					continue
 				}
-			
-				// Convert map to JSON and unmarshal into event struct
+
 				eventJSON, err := json.Marshal(eventMap)
 				if err != nil {
-					log.Printf("Failed to marshal event data: %v", err)
+					log.Printf("[ERROR] Failed to marshal event in haves: %v", err)
 					continue
 				}
-			
+
 				err = json.Unmarshal(eventJSON, &event)
 				if err != nil {
-					log.Printf("Failed to parse event from local relay: %v", err)
+					log.Printf("[ERROR] Failed to parse event in haves: %v", err)
 					continue
 				}
-			
+
+				log.Printf("[HAVES] Received event ID: %s", event.ID)
 				localEvents = append(localEvents, event)
-			
+
 			case "EOSE":
+				log.Printf("[HAVES] Received EOSE from local relay")
 				eoseReceived = true
 			}
 		}
 	}
 
+	log.Printf("[HAVES] Total events received: %d", len(localEvents))
+
 	_ = conn.WriteMessage(websocket.TextMessage, []byte(`["CLOSE", "sub_local"]`))
 	return localEvents, nil
 }
-
 
