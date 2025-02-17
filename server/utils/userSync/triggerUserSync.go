@@ -15,7 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// triggerUserSync fetches Kind 10002 events and stores the latest one.
+// triggerUserSync fetches Kind 10002 events and starts syncing missing events.
 func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, serverCfg *configTypes.ServerConfig) {
 	log.Printf("Starting user sync for pubkey: %s", pubKey)
 
@@ -25,32 +25,29 @@ func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, ser
 		return
 	}
 
-	// Fetch user outboxes from the initial relays
+	// Fetch user's outbox events
 	userOutboxEvents := fetchUserOutboxes(pubKey, initialRelays)
 	if len(userOutboxEvents) == 0 {
 		log.Printf("No Kind 10002 events found for pubkey: %s", pubKey)
 		return
 	}
 
-	// Sort user outbox events by `created_at` descending
+	// Sort by `created_at` descending and pick the latest event
 	sort.Slice(userOutboxEvents, func(i, j int) bool {
 		return userOutboxEvents[i].CreatedAt > userOutboxEvents[j].CreatedAt
 	})
-
-	// Select the newest outbox event
 	latestOutboxEvent := userOutboxEvents[0]
+
 	log.Printf("Selected latest Kind 10002 event: ID=%s, CreatedAt=%d", latestOutboxEvent.ID, latestOutboxEvent.CreatedAt)
 
-	// Forward the event to the local relay
+	// Store the latest outbox event in the local relay
 	err := storeUserOutboxes(latestOutboxEvent, serverCfg)
 	if err != nil {
-		log.Printf("Failed to forward Kind 10002 event to local relay: %v", err)
+		log.Printf("Failed to store Kind 10002 event to local relay: %v", err)
 		return
 	}
 
-	log.Printf("Kind 10002 event successfully stored for pubkey: %s", pubKey)
-
-	// Extract user outbox relays from the tags of the latest event
+	// Extract relay URLs from event tags
 	var userOutboxes []string
 	for _, tag := range latestOutboxEvent.Tags {
 		if len(tag) > 1 && tag[0] == "r" {
@@ -59,27 +56,29 @@ func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, ser
 	}
 
 	if len(userOutboxes) == 0 {
-		log.Printf("No outbox relays found in the latest Kind 10002 event for pubkey: %s", pubKey)
+		log.Printf("No outbox relays found for pubkey: %s", pubKey)
 		return
 	}
 
-	// Fetch "haves" from the local relay
-	haves, err := fetchHaves(pubKey, fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port), *userSyncCfg)
+	// Fetch haves & needs (wait for EOSE)
+	localRelayURL := fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port)
+	haves, err := fetchHaves(pubKey, localRelayURL, *userSyncCfg)
 	if err != nil {
-		log.Printf("Failed to fetch haves from local relay: %v", err)
+		log.Printf("Failed to fetch haves: %v", err)
 		return
 	}
-	log.Printf("Fetched %d events from the local relay (haves).", len(haves))
 
-	// Fetch "needs" from the user outbox relays
 	needs := fetchNeeds(pubKey, userOutboxes, *userSyncCfg)
-	log.Printf("Fetched %d events from the user outbox relays (needs).", len(needs))
+
+	// Sort before comparing
+	sort.Slice(haves, func(i, j int) bool { return haves[i].ID < haves[j].ID })
+	sort.Slice(needs, func(i, j int) bool { return needs[i].ID < needs[j].ID })
 
 	// Identify missing events
 	missingEvents := findMissingEvents(haves, needs)
 	log.Printf("Identified %d missing events.", len(missingEvents))
 
-	// Batch and send missing events
+	// Send missing events in batches
 	batchAndSendEvents(missingEvents, serverCfg)
 }
 
@@ -246,23 +245,20 @@ func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mute
 
 // writeFailuresToFile logs all failed events to a file in JSON format.
 func writeFailuresToFile(failedEventsLog []map[string]interface{}) {
-	logFile, err := os.OpenFile("failed.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Printf("[ERROR] Failed to open failed.log: %v", err)
-		return
-	}
+	filePath := "failed.log"
+	maxSize := int64(5 * 1024 * 1024) // 5MB
+
+	logFile, _ := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer logFile.Close()
 
 	for _, failure := range failedEventsLog {
 		failureJSON, _ := json.Marshal(failure)
-		_, err := logFile.WriteString(string(failureJSON) + "\n")
-		if err != nil {
-			log.Printf("[ERROR] Failed to write to failed.log: %v", err)
-		}
+		_, _ = logFile.WriteString(string(failureJSON) + "\n")
 	}
 
-	err = logFile.Sync()
-	if err != nil {
-		log.Printf("[ERROR] Failed to flush failed.log: %v", err)
+	// Trim file if too large
+	fileInfo, _ := logFile.Stat()
+	if fileInfo.Size() > maxSize {
+		_ = os.Truncate(filePath, maxSize/2) // Remove oldest half
 	}
 }

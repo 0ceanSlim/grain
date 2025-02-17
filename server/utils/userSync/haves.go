@@ -22,59 +22,41 @@ func fetchHaves(pubKey, localRelayURL string, syncConfig config.UserSyncConfig) 
 	}
 	defer conn.Close()
 
-	// Generate the filter based on UserSyncConfig
 	filter := generateUserSyncFilter(pubKey, syncConfig)
-
-	subRequest := []interface{}{
-		"REQ",
-		"sub_local",
-		filter,
-	}
-
-	requestJSON, err := json.Marshal(subRequest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal subscription request: %w", err)
-	}
+	subRequest := []interface{}{"REQ", "sub_local", filter}
+	requestJSON, _ := json.Marshal(subRequest)
 
 	if err := conn.WriteMessage(websocket.TextMessage, requestJSON); err != nil {
 		return nil, fmt.Errorf("failed to send subscription request: %w", err)
 	}
 
 	var localEvents []nostr.Event
-	for {
+	eoseReceived := false
+	for !eoseReceived {
 		conn.SetReadDeadline(time.Now().Add(WebSocketTimeout))
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("[ERROR] Error reading from local relay: %v", err)
+			log.Printf("[ERROR] Reading from local relay: %v", err)
 			break
 		}
 
 		var response []interface{}
-		if err := json.Unmarshal(message, &response); err != nil {
-			log.Printf("Failed to unmarshal response from local relay: %v", err)
-			continue
-		}
+		_ = json.Unmarshal(message, &response)
 
 		if len(response) > 0 {
 			switch response[0] {
 			case "EVENT":
 				var event nostr.Event
-				eventData, _ := json.Marshal(response[2])
-				if err := json.Unmarshal(eventData, &event); err != nil {
-					log.Printf("Failed to parse event from local relay: %v", err)
-					continue
-				}
+				_ = json.Unmarshal([]byte(response[2].(string)), &event)
 				localEvents = append(localEvents, event)
-
 			case "EOSE":
-				log.Printf("EOSE received from local relay: %s", localRelayURL)
-				return localEvents, nil
+				eoseReceived = true
 			}
 		}
 	}
 
-	// Close subscription before closing connection
 	_ = conn.WriteMessage(websocket.TextMessage, []byte(`["CLOSE", "sub_local"]`))
 	return localEvents, nil
 }
+
 
