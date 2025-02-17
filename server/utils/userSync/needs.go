@@ -13,11 +13,12 @@ import (
 	nostr "grain/server/types"
 )
 
+// fetchNeeds fetches all events authored by the user from the provided relays concurrently.
 func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig) []nostr.Event {
 	var (
-		eventMap = make(map[string]nostr.Event) // Deduplication map
-		mu       sync.Mutex
-		wg       sync.WaitGroup
+		eventMap    = make(map[string]nostr.Event) // Deduplication map
+		mu          sync.Mutex
+		wg          sync.WaitGroup
 	)
 
 	filter := generateUserSyncFilter(pubKey, syncConfig)
@@ -34,7 +35,10 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 				log.Printf("Failed to connect to relay %s: %v", relay, err)
 				return
 			}
-			defer conn.Close()
+			defer func() {
+				log.Printf("Closing connection to relay: %s", relay)
+				conn.Close()
+			}()
 
 			subRequest := []interface{}{"REQ", "sub_outbox", filter}
 			requestJSON, err := json.Marshal(subRequest)
@@ -48,8 +52,9 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 				return
 			}
 
-		outer:
-			for {
+			eoseReceived := false
+
+			for !eoseReceived {
 				conn.SetReadDeadline(time.Now().Add(WebSocketTimeout))
 				_, message, err := conn.ReadMessage()
 				if err != nil {
@@ -80,12 +85,14 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 
 					case "EOSE":
 						log.Printf("EOSE received from relay: %s", relay)
-						break outer
+						eoseReceived = true
 					}
 				}
 			}
 
+			// Close the subscription after receiving all events
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`["CLOSE", "sub_outbox"]`))
+
 		}(relay)
 	}
 

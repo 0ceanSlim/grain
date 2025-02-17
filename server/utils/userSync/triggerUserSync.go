@@ -85,40 +85,30 @@ func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, ser
 
 // findMissingEvents compares 'have' and 'need' event lists by ID.
 func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
-	// Sort both lists by event ID
-	sort.Slice(haves, func(i, j int) bool { return haves[i].ID < haves[j].ID })
-	sort.Slice(needs, func(i, j int) bool { return needs[i].ID < needs[j].ID })
+	// Convert haves to a set for quick lookups
+	haveIDs := make(map[string]struct{}, len(haves))
+	for _, evt := range haves {
+		haveIDs[evt.ID] = struct{}{}
+	}
 
-	var missing []nostr.Event
-	var kind5Events []nostr.Event
+	// Identify missing events without duplicates
+	missingSet := make(map[string]nostr.Event)
 
-	i, j := 0, 0 // Two pointers for sorted lists
-
-	// Compare sorted lists
-	for j < len(needs) {
-		// If we've exhausted 'haves', everything in 'needs' is missing
-		if i >= len(haves) || needs[j].ID < haves[i].ID {
-			// Event is missing
-			if needs[j].Kind == 5 {
-				kind5Events = append(kind5Events, needs[j])
-			} else {
-				missing = append(missing, needs[j])
-			}
-			j++
-		} else if needs[j].ID == haves[i].ID {
-			// Found a match, move both pointers
-			i++
-			j++
-		} else {
-			// needs[j].ID > haves[i].ID, move `i` forward
-			i++
+	for _, evt := range needs {
+		if _, exists := haveIDs[evt.ID]; !exists {
+			missingSet[evt.ID] = evt
 		}
 	}
 
-	log.Printf("Missing events: %d (Needs: %d, Haves: %d)", len(missing)+len(kind5Events), len(needs), len(haves))
-	return append(missing, kind5Events...) // Append Kind 5 events at the end
-}
+	// Convert to slice
+	missing := make([]nostr.Event, 0, len(missingSet))
+	for _, evt := range missingSet {
+		missing = append(missing, evt)
+	}
 
+	log.Printf("Missing events to store: %d (Needs: %d, Haves: %d)", len(missing), len(needs), len(haves))
+	return missing
+}
 
 // batchAndSendEvents sends events in controlled batches.
 func batchAndSendEvents(events []nostr.Event, serverCfg *configTypes.ServerConfig) {
