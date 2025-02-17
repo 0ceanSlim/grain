@@ -13,15 +13,13 @@ import (
 	nostr "grain/server/types"
 )
 
-// fetchNeeds fetches all events authored by the user from the provided relays concurrently.
 func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig) []nostr.Event {
 	var (
-		allEvents []nostr.Event
-		mu        sync.Mutex
-		wg        sync.WaitGroup
+		eventMap = make(map[string]nostr.Event) // Deduplication map
+		mu       sync.Mutex
+		wg       sync.WaitGroup
 	)
 
-	// Generate the filter based on UserSyncConfig
 	filter := generateUserSyncFilter(pubKey, syncConfig)
 
 	for _, relay := range relays {
@@ -38,13 +36,7 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 			}
 			defer conn.Close()
 
-			// Create subscription request
-			subRequest := []interface{}{
-				"REQ",
-				"sub_outbox",
-				filter,
-			}
-
+			subRequest := []interface{}{"REQ", "sub_outbox", filter}
 			requestJSON, err := json.Marshal(subRequest)
 			if err != nil {
 				log.Printf("Failed to marshal subscription request for relay %s: %v", relay, err)
@@ -55,8 +47,6 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 				log.Printf("Failed to send subscription request to relay %s: %v", relay, err)
 				return
 			}
-
-			var relayEvents []nostr.Event
 
 		outer:
 			for {
@@ -82,7 +72,11 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 							log.Printf("Failed to parse event from relay %s: %v", relay, err)
 							continue
 						}
-						relayEvents = append(relayEvents, event)
+
+						// Deduplicate events by ID
+						mu.Lock()
+						eventMap[event.ID] = event
+						mu.Unlock()
 
 					case "EOSE":
 						log.Printf("EOSE received from relay: %s", relay)
@@ -91,23 +85,22 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 				}
 			}
 
-			// Close subscription after processing
 			_ = conn.WriteMessage(websocket.TextMessage, []byte(`["CLOSE", "sub_outbox"]`))
-
-			// Append filtered events to allEvents
-			mu.Lock()
-			allEvents = append(allEvents, relayEvents...)
-			mu.Unlock()
 		}(relay)
 	}
 
 	wg.Wait()
 
-	// Sort events by created_at timestamp
+	// Convert map to slice
+	allEvents := make([]nostr.Event, 0, len(eventMap))
+	for _, evt := range eventMap {
+		allEvents = append(allEvents, evt)
+	}
+
+	// Sort by created_at
 	sort.Slice(allEvents, func(i, j int) bool {
 		return allEvents[i].CreatedAt < allEvents[j].CreatedAt
 	})
 
 	return allEvents
 }
-

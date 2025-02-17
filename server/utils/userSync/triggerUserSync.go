@@ -85,30 +85,38 @@ func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, ser
 
 // findMissingEvents compares 'have' and 'need' event lists by ID.
 func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
-	haveIDs := make(map[string]struct{}, len(haves)) // Pre-allocate for efficiency
+	haveIDs := make(map[string]struct{}, len(haves))
 
 	// Store all existing event IDs
 	for _, evt := range haves {
 		haveIDs[evt.ID] = struct{}{}
 	}
 
-	var missing []nostr.Event
-	var kind5Events []nostr.Event
+	// Use map for deduplication
+	missingMap := make(map[string]nostr.Event)
 
 	// Identify missing events
 	for _, evt := range needs {
-		if _, exists := haveIDs[evt.ID]; !exists { // If not found, it's missing
-			if evt.Kind == 5 {
-				kind5Events = append(kind5Events, evt) // Store Kind 5 separately
-			} else {
-				missing = append(missing, evt)
-			}
+		if _, exists := haveIDs[evt.ID]; !exists {
+			missingMap[evt.ID] = evt
 		}
 	}
 
-	log.Printf("Missing events: %d (Needs: %d, Haves: %d)", len(missing)+len(kind5Events), len(needs), len(haves))
-	return append(missing, kind5Events...) // Append Kind 5 events at the end
+	// Convert to slice
+	missing := make([]nostr.Event, 0, len(missingMap))
+	for _, evt := range missingMap {
+		missing = append(missing, evt)
+	}
+
+	// Sort by created_at
+	sort.Slice(missing, func(i, j int) bool {
+		return missing[i].CreatedAt < missing[j].CreatedAt
+	})
+
+	log.Printf("Missing events: %d (Needs: %d, Haves: %d)", len(missing), len(needs), len(haves))
+	return missing
 }
+
 
 // batchAndSendEvents sends events in controlled batches.
 func batchAndSendEvents(events []nostr.Event, serverCfg *configTypes.ServerConfig) {
