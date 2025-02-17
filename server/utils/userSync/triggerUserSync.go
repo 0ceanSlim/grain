@@ -85,36 +85,38 @@ func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, ser
 
 // findMissingEvents compares 'have' and 'need' event lists by ID.
 func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
-	haveIDs := make(map[string]struct{}, len(haves))
+	// Sort both lists by event ID
+	sort.Slice(haves, func(i, j int) bool { return haves[i].ID < haves[j].ID })
+	sort.Slice(needs, func(i, j int) bool { return needs[i].ID < needs[j].ID })
 
-	// Store all existing event IDs
-	for _, evt := range haves {
-		haveIDs[evt.ID] = struct{}{}
-	}
+	var missing []nostr.Event
+	var kind5Events []nostr.Event
 
-	// Use map for deduplication
-	missingMap := make(map[string]nostr.Event)
+	i, j := 0, 0 // Two pointers for sorted lists
 
-	// Identify missing events
-	for _, evt := range needs {
-		if _, exists := haveIDs[evt.ID]; !exists {
-			missingMap[evt.ID] = evt
+	// Compare sorted lists
+	for j < len(needs) {
+		// If we've exhausted 'haves', everything in 'needs' is missing
+		if i >= len(haves) || needs[j].ID < haves[i].ID {
+			// Event is missing
+			if needs[j].Kind == 5 {
+				kind5Events = append(kind5Events, needs[j])
+			} else {
+				missing = append(missing, needs[j])
+			}
+			j++
+		} else if needs[j].ID == haves[i].ID {
+			// Found a match, move both pointers
+			i++
+			j++
+		} else {
+			// needs[j].ID > haves[i].ID, move `i` forward
+			i++
 		}
 	}
 
-	// Convert to slice
-	missing := make([]nostr.Event, 0, len(missingMap))
-	for _, evt := range missingMap {
-		missing = append(missing, evt)
-	}
-
-	// Sort by created_at
-	sort.Slice(missing, func(i, j int) bool {
-		return missing[i].CreatedAt < missing[j].CreatedAt
-	})
-
-	log.Printf("Missing events: %d (Needs: %d, Haves: %d)", len(missing), len(needs), len(haves))
-	return missing
+	log.Printf("Missing events: %d (Needs: %d, Haves: %d)", len(missing)+len(kind5Events), len(needs), len(haves))
+	return append(missing, kind5Events...) // Append Kind 5 events at the end
 }
 
 
