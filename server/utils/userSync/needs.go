@@ -51,10 +51,30 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 					switch response[0] {
 					case "EVENT":
 						var event nostr.Event
-						_ = json.Unmarshal([]byte(response[2].(string)), &event)
+					
+						eventMap, ok := response[2].(map[string]interface{})
+						if !ok {
+							log.Printf("[ERROR] Unexpected event data format from relay: %+v", response[2])
+							continue
+						}
+					
+						// Convert map to JSON and unmarshal into event struct
+						eventJSON, err := json.Marshal(eventMap)
+						if err != nil {
+							log.Printf("[ERROR] Failed to marshal event data: %v", err)
+							continue
+						}
+					
+						err = json.Unmarshal(eventJSON, &event)
+						if err != nil {
+							log.Printf("[ERROR] Failed to parse event from relay: %v", err)
+							continue
+						}
+					
 						mu.Lock()
 						eventMap[event.ID] = event
 						mu.Unlock()
+					
 					case "EOSE":
 						eoseReceived = true
 					}
