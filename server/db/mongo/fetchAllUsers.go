@@ -14,21 +14,15 @@ import (
 
 // getAllAuthorsFromRelay fetches all unique authors from MongoDB.
 func GetAllAuthorsFromRelay(cfg *configTypes.ServerConfig) []string {
-	client, err := mongo.NewClient(options.Client().ApplyURI(cfg.MongoDB.URI))
-	if err != nil {
-		log.Printf("Failed to create MongoDB client: %v", err)
-		return nil
-	}
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	err = client.Connect(ctx)
-	if err != nil {
-		log.Printf("Failed to connect to MongoDB: %v", err)
-		return nil
-	}
-	defer client.Disconnect(ctx)
+    client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoDB.URI))
+    if err != nil {
+        log.Printf("Failed to connect to MongoDB: %v", err)
+        return nil
+    }
+    defer client.Disconnect(ctx)
 
 	db := client.Database(cfg.MongoDB.Database)
 	collectionNames, err := db.ListCollectionNames(ctx, bson.M{})

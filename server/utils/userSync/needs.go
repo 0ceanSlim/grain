@@ -86,11 +86,13 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 
 					case "EOSE":
 						log.Printf("EOSE received from relay: %s", relay)
-						_ = conn.WriteMessage(websocket.TextMessage, []byte(`["CLOSE", "sub_outbox"]`))
 						break outer
 					}
 				}
 			}
+
+			// Close subscription after processing
+			_ = conn.WriteMessage(websocket.TextMessage, []byte(`["CLOSE", "sub_outbox"]`))
 
 			// Append filtered events to allEvents
 			mu.Lock()
@@ -108,3 +110,4 @@ func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig
 
 	return allEvents
 }
+

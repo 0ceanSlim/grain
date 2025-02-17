@@ -45,7 +45,8 @@ func fetchHaves(pubKey, localRelayURL string, syncConfig config.UserSyncConfig) 
 		conn.SetReadDeadline(time.Now().Add(WebSocketTimeout))
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			return nil, fmt.Errorf("error reading from local relay: %w", err)
+			log.Printf("[ERROR] Error reading from local relay: %v", err)
+			break
 		}
 
 		var response []interface{}
@@ -67,9 +68,13 @@ func fetchHaves(pubKey, localRelayURL string, syncConfig config.UserSyncConfig) 
 
 			case "EOSE":
 				log.Printf("EOSE received from local relay: %s", localRelayURL)
-				_ = conn.WriteMessage(websocket.TextMessage, []byte(`["CLOSE", "sub_local"]`))
 				return localEvents, nil
 			}
 		}
 	}
+
+	// Close subscription before closing connection
+	_ = conn.WriteMessage(websocket.TextMessage, []byte(`["CLOSE", "sub_local"]`))
+	return localEvents, nil
 }
+

@@ -138,7 +138,7 @@ func EnsureIndexes(client *mongo.Client, databaseName string) error {
 				continue
 			}
 		}
-		fmt.Printf("Indexes created successfully for collection: %s\n", collectionName)
+		//fmt.Printf("Indexes created successfully for collection: %s\n", collectionName)
 	}
 
 	return nil

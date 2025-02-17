@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -109,14 +110,14 @@ func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
 	return append(missing, kind5Events...) // Append Kind 5 events at the end
 }
 
-// batchAndSendEvents batches and sends events with progress updates.
+// batchAndSendEvents sends events in controlled batches.
 func batchAndSendEvents(events []nostr.Event, serverCfg *configTypes.ServerConfig) {
 	sort.Slice(events, func(i, j int) bool {
 		return events[i].CreatedAt < events[j].CreatedAt
 	})
 
 	rateLimit := int(serverCfg.RateLimit.EventLimit)
-	batchSize := rateLimit / 2 // Send in batches of half the rate limit
+	batchSize := rateLimit / 2 // Half the rate limit
 
 	nonKind5Events := []nostr.Event{}
 	kind5Events := []nostr.Event{}
@@ -129,14 +130,25 @@ func batchAndSendEvents(events []nostr.Event, serverCfg *configTypes.ServerConfi
 		}
 	}
 
-	processBatches(nonKind5Events, batchSize, serverCfg)
-	processBatches(kind5Events, batchSize, serverCfg)
+	processBatches(nonKind5Events, batchSize, serverCfg, "Non-Kind5")
+	processBatches(kind5Events, batchSize, serverCfg, "Kind5")
 }
 
-func processBatches(events []nostr.Event, batchSize int, serverCfg *configTypes.ServerConfig) {
+// processBatches ensures batched processing of events.
+func processBatches(events []nostr.Event, batchSize int, serverCfg *configTypes.ServerConfig, label string) {
 	totalEvents := len(events)
-	successCount := 0
-	failureCount := 0
+	totalSuccess := 0
+	totalFailure := 0
+	var failedEventsLog []map[string]interface{}
+
+	localRelayURL := fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port)
+	conn, _, err := websocket.DefaultDialer.Dial(localRelayURL, nil)
+	if err != nil {
+		log.Printf("[ERROR] Failed to connect to relay WebSocket: %v", err)
+		return
+	}
+	defer conn.Close()
+
 	var mu sync.Mutex
 
 	for i := 0; i < totalEvents; i += batchSize {
@@ -146,70 +158,111 @@ func processBatches(events []nostr.Event, batchSize int, serverCfg *configTypes.
 		}
 		batch := events[i:end]
 
-		if err := sendEventsToRelay(batch, serverCfg, &successCount, &failureCount, &mu); err != nil {
-			log.Printf("Failed to send batch starting at index %d: %v", i, err)
-		}
+		successCount, failureCount, failures := sendEventsToRelay(conn, batch, &mu)
 
-		log.Printf("Progress: Sent %d/%d events", i+len(batch), totalEvents)
-		time.Sleep(time.Second) // Wait 1 second between batches
+		totalSuccess += successCount
+		totalFailure += failureCount
+		failedEventsLog = append(failedEventsLog, failures...)
+
+		log.Printf("[%s] Progress: Sent %d/%d events", label, i+len(batch), totalEvents)
+		time.Sleep(time.Second) // Rate limit delay
 	}
 
-	log.Printf("Sending complete. Success: %d, Failed: %d", successCount, failureCount)
+	log.Printf("[%s] Sending complete. Success: %d, Failed: %d", label, totalSuccess, totalFailure)
+
+	if totalFailure > 0 {
+		writeFailuresToFile(failedEventsLog)
+	}
 }
 
-// sendEventsToRelay sends a batch of events and tracks response statuses.
-func sendEventsToRelay(events []nostr.Event, serverCfg *configTypes.ServerConfig, successCount, failureCount *int, mu *sync.Mutex) error {
-	localRelayURL := fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port)
-
-	conn, _, err := websocket.DefaultDialer.Dial(localRelayURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to connect to relay WebSocket: %w", err)
-	}
-	defer func() {
-		closeMessage := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "closing connection")
-		if err := conn.WriteMessage(websocket.CloseMessage, closeMessage); err != nil {
-			log.Printf("[ERROR] Failed to send CLOSE message: %v", err)
-		}
-		conn.Close()
-	}()
+// sendEventsToRelay sends a batch of events and returns success/failure counts.
+func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mutex) (int, int, []map[string]interface{}) {
+	successCount := 0
+	failureCount := 0
+	var failedEventsLog []map[string]interface{}
 
 	for _, event := range events {
 		eventMessage := []interface{}{"EVENT", event}
 		messageJSON, err := json.Marshal(eventMessage)
 		if err != nil {
-			return fmt.Errorf("failed to marshal event: %w", err)
+			failureCount++
+			failedEventsLog = append(failedEventsLog, map[string]interface{}{
+				"error": fmt.Sprintf("Failed to marshal event: %v", err),
+				"event": event,
+			})
+			continue
 		}
 
-		if err := conn.WriteMessage(websocket.TextMessage, messageJSON); err != nil {
-			return fmt.Errorf("failed to send event: %w", err)
+		mu.Lock()
+		err = conn.WriteMessage(websocket.TextMessage, messageJSON)
+		mu.Unlock()
+
+		if err != nil {
+			failureCount++
+			failedEventsLog = append(failedEventsLog, map[string]interface{}{
+				"error": fmt.Sprintf("Failed to send event: %v", err),
+				"event": event,
+			})
+			continue
 		}
 
 		// Read response
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			return fmt.Errorf("failed to read relay response: %w", err)
+			failureCount++
+			failedEventsLog = append(failedEventsLog, map[string]interface{}{
+				"error": fmt.Sprintf("Failed to read relay response: %v", err),
+				"event": event,
+			})
+			continue
 		}
 
 		var response []interface{}
 		if err := json.Unmarshal(message, &response); err != nil || len(response) < 3 {
-			log.Printf("[ERROR] Invalid response format: %s", message)
-			mu.Lock()
-			*failureCount++
-			mu.Unlock()
+			failureCount++
+			failedEventsLog = append(failedEventsLog, map[string]interface{}{
+				"error":    "Invalid response format",
+				"response": string(message),
+				"event":    event,
+			})
 			continue
 		}
 
 		ok, okCast := response[2].(bool)
 		if okCast && ok {
-			mu.Lock()
-			*successCount++
-			mu.Unlock()
+			successCount++
 		} else {
-			mu.Lock()
-			*failureCount++
-			mu.Unlock()
+			failureCount++
+			failedEventsLog = append(failedEventsLog, map[string]interface{}{
+				"error":    "Relay rejected event",
+				"response": response,
+				"event":    event,
+			})
 		}
 	}
 
-	return nil
+	return successCount, failureCount, failedEventsLog
+}
+
+// writeFailuresToFile logs all failed events to a file in JSON format.
+func writeFailuresToFile(failedEventsLog []map[string]interface{}) {
+	logFile, err := os.OpenFile("failed.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("[ERROR] Failed to open failed.log: %v", err)
+		return
+	}
+	defer logFile.Close()
+
+	for _, failure := range failedEventsLog {
+		failureJSON, _ := json.Marshal(failure)
+		_, err := logFile.WriteString(string(failureJSON) + "\n")
+		if err != nil {
+			log.Printf("[ERROR] Failed to write to failed.log: %v", err)
+		}
+	}
+
+	err = logFile.Sync()
+	if err != nil {
+		log.Printf("[ERROR] Failed to flush failed.log: %v", err)
+	}
 }
