@@ -21,8 +21,3 @@ func GetCurrentHeapUsageMB() float64 {
 	// HeapAlloc represents bytes of allocated heap objects
 	return float64(memStats.HeapAlloc) / 1024 / 1024
 }
-
-// GetCurrentGoroutineCount returns the number of currently running goroutines
-func GetCurrentGoroutineCount() int {
-	return runtime.NumGoroutine()
-}

@@ -67,7 +67,6 @@ func WebSocketHandler(ws *websocket.Conn) {
 	maxSubs := config.GetConfig().Server.MaxSubscriptionsPerClient
 	memoryMBLimit := resourceLimits.MemoryMB
 	heapSizeMBLimit := resourceLimits.HeapSizeMB
-	maxGoroutinesLimit := resourceLimits.MaxGoroutines
 
 	// Base buffer size calculation (based on max clients and subs)
 	baseBufferSize := maxClients * maxSubs * 2
@@ -75,12 +74,10 @@ func WebSocketHandler(ws *websocket.Conn) {
 	// Get current system resource usage
 	currentMemoryUsage := utils.GetCurrentMemoryUsageMB()
 	currentHeapUsage := utils.GetCurrentHeapUsageMB()
-	currentGoroutines := utils.GetCurrentGoroutineCount()
 
 	// Calculate resource usage percentages
 	memoryUsagePercent := float64(currentMemoryUsage) / float64(memoryMBLimit)
 	heapUsagePercent := float64(currentHeapUsage) / float64(heapSizeMBLimit)
-	goroutineUsagePercent := float64(currentGoroutines) / float64(maxGoroutinesLimit)
 
 	// Adjust buffer size dynamically based on usage
 	scalingFactor := 1.0
@@ -88,9 +85,6 @@ func WebSocketHandler(ws *websocket.Conn) {
 		scalingFactor *= 0.5
 	}
 	if heapUsagePercent > 0.75 {
-		scalingFactor *= 0.5
-	}
-	if goroutineUsagePercent > 0.75 {
 		scalingFactor *= 0.5
 	}
 
