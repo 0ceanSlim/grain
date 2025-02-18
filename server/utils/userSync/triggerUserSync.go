@@ -254,11 +254,9 @@ func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mute
 	return successCount, failureCount, failedEventsLog
 }
 
-
-
 // writeFailuresToFile logs all failed events to a file in JSON format.
 func writeFailuresToFile(failedEventsLog []map[string]interface{}) {
-	filePath := "failed.log"
+	filePath := "debug.log"
 	maxSize := int64(5 * 1024 * 1024) // 5MB
 
 	logFile, _ := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)

@@ -6,4 +6,4 @@ relay_metadata.json
 grain.exe
 /build
 /logs
-failed.log
+debug.log
