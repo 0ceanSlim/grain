@@ -2,10 +2,6 @@ mongodb:
   uri: mongodb://localhost:27017/
   database: grain
 
-auth:
-  enabled: false # Enable or disable AUTH handling
-  relay_url: "wss://relay.example.com/" # Specify the relay URL
-
 server:
   port: :8181
   read_timeout: 10 # in seconds
@@ -13,6 +9,15 @@ server:
   idle_timeout: 120 # in seconds
   max_connections: 100
   max_subscriptions_per_client: 10
+
+resource_limits:
+  cpu_cores: 2 # Limit the number of CPU cores the application can use
+  memory_mb: 1024 # Cap the maximum amount of RAM in MB the application can use
+  heap_size_mb: 512 # Set a limit on the Go garbage collector's heap size in MB
+
+auth:
+  enabled: false # Enable or disable AUTH handling
+  relay_url: "wss://relay.example.com/" # Specify the relay URL
 
 UserSync:
   user_sync: false
@@ -30,16 +35,27 @@ backup_relay:
   enabled: false # Set to true to enable sending events to the backup relay
   url: "wss://some-relay.com" # URL of the backup relay
 
+event_purge:
+  enabled: false # Toggle to enable/disable event purging
+  keep_interval_hours: 24 # Number of hours to keep events before purging
+  purge_interval_minutes: 240 # Interval in minutes for running the purge
+  purge_by_category: # Configure purging based on categories
+    regular: true
+    replaceable: false
+    addressable: false
+    deprecated: true
+  purge_by_kind_enabled: false # Enable purging by specific kinds, if false, all collections will be purged
+  kinds_to_purge: # List of event kinds to explicitly purge
+    - 1
+    - 2
+    - 1000
+  exclude_whitelisted: true # Exclude events from whitelisted pubkeys during purging
+
 event_time_constraints:
   min_created_at: 1577836800 # January 1, 2020, as Unix timestamp
   # min_created_at_string: now-5m  # Custom value to indicate 5 minutes in the past
   # max_created_at: 0 # Set to 0 to use the default behavior of 'now'
   max_created_at_string: now+5m # Use a string to set a date for max created at in the future or past from current time
-
-resource_limits:
-  cpu_cores: 2 # Limit the number of CPU cores the application can use
-  memory_mb: 1024 # Cap the maximum amount of RAM in MB the application can use
-  heap_size_mb: 512 # Set a limit on the Go garbage collector's heap size in MB
 
 rate_limit:
   ws_limit: 100 # WebSocket messages per second
@@ -83,19 +99,3 @@ rate_limit:
     - kind: 3
       limit: 25
       burst: 50
-
-event_purge:
-  enabled: false # Toggle to enable/disable event purging
-  keep_interval_hours: 24 # Number of hours to keep events before purging
-  purge_interval_minutes: 240 # Interval in minutes for running the purge
-  purge_by_category: # Configure purging based on categories
-    regular: true
-    replaceable: false
-    addressable: false
-    deprecated: true
-  purge_by_kind_enabled: false # Enable purging by specific kinds, if false, all collections will be purged
-  kinds_to_purge: # List of event kinds to explicitly purge
-    - 1
-    - 2
-    - 1000
-  exclude_whitelisted: true # Exclude events from whitelisted pubkeys during purging
