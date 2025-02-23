@@ -10,7 +10,6 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	go.mongodb.org/mongo-driver v1.16.0
 	golang.org/x/net v0.27.0
-	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -38,4 +37,5 @@ require (
 	golang.org/x/text v0.16.0 // indirect
 	golang.org/x/time v0.5.0
 	gopkg.in/fsnotify.v1 v1.4.7
+	gopkg.in/yaml.v3 v3.0.1
 )
