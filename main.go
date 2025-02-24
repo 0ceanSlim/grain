@@ -13,11 +13,11 @@ import (
 	configTypes "grain/config/types"
 	relay "grain/server"
 
-	//"grain/app/src/api"
 	"grain/config"
 	"grain/server/db/mongo"
 	"grain/server/utils"
 	"grain/server/utils/userSync"
+	"grain/web/api"
 	"grain/web/handlers"
 	"grain/web/middleware"
 	"grain/web/routes"
@@ -108,6 +108,9 @@ func initApp() http.Handler {
 	mux := http.NewServeMux()
 	// Listen for ws messages or upgrade to http
 	mux.HandleFunc("/", initRoot)
+
+	// Init API Routes
+	api.RegisterAPIRoutes(mux)
 
 	// Handlers for Frontend
 	mux.HandleFunc("/do-login", handlers.LoginHandler)
