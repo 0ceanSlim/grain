@@ -1,8 +1,8 @@
 package userSync
 
 import (
-	"grain/app/src/types"
 	config "grain/config/types"
+	"grain/web/types"
 )
 
 // generateUserSyncFilter creates a SubscriptionFilter based on UserSyncConfig settings.

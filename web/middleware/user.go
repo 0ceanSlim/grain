@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"context"
-	"grain/app/src/handlers"
+	"grain/web/handlers"
 	"net/http"
 )
 

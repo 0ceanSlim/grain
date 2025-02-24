@@ -14,13 +14,13 @@ import (
 	relay "grain/server"
 
 	//"grain/app/src/api"
-	"grain/app/src/handlers"
-	"grain/app/src/middleware"
-	"grain/app/src/routes"
 	"grain/config"
 	"grain/server/db/mongo"
 	"grain/server/utils"
 	"grain/server/utils/userSync"
+	"grain/web/handlers"
+	"grain/web/middleware"
+	"grain/web/routes"
 
 	"golang.org/x/net/websocket"
 )

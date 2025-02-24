@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"grain/app/src/types"
+	"grain/web/types"
 
 	"github.com/gorilla/websocket"
 )

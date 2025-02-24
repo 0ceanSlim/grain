@@ -2,7 +2,7 @@ package userSync
 
 import (
 	"encoding/json"
-	"grain/app/src/types"
+	"grain/web/types"
 	"log"
 	"time"
 

@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"grain/app/src/middleware"
-	"grain/app/src/utils"
+	"grain/web/middleware"
+	"grain/web/utils"
 	"net/http"
 )
 
