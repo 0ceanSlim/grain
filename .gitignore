@@ -7,3 +7,4 @@ grain.exe
 /build
 /logs
 debug.log
+domain_pubkey_cache.json
