@@ -66,9 +66,6 @@ func main() {
 
 		config.SetResourceLimit(&cfg.ResourceLimits)
 
-		// Start event purging in the background.
-		go mongo.ScheduleEventPurging(cfg)
-
 		config.SetRateLimit(cfg)
 		config.SetSizeLimit(cfg)
 		config.ClearTemporaryBans()
@@ -80,6 +77,9 @@ func main() {
 
 		mux := initApp()
 		server := initRelay(cfg, mux, &wg)
+
+		// Start event purging in the background.
+		go mongo.ScheduleEventPurging(cfg)
 
 		// Start periodic user sync in a goroutine
 		go userSync.StartPeriodicUserSync(cfg)

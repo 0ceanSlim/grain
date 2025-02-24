@@ -168,6 +168,32 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig types.BlacklistConfi
 	return nil
 }
 
+// GetTemporaryBlacklist fetches all currently active temporary bans
+func GetTemporaryBlacklist() []map[string]interface{} {
+	mu.Lock()
+	defer mu.Unlock()
+
+	var tempBans []map[string]interface{}
+
+	now := time.Now()
+
+	for pubkey, entry := range tempBannedPubkeys {
+		// Check if the temp ban is still active
+		if now.Before(entry.unbanTime) {
+			tempBans = append(tempBans, map[string]interface{}{
+				"pubkey":     pubkey,
+				"expires_at": entry.unbanTime.Unix(), // Convert expiration time to Unix timestamp
+			})
+		} else {
+			// If the ban has expired, log and remove it
+			log.Printf("Removing expired temp ban for pubkey: %s", pubkey)
+			delete(tempBannedPubkeys, pubkey)
+		}
+	}
+
+	return tempBans
+}
+
 func isPubKeyPermanentlyBlacklisted(pubKey string, blacklistConfig *types.BlacklistConfig) bool {
 	if blacklistConfig == nil || !blacklistConfig.Enabled {
 		return false
