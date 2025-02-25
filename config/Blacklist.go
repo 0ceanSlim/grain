@@ -7,12 +7,13 @@ import (
 	"grain/server/utils"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"golang.org/x/net/websocket"
 	"gopkg.in/yaml.v3"
 )
 
@@ -260,11 +261,22 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 	var allPubkeys []string
 	results := make(chan []string, 1)
 
+	// Parse WebSocket URL
+	wsURL, err := url.Parse(localRelayURL)
+	if err != nil {
+		log.Printf("Invalid WebSocket URL %s: %v", localRelayURL, err)
+		return nil, err
+	}
+
+	// Construct WebSocket origin (required by `x/net/websocket`)
+	origin := "http://" + wsURL.Host
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 
-		conn, _, err := websocket.DefaultDialer.Dial(localRelayURL, nil)
+		// Dial WebSocket connection
+		conn, err := websocket.Dial(localRelayURL, "", origin)
 		if err != nil {
 			log.Printf("Failed to connect to local relay %s: %v", localRelayURL, err)
 			return
@@ -285,21 +297,27 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 			return
 		}
 
-		err = conn.WriteMessage(websocket.TextMessage, reqJSON)
-		if err != nil {
+		// Send the message
+		if _, err := conn.Write(reqJSON); err != nil {
 			log.Printf("Failed to send request to local relay %s: %v", localRelayURL, err)
 			return
 		}
 
-		// Listen for messages from the local relay.
+		// Listen for messages
 		for {
-			_, message, err := conn.ReadMessage()
+			message := make([]byte, 4096)
+			n, err := conn.Read(message)
 			if err != nil {
+				if err == io.EOF {
+					log.Println("Connection closed by the server (EOF)")
+					break
+				}
 				log.Printf("Error reading message from local relay %s: %v", localRelayURL, err)
 				break
 			}
 
-			// Log the raw message for debugging.
+			// Trim message to actual length
+			message = message[:n]
 			log.Printf("Received raw message: %s", message)
 
 			var response []interface{}
@@ -309,62 +327,36 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 				continue
 			}
 
-			// Check for "EVENT" type messages.
-			eventType, ok := response[0].(string)
-			if !ok {
-				log.Printf("Unexpected event type: %v", response[0])
-				continue
-			}
-
-			if eventType == "EOSE" {
-				// End of subscription events; send a "CLOSE" message to the relay.
-				closeReq := []interface{}{"CLOSE", subscriptionID}
-				closeReqJSON, err := json.Marshal(closeReq)
-				if err != nil {
-					log.Printf("Failed to marshal close request: %v", err)
-				} else {
-					if err = conn.WriteMessage(websocket.TextMessage, closeReqJSON); err != nil {
-						log.Printf("Failed to send close request to relay %s: %v", localRelayURL, err)
-					} else {
-						log.Println("Sent CLOSE request to end subscription.")
-
-						// Wait for a potential response or timeout
-						conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-						_, _, err = conn.ReadMessage()
-						if err != nil {
-							if err == io.EOF {
-								log.Println("Connection closed by the server after CLOSE request (EOF)")
-							} else if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-								log.Println("WebSocket closed normally after CLOSE request")
-							} else {
-								log.Printf("Unexpected error after CLOSE request: %v", err)
-							}
-						}
-					}
-				}
-
-				// Ensure we break the loop after handling EOSE
-				break
-			}
-
-			if eventType == "EVENT" {
-				// Safely cast the event data from the third element.
-				if len(response) < 3 {
-					log.Printf("Unexpected event format with insufficient data: %v", response)
-					continue
-				}
-
-				eventData, ok := response[2].(map[string]interface{})
+			
+			if len(response) > 0 {
+				eventType, ok := response[0].(string)
 				if !ok {
-					log.Printf("Expected event data to be a map, got: %T", response[2])
+					log.Printf("Unexpected event type: %v", response[0])
 					continue
 				}
 
-				// Log event data for debugging.
-				log.Printf("Event data received: %+v", eventData)
+				// Handle "EVENT"
+				if eventType == "EVENT" && len(response) >= 3 {
+					eventData, ok := response[2].(map[string]interface{})
+					if !ok {
+						log.Printf("Unexpected event data format: %v", response[2])
+						continue
+					}
 
-				pubkeys := extractPubkeysFromMuteListEvent(eventData)
-				results <- pubkeys
+					pubkeys := extractPubkeysFromMuteListEvent(eventData)
+					results <- pubkeys
+				}
+
+				// Handle "EOSE"
+				if eventType == "EOSE" {
+					closeReq := []interface{}{"CLOSE", subscriptionID}
+					closeReqJSON, _ := json.Marshal(closeReq)
+					_, _ = conn.Write(closeReqJSON)
+					log.Println("Sent CLOSE request to end subscription.")
+					break
+				}
+
+				
 			}
 		}
 	}()
@@ -374,7 +366,7 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 		close(results)
 	}()
 
-	// Collect results from the relay.
+	// Collect results
 	for pubkeys := range results {
 		mu.Lock()
 		allPubkeys = append(allPubkeys, pubkeys...)
