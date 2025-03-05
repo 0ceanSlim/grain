@@ -9,6 +9,7 @@ type EventTimeConstraints struct {
 
 type UserSyncConfig struct {
 	UserSync              bool     `yaml:"user_sync"`               // Enable/disable syncing
+	DisableAtStartup      bool     `yaml:"disable_at_startup"`      // New field
 	InitialSyncRelays     []string `yaml:"initial_sync_relays"`     // Relays for initial kind10002 fetch
 	Kinds                 []int    `yaml:"kinds"`                   // Kinds to sync
 	Categories            string   `yaml:"categories"`              // Categories to sync

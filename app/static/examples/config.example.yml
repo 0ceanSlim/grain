@@ -21,6 +21,7 @@ auth:
 
 UserSync:
   user_sync: false
+  disable_at_startup: true
   initial_sync_relays: [
       "wss://purplepag.es",
       "wss://nos.lol",

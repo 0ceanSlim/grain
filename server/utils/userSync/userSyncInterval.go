@@ -16,15 +16,14 @@ func StartPeriodicUserSync(cfg *configTypes.ServerConfig) {
 		return
 	}
 
-	// Wait 30 seconds (for app and relay to init) before the initial sync
-	//log.Println("Waiting 30 seconds before starting initial user sync...")
-	time.Sleep(30 * time.Second)
+	if cfg.UserSync.DisableAtStartup {
+		log.Println("User sync is disabled at startup. Skipping initial sync.")
+	} else {
+		time.Sleep(30 * time.Second) // Wait before initial sync
+		log.Println("Running initial user sync...")
+		runUserSync(cfg)
+	}
 
-	// Run the first sync
-	log.Println("Running initial user sync...")
-	runUserSync(cfg)
-
-	// Start periodic sync if interval is set
 	interval := cfg.UserSync.Interval
 	if interval <= 0 {
 		log.Println("User sync interval is not set. Skipping periodic sync.")
