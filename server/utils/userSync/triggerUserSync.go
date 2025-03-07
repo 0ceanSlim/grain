@@ -110,7 +110,6 @@ func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
 	return missing
 }
 
-
 // batchAndSendEvents sends events in controlled batches.
 func batchAndSendEvents(events []nostr.Event, serverCfg *configTypes.ServerConfig) {
 	sort.Slice(events, func(i, j int) bool {
@@ -176,7 +175,6 @@ func processBatches(events []nostr.Event, batchSize int, serverCfg *configTypes.
 	}
 }
 
-// sendEventsToRelay sends a batch of events and returns success/failure counts.
 // sendEventsToRelay sends a batch of events and returns success/failure counts.
 func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mutex) (int, int, []map[string]interface{}) {
 	successCount := 0
