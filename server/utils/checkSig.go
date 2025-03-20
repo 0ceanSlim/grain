@@ -9,7 +9,7 @@ import (
 
 	relay "grain/server/types"
 
-	"github.com/btcsuite/btcd/btcec/v2"
+	//"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
 
@@ -52,63 +52,56 @@ func serializeTags(tags [][]string) string {
 
 // CheckSignature verifies the event's signature and ID
 func CheckSignature(evt relay.Event) bool {
-	// Manually serialize the event
+	// Serialize event correctly
 	serializedEvent := SerializeEvent(evt)
+	if serializedEvent == "" {
+		log.Printf("Failed to serialize event")
+		return false
+	}
 
-	// Compute the SHA-256 hash of the serialized event
+	// Compute SHA-256 hash
 	hash := sha256.Sum256([]byte(serializedEvent))
 	eventID := hex.EncodeToString(hash[:])
 
-	// Log the generated and provided IDs
-	log.Printf("Generated event ID: %s, Provided event ID: %s", eventID, evt.ID)
-
-	// Compare the computed event ID with the one provided by the client
+	// Validate event ID
 	if eventID != evt.ID {
 		log.Printf("Invalid ID: expected %s, got %s", eventID, evt.ID)
 		return false
 	}
 
-	// Decode the signature from hex
+	// Decode signature
 	sigBytes, err := hex.DecodeString(evt.Sig)
-	if err != nil {
-		log.Printf("Error decoding signature: %v", err)
+	if err != nil || len(sigBytes) != 64 {
+		log.Printf("Invalid signature: %v", err)
 		return false
 	}
 
-	// Parse the Schnorr signature
+	// Parse signature
 	sig, err := schnorr.ParseSignature(sigBytes)
 	if err != nil {
 		log.Printf("Error parsing signature: %v", err)
 		return false
 	}
 
-	// Decode the public key from hex
+	// Decode public key
 	pubKeyBytes, err := hex.DecodeString(evt.PubKey)
-	if err != nil {
-		log.Printf("Error decoding public key: %v", err)
+	if err != nil || len(pubKeyBytes) != 32 {
+		log.Printf("Invalid public key length: %d", len(pubKeyBytes))
 		return false
 	}
 
-	// Since the public key is 32 bytes, prepend 0x02 (assuming y-coordinate is even)
-	if len(pubKeyBytes) == 32 {
-		pubKeyBytes = append([]byte{0x02}, pubKeyBytes...)
-	} else {
-		log.Printf("Malformed public key: invalid length: %d", len(pubKeyBytes))
-		return false
-	}
-
-	// Parse the public key
-	pubKey, err := btcec.ParsePubKey(pubKeyBytes)
+	// Parse X-only pubkey
+	pubKey, err := schnorr.ParsePubKey(pubKeyBytes)
 	if err != nil {
 		log.Printf("Error parsing public key: %v", err)
 		return false
 	}
 
-	// Verify the signature using the event's hash and public key
-	verified := sig.Verify(hash[:], pubKey)
-	if !verified {
+	// Verify signature
+	if !sig.Verify(hash[:], pubKey) {
 		log.Printf("Signature verification failed for event ID: %s", evt.ID)
+		return false
 	}
 
-	return verified
+	return true
 }
