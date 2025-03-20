@@ -3,9 +3,8 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
+	"encoding/json"
 	"log"
-	"strings"
 
 	relay "grain/server/types"
 
@@ -13,41 +12,22 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
 
-// EscapeSpecialChars escapes special characters in the content according to NIP-01
-func EscapeSpecialChars(content string) string {
-	content = strings.ReplaceAll(content, "\\", "\\\\")
-	content = strings.ReplaceAll(content, "\"", "\\\"")
-	content = strings.ReplaceAll(content, "\n", "\\n")
-	content = strings.ReplaceAll(content, "\r", "\\r")
-	content = strings.ReplaceAll(content, "\t", "\\t")
-	content = strings.ReplaceAll(content, "\b", "\\b")
-	content = strings.ReplaceAll(content, "\f", "\\f")
-	return content
-}
-
 // SerializeEvent manually constructs the JSON string for event serialization according to NIP-01
 func SerializeEvent(evt relay.Event) string {
-	// Escape special characters in the content
-	escapedContent := EscapeSpecialChars(evt.Content)
-
-	// Manually construct the event data as a JSON array string
-	return fmt.Sprintf(
-		`[0,"%s",%d,%d,%s,"%s"]`,
+	eventData := []interface{}{
+		0,
 		evt.PubKey,
 		evt.CreatedAt,
 		evt.Kind,
-		serializeTags(evt.Tags),
-		escapedContent, // Special characters are escaped
-	)
-}
-
-// Helper function to serialize the tags array
-func serializeTags(tags [][]string) string {
-	var tagStrings []string
-	for _, tag := range tags {
-		tagStrings = append(tagStrings, fmt.Sprintf(`["%s"]`, strings.Join(tag, `","`)))
+		evt.Tags,
+		evt.Content,
 	}
-	return "[" + strings.Join(tagStrings, ",") + "]"
+	jsonBytes, err := json.Marshal(eventData)
+	if err != nil {
+		log.Printf("Error serializing event: %v", err)
+		return ""
+	}
+	return string(jsonBytes)
 }
 
 // CheckSignature verifies the event's signature and ID
