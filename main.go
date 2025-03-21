@@ -30,19 +30,17 @@ func main() {
 	// Initialize logger from config
 	utils.InitializeLogger("config.yml")
 
-	utils.Log.Info("Relay started")
-	utils.Log.Debug("Processing event", "event_id", "1234")
-	utils.Log.Warn("Potential issue detected", "details", "slow response")
-	utils.Log.Error("Critical failure", "error", "database unreachable")
+	// Set component for main
+	utils.SetComponent("main")
 
 	utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
-	//utils.EnsureFileExists("whitelist.yml", "app/static/examples/whitelist.example.yml")
+	utils.EnsureFileExists("whitelist.yml", "app/static/examples/whitelist.example.yml")
 	utils.EnsureFileExists("blacklist.yml", "app/static/examples/blacklist.example.yml")
 	utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
 
 	restartChan := make(chan struct{})
 	go config.WatchConfigFile("config.yml", restartChan)
-	//go config.WatchConfigFile("whitelist.yml", restartChan)
+	go config.WatchConfigFile("whitelist.yml", restartChan)
 	go config.WatchConfigFile("blacklist.yml", restartChan)
 	go config.WatchConfigFile("relay_metadata.json", restartChan)
 
