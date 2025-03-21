@@ -2,10 +2,11 @@ package config
 
 import (
 	"fmt"
-	nostr "grain/server/types"
-	"grain/server/utils"
 	"log"
 	"strconv"
+
+	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils"
 )
 
 // CheckWhitelist checks if an event meets the whitelist criteria.

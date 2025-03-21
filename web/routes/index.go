@@ -1,9 +1,10 @@
 package routes
 
 import (
-	"grain/web/middleware"
-	"grain/web/utils"
 	"net/http"
+
+	"github.com/0ceanslim/grain/web/middleware"
+	"github.com/0ceanslim/grain/web/utils"
 )
 
 func IndexHandler(w http.ResponseWriter, r *http.Request) {

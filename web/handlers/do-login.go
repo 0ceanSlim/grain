@@ -2,7 +2,8 @@ package handlers
 
 import (
 	"fmt"
-	"grain/config"
+
+	"github.com/0ceanslim/grain/config"
 
 	"encoding/json"
 	"log"

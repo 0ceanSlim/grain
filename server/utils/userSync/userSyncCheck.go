@@ -2,11 +2,12 @@ package userSync
 
 import (
 	"fmt"
-	"grain/config"
 	"log"
 
-	configTypes "grain/config/types"
-	nostr "grain/server/types"
+	"github.com/0ceanslim/grain/config"
+
+	configTypes "github.com/0ceanslim/grain/config/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 )
 
 // UserSyncCheck determines if a user is new and triggers the initial sync if necessary.

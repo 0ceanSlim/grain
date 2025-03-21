@@ -2,8 +2,9 @@ package middleware
 
 import (
 	"context"
-	"grain/web/handlers"
 	"net/http"
+
+	"github.com/0ceanslim/grain/web/handlers"
 )
 
 type contextKey string

@@ -4,9 +4,9 @@ import (
 	"os"
 	"sync"
 
-	configTypes "grain/config/types"
+	configTypes "github.com/0ceanslim/grain/config/types"
 
-	"grain/server/utils"
+	"github.com/0ceanslim/grain/server/utils"
 
 	"gopkg.in/yaml.v3"
 )

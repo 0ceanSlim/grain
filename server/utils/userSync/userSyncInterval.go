@@ -4,9 +4,9 @@ import (
 	"log"
 	"time"
 
-	"grain/config"
-	configTypes "grain/config/types"
-	"grain/server/db/mongo"
+	"github.com/0ceanslim/grain/config"
+	configTypes "github.com/0ceanslim/grain/config/types"
+	"github.com/0ceanslim/grain/server/db/mongo"
 )
 
 // Periodically triggers user sync based on config interval.

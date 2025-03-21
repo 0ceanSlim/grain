@@ -1,8 +1,9 @@
 package utils
 
 import (
-	relay "grain/server/types"
 	"regexp"
+
+	relay "github.com/0ceanslim/grain/server/types"
 )
 
 // isValidHex validates if the given string is a 64-character lowercase hex string

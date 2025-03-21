@@ -2,9 +2,10 @@ package utils
 
 import (
 	"fmt"
-	config "grain/config/types"
 	"strings"
 	"time"
+
+	config "github.com/0ceanslim/grain/config/types"
 )
 
 // Adjusts the event time constraints based on the configuration

@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	nostr "grain/server/types" // Adjust import path as needed
+
+	nostr "github.com/0ceanslim/grain/server/types" // Adjust import path as needed
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

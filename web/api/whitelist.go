@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"grain/config"
-	"grain/server/utils"
+	"github.com/0ceanslim/grain/config"
+	"github.com/0ceanslim/grain/server/utils"
 )
 
 // GetAllWhitelistedPubkeys handles the request to return all whitelisted pubkeys

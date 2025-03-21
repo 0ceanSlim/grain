@@ -8,8 +8,8 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	configTypes "grain/config/types"
-	nostr "grain/server/types"
+	configTypes "github.com/0ceanslim/grain/config/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 )
 
 // storeUserOutboxes forwards the event to the local relay via WebSocket and ensures graceful closure.

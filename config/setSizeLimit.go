@@ -3,7 +3,7 @@ package config
 import (
 	"sync"
 
-	config "grain/config/types"
+	config "github.com/0ceanslim/grain/config/types"
 )
 
 type SizeLimiter struct {

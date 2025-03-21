@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"grain/web/types"
+	"github.com/0ceanslim/grain/web/types"
 
 	"github.com/gorilla/websocket"
 )

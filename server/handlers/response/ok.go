@@ -1,7 +1,7 @@
 package response
 
 import (
-	relay "grain/server/types"
+	relay "github.com/0ceanslim/grain/server/types"
 )
 
 // SendOK sends an "OK" response to the client

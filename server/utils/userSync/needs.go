@@ -8,8 +8,8 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	config "grain/config/types"
-	nostr "grain/server/types"
+	config "github.com/0ceanslim/grain/config/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 )
 
 // fetchNeeds fetches all events authored by the user from the provided relays concurrently.

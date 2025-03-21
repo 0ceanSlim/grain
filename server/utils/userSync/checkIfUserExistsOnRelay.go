@@ -2,13 +2,14 @@ package userSync
 
 import (
 	"encoding/json"
-	"grain/web/types"
 	"log"
 	"time"
 
+	"github.com/0ceanslim/grain/web/types"
+
 	"github.com/gorilla/websocket"
 
-	nostr "grain/server/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 )
 
 // CheckIfUserExistsOnRelay checks if a user exists on the relay by their pubkey.

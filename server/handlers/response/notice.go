@@ -1,7 +1,7 @@
 package response
 
 import (
-	relay "grain/server/types"
+	relay "github.com/0ceanslim/grain/server/types"
 )
 
 // SendNotice sends a notice message to the client

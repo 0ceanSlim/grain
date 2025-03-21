@@ -3,11 +3,12 @@ package mongo
 import (
 	"context"
 	"fmt"
-	"grain/server/db/mongo/kinds"
-	"grain/server/handlers/response"
-	relay "grain/server/types"
 
-	"grain/config"
+	"github.com/0ceanslim/grain/server/db/mongo/kinds"
+	"github.com/0ceanslim/grain/server/handlers/response"
+	relay "github.com/0ceanslim/grain/server/types"
+
+	"github.com/0ceanslim/grain/config"
 )
 
 // StoreMongoEvent processes and stores an event based on its kind

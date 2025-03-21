@@ -1,8 +1,9 @@
 package tests
 
 import (
-	"grain/config"
 	"testing"
+
+	"github.com/0ceanslim/grain/config"
 )
 
 func TestSizeLimiterGlobalMaxSize(t *testing.T) {
@@ -26,7 +27,7 @@ func TestSizeLimiterGlobalMaxSize(t *testing.T) {
 
 func TestSizeLimiterKindSpecificSize(t *testing.T) {
 	sizeLimiter := config.NewSizeLimiter(1024) // Set global max size to 1024 bytes
-	sizeLimiter.AddKindSizeLimit(1, 512)      // Set max size for kind 1 to 512 bytes
+	sizeLimiter.AddKindSizeLimit(1, 512)       // Set max size for kind 1 to 512 bytes
 
 	// Test that an event within the kind-specific max size is allowed
 	if allowed, _ := sizeLimiter.AllowSize(1, 256); !allowed {

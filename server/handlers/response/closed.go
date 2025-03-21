@@ -1,7 +1,7 @@
 package response
 
 import (
-	relay "grain/server/types"
+	relay "github.com/0ceanslim/grain/server/types"
 )
 
 // SendClosed sends a "CLOSED" response to the client

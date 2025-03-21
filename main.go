@@ -10,17 +10,17 @@ import (
 	"syscall"
 	"time"
 
-	configTypes "grain/config/types"
-	relay "grain/server"
+	configTypes "github.com/0ceanslim/grain/config/types"
+	relay "github.com/0ceanslim/grain/server"
 
-	"grain/config"
-	"grain/server/db/mongo"
-	"grain/server/utils"
-	"grain/server/utils/userSync"
-	"grain/web/api"
-	"grain/web/handlers"
-	"grain/web/middleware"
-	"grain/web/routes"
+	"github.com/0ceanslim/grain/config"
+	"github.com/0ceanslim/grain/server/db/mongo"
+	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/server/utils/userSync"
+	"github.com/0ceanslim/grain/web/api"
+	"github.com/0ceanslim/grain/web/handlers"
+	"github.com/0ceanslim/grain/web/middleware"
+	"github.com/0ceanslim/grain/web/routes"
 
 	"golang.org/x/net/websocket"
 )

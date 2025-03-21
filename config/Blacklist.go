@@ -3,8 +3,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	types "grain/config/types"
-	"grain/server/utils"
 	"io"
 	"log"
 	"net/url"
@@ -12,6 +10,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	types "github.com/0ceanslim/grain/config/types"
+	"github.com/0ceanslim/grain/server/utils"
 
 	"golang.org/x/net/websocket"
 	"gopkg.in/yaml.v3"
@@ -327,7 +328,6 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 				continue
 			}
 
-			
 			if len(response) > 0 {
 				eventType, ok := response[0].(string)
 				if !ok {
@@ -356,7 +356,6 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 					break
 				}
 
-				
 			}
 		}
 	}()

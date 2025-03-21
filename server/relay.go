@@ -7,14 +7,15 @@ import (
 	"time"
 
 	//"fmt"
-	"grain/config"
-	"grain/server/handlers"
-	relay "grain/server/types"
-	"grain/server/utils"
 	"io"
 	"log"
 	"strings"
 	"sync"
+
+	"github.com/0ceanslim/grain/config"
+	"github.com/0ceanslim/grain/server/handlers"
+	relay "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils"
 
 	"golang.org/x/net/websocket"
 )

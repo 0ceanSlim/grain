@@ -4,16 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"grain/config"
-	"grain/server/db/mongo"
-	"grain/server/utils/userSync"
 	"log"
 	"time"
 
-	"grain/server/handlers/response"
-	"grain/server/utils"
+	"github.com/0ceanslim/grain/config"
+	"github.com/0ceanslim/grain/server/db/mongo"
+	"github.com/0ceanslim/grain/server/utils/userSync"
 
-	relay "grain/server/types"
+	"github.com/0ceanslim/grain/server/handlers/response"
+	"github.com/0ceanslim/grain/server/utils"
+
+	relay "github.com/0ceanslim/grain/server/types"
 
 	"golang.org/x/net/websocket"
 )

@@ -6,7 +6,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	configTypes "grain/config/types"
+	configTypes "github.com/0ceanslim/grain/config/types"
 )
 
 func SetResourceLimit(cfg *configTypes.ResourceLimits) {

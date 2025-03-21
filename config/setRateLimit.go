@@ -2,8 +2,9 @@ package config
 
 import (
 	"fmt"
-	config "grain/config/types"
 	"sync"
+
+	config "github.com/0ceanslim/grain/config/types"
 
 	"golang.org/x/time/rate"
 )

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	config "grain/config/types"
+	config "github.com/0ceanslim/grain/config/types"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

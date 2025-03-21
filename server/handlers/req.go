@@ -2,11 +2,12 @@ package handlers
 
 import (
 	"fmt"
-	"grain/config"
-	"grain/server/db/mongo"
-	"grain/server/handlers/response"
-	relay "grain/server/types"
-	"grain/server/utils"
+
+	"github.com/0ceanslim/grain/config"
+	"github.com/0ceanslim/grain/server/db/mongo"
+	"github.com/0ceanslim/grain/server/handlers/response"
+	relay "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils"
 )
 
 // HandleReq processes a new subscription request

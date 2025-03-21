@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	configTypes "grain/config/types"
-	nostr "grain/server/types"
+	configTypes "github.com/0ceanslim/grain/config/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 
 	"github.com/gorilla/websocket"
 )

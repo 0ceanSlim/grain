@@ -3,7 +3,7 @@ package tests
 import (
 	"testing"
 
-	"grain/config"
+	"github.com/0ceanslim/grain/config"
 
 	"golang.org/x/time/rate"
 )

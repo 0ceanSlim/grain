@@ -2,8 +2,9 @@ package handlers
 
 import (
 	"fmt"
-	"grain/server/handlers/response"
-	relay "grain/server/types"
+
+	"github.com/0ceanslim/grain/server/handlers/response"
+	relay "github.com/0ceanslim/grain/server/types"
 )
 
 // HandleClose processes a "CLOSE" message from a client

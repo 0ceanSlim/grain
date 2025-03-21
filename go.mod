@@ -1,4 +1,4 @@
-module grain
+module github.com/0ceanslim/grain
 
 go 1.23
 

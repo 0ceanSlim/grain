@@ -6,8 +6,8 @@ import (
 	"log"
 	"net/http"
 
-	"grain/config"
-	"grain/server/utils"
+	"github.com/0ceanslim/grain/config"
+	"github.com/0ceanslim/grain/server/utils"
 )
 
 // GetAllBlacklistedPubkeys returns a full list of blacklisted pubkeys, including mutelist authors
@@ -73,4 +73,3 @@ func GetAllBlacklistedPubkeys(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
-

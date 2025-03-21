@@ -3,9 +3,10 @@ package kinds
 import (
 	"context"
 	"fmt"
-	"grain/server/handlers/response"
-	relay "grain/server/types"
 	"strings"
+
+	"github.com/0ceanslim/grain/server/handlers/response"
+	relay "github.com/0ceanslim/grain/server/types"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

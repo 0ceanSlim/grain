@@ -2,13 +2,14 @@ package userSync
 
 import (
 	"encoding/json"
-	"grain/web/types"
 	"log"
 	"time"
 
+	"github.com/0ceanslim/grain/web/types"
+
 	"github.com/gorilla/websocket"
 
-	nostr "grain/server/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 )
 
 // fetchUserOutboxes fetches Kind 10002 events from a set of relays.

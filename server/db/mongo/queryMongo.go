@@ -3,7 +3,8 @@ package mongo
 import (
 	"context"
 	"fmt"
-	relay "grain/server/types"
+
+	relay "github.com/0ceanslim/grain/server/types"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

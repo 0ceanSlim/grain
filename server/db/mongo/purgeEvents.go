@@ -3,13 +3,14 @@ package mongo
 import (
 	"context"
 	"fmt"
-	"grain/config"
-	types "grain/config/types"
-	nostr "grain/server/types"
-	"grain/server/utils"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/0ceanslim/grain/config"
+	types "github.com/0ceanslim/grain/config/types"
+	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"grain/config"
-	"grain/server/handlers/response"
-	relay "grain/server/types"
-	"grain/server/utils"
 	"sync"
 	"time"
+
+	"github.com/0ceanslim/grain/config"
+	"github.com/0ceanslim/grain/server/handlers/response"
+	relay "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils"
 )
 
 // Mutex to protect auth data

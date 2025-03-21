@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"log"
 
-	relay "grain/server/types"
+	relay "github.com/0ceanslim/grain/server/types"
 
 	//"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"

@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
-	config "grain/config/types"
-	nostr "grain/server/types"
+	config "github.com/0ceanslim/grain/config/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 
 	"github.com/gorilla/websocket"
 )
@@ -81,4 +81,3 @@ func fetchHaves(pubKey, localRelayURL string, syncConfig config.UserSyncConfig) 
 	_ = conn.WriteMessage(websocket.TextMessage, []byte(`["CLOSE", "sub_local"]`))
 	return localEvents, nil
 }
-
