@@ -23,18 +23,7 @@ type LogConfig struct {
 }
 
 // Logger instance
-var Logger *slog.Logger
-
-// ANSI color codes for terminal output
-var levelColors = map[slog.Level]string{
-	slog.LevelDebug: "\033[36m", // Cyan
-	slog.LevelInfo:  "\033[32m", // Green
-	slog.LevelWarn:  "\033[33m", // Yellow
-	slog.LevelError: "\033[31m", // Red
-}
-
-// Reset color (outside of the map)
-const colorReset = "\033[0m"
+var Log *slog.Logger
 
 // MultiHandler sends logs to multiple handlers
 type MultiHandler struct {
@@ -105,23 +94,46 @@ func InitializeLogger(configPath string) {
 		os.Exit(1)
 	}
 
-	// Define handlers
-	fileHandler := slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: logLevel})
-	consoleHandler := NewColorConsoleHandler(os.Stdout, logLevel)
-	Logger = slog.New(MultiHandler{handlers: []slog.Handler{fileHandler, consoleHandler}})
+	// Define handlers using `SimpleLogHandler`
+	fileHandler := &SimpleLogHandler{output: logFile, level: logLevel}
+	consoleHandler := &SimpleLogHandler{output: nil, level: logLevel} // No file output for console
 
-	// Start log trimming in a separate goroutine
-	go func() {
-		for {
-			TrimLogFile(cfg.Logging.File, cfg.Logging.MaxSizeMB)
-			time.Sleep(10 * time.Second) // Check every 10 seconds
-		}
-	}()
+	// Set global Log variable
+	Log = slog.New(MultiHandler{handlers: []slog.Handler{fileHandler, consoleHandler}})
+}
+
+type CustomErrorHandler struct {
+	Handler slog.Handler
+}
+
+// Handle modifies error messages before passing to the base handler
+func (h CustomErrorHandler) Handle(ctx context.Context, r slog.Record) error {
+	if r.Level == slog.LevelError {
+		// Iterate over attributes to find an error
+		r.Attrs(func(attr slog.Attr) bool {
+			if err, ok := attr.Value.Any().(error); ok {
+				r.Message = err.Error() // Set error message
+			}
+			return true // Continue iteration
+		})
+	}
+	return h.Handler.Handle(ctx, r)
+}
+
+// Other required methods for Handler interface
+func (h CustomErrorHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.Handler.Enabled(ctx, level)
+}
+func (h CustomErrorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return CustomErrorHandler{Handler: h.Handler.WithAttrs(attrs)}
+}
+func (h CustomErrorHandler) WithGroup(name string) slog.Handler {
+	return CustomErrorHandler{Handler: h.Handler.WithGroup(name)}
 }
 
 // GetLogger returns a logger with a specific component field
 func GetLogger(component string) *slog.Logger {
-	return Logger.With("component", component)
+	return Log.With("component", fmt.Sprintf("[%s]", component))
 }
 
 // NewColorConsoleHandler returns a handler that adds color coding to console logs
@@ -129,12 +141,15 @@ func NewColorConsoleHandler(output *os.File, level slog.Level) slog.Handler {
 	return slog.NewTextHandler(output, &slog.HandlerOptions{
 		Level: level,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-			// Colorize the level field
-			if a.Key == slog.LevelKey {
-				level, _ := a.Value.Any().(slog.Level) // Ensure type safety
-				if color, exists := levelColors[level]; exists {
-					a.Value = slog.StringValue(color + strings.ToUpper(a.Value.String()) + colorReset)
-				}
+			switch a.Key {
+			case slog.TimeKey: // Format timestamp without key
+				a.Value = slog.StringValue(a.Value.Time().Format(time.RFC3339))
+			case slog.LevelKey: // Format level as [LEVEL]
+				a.Value = slog.StringValue(fmt.Sprintf("[%s]", strings.ToUpper(a.Value.String())))
+			case slog.MessageKey: // Keep message clean (remove "msg=" prefix)
+				return a // No modification needed
+			default:
+				return slog.Attr{} // Remove all other attributes (component, etc.)
 			}
 			return a
 		},
@@ -182,4 +197,117 @@ func TrimLogFile(filePath string, maxSizeMB int) {
 			fmt.Println("Log file trimmed successfully")
 		}
 	}
+}
+
+type LogFormatterHandler struct {
+	Handler slog.Handler
+}
+
+func (h LogFormatterHandler) Handle(ctx context.Context, r slog.Record) error {
+	// Manually format log entry
+	var b strings.Builder
+
+	// Format timestamp
+	b.WriteString(r.Time.Format(time.RFC3339))
+	b.WriteString(" ")
+
+	// Format log level as [LEVEL]
+	b.WriteString(fmt.Sprintf("[%s] ", strings.ToUpper(r.Level.String())))
+
+	// Append message
+	b.WriteString(r.Message)
+
+	// Handle extra attributes (optional)
+	r.Attrs(func(attr slog.Attr) bool {
+		b.WriteString(fmt.Sprintf(" %v", attr.Value))
+		return true
+	})
+
+	// Write to both console and file
+	fmt.Fprintln(os.Stdout, b.String()) // ✅ Print to console
+
+	// Write to file using the actual handler
+	r = slog.Record{
+		Time:    r.Time,
+		Level:   r.Level,
+		Message: b.String(),
+	}
+	return h.Handler.Handle(ctx, r) // ✅ Ensure logs are sent to the file handler
+}
+
+
+// Required interface methods
+func (h LogFormatterHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.Handler.Enabled(ctx, level)
+}
+func (h LogFormatterHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return LogFormatterHandler{Handler: h.Handler.WithAttrs(attrs)}
+}
+func (h LogFormatterHandler) WithGroup(name string) slog.Handler {
+	return LogFormatterHandler{Handler: h.Handler.WithGroup(name)}
+}
+
+type SimpleLogHandler struct {
+	output *os.File
+	level  slog.Level
+}
+
+func (h *SimpleLogHandler) Handle(ctx context.Context, r slog.Record) error {
+	var b strings.Builder
+
+	// Format timestamp
+	b.WriteString(r.Time.Format(time.RFC3339))
+	b.WriteString(" ")
+
+	// Format log level as [LEVEL]
+	b.WriteString(fmt.Sprintf("[%s] ", strings.ToUpper(r.Level.String())))
+
+	// Check for component
+	var component string
+	r.Attrs(func(attr slog.Attr) bool {
+		if attr.Key == "component" {
+			component = attr.Value.String()
+			return false // Stop iterating
+		}
+		return true
+	})
+
+	// Append component if it exists
+	if component != "" {
+		b.WriteString(component + " ")
+	}
+
+	// Append message
+	b.WriteString(r.Message)
+
+	// Handle extra attributes (optional)
+	r.Attrs(func(attr slog.Attr) bool {
+		if attr.Key != "component" { // Avoid duplicate component printing
+			b.WriteString(fmt.Sprintf(" %v", attr.Value))
+		}
+		return true
+	})
+
+	// Write to console
+	fmt.Println(b.String())
+
+	// Write to file if enabled
+	if h.output != nil {
+		fmt.Fprintln(h.output, b.String())
+	}
+
+	return nil
+}
+
+// Required interface methods
+func (h *SimpleLogHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= h.level
+}
+
+func (h *SimpleLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return h // No structured attributes needed
+}
+
+func (h *SimpleLogHandler) WithGroup(name string) slog.Handler {
+	return h // No grouping needed
 }

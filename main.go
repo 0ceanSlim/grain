@@ -30,21 +30,19 @@ func main() {
 	// Initialize logger from config
 	utils.InitializeLogger("config.yml")
 
-	// Example usage
-	log := utils.GetLogger("relay")
-	log.Info("Relay started")
-	log.Debug("Processing event", "event_id", "1234")
-	log.Warn("Potential issue detected", "details", "slow response")
-	log.Error("Critical failure", "error", "database unreachable")
+	utils.Log.Info("Relay started")
+	utils.Log.Debug("Processing event", "event_id", "1234")
+	utils.Log.Warn("Potential issue detected", "details", "slow response")
+	utils.Log.Error("Critical failure", "error", "database unreachable")
 
 	utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
-	utils.EnsureFileExists("whitelist.yml", "app/static/examples/whitelist.example.yml")
+	//utils.EnsureFileExists("whitelist.yml", "app/static/examples/whitelist.example.yml")
 	utils.EnsureFileExists("blacklist.yml", "app/static/examples/blacklist.example.yml")
 	utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
 
 	restartChan := make(chan struct{})
 	go config.WatchConfigFile("config.yml", restartChan)
-	go config.WatchConfigFile("whitelist.yml", restartChan)
+	//go config.WatchConfigFile("whitelist.yml", restartChan)
 	go config.WatchConfigFile("blacklist.yml", restartChan)
 	go config.WatchConfigFile("relay_metadata.json", restartChan)
 
@@ -57,22 +55,22 @@ func main() {
 
 		cfg, err := config.LoadConfig("config.yml")
 		if err != nil {
-			log.Error("Error loading config: ", "error", err)
+			utils.Log.Error(err.Error())
 		}
 
 		_, err = config.LoadWhitelistConfig("whitelist.yml")
 		if err != nil {
-			log.Error("Error loading whitelist config: ", "error", err)
+			utils.Log.Error(err.Error())
 		}
 
 		_, err = config.LoadBlacklistConfig("blacklist.yml")
 		if err != nil {
-			log.Error("Error loading blacklist config: ", "error", err)
+			utils.Log.Error(err.Error())
 		}
 
 		client, err := mongo.InitDB(cfg)
 		if err != nil {
-			log.Error("Error initializing database: ", "error", err)
+			utils.Log.Error(err.Error())
 		}
 
 		config.SetResourceLimit(&cfg.ResourceLimits)
@@ -83,7 +81,7 @@ func main() {
 
 		err = utils.LoadRelayMetadataJSON()
 		if err != nil {
-			log.Error("Failed to load relay metadata: ", "error", err)
+			utils.Log.Error(err.Error())
 		}
 
 		mux := initApp()
@@ -98,7 +96,7 @@ func main() {
 		// Monitor for server restart or shutdown signals.
 		select {
 		case <-restartChan:
-			log.Info("Restarting server...")
+			utils.Log.Info("Restarting server...")
 			config.ResetConfig()
 			config.ResetWhitelistConfig()
 			config.ResetBlacklistConfig()
@@ -106,7 +104,7 @@ func main() {
 			wg.Wait()
 			time.Sleep(3 * time.Second)
 		case <-signalChan:
-			log.Info("Shutting down server...")
+			utils.Log.Info("Shutting down server...")
 			server.Close()
 			mongo.DisconnectDB(client)
 			wg.Wait()
@@ -168,7 +166,7 @@ func initRelay(config *configTypes.ServerConfig, handler http.Handler, wg *sync.
 		fmt.Printf("Server is running on http://localhost%s\n", config.Server.Port)
 		err := server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
-			fmt.Println("Error starting server:", err)
+			utils.Log.Error(err.Error())
 		}
 	}()
 
