@@ -1,3 +1,8 @@
+logging:
+  level: "debug" # Log levels: "debug", "info", "warn", "error"
+  file: "debug.log" # Log file location
+  max_log_size_mb: 10 # Maximum log file size in MB before trimming
+
 mongodb:
   uri: mongodb://localhost:27017/
   database: grain

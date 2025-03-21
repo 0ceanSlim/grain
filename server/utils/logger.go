@@ -1,11 +1,13 @@
 package utils
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -15,8 +17,9 @@ type Config struct {
 }
 
 type LogConfig struct {
-	Level string `yaml:"level"`
-	File  string `yaml:"file"`
+	Level     string `yaml:"level"`
+	File      string `yaml:"file"`
+	MaxSizeMB int    `yaml:"max_log_size_mb"`
 }
 
 // Logger instance
@@ -87,13 +90,8 @@ func InitializeLogger(configPath string) {
 		os.Exit(1)
 	}
 
-	// Debug: Print loaded config
-	fmt.Printf("Loaded config: %+v\n", cfg)
-
-	// Trim spaces and convert level to lowercase
+	// Convert log level
 	cfg.Logging.Level = strings.TrimSpace(strings.ToLower(cfg.Logging.Level))
-
-	// Convert log level using slog's built-in function
 	var logLevel slog.Level
 	if err := logLevel.UnmarshalText([]byte(cfg.Logging.Level)); err != nil {
 		fmt.Printf("Invalid log level in config: %s\n", cfg.Logging.Level)
@@ -107,12 +105,18 @@ func InitializeLogger(configPath string) {
 		os.Exit(1)
 	}
 
-	// Define handlers for file and console output
+	// Define handlers
 	fileHandler := slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: logLevel})
 	consoleHandler := NewColorConsoleHandler(os.Stdout, logLevel)
-
-	// Use MultiHandler to log to both file and console
 	Logger = slog.New(MultiHandler{handlers: []slog.Handler{fileHandler, consoleHandler}})
+
+	// Start log trimming in a separate goroutine
+	go func() {
+		for {
+			TrimLogFile(cfg.Logging.File, cfg.Logging.MaxSizeMB)
+			time.Sleep(10 * time.Second) // Check every 10 seconds
+		}
+	}()
 }
 
 // GetLogger returns a logger with a specific component field
@@ -135,4 +139,47 @@ func NewColorConsoleHandler(output *os.File, level slog.Level) slog.Handler {
 			return a
 		},
 	})
+}
+
+// TrimLogFile checks log size and trims the oldest 20% if needed
+func TrimLogFile(filePath string, maxSizeMB int) {
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		fmt.Printf("Error checking log file: %v\n", err)
+		return
+	}
+
+	// Convert max size to bytes
+	maxSizeBytes := maxSizeMB * 1024 * 1024
+
+	// If file size exceeds the limit, start trimming
+	if fileInfo.Size() > int64(maxSizeBytes) {
+		fmt.Println("Log file size exceeded limit, trimming...")
+
+		// Read all lines
+		file, err := os.Open(filePath)
+		if err != nil {
+			fmt.Printf("Error opening log file: %v\n", err)
+			return
+		}
+		defer file.Close()
+
+		var lines []string
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			lines = append(lines, scanner.Text())
+		}
+
+		// Calculate how many lines to keep (80%)
+		trimCount := len(lines) / 5 // 20% to remove
+		remainingLines := lines[trimCount:]
+
+		// Reopen file in write mode and overwrite it with trimmed logs
+		err = os.WriteFile(filePath, []byte(strings.Join(remainingLines, "\n")+"\n"), 0644)
+		if err != nil {
+			fmt.Printf("Error writing trimmed log file: %v\n", err)
+		} else {
+			fmt.Println("Log file trimmed successfully")
+		}
+	}
 }
