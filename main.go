@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	//"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -26,6 +26,17 @@ import (
 )
 
 func main() {
+
+	// Initialize logger from config
+	utils.InitializeLogger("config.yml")
+
+	// Example usage
+	log := utils.GetLogger("relay")
+	log.Info("Relay started")
+	log.Debug("Processing event", "event_id", "1234")
+	log.Warn("Potential issue detected", "details", "slow response")
+	log.Error("Critical failure", "error", "database unreachable")
+
 	utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
 	utils.EnsureFileExists("whitelist.yml", "app/static/examples/whitelist.example.yml")
 	utils.EnsureFileExists("blacklist.yml", "app/static/examples/blacklist.example.yml")
@@ -46,22 +57,22 @@ func main() {
 
 		cfg, err := config.LoadConfig("config.yml")
 		if err != nil {
-			log.Fatal("Error loading config: ", err)
+			log.Error("Error loading config: ", "error", err)
 		}
 
 		_, err = config.LoadWhitelistConfig("whitelist.yml")
 		if err != nil {
-			log.Fatal("Error loading whitelist config: ", err)
+			log.Error("Error loading whitelist config: ", "error", err)
 		}
 
 		_, err = config.LoadBlacklistConfig("blacklist.yml")
 		if err != nil {
-			log.Fatal("Error loading blacklist config: ", err)
+			log.Error("Error loading blacklist config: ", "error", err)
 		}
 
 		client, err := mongo.InitDB(cfg)
 		if err != nil {
-			log.Fatal("Error initializing database: ", err)
+			log.Error("Error initializing database: ", "error", err)
 		}
 
 		config.SetResourceLimit(&cfg.ResourceLimits)
@@ -72,7 +83,7 @@ func main() {
 
 		err = utils.LoadRelayMetadataJSON()
 		if err != nil {
-			log.Fatal("Failed to load relay metadata: ", err)
+			log.Error("Failed to load relay metadata: ", "error", err)
 		}
 
 		mux := initApp()
@@ -87,7 +98,7 @@ func main() {
 		// Monitor for server restart or shutdown signals.
 		select {
 		case <-restartChan:
-			log.Println("Restarting server...")
+			log.Info("Restarting server...")
 			config.ResetConfig()
 			config.ResetWhitelistConfig()
 			config.ResetBlacklistConfig()
@@ -95,7 +106,7 @@ func main() {
 			wg.Wait()
 			time.Sleep(3 * time.Second)
 		case <-signalChan:
-			log.Println("Shutting down server...")
+			log.Info("Shutting down server...")
 			server.Close()
 			mongo.DisconnectDB(client)
 			wg.Wait()
