@@ -20,6 +20,7 @@ type LogConfig struct {
 	Level     string `yaml:"level"`
 	File      string `yaml:"file"`
 	MaxSizeMB int    `yaml:"max_log_size_mb"`
+	Structure bool   `yaml:"structure"`
 }
 
 // Logger instance
@@ -46,18 +47,28 @@ func InitializeLogger(configPath string) {
 		os.Exit(1)
 	}
 
-	// Open log file
-	logFile, err := os.OpenFile(cfg.Logging.File, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// Open log file in truncate mode if resetting, otherwise append
+	flags := os.O_CREATE | os.O_WRONLY | os.O_APPEND
+	if checkLogFormatMismatch(cfg.Logging.File, cfg.Logging.Structure) {
+		fmt.Println("Log format mismatch detected. Resetting log file...")
+		flags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC // ✅ Truncate file on mismatch
+	}
+	logFile, err := os.OpenFile(cfg.Logging.File, flags|os.O_SYNC, 0644) // ✅ O_SYNC forces immediate writes
 	if err != nil {
 		fmt.Printf("Failed to open log file: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Create a LogWriter that writes ONLY to the file
-	fileHandler := &LogWriter{output: logFile, level: logLevel}
+	// Choose between structured JSON logs and pretty logs
+	var handler slog.Handler
+	if cfg.Logging.Structure {
+		handler = &FlushHandler{handler: slog.NewJSONHandler(logFile, &slog.HandlerOptions{Level: logLevel})} // ✅ Forces live writing
+	} else {
+		handler = &LogWriter{output: logFile, level: logLevel}
+	}
 
 	// Set global logger
-	Log = slog.New(fileHandler)
+	Log = slog.New(handler)
 }
 
 // GetLogger returns a logger with a specific component field
@@ -130,18 +141,14 @@ func (h *LogWriter) Handle(ctx context.Context, r slog.Record) error {
 	// Format log level as [LEVEL]
 	b.WriteString(fmt.Sprintf("[%s] ", strings.ToUpper(r.Level.String())))
 
-	// Extract component from attributes (from stored attrs & record attrs)
+	// Extract component from attributes
 	var component string
-
-	// First, check stored attributes in LogWriter
 	for _, attr := range h.attrs {
 		if attr.Key == "component" {
 			component = fmt.Sprintf("[%s] ", attr.Value.String())
 			break
 		}
 	}
-
-	// If not found, check the log record attributes
 	r.Attrs(func(attr slog.Attr) bool {
 		if attr.Key == "component" {
 			component = fmt.Sprintf("[%s] ", attr.Value.String())
@@ -166,7 +173,7 @@ func (h *LogWriter) Handle(ctx context.Context, r slog.Record) error {
 		return true
 	})
 
-	// Write only to file (❌ No console output)
+	// Write to file (❌ No console output)
 	if h.output != nil {
 		_, err := fmt.Fprintln(h.output, b.String()) // Write to file
 		if err != nil {
@@ -191,4 +198,52 @@ func (h *LogWriter) WithAttrs(attrs []slog.Attr) slog.Handler {
 }
 func (h *LogWriter) WithGroup(name string) slog.Handler {
 	return h
+}
+
+// Function to check log format and reset if needed
+func checkLogFormatMismatch(logFilePath string, isStructured bool) bool {
+	file, err := os.Open(logFilePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false // File doesn't exist, no reset needed
+		}
+		fmt.Printf("Error opening log file: %v\n", err)
+		return false
+	}
+	defer file.Close()
+
+	// Read first line
+	reader := bufio.NewReader(file)
+	firstLine, err := reader.ReadString('\n')
+	if err != nil {
+		return false // Empty file, no reset needed
+	}
+
+	// Check if the first line is JSON or Pretty
+	isJSON := strings.HasPrefix(strings.TrimSpace(firstLine), "{") // JSON starts with '{'
+	return isJSON != isStructured                                  // ✅ Return true if format is mismatched
+}
+
+type FlushHandler struct {
+	handler slog.Handler
+}
+
+func (f *FlushHandler) Handle(ctx context.Context, r slog.Record) error {
+	err := f.handler.Handle(ctx, r)
+	if flusher, ok := f.handler.(interface{ Flush() }); ok {
+		flusher.Flush() // ✅ Force flush after each log
+	}
+	return err
+}
+
+func (f *FlushHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return f.handler.Enabled(ctx, level)
+}
+
+func (f *FlushHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &FlushHandler{handler: f.handler.WithAttrs(attrs)}
+}
+
+func (f *FlushHandler) WithGroup(name string) slog.Handler {
+	return &FlushHandler{handler: f.handler.WithGroup(name)}
 }
