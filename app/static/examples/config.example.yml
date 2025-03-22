@@ -1,7 +1,8 @@
 logging:
-  level: "debug" # Log levels: "debug", "info", "warn", "error"
-  file: "debug.log" # Log file location
+  level: "info" # Log levels: "debug", "info", "warn", "error"
+  file: "debug" # Log file name
   max_log_size_mb: 10 # Maximum log file size in MB before trimming
+  structure: false # true = structured JSON logs, false = pretty logs
 
 mongodb:
   uri: mongodb://localhost:27017/

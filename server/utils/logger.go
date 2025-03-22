@@ -3,6 +3,7 @@ package utils
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -47,24 +48,28 @@ func InitializeLogger(configPath string) {
 		os.Exit(1)
 	}
 
-	// Open log file in truncate mode if resetting, otherwise append
-	flags := os.O_CREATE | os.O_WRONLY | os.O_APPEND
-	if checkLogFormatMismatch(cfg.Logging.File, cfg.Logging.Structure) {
-		fmt.Println("Log format mismatch detected. Resetting log file...")
-		flags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC // ✅ Truncate file on mismatch
-	}
-	logFile, err := os.OpenFile(cfg.Logging.File, flags|os.O_SYNC, 0644) // ✅ O_SYNC forces immediate writes
-	if err != nil {
-		fmt.Printf("Failed to open log file: %v\n", err)
-		os.Exit(1)
+	// Determine log file name based on structure setting
+	var logFilePath string
+	if cfg.Logging.Structure {
+		logFilePath = cfg.Logging.File + ".json"
+	} else {
+		logFilePath = cfg.Logging.File + ".log"
 	}
 
 	// Choose between structured JSON logs and pretty logs
 	var handler slog.Handler
 	if cfg.Logging.Structure {
-		handler = &FlushHandler{handler: slog.NewJSONHandler(logFile, &slog.HandlerOptions{Level: logLevel})} // ✅ Forces live writing
+		handler = &JSONLogWriter{
+			filePath: logFilePath,
+			level:    logLevel,
+		}
 	} else {
-		handler = &LogWriter{output: logFile, level: logLevel}
+		logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_SYNC, 0644)
+		if err != nil {
+			fmt.Printf("Failed to open log file: %v\n", err)
+			os.Exit(1)
+		}
+		handler = &PrettyLogWriter{output: logFile, level: logLevel}
 	}
 
 	// Set global logger
@@ -123,15 +128,15 @@ func TrimLogFile(filePath string, maxSizeMB int) {
 	}
 }
 
-// LogWriter writes logs ONLY to a file
-type LogWriter struct {
+// PrettyLogWriter writes logs ONLY to a file
+type PrettyLogWriter struct {
 	output *os.File
 	level  slog.Level
 	attrs  []slog.Attr
 }
 
 // Handle writes logs to the log file
-func (h *LogWriter) Handle(ctx context.Context, r slog.Record) error {
+func (h *PrettyLogWriter) Handle(ctx context.Context, r slog.Record) error {
 	var b strings.Builder
 
 	// Format timestamp
@@ -173,77 +178,120 @@ func (h *LogWriter) Handle(ctx context.Context, r slog.Record) error {
 		return true
 	})
 
-	// Write to file (❌ No console output)
+	// Write to file ( No console output)
 	if h.output != nil {
 		_, err := fmt.Fprintln(h.output, b.String()) // Write to file
 		if err != nil {
 			return err
 		}
-		h.output.Sync() // ✅ Force immediate write to disk
+		h.output.Sync() // immediate write to disk
 	}
 
 	return nil
 }
 
 // Required interface methods for slog.Handler
-func (h *LogWriter) Enabled(ctx context.Context, level slog.Level) bool {
+func (h *PrettyLogWriter) Enabled(ctx context.Context, level slog.Level) bool {
 	return level >= h.level
 }
-func (h *LogWriter) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &LogWriter{
+func (h *PrettyLogWriter) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &PrettyLogWriter{
 		output: h.output,
 		level:  h.level,
 		attrs:  append(h.attrs, attrs...),
 	}
 }
-func (h *LogWriter) WithGroup(name string) slog.Handler {
+func (h *PrettyLogWriter) WithGroup(name string) slog.Handler {
 	return h
 }
 
-// Function to check log format and reset if needed
-func checkLogFormatMismatch(logFilePath string, isStructured bool) bool {
-	file, err := os.Open(logFilePath)
+// JSONLogWriter writes logs in JSON format
+type JSONLogWriter struct {
+	filePath string
+	level    slog.Level
+	attrs    []slog.Attr
+}
+
+// Handle writes logs in JSON format
+func (j *JSONLogWriter) Handle(ctx context.Context, r slog.Record) error {
+	// Check if log level is enabled
+	if !j.Enabled(ctx, r.Level) {
+		return nil
+	}
+
+	// Collect all attributes including those from WithAttrs
+	allAttrs := make(map[string]interface{})
+
+	// First add attrs from WithAttrs
+	for _, attr := range j.attrs {
+		allAttrs[attr.Key] = attr.Value.String()
+	}
+
+	// Then add attrs from the record
+	r.Attrs(func(attr slog.Attr) bool {
+		allAttrs[attr.Key] = attr.Value.String()
+		return true
+	})
+
+	// Create log entry
+	logEntry := map[string]interface{}{
+		"time":  r.Time.Format(time.RFC3339),
+		"level": r.Level.String(),
+		"msg":   r.Message,
+	}
+
+	// Add component if it exists
+	if component, ok := allAttrs["component"]; ok {
+		logEntry["component"] = component
+		delete(allAttrs, "component") // Remove it to avoid duplication
+	}
+
+	// Add remaining attributes
+	for k, v := range allAttrs {
+		logEntry[k] = v
+	}
+
+	// Convert to JSON
+	jsonData, err := json.Marshal(logEntry)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return false // File doesn't exist, no reset needed
-		}
-		fmt.Printf("Error opening log file: %v\n", err)
-		return false
+		return err
 	}
-	defer file.Close()
 
-	// Read first line
-	reader := bufio.NewReader(file)
-	firstLine, err := reader.ReadString('\n')
+	// Append to file with newline
+	f, err := os.OpenFile(j.filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return false // Empty file, no reset needed
+		return err
+	}
+	defer f.Close()
+
+	if _, err := f.Write(jsonData); err != nil {
+		return err
+	}
+	if _, err := f.Write([]byte("\n")); err != nil {
+		return err
 	}
 
-	// Check if the first line is JSON or Pretty
-	isJSON := strings.HasPrefix(strings.TrimSpace(firstLine), "{") // JSON starts with '{'
-	return isJSON != isStructured                                  // ✅ Return true if format is mismatched
+	return nil
 }
 
-type FlushHandler struct {
-	handler slog.Handler
+// Required interface methods for slog.Handler
+func (j *JSONLogWriter) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= j.level
 }
 
-func (f *FlushHandler) Handle(ctx context.Context, r slog.Record) error {
-	err := f.handler.Handle(ctx, r)
-	if flusher, ok := f.handler.(interface{ Flush() }); ok {
-		flusher.Flush() // ✅ Force flush after each log
+func (j *JSONLogWriter) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &JSONLogWriter{
+		filePath: j.filePath,
+		level:    j.level,
+		attrs:    append(j.attrs, attrs...),
 	}
-	return err
 }
 
-func (f *FlushHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return f.handler.Enabled(ctx, level)
+func (j *JSONLogWriter) WithGroup(name string) slog.Handler {
+	return j // Grouping not supported in this implementation
 }
 
-func (f *FlushHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &FlushHandler{handler: f.handler.WithAttrs(attrs)}
-}
-
-func (f *FlushHandler) WithGroup(name string) slog.Handler {
-	return &FlushHandler{handler: f.handler.WithGroup(name)}
+// Close is now a no-op since logs are written properly on each entry.
+func (j *JSONLogWriter) Close() {
+	// No action needed, since the file is managed per log entry.
 }
