@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+
+	//"log"
 	"net/url"
 	"os"
 	"strings"
@@ -25,38 +26,45 @@ func CheckBlacklist(pubkey, eventContent string) (bool, string) {
 		return false, ""
 	}
 
-	log.Printf("Checking blacklist for pubkey: %s", pubkey)
+	// Checking the blacklist for a pubkey
+	log.Info(fmt.Sprintf("Checking blacklist for pubkey: %s", pubkey))
 
 	// Check for permanent blacklist by pubkey or npub.
 	if isPubKeyPermanentlyBlacklisted(pubkey, blacklistConfig) {
-		log.Printf("Pubkey %s is permanently blacklisted", pubkey)
+		// Permanent blacklist match
+		log.Info(fmt.Sprintf("Pubkey %s is permanently blacklisted", pubkey))
 		return true, fmt.Sprintf("pubkey %s is permanently blacklisted", pubkey)
 	}
 
 	// Check for temporary ban.
 	if isPubKeyTemporarilyBlacklisted(pubkey) {
-		log.Printf("Pubkey %s is temporarily blacklisted", pubkey)
+		// Temporary blacklist match
+		log.Info(fmt.Sprintf("Pubkey %s is temporarily blacklisted", pubkey))
 		return true, fmt.Sprintf("pubkey %s is temporarily blacklisted", pubkey)
 	}
 
-	// Check for permanent ban based on wordlist.
+	// Check for permanent ban based on wordlist
 	for _, word := range blacklistConfig.PermanentBanWords {
 		if strings.Contains(eventContent, word) {
 			err := AddToPermanentBlacklist(pubkey)
 			if err != nil {
+				log.Error("Failed to add pubkey to permanent blacklist", "pubkey", pubkey, "error", err)
 				return true, fmt.Sprintf("pubkey %s is permanently banned and failed to save: %v", pubkey, err)
 			}
+			log.Info("Pubkey permanently banned due to wordlist match", "pubkey", pubkey, "word", word)
 			return true, "blocked: pubkey is permanently banned"
 		}
 	}
 
-	// Check for temporary ban based on wordlist.
+	// Check for temporary ban based on wordlist
 	for _, word := range blacklistConfig.TempBanWords {
 		if strings.Contains(eventContent, word) {
 			err := AddToTemporaryBlacklist(pubkey, *blacklistConfig)
 			if err != nil {
+				log.Error("Failed to add pubkey to temporary blacklist", "pubkey", pubkey, "error", err)
 				return true, fmt.Sprintf("pubkey %s is temporarily banned and failed to save: %v", pubkey, err)
 			}
+			log.Info("Pubkey temporarily banned due to wordlist match", "pubkey", pubkey, "word", word)
 			return true, "blocked: pubkey is temporarily banned"
 		}
 	}
@@ -65,25 +73,27 @@ func CheckBlacklist(pubkey, eventContent string) (bool, string) {
 	if len(blacklistConfig.MuteListAuthors) > 0 {
 		cfg := GetConfig()
 		if cfg == nil {
-			log.Println("Server configuration is not loaded")
 			return true, "Internal server error: server configuration is missing"
 		}
 
 		localRelayURL := fmt.Sprintf("ws://localhost%s", cfg.Server.Port)
 		mutelistedPubkeys, err := FetchPubkeysFromLocalMuteList(localRelayURL, blacklistConfig.MuteListAuthors)
 		if err != nil {
-			log.Printf("Error fetching pubkeys from mutelist: %v", err)
+			// Error fetching pubkeys from mute list
+			log.Error("Error fetching pubkeys from mutelist", "error", err)
 			return true, "Error fetching pubkeys from mutelist"
 		}
 
 		for _, mutelistedPubkey := range mutelistedPubkeys {
 			if pubkey == mutelistedPubkey {
-				log.Printf("Pubkey %s is in the mutelist", pubkey)
+				// Pubkey found in the mutelist
+				log.Info(fmt.Sprintf("Pubkey %s is in the mutelist", pubkey))
 				return true, "not allowed: pubkey is in mutelist"
 			}
 		}
 	} else {
-		log.Println("No mutelist event IDs specified in the blacklist configuration")
+		// No mutelist event IDs specified
+		log.Info("No mutelist event IDs specified in the blacklist configuration")
 	}
 
 	return false, ""
@@ -96,17 +106,20 @@ func isPubKeyTemporarilyBlacklisted(pubkey string) bool {
 
 	entry, exists := tempBannedPubkeys[pubkey]
 	if !exists {
-		log.Printf("Pubkey %s not found in temporary blacklist", pubkey)
+		// Pubkey not found in temporary blacklist
+		log.Debug(fmt.Sprintf("Pubkey %s not found in temporary blacklist", pubkey))
 		return false
 	}
 
 	now := time.Now()
 	if now.After(entry.unbanTime) {
-		log.Printf("Temporary ban for pubkey %s has expired. Count: %d", pubkey, entry.count)
+		// Temporary ban expired
+		log.Info(fmt.Sprintf("Temporary ban for pubkey %s has expired. Count: %d", pubkey, entry.count))
 		return false
 	}
 
-	log.Printf("Pubkey %s is currently temporarily blacklisted. Count: %d, Unban time: %s", pubkey, entry.count, entry.unbanTime)
+	// Pubkey currently blacklisted
+	log.Warn(fmt.Sprintf("Pubkey %s is currently temporarily blacklisted. Count: %d, Unban time: %s", pubkey, entry.count, entry.unbanTime))
 	return true
 }
 
@@ -132,16 +145,21 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig types.BlacklistConfi
 
 	entry, exists := tempBannedPubkeys[pubkey]
 	if !exists {
-		log.Printf("Creating new temporary ban entry for pubkey %s", pubkey)
+		// Creating a new temp ban entry
+		log.Info(fmt.Sprintf("Creating new temporary ban entry for pubkey %s", pubkey))
 		entry = &tempBanEntry{
 			count:     0,
 			unbanTime: time.Now(),
 		}
 		tempBannedPubkeys[pubkey] = entry
 	} else {
-		log.Printf("Updating existing temporary ban entry for pubkey %s. Current count: %d", pubkey, entry.count)
+		// Updating an existing temp ban entry
+		log.Info(fmt.Sprintf("Updating existing temporary ban entry for pubkey %s. Current count: %d", pubkey, entry.count))
+
 		if time.Now().After(entry.unbanTime) {
-			log.Printf("Previous ban for pubkey %s has expired. Keeping count at %d", pubkey, entry.count)
+			// Previous ban expired, keeping count
+			log.Info(fmt.Sprintf("Previous ban for pubkey %s has expired. Keeping count at %d", pubkey, entry.count))
+
 		}
 	}
 
@@ -149,10 +167,13 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig types.BlacklistConfi
 	entry.count++
 	entry.unbanTime = time.Now().Add(time.Duration(blacklistConfig.TempBanDuration) * time.Second)
 
-	log.Printf("Pubkey %s temporary ban count updated to: %d, MaxTempBans: %d, New unban time: %s", pubkey, entry.count, blacklistConfig.MaxTempBans, entry.unbanTime)
+	// Updating temp ban count
+	log.Info(fmt.Sprintf("Pubkey %s temporary ban count updated to: %d, MaxTempBans: %d, New unban time: %s", pubkey, entry.count, blacklistConfig.MaxTempBans, entry.unbanTime))
 
 	if entry.count > blacklistConfig.MaxTempBans {
-		log.Printf("Attempting to move pubkey %s to permanent blacklist", pubkey)
+		// Attempting to move to permanent blacklist
+		log.Warn(fmt.Sprintf("Attempting to move pubkey %s to permanent blacklist", pubkey))
+
 		delete(tempBannedPubkeys, pubkey)
 
 		// Release the lock before calling AddToPermanentBlacklist
@@ -161,10 +182,12 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig types.BlacklistConfi
 		mu.Lock() // Re-acquire the lock
 
 		if err != nil {
-			log.Printf("Error adding pubkey %s to permanent blacklist: %v", pubkey, err)
+			// Error adding to permanent blacklist
+			log.Error("Error adding pubkey to permanent blacklist", "pubkey", pubkey, "error", err)
 			return err
 		}
-		log.Printf("Successfully added pubkey %s to permanent blacklist", pubkey)
+		// Successfully added to permanent blacklist
+		log.Info(fmt.Sprintf("Successfully added pubkey %s to permanent blacklist", pubkey))
 	}
 
 	return nil
@@ -188,7 +211,8 @@ func GetTemporaryBlacklist() []map[string]interface{} {
 			})
 		} else {
 			// If the ban has expired, log and remove it
-			log.Printf("Removing expired temp ban for pubkey: %s", pubkey)
+			// Removing expired temp ban
+			log.Info(fmt.Sprintf("Removing expired temp ban for pubkey: %s", pubkey))
 			delete(tempBannedPubkeys, pubkey)
 		}
 	}
@@ -265,7 +289,8 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 	// Parse WebSocket URL
 	wsURL, err := url.Parse(localRelayURL)
 	if err != nil {
-		log.Printf("Invalid WebSocket URL %s: %v", localRelayURL, err)
+		// Invalid WebSocket URL
+		log.Error("Invalid WebSocket URL", "url", localRelayURL, "error", err)
 		return nil, err
 	}
 
@@ -279,7 +304,8 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 		// Dial WebSocket connection
 		conn, err := websocket.Dial(localRelayURL, "", origin)
 		if err != nil {
-			log.Printf("Failed to connect to local relay %s: %v", localRelayURL, err)
+			// Failed to connect to the local relay
+			log.Error("Failed to connect to local relay", "relay_url", localRelayURL, "error", err)
 			return
 		}
 		defer conn.Close()
@@ -294,13 +320,15 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 
 		reqJSON, err := json.Marshal(req)
 		if err != nil {
-			log.Printf("Failed to marshal request: %v", err)
+			// Failed to marshal WebSocket request
+			log.Error("Failed to marshal request", "error", err)
 			return
 		}
 
 		// Send the message
 		if _, err := conn.Write(reqJSON); err != nil {
-			log.Printf("Failed to send request to local relay %s: %v", localRelayURL, err)
+			// Failed to send request to the local relay
+			log.Error("Failed to send request to local relay", "relay_url", localRelayURL, "error", err)
 			return
 		}
 
@@ -310,28 +338,33 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 			n, err := conn.Read(message)
 			if err != nil {
 				if err == io.EOF {
-					log.Println("Connection closed by the server (EOF)")
+					// Connection closed by the server
+					log.Warn("Connection closed by the server (EOF)")
 					break
 				}
-				log.Printf("Error reading message from local relay %s: %v", localRelayURL, err)
+				// Error reading message from relay
+				log.Error("Error reading message from local relay", "relay_url", localRelayURL, "error", err)
+
 				break
 			}
 
 			// Trim message to actual length
 			message = message[:n]
-			log.Printf("Received raw message: %s", message)
+			// Received raw WebSocket message
+			log.Debug(fmt.Sprintf("Received raw message: %s", message))
 
 			var response []interface{}
 			err = json.Unmarshal(message, &response)
 			if err != nil || len(response) < 2 {
-				log.Printf("Invalid message format or failed to unmarshal: %v", err)
+				// Invalid WebSocket message format
+				log.Error("Invalid message format or failed to unmarshal", "error", err)
 				continue
 			}
 
 			if len(response) > 0 {
 				eventType, ok := response[0].(string)
 				if !ok {
-					log.Printf("Unexpected event type: %v", response[0])
+					log.Warn("Unexpected event type", "type", response[0])
 					continue
 				}
 
@@ -339,7 +372,7 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 				if eventType == "EVENT" && len(response) >= 3 {
 					eventData, ok := response[2].(map[string]interface{})
 					if !ok {
-						log.Printf("Unexpected event data format: %v", response[2])
+						log.Warn("Unexpected event data format", "data", response[2])
 						continue
 					}
 
@@ -352,7 +385,7 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 					closeReq := []interface{}{"CLOSE", subscriptionID}
 					closeReqJSON, _ := json.Marshal(closeReq)
 					_, _ = conn.Write(closeReqJSON)
-					log.Println("Sent CLOSE request to end subscription.")
+					log.Info("Sent CLOSE request to end subscription.")
 					break
 				}
 
@@ -381,7 +414,7 @@ func extractPubkeysFromMuteListEvent(eventData map[string]interface{}) []string 
 
 	tags, ok := eventData["tags"].([]interface{})
 	if !ok {
-		log.Println("Tags field is missing or not an array")
+		log.Warn("Tags field is missing or not an array")
 		return pubkeys
 	}
 
@@ -395,6 +428,7 @@ func extractPubkeysFromMuteListEvent(eventData map[string]interface{}) []string 
 		}
 	}
 
-	log.Printf("Extracted pubkeys: %v", pubkeys)
+	// Extracted pubkeys from mute list event
+	log.Debug(fmt.Sprintf("Extracted pubkeys: %v", pubkeys))
 	return pubkeys
 }

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"sync"
 
@@ -10,6 +11,13 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+var log *slog.Logger
+
+func init() {
+	utils.InitializeLogger("config.yml")
+	log = utils.GetLogger("config")
+}
 
 var (
 	cfg           *configTypes.ServerConfig

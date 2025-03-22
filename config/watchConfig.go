@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
-	"log"
+	"os"
+
+	//"log"
 	"time"
 
 	"gopkg.in/fsnotify.v1"
@@ -11,13 +13,15 @@ import (
 func WatchConfigFile(filePath string, restartChan chan<- struct{}) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatal("Error creating file watcher:", err)
+		log.Error("Error creating file watcher", "error", err)
+		os.Exit(1) // Manually exit after logging the error
 	}
 	defer watcher.Close()
 
 	err = watcher.Add(filePath)
 	if err != nil {
-		log.Fatal("Error adding file to watcher:", err)
+		log.Error("Error creating file watcher", "error", err)
+		os.Exit(1) // Manually exit after logging the error
 	}
 
 	var debounceTimer *time.Timer
@@ -46,7 +50,7 @@ func WatchConfigFile(filePath string, restartChan chan<- struct{}) {
 			if !ok {
 				return
 			}
-			log.Println("Error watching file:", err)
+			log.Error("Error watching file", "error", err)
 		}
 	}
 }

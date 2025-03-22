@@ -25,55 +25,6 @@ type LogConfig struct {
 // Logger instance
 var Log *slog.Logger
 
-// Global component variable (default: empty)
-var logComponent string
-
-// SetComponent allows any package to set its component
-func SetComponent(component string) {
-	logComponent = fmt.Sprintf("[%s]", component) // Format as [component]
-}
-
-// MultiHandler sends logs to multiple handlers
-type MultiHandler struct {
-	handlers []slog.Handler
-}
-
-// Enabled checks if the given level is enabled for any handler
-func (m MultiHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	for _, h := range m.handlers {
-		if h.Enabled(ctx, level) {
-			return true
-		}
-	}
-	return false
-}
-
-// Handle sends logs to all registered handlers
-func (m MultiHandler) Handle(ctx context.Context, record slog.Record) error {
-	for _, h := range m.handlers {
-		h.Handle(ctx, record)
-	}
-	return nil
-}
-
-// WithAttrs returns a new MultiHandler with additional attributes
-func (m MultiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	newHandlers := make([]slog.Handler, len(m.handlers))
-	for i, h := range m.handlers {
-		newHandlers[i] = h.WithAttrs(attrs)
-	}
-	return MultiHandler{handlers: newHandlers}
-}
-
-// WithGroup returns a new MultiHandler with grouped attributes
-func (m MultiHandler) WithGroup(name string) slog.Handler {
-	newHandlers := make([]slog.Handler, len(m.handlers))
-	for i, h := range m.handlers {
-		newHandlers[i] = h.WithGroup(name)
-	}
-	return MultiHandler{handlers: newHandlers}
-}
-
 // InitializeLogger loads config and sets up global logger
 func InitializeLogger(configPath string) {
 	cfg := Config{}
@@ -87,6 +38,7 @@ func InitializeLogger(configPath string) {
 		os.Exit(1)
 	}
 
+	// Convert log level from config
 	cfg.Logging.Level = strings.TrimSpace(strings.ToLower(cfg.Logging.Level))
 	var logLevel slog.Level
 	if err := logLevel.UnmarshalText([]byte(cfg.Logging.Level)); err != nil {
@@ -101,66 +53,20 @@ func InitializeLogger(configPath string) {
 		os.Exit(1)
 	}
 
-	// Define handlers
-	fileHandler := &SimpleLogHandler{output: logFile, level: logLevel}
-	consoleHandler := &SimpleLogHandler{output: nil, level: logLevel}
+	// Create a LogWriter that writes ONLY to the file
+	fileHandler := &LogWriter{output: logFile, level: logLevel}
 
-	// Set global Log variable
-	Log = slog.New(MultiHandler{handlers: []slog.Handler{fileHandler, consoleHandler}})
-}
-
-type CustomErrorHandler struct {
-	Handler slog.Handler
-}
-
-// Handle modifies error messages before passing to the base handler
-func (h CustomErrorHandler) Handle(ctx context.Context, r slog.Record) error {
-	if r.Level == slog.LevelError {
-		// Iterate over attributes to find an error
-		r.Attrs(func(attr slog.Attr) bool {
-			if err, ok := attr.Value.Any().(error); ok {
-				r.Message = err.Error() // Set error message
-			}
-			return true // Continue iteration
-		})
-	}
-	return h.Handler.Handle(ctx, r)
-}
-
-// Other required methods for Handler interface
-func (h CustomErrorHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return h.Handler.Enabled(ctx, level)
-}
-func (h CustomErrorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return CustomErrorHandler{Handler: h.Handler.WithAttrs(attrs)}
-}
-func (h CustomErrorHandler) WithGroup(name string) slog.Handler {
-	return CustomErrorHandler{Handler: h.Handler.WithGroup(name)}
+	// Set global logger
+	Log = slog.New(fileHandler)
 }
 
 // GetLogger returns a logger with a specific component field
 func GetLogger(component string) *slog.Logger {
-	return Log.With("component", fmt.Sprintf("[%s]", component))
-}
-
-// NewColorConsoleHandler returns a handler that adds color coding to console logs
-func NewColorConsoleHandler(output *os.File, level slog.Level) slog.Handler {
-	return slog.NewTextHandler(output, &slog.HandlerOptions{
-		Level: level,
-		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-			switch a.Key {
-			case slog.TimeKey: // Format timestamp without key
-				a.Value = slog.StringValue(a.Value.Time().Format(time.RFC3339))
-			case slog.LevelKey: // Format level as [LEVEL]
-				a.Value = slog.StringValue(fmt.Sprintf("[%s]", strings.ToUpper(a.Value.String())))
-			case slog.MessageKey: // Keep message clean (remove "msg=" prefix)
-				return a // No modification needed
-			default:
-				return slog.Attr{} // Remove all other attributes (component, etc.)
-			}
-			return a
-		},
-	})
+	if Log == nil {
+		fmt.Println("Logger is not initialized. Returning default logger.")
+		return slog.New(slog.NewTextHandler(os.Stdout, nil)) // Prevents crash
+	}
+	return Log.With("component", component)
 }
 
 // TrimLogFile checks log size and trims the oldest 20% if needed
@@ -206,14 +112,15 @@ func TrimLogFile(filePath string, maxSizeMB int) {
 	}
 }
 
-// SimpleLogHandler is a basic handler that writes logs to console and file
-type SimpleLogHandler struct {
+// LogWriter writes logs ONLY to a file
+type LogWriter struct {
 	output *os.File
 	level  slog.Level
+	attrs  []slog.Attr
 }
 
-// Handle writes logs to console and file
-func (h *SimpleLogHandler) Handle(ctx context.Context, r slog.Record) error {
+// Handle writes logs to the log file
+func (h *LogWriter) Handle(ctx context.Context, r slog.Record) error {
 	var b strings.Builder
 
 	// Format timestamp
@@ -223,40 +130,65 @@ func (h *SimpleLogHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Format log level as [LEVEL]
 	b.WriteString(fmt.Sprintf("[%s] ", strings.ToUpper(r.Level.String())))
 
-	// Append the global component if set
-	if logComponent != "" {
-		b.WriteString(logComponent + " ")
+	// Extract component from attributes (from stored attrs & record attrs)
+	var component string
+
+	// First, check stored attributes in LogWriter
+	for _, attr := range h.attrs {
+		if attr.Key == "component" {
+			component = fmt.Sprintf("[%s] ", attr.Value.String())
+			break
+		}
+	}
+
+	// If not found, check the log record attributes
+	r.Attrs(func(attr slog.Attr) bool {
+		if attr.Key == "component" {
+			component = fmt.Sprintf("[%s] ", attr.Value.String())
+			return false
+		}
+		return true
+	})
+
+	// Append the component if found
+	if component != "" {
+		b.WriteString(component)
 	}
 
 	// Append message
 	b.WriteString(r.Message)
 
-	// Handle extra attributes
+	// Append remaining attributes (except component)
 	r.Attrs(func(attr slog.Attr) bool {
-		b.WriteString(fmt.Sprintf(" %v", attr.Value))
+		if attr.Key != "component" {
+			b.WriteString(fmt.Sprintf(" %s=%v", attr.Key, attr.Value))
+		}
 		return true
 	})
 
-	// Print to console
-	fmt.Println(b.String())
-
-	// Write to file
+	// Write only to file (❌ No console output)
 	if h.output != nil {
-		fmt.Fprintln(h.output, b.String())
+		_, err := fmt.Fprintln(h.output, b.String()) // Write to file
+		if err != nil {
+			return err
+		}
+		h.output.Sync() // ✅ Force immediate write to disk
 	}
 
 	return nil
 }
 
-// Required interface methods
-func (h *SimpleLogHandler) Enabled(ctx context.Context, level slog.Level) bool {
+// Required interface methods for slog.Handler
+func (h *LogWriter) Enabled(ctx context.Context, level slog.Level) bool {
 	return level >= h.level
 }
-
-func (h *SimpleLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return h
+func (h *LogWriter) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &LogWriter{
+		output: h.output,
+		level:  h.level,
+		attrs:  append(h.attrs, attrs...),
+	}
 }
-
-func (h *SimpleLogHandler) WithGroup(name string) slog.Handler {
+func (h *LogWriter) WithGroup(name string) slog.Handler {
 	return h
 }
