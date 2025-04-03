@@ -31,9 +31,13 @@ import (
 var log *slog.Logger
 
 func main() {
-
-	// Initialize logger from config
-	utils.InitializeLogger("config.yml")
+	// Initial logger setup
+	cfg, err := config.LoadConfig("config.yml")
+	if err != nil {
+		fmt.Printf("Failed to load initial config: %v\n", err)
+		os.Exit(1) // Exit if initial config load fails
+	}
+	utils.InitializeLogger(cfg) // Initialize logger with initial config
 	log = utils.GetLogger("main")
 
 	utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
@@ -74,6 +78,9 @@ func main() {
 			log.Error("Failed to initialize database", "error", err)
 		}
 
+		// Re-initialize logger with new configuration
+		utils.InitializeLogger(cfg)
+		log = utils.GetLogger("main") // Update global logger
 		config.SetResourceLimit(&cfg.ResourceLimits)
 		config.SetRateLimit(cfg)
 		config.SetSizeLimit(cfg)

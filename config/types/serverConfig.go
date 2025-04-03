@@ -18,7 +18,15 @@ type UserSyncConfig struct {
 	Interval              int      `yaml:"interval"`                // Resync interval in hours
 }
 
+type LogConfig struct {
+	Level     string `yaml:"level"`
+	File      string `yaml:"file"`
+	MaxSizeMB int    `yaml:"max_log_size_mb"`
+	Structure bool   `yaml:"structure"`
+}
+
 type ServerConfig struct {
+	Logging LogConfig `yaml:"logging"`
 	MongoDB struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`

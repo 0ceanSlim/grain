@@ -15,7 +15,6 @@ import (
 var log *slog.Logger
 
 func init() {
-	utils.InitializeLogger("config.yml")
 	log = utils.GetLogger("config")
 }
 

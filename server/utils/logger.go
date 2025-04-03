@@ -12,67 +12,43 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	configTypes "github.com/0ceanslim/grain/config/types"
 )
 
-type Config struct {
-	Logging LogConfig `yaml:"logging"`
-}
-
-type LogConfig struct {
-	Level     string `yaml:"level"`
-	File      string `yaml:"file"`
-	MaxSizeMB int    `yaml:"max_log_size_mb"`
-	Structure bool   `yaml:"structure"`
-}
-
-// Logger instance
 var Log *slog.Logger
 
-// InitializeLogger loads config and sets up global logger
-func InitializeLogger(configPath string) {
-	cfg := Config{}
-	file, err := os.ReadFile(configPath)
-	if err != nil {
-		fmt.Printf("Error reading config file: %v\n", err)
-		os.Exit(1)
-	}
-	if err := yaml.Unmarshal(file, &cfg); err != nil {
-		fmt.Printf("Error parsing YAML: %v\n", err)
-		os.Exit(1)
-	}
+func InitializeLogger(cfg *configTypes.ServerConfig) {
+    // Convert log level from config
+    cfg.Logging.Level = strings.TrimSpace(strings.ToLower(cfg.Logging.Level))
+    var logLevel slog.Level
+    if err := logLevel.UnmarshalText([]byte(cfg.Logging.Level)); err != nil {
+        fmt.Printf("Invalid log level in config: %s\n", cfg.Logging.Level)
+        os.Exit(1)
+    }
 
-	// Convert log level from config
-	cfg.Logging.Level = strings.TrimSpace(strings.ToLower(cfg.Logging.Level))
-	var logLevel slog.Level
-	if err := logLevel.UnmarshalText([]byte(cfg.Logging.Level)); err != nil {
-		fmt.Printf("Invalid log level in config: %s\n", cfg.Logging.Level)
-		os.Exit(1)
-	}
+    // Determine log file name based on structure setting
+    var logFilePath string
+    if cfg.Logging.Structure {
+        logFilePath = cfg.Logging.File + ".json"
+    } else {
+        logFilePath = cfg.Logging.File + ".log"
+    }
 
-	// Determine log file name based on structure setting
-	var logFilePath string
-	if cfg.Logging.Structure {
-		logFilePath = cfg.Logging.File + ".json"
-	} else {
-		logFilePath = cfg.Logging.File + ".log"
-	}
+    // Choose between structured JSON logs and pretty logs
+    var handler slog.Handler
+    if cfg.Logging.Structure {
+        handler = NewJSONLogWriter(logFilePath, logLevel, cfg.Logging.MaxSizeMB)
+    } else {
+        logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_SYNC, 0644)
+        if err != nil {
+            fmt.Printf("Failed to open log file: %v\n", err)
+            os.Exit(1)
+        }
+        handler = &PrettyLogWriter{output: logFile, level: logLevel}
+    }
 
-	// Choose between structured JSON logs and pretty logs
-	var handler slog.Handler
-	if cfg.Logging.Structure {
-		handler = NewJSONLogWriter(logFilePath, logLevel, cfg.Logging.MaxSizeMB)
-	} else {
-		logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_SYNC, 0644)
-		if err != nil {
-			fmt.Printf("Failed to open log file: %v\n", err)
-			os.Exit(1)
-		}
-		handler = &PrettyLogWriter{output: logFile, level: logLevel}
-	}
-
-	// Set global logger
-	Log = slog.New(handler)
+    // Set global logger
+    Log = slog.New(handler)
 }
 
 // GetLogger returns a logger with a specific component field
