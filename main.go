@@ -60,22 +60,22 @@ func main() {
 
 		cfg, err := config.LoadConfig("config.yml")
 		if err != nil {
-			log.Error("Failed to load config", "file", "config.yml", "error", err)
+			log.Error("Failed to load config", "error", err, "file", "config.yml")
 		}
 
 		_, err = config.LoadWhitelistConfig("whitelist.yml")
 		if err != nil {
-			log.Error("Failed to load whitelist config", "file", "whitelist.yml", "error", err)
+			log.Error("Failed to load whitelist config", "error", err, "file", "whitelist.yml")
 		}
 
 		_, err = config.LoadBlacklistConfig("blacklist.yml")
 		if err != nil {
-			log.Error("Failed to load blacklist config", "file", "blacklist.yml", "error", err)
+			log.Error("Failed to load blacklist config", "error", err, "file", "blacklist.yml")
 		}
 
 		client, err := mongo.InitDB(cfg)
 		if err != nil {
-			log.Error("Failed to initialize database", "error", err)
+			log.Error("Failed to initialize database", "error", err, "uri", cfg.MongoDB.URI)
 		}
 
 		// Re-initialize logger with new configuration
@@ -88,7 +88,7 @@ func main() {
 
 		err = utils.LoadRelayMetadataJSON()
 		if err != nil {
-			log.Error("Failed to load relay metadata", "error", err)
+			log.Error("Failed to load relay metadata", "error", err, "file", "relay_metadata.json")
 		}
 
 		mux := initApp()
