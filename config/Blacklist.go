@@ -32,14 +32,14 @@ func CheckBlacklist(pubkey, eventContent string) (bool, string) {
 	// Check for permanent blacklist by pubkey or npub.
 	if isPubKeyPermanentlyBlacklisted(pubkey, blacklistConfig) {
 		// Permanent blacklist match
-		log.Info("Pubkey permanently blacklisted", "pubkey", pubkey)
+		log.Warn("Pubkey permanently blacklisted", "pubkey", pubkey)
 		return true, fmt.Sprintf("pubkey %s is permanently blacklisted", pubkey)
 	}
 
 	// Check for temporary ban.
 	if isPubKeyTemporarilyBlacklisted(pubkey) {
 		// Temporary blacklist match
-		log.Info("Pubkey temporarily blacklisted", "pubkey", pubkey)
+		log.Warn("Pubkey temporarily blacklisted", "pubkey", pubkey)
 		return true, fmt.Sprintf("pubkey %s is temporarily blacklisted", pubkey)
 	}
 
@@ -97,7 +97,7 @@ func CheckBlacklist(pubkey, eventContent string) (bool, string) {
 		for _, mutelistedPubkey := range mutelistedPubkeys {
 			if pubkey == mutelistedPubkey {
 				// Pubkey found in the mutelist
-				log.Info("Pubkey found in mutelist", "pubkey", pubkey)
+				log.Warn("Pubkey found in mutelist - blocking", "pubkey", pubkey)
 				return true, "not allowed: pubkey is in mutelist"
 			}
 		}
@@ -143,7 +143,7 @@ func ClearTemporaryBans() {
 	mu.Lock()
 	defer mu.Unlock()
 	tempBannedPubkeys = make(map[string]*tempBanEntry)
-	log.Debug("Cleared all temporary bans")
+	log.Debug("Cleared all temporary bans", "timestamp", time.Now().Format(time.RFC3339))
 }
 
 var (
