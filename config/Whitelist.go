@@ -1,8 +1,6 @@
 package config
 
 import (
-
-	//"log"
 	"strconv"
 
 	nostr "github.com/0ceanslim/grain/server/types"
@@ -57,7 +55,7 @@ func IsPubKeyWhitelisted(pubKey string, skipEnabledCheck bool) bool {
 	for _, npub := range cfg.PubkeyWhitelist.Npubs {
 		decodedPubKey, err := utils.DecodeNpub(npub)
 		if err != nil {
-			log.Error("Error decoding npub", "error", err)
+			log.Error("Failed to decode npub", "npub", npub, "error", err)
 			continue
 		}
 		if pubKey == decodedPubKey {
@@ -70,7 +68,7 @@ func IsPubKeyWhitelisted(pubKey string, skipEnabledCheck bool) bool {
 		domains := cfg.DomainWhitelist.Domains
 		pubkeys, err := utils.FetchPubkeysFromDomains(domains)
 		if err != nil {
-			log.Error("Error fetching pubkeys from domains", "error", err)
+			log.Error("Failed to fetch pubkeys from domains", "domains", domains, "error", err)
 			return false // Consider errors as non-whitelisted for purging
 		}
 
@@ -94,7 +92,7 @@ func IsKindWhitelisted(kind int) bool {
 	for _, whitelistedKindStr := range cfg.KindWhitelist.Kinds {
 		whitelistedKind, err := strconv.Atoi(whitelistedKindStr)
 		if err != nil {
-			log.Error("Error converting whitelisted kind to int", "error", err)
+			log.Error("Failed to convert whitelisted kind to int", "kind", whitelistedKindStr, "error", err)
 			continue
 		}
 		if kind == whitelistedKind {

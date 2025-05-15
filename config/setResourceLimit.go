@@ -1,8 +1,6 @@
 package config
 
 import (
-	"fmt"
-	//"log"
 	"runtime"
 	"runtime/debug"
 	"time"
@@ -13,19 +11,19 @@ import (
 func SetResourceLimit(cfg *configTypes.ResourceLimits) {
 	// Set CPU cores
 	runtime.GOMAXPROCS(cfg.CPUCores)
-	log.Info(fmt.Sprintf("CPU cores set to %d", cfg.CPUCores))
+	log.Info("CPU cores limit set", "cores", cfg.CPUCores)
 
 	// Set maximum heap size
 	if cfg.HeapSizeMB > 0 {
 		heapSize := int64(uint64(cfg.HeapSizeMB) * 1024 * 1024)
 		debug.SetMemoryLimit(heapSize)
-		log.Info(fmt.Sprintf("Heap size limited to %d MB", cfg.HeapSizeMB))
+		log.Info("Heap size limit set", "size_mb", cfg.HeapSizeMB)
 	}
 
 	// Optional: Basic memory monitoring without goroutine management
 	if cfg.MemoryMB > 0 {
 		go monitorMemoryUsage(cfg.MemoryMB)
-		log.Info(fmt.Sprintf("Memory usage monitoring enabled at %d MB", cfg.MemoryMB))
+		log.Info("Memory usage monitoring enabled", "limit_mb", cfg.MemoryMB)
 	}
 }
 
@@ -36,7 +34,7 @@ func monitorMemoryUsage(maxMemoryMB int) {
 
 		usedMemoryMB := int(memStats.Alloc / 1024 / 1024)
 		if usedMemoryMB > maxMemoryMB {
-			log.Warn(fmt.Sprintf("Memory usage exceeded: %d MB used, limit is %d MB", usedMemoryMB, maxMemoryMB))
+			log.Warn("Memory usage exceeded limit", "used_mb", usedMemoryMB, "limit_mb", maxMemoryMB)
 			debug.FreeOSMemory() // Attempt to free memory
 		}
 

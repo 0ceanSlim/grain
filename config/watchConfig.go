@@ -1,10 +1,7 @@
 package config
 
 import (
-	"fmt"
 	"os"
-
-	//"log"
 	"time"
 
 	"gopkg.in/fsnotify.v1"
@@ -20,7 +17,7 @@ func WatchConfigFile(filePath string, restartChan chan<- struct{}) {
 
 	err = watcher.Add(filePath)
 	if err != nil {
-		log.Error("Error creating file watcher", "error", err)
+		log.Error("Failed to add file to watcher", "file", filePath, "error", err)
 		os.Exit(1) // Manually exit after logging the error
 	}
 
@@ -34,11 +31,12 @@ func WatchConfigFile(filePath string, restartChan chan<- struct{}) {
 				return
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
+				log.Info("Config file modified", "file", filePath)
 				if debounceTimer != nil {
 					debounceTimer.Stop() // Cancel the previous timer
 				}
 				debounceTimer = time.AfterFunc(debounceDuration, func() {
-					fmt.Println("Config file modified, restarting server...")
+					log.Info("Config file change debounced, triggering restart", "file", filePath)
 					select {
 					case restartChan <- struct{}{}:
 					default:
