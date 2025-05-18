@@ -3,13 +3,22 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
+	"github.com/0ceanslim/grain/config"
 	relay "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+var queryLog *slog.Logger
+
+func init() {
+	queryLog = utils.GetLogger("mongo-query")
+}
 
 // QueryEvents queries events from the MongoDB collection(s) based on filters
 func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName string) ([]relay.Event, error) {
@@ -59,24 +68,45 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 	// Apply sorting by creation date (descending)
 	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
 
+	// Get limit from filters or use implicit limit
 	var queryLimit int64 = -1 // Default: no limit
+	implicitLimit := config.GetConfig().Server.ImplicitReqLimit
 
+	// First check if any filter has a limit
+	var lowestExplicitLimit *int
 	for _, filter := range filters {
 		if filter.Limit != nil {
-			if queryLimit == -1 || int64(*filter.Limit) < queryLimit {
-				queryLimit = int64(*filter.Limit)
+			if lowestExplicitLimit == nil || *filter.Limit < *lowestExplicitLimit {
+				lowestExplicitLimit = filter.Limit
 			}
 		}
 	}
 
+	// Apply the appropriate limit
+	if lowestExplicitLimit != nil {
+		queryLimit = int64(*lowestExplicitLimit)
+		queryLog.Debug("Using explicit limit from filter", "limit", queryLimit)
+	} else if implicitLimit > 0 {
+		queryLimit = int64(implicitLimit)
+		queryLog.Info("No explicit limit specified, applying implicit limit", 
+			"implicit_limit", implicitLimit,
+			"database", databaseName)
+	} else {
+		queryLog.Warn("No limit specified and no implicit limit configured", 
+			"database", databaseName,
+			"query_filters", len(combinedFilters))
+	}
+
 	if queryLimit > 0 {
-		opts.SetLimit(queryLimit) // Apply the lowest limit found
+		opts.SetLimit(queryLimit) // Apply the limit
 	}
 
 	// If no kinds are specified in any filter, query all collections
 	var collections []string
 	if len(filters) > 0 && len(filters[0].Kinds) == 0 {
 		collections, _ = client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
+		queryLog.Debug("No kinds specified, querying all collections", 
+			"collection_count", len(collections))
 	} else {
 		// Collect all kinds from filters and query those collections
 		kindsMap := make(map[int]bool)
@@ -91,30 +121,64 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 			collectionName := fmt.Sprintf("event-kind%d", kind)
 			collections = append(collections, collectionName)
 		}
+		queryLog.Debug("Querying specific kind collections", 
+			"kind_count", len(kindsMap),
+			"collection_count", len(collections))
 	}
 
+	totalEvents := 0
 	// Query each collection
 	for _, collectionName := range collections {
 		collection := client.Database(databaseName).Collection(collectionName)
 		cursor, err := collection.Find(context.TODO(), query, opts)
 		if err != nil {
+			queryLog.Error("Error querying collection", 
+				"collection", collectionName, 
+				"error", err)
 			return nil, fmt.Errorf("error querying collection %s: %v", collectionName, err)
 		}
 		defer cursor.Close(context.TODO())
 
+		collectionEvents := 0
 		for cursor.Next(context.TODO()) {
 			var event relay.Event
 			if err := cursor.Decode(&event); err != nil {
+				queryLog.Error("Error decoding event", 
+					"collection", collectionName, 
+					"error", err)
 				return nil, fmt.Errorf("error decoding event from collection %s: %v", collectionName, err)
 			}
 			results = append(results, event)
+			collectionEvents++
 		}
+		totalEvents += collectionEvents
 
 		// Handle cursor errors
 		if err := cursor.Err(); err != nil {
+			queryLog.Error("Cursor error", 
+				"collection", collectionName, 
+				"error", err)
 			return nil, fmt.Errorf("cursor error in collection %s: %v", collectionName, err)
 		}
+		
+		queryLog.Debug("Collection query complete", 
+			"collection", collectionName,
+			"events_found", collectionEvents,
+			"limit_applied", queryLimit > 0)
 	}
+
+	queryLog.Info("Query completed", 
+		"total_collections", len(collections),
+		"total_events", totalEvents,
+		"limit_type", func() string {
+			if lowestExplicitLimit != nil {
+				return "explicit"
+			} else if queryLimit > 0 {
+				return "implicit"
+			}
+			return "none"
+		}(),
+		"limit_value", queryLimit)
 
 	return results, nil
 }

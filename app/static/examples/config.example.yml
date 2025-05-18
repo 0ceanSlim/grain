@@ -15,6 +15,7 @@ server:
   idle_timeout: 120 # in seconds
   max_connections: 100
   max_subscriptions_per_client: 10
+  implicit_req_limit: 500 # Default limit applied to REQ when no limit is specified
 
 resource_limits:
   cpu_cores: 2 # Limit the number of CPU cores the application can use
