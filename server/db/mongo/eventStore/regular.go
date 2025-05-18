@@ -12,13 +12,22 @@ import (
 
 // Regular stores regular events in the database
 func Regular(ctx context.Context, evt relay.Event, collection *mongo.Collection, client relay.ClientInterface) error {
-	_, err := collection.InsertOne(ctx, evt)
+	result, err := collection.InsertOne(ctx, evt)
 	if err != nil {
+		log.Error("Failed to insert regular event", 
+			"event_id", evt.ID, 
+			"kind", evt.Kind, 
+			"pubkey", evt.PubKey, 
+			"error", err)
 		response.SendOK(client, evt.ID, false, "error: could not connect to the database")
 		return fmt.Errorf("error inserting event kind %d into MongoDB: %v", evt.Kind, err)
 	}
 
-	fmt.Printf("Inserted event kind %d into MongoDB: %s\n", evt.Kind, evt.ID)
+	log.Info("Inserted regular event", 
+		"event_id", evt.ID, 
+		"kind", evt.Kind, 
+		"pubkey", evt.PubKey, 
+		"inserted_id", result.InsertedID)
 	response.SendOK(client, evt.ID, true, "")
 	return nil
 }

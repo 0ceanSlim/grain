@@ -23,6 +23,10 @@ func Addressable(ctx context.Context, evt relay.Event, collection *mongo.Collect
 	}
 
 	if dTag == "" {
+		log.Warn("No d tag found in addressable event", 
+			"event_id", evt.ID, 
+			"kind", evt.Kind, 
+			"pubkey", evt.PubKey)
 		return fmt.Errorf("no d tag is present in addressable event")
 	}
 
@@ -33,32 +37,70 @@ func Addressable(ctx context.Context, evt relay.Event, collection *mongo.Collect
 	var existingEvent relay.Event
 	err := collection.FindOne(ctx, filter).Decode(&existingEvent)
 	if err != nil && err != mongo.ErrNoDocuments {
+		log.Error("Failed to find existing event", 
+			"event_id", evt.ID, 
+			"kind", evt.Kind, 
+			"pubkey", evt.PubKey, 
+			"d_tag", dTag, 
+			"error", err)
 		return fmt.Errorf("error finding existing event: %v", err)
 	}
 
 	// Step 4: If an existing event is found, compare created_at and id to decide if it should be replaced
 	if err != mongo.ErrNoDocuments {
+		log.Debug("Found existing addressable event", 
+			"existing_id", existingEvent.ID, 
+			"new_id", evt.ID, 
+			"existing_created_at", existingEvent.CreatedAt, 
+			"new_created_at", evt.CreatedAt)
+
 		if existingEvent.CreatedAt > evt.CreatedAt || (existingEvent.CreatedAt == evt.CreatedAt && existingEvent.ID < evt.ID) {
+			log.Info("Rejecting event - newer version exists", 
+				"event_id", evt.ID, 
+				"existing_id", existingEvent.ID,
+				"kind", evt.Kind,
+				"pubkey", evt.PubKey,
+				"d_tag", dTag)
 			response.SendOK(client, evt.ID, false, "blocked: relay already has a newer event for this pubkey and dTag")
 			return nil
 		}
 
 		// Step 5: Delete the older event before inserting the new one
-		_, err := collection.DeleteOne(ctx, filter)
+		result, err := collection.DeleteOne(ctx, filter)
 		if err != nil {
+			log.Error("Failed to delete older event", 
+				"existing_id", existingEvent.ID, 
+				"new_id", evt.ID, 
+				"kind", evt.Kind, 
+				"pubkey", evt.PubKey, 
+				"error", err)
 			return fmt.Errorf("error deleting the older event: %v", err)
 		}
-		fmt.Printf("Deleted older event with ID: %s\n", existingEvent.ID)
+		log.Info("Deleted older event", 
+			"existing_id", existingEvent.ID, 
+			"new_id", evt.ID, 
+			"kind", evt.Kind, 
+			"deleted_count", result.DeletedCount)
 	}
 
 	// Step 6: Insert the new event (without upsert since we already deleted the old one)
-	_, err = collection.InsertOne(ctx, evt)
+	result, err := collection.InsertOne(ctx, evt)
 	if err != nil {
+		log.Error("Failed to insert addressable event", 
+			"event_id", evt.ID, 
+			"kind", evt.Kind, 
+			"pubkey", evt.PubKey, 
+			"error", err)
 		response.SendOK(client, evt.ID, false, "error: could not insert the new event into the database")
 		return fmt.Errorf("error inserting event kind %d into MongoDB: %v", evt.Kind, err)
 	}
 
-	fmt.Printf("Inserted event kind %d into MongoDB: %s\n", evt.Kind, evt.ID)
+	log.Info("Inserted addressable event", 
+		"event_id", evt.ID, 
+		"kind", evt.Kind, 
+		"pubkey", evt.PubKey, 
+		"d_tag", dTag, 
+		"inserted_id", result.InsertedID)
 	response.SendOK(client, evt.ID, true, "")
 	return nil
 }

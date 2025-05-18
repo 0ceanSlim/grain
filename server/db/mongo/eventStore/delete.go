@@ -3,7 +3,6 @@ package eventStore
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/0ceanslim/grain/server/handlers/response"
 	relay "github.com/0ceanslim/grain/server/types"
@@ -14,29 +13,59 @@ import (
 
 // Delete processes kind 5 delete events and removes matching events from the database
 func Delete(ctx context.Context, evt relay.Event, dbClient *mongo.Client, dbName string, client relay.ClientInterface) error {
+	log.Info("Processing deletion event", 
+		"event_id", evt.ID, 
+		"pubkey", evt.PubKey,
+		"tag_count", len(evt.Tags))
+
 	for _, tag := range evt.Tags {
 		if len(tag) < 2 {
 			continue
 		}
+
 		if tag[0] == "e" {
 			eventID := tag[1]
-			if err := deleteEventByID(ctx, dbName, eventID, evt.PubKey, dbClient); err != nil {
+			log.Debug("Processing e tag deletion", 
+				"target_event_id", eventID, 
+				"event_id", evt.ID)
+
+			if err := deleteSpecificEvent(ctx, dbName, eventID, evt.PubKey, dbClient); err != nil {
+				log.Error("Failed to delete event by ID", 
+					"target_event_id", eventID, 
+					"event_id", evt.ID, 
+					"error", err)
 				response.SendOK(client, evt.ID, false, fmt.Sprintf("error: %v", err))
 				return fmt.Errorf("error deleting event with ID %s: %v", eventID, err)
 			}
 		} else if tag[0] == "a" {
-			parts := splitTagA(tag[1])
+			parts := parseAddressableEventReference(tag[1])
 			if len(parts) == 3 {
 				kind := parts[0]
 				pubKey := parts[1]
 				dID := parts[2]
 
-				if err := deletePreviousKind5Events(ctx, dbName, kind, pubKey, dID, dbClient); err != nil {
+				log.Debug("Processing a tag deletion", 
+					"kind", kind, 
+					"pubkey", pubKey, 
+					"d_tag", dID, 
+					"event_id", evt.ID)
+
+				if err := cleanupPreviousDeletionRequests(ctx, dbName, kind, pubKey, dID, dbClient); err != nil {
+					log.Error("Failed to delete previous kind 5 events", 
+						"kind", kind, 
+						"pubkey", pubKey, 
+						"d_tag", dID, 
+						"error", err)
 					response.SendOK(client, evt.ID, false, fmt.Sprintf("error: %v", err))
 					return fmt.Errorf("error deleting previous kind 5 events: %v", err)
 				}
 
-				if err := deleteEventByKindPubKeyDID(ctx, dbName, kind, pubKey, dID, evt.CreatedAt, dbClient); err != nil {
+				if err := deleteAddressableEvents(ctx, dbName, kind, pubKey, dID, evt.CreatedAt, dbClient); err != nil {
+					log.Error("Failed to delete events by kind, pubkey, and dID", 
+						"kind", kind, 
+						"pubkey", pubKey, 
+						"d_tag", dID, 
+						"error", err)
 					response.SendOK(client, evt.ID, false, fmt.Sprintf("error: %v", err))
 					return fmt.Errorf("error deleting events with kind %s, pubkey %s, and dID %s: %v", kind, pubKey, dID, err)
 				}
@@ -44,17 +73,21 @@ func Delete(ctx context.Context, evt relay.Event, dbClient *mongo.Client, dbName
 		}
 	}
 
-	if err := storeEvent(ctx, dbName, evt, dbClient); err != nil {
+	if err := storeDeletionEvent(ctx, dbName, evt, dbClient); err != nil {
+		log.Error("Failed to store deletion event", 
+			"event_id", evt.ID, 
+			"error", err)
 		response.SendOK(client, evt.ID, false, fmt.Sprintf("error: %v", err))
 		return fmt.Errorf("error storing deletion event: %v", err)
 	}
 
+	log.Info("Deletion event processed successfully", "event_id", evt.ID)
 	response.SendOK(client, evt.ID, true, "")
 	return nil
 }
 
-func deletePreviousKind5Events(ctx context.Context, dbName string, kind string, pubKey string, dID string, dbClient *mongo.Client) error {
-	collection := dbClient.Database(dbName).Collection("event-kind5") // ✅ Use dbName
+func cleanupPreviousDeletionRequests(ctx context.Context, dbName string, kind string, pubKey string, dID string, dbClient *mongo.Client) error {
+	collection := dbClient.Database(dbName).Collection("event-kind5")
 	filter := bson.M{
 		"tags": bson.M{
 			"$elemMatch": bson.M{
@@ -64,63 +97,109 @@ func deletePreviousKind5Events(ctx context.Context, dbName string, kind string, 
 		},
 	}
 
-	_, err := collection.DeleteMany(ctx, filter)
+	result, err := collection.DeleteMany(ctx, filter)
 	if err != nil {
+		log.Error("Failed to delete previous kind 5 events", 
+			"kind", kind, 
+			"pubkey", pubKey, 
+			"d_tag", dID, 
+			"error", err)
 		return fmt.Errorf("error deleting previous kind 5 events from collection event-kind5: %v", err)
 	}
 
-	fmt.Printf("Deleted previous kind 5 events for kind %s, pubkey %s, and dID %s\n", kind, pubKey, dID)
+	log.Info("Deleted previous kind 5 events", 
+		"kind", kind, 
+		"pubkey", pubKey, 
+		"d_tag", dID, 
+		"deleted_count", result.DeletedCount)
 	return nil
 }
 
-func deleteEventByID(ctx context.Context, dbName string, eventID string, pubKey string, dbClient *mongo.Client) error {
+func deleteSpecificEvent(ctx context.Context, dbName string, eventID string, pubKey string, dbClient *mongo.Client) error {
 	collections, err := dbClient.Database(dbName).ListCollectionNames(ctx, bson.M{})
 	if err != nil {
+		log.Error("Failed to list collections", 
+			"database", dbName, 
+			"error", err)
 		return fmt.Errorf("error listing collections: %v", err)
 	}
+
+	log.Debug("Searching for event across collections", 
+		"event_id", eventID, 
+		"pubkey", pubKey, 
+		"collection_count", len(collections))
 
 	for _, collectionName := range collections {
 		filter := bson.M{"id": eventID, "pubkey": pubKey}
 		result, err := dbClient.Database(dbName).Collection(collectionName).DeleteOne(ctx, filter)
 		if err != nil {
+			log.Error("Failed to delete event from collection", 
+				"collection", collectionName, 
+				"event_id", eventID, 
+				"error", err)
 			return fmt.Errorf("error deleting event from collection %s: %v", collectionName, err)
 		}
 		if result.DeletedCount > 0 {
-			fmt.Printf("Deleted event %s from collection %s\n", eventID, collectionName)
+			log.Info("Successfully deleted event", 
+				"event_id", eventID, 
+				"collection", collectionName)
 			return nil
 		}
 	}
 
+	log.Debug("No matching event found to delete", 
+		"event_id", eventID, 
+		"pubkey", pubKey)
 	return nil
 }
 
-func splitTagA(tagA string) []string {
-	return strings.Split(tagA, ":")
-}
-
-func deleteEventByKindPubKeyDID(ctx context.Context, dbName string, kind string, pubKey string, dID string, createdAt int64, dbClient *mongo.Client) error {
-	filter := bson.M{"kind": kind, "pubkey": pubKey, "tags.d": dID, "createdat": bson.M{"$lte": createdAt}}
+func deleteAddressableEvents(ctx context.Context, dbName string, kind string, pubKey string, dID string, createdAt int64, dbClient *mongo.Client) error {
+	filter := bson.M{"kind": kind, "pubkey": pubKey, "tags.d": dID, "created_at": bson.M{"$lte": createdAt}}
 	collections, err := dbClient.Database(dbName).ListCollectionNames(ctx, bson.M{})
 	if err != nil {
+		log.Error("Failed to list collections", 
+			"database", dbName, 
+			"error", err)
 		return fmt.Errorf("error listing collections: %v", err)
 	}
 
 	for _, collectionName := range collections {
-		_, err := dbClient.Database(dbName).Collection(collectionName).DeleteMany(ctx, filter)
+		result, err := dbClient.Database(dbName).Collection(collectionName).DeleteMany(ctx, filter)
 		if err != nil {
+			log.Error("Failed to delete events from collection", 
+				"collection", collectionName, 
+				"kind", kind, 
+				"pubkey", pubKey, 
+				"d_tag", dID, 
+				"error", err)
 			return fmt.Errorf("error deleting events from collection %s: %v", collectionName, err)
 		}
-		fmt.Printf("Deleted events with kind %s, pubkey %s, and dID %s from collection %s\n", kind, pubKey, dID, collectionName)
+		
+		if result.DeletedCount > 0 {
+			log.Info("Deleted events by kind, pubkey, and dID", 
+				"collection", collectionName, 
+				"kind", kind, 
+				"pubkey", pubKey, 
+				"d_tag", dID, 
+				"deleted_count", result.DeletedCount)
+		}
 	}
 
 	return nil
 }
 
-func storeEvent(ctx context.Context, dbName string, evt relay.Event, dbClient *mongo.Client) error {
-	_, err := dbClient.Database(dbName).Collection("event-kind5").InsertOne(ctx, evt)
+func storeDeletionEvent(ctx context.Context, dbName string, evt relay.Event, dbClient *mongo.Client) error {
+	collection := dbClient.Database(dbName).Collection("event-kind5")
+	result, err := collection.InsertOne(ctx, evt)
 	if err != nil {
+		log.Error("Failed to insert deletion event", 
+			"event_id", evt.ID, 
+			"error", err)
 		return fmt.Errorf("error inserting deletion event: %v", err)
 	}
-	fmt.Printf("Stored deletion event %s\n", evt.ID)
+	
+	log.Info("Stored deletion event", 
+		"event_id", evt.ID, 
+		"inserted_id", result.InsertedID)
 	return nil
 }
