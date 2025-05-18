@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-
-	//"log"
 	"net/url"
 	"os"
 	"strings"

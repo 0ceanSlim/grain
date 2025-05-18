@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	configTypes "github.com/0ceanslim/grain/config/types"
-
 	"github.com/0ceanslim/grain/server/utils"
 
 	"gopkg.in/yaml.v3"
