@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
-
-	//"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/handlers"
@@ -19,6 +18,12 @@ import (
 
 	"golang.org/x/net/websocket"
 )
+
+var log *slog.Logger
+
+func init() {
+	log = utils.GetLogger("relay")
+}
 
 // Client implements ClientInterface
 type Client struct {
@@ -29,10 +34,17 @@ type Client struct {
 	messageBuffer strings.Builder
 
 	// Debugging Information
+	id 			string
 	ip          string
 	userAgent   string
 	origin      string
 	connectedAt time.Time
+
+	// Message monitoring
+	droppedMessages int
+	lastAdjustment  time.Time
+	messagesSent    int64
+	messagesDropped int64
 }
 
 // Track active clients
@@ -41,7 +53,38 @@ var (
 	mu                 sync.Mutex
 	clients            = make(map[*websocket.Conn]*Client)
 	clientsMu          sync.Mutex
+	
+	// Global stats
+	totalMessagesSent    int64
+	totalMessagesDropped int64
 )
+
+// PrintStats periodically logs messaging statistics
+func PrintStats() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		sent := atomic.LoadInt64(&totalMessagesSent)
+		dropped := atomic.LoadInt64(&totalMessagesDropped)
+		
+		// Reset counters
+		atomic.StoreInt64(&totalMessagesSent, 0)
+		atomic.StoreInt64(&totalMessagesDropped, 0)
+		
+		// Calculate drop rate
+		dropRate := 0.0
+		if sent+dropped > 0 {
+			dropRate = float64(dropped) / float64(sent+dropped) * 100
+		}
+		
+		log.Info("WebSocket message statistics", 
+			"sent", sent, 
+			"dropped", dropped, 
+			"drop_rate_pct", fmt.Sprintf("%.2f", dropRate),
+			"active_connections", currentConnections)
+	}
+}
 
 func WebSocketHandler(ws *websocket.Conn) {
 	mu.Lock()
@@ -59,61 +102,40 @@ func WebSocketHandler(ws *websocket.Conn) {
 	userAgent := ws.Request().Header.Get("User-Agent")
 	origin := ws.Request().Header.Get("Origin")
 
-	log.Printf("New connection: IP=%s, User-Agent=%s, Origin=%s", ip, userAgent, origin)
+	// Get server config
+	cfg := config.GetConfig()
+	
+	// Calculate optimal buffer size based on average message size
+	bufferSize := utils.CalculateOptimalBufferSize(cfg)
 
-	// Get resource limits from config
-	resourceLimits := config.GetConfig().ResourceLimits
-
-	maxClients := config.GetConfig().Server.MaxConnections
-	maxSubs := config.GetConfig().Server.MaxSubscriptionsPerClient
-	memoryMBLimit := resourceLimits.MemoryMB
-	heapSizeMBLimit := resourceLimits.HeapSizeMB
-
-	// Base buffer size calculation (based on max clients and subs)
-	baseBufferSize := maxClients * maxSubs * 2
-
-	// Get current system resource usage
-	currentMemoryUsage := utils.GetCurrentMemoryUsageMB()
-	currentHeapUsage := utils.GetCurrentHeapUsageMB()
-
-	// Calculate resource usage percentages
-	memoryUsagePercent := float64(currentMemoryUsage) / float64(memoryMBLimit)
-	heapUsagePercent := float64(currentHeapUsage) / float64(heapSizeMBLimit)
-
-	// Adjust buffer size dynamically based on usage
-	scalingFactor := 1.0
-	if memoryUsagePercent > 0.75 {
-		scalingFactor *= 0.5
-	}
-	if heapUsagePercent > 0.75 {
-		scalingFactor *= 0.5
-	}
-
-	// Apply scaling
-	dynamicBufferSize := int(float64(baseBufferSize) * scalingFactor)
-
-	// Ensure a reasonable minimum buffer size
-	if dynamicBufferSize < 1000 {
-		dynamicBufferSize = 1000
-	}
-
-	// Create a new client with dynamic buffer size
+	// Create a new client with optimized buffer size
 	client := &Client{
 		ws:            ws,
-		sendCh:        make(chan string, dynamicBufferSize),
+		sendCh:        make(chan string, bufferSize),
 		subscriptions: make(map[string][]relay.Filter),
 		rateLimiter:   config.GetRateLimiter(),
+		messageBuffer: strings.Builder{},
+		id: fmt.Sprintf("c%d", time.Now().UnixNano()), // Simple unique ID
 		ip:            ip,
 		userAgent:     userAgent,
 		origin:        origin,
 		connectedAt:   time.Now(),
+		
+		// Initialize monitoring fields
+		droppedMessages: 0,
+		lastAdjustment:  time.Now(),
 	}
 
 	clientsMu.Lock()
 	clients[ws] = client
 	clientsMu.Unlock()
 
-	log.Printf("New connection from IP: %s (Buffer Size: %d)", utils.GetClientIP(ws.Request()), dynamicBufferSize)
+	log.Info("New connection established", 
+		"client_id", client.id,
+		"ip", ip, 
+		"user_agent", userAgent, 
+		"buffer_size", bufferSize, 
+		"buffer_mb", fmt.Sprintf("%.2f", float64(bufferSize)*float64(utils.BufferMessageSizeLimit)/(1024*1024)))
 
 	// Start goroutine to handle outgoing messages
 	go clientWriter(client)
@@ -122,13 +144,65 @@ func WebSocketHandler(ws *websocket.Conn) {
 	clientReader(client)
 }
 
-// ✅ Implement `ClientInterface` methods
+// Implement `ClientInterface` methods
 func (c *Client) SendMessage(msg interface{}) {
-	jsonMsg, _ := json.Marshal(msg)
+	jsonMsg, err := json.Marshal(msg)
+	if err != nil {
+		log.Error("Failed to marshal message", "error", err)
+		return
+	}
+	
+	// Determine message priority (for logging and potential prioritization)
+	priority := "normal"
+	if arr, ok := msg.([]interface{}); ok && len(arr) > 0 {
+		if msgType, ok := arr[0].(string); ok {
+			switch msgType {
+			case "NOTICE", "EOSE", "CLOSED", "OK":
+				priority = "high"
+			}
+		}
+	}
+	
+	// Try to send without blocking
 	select {
 	case c.sendCh <- string(jsonMsg):
+		atomic.AddInt64(&c.messagesSent, 1)
+		atomic.AddInt64(&totalMessagesSent, 1)
 	default:
-		log.Println("[WARN] Client send buffer full, dropping message")
+		c.droppedMessages++
+		atomic.AddInt64(&c.messagesDropped, 1)
+		atomic.AddInt64(&totalMessagesDropped, 1)
+		
+		// For high priority messages, attempt to force them through
+		if priority == "high" && c.droppedMessages < 1000 {
+			select {
+			case <-c.sendCh: // Remove one message from the buffer
+				// Try again
+				select {
+				case c.sendCh <- string(jsonMsg):
+					log.Debug("Forced high-priority message into buffer", 
+						"type", priority,
+						"client_id", c.id, 
+						"client", c.ClientInfo())
+				default:
+					log.Warn("Failed to send high-priority message even after making room",
+						"client_id", c.id,
+						"client", c.ClientInfo())
+				}
+			default:
+				// Couldn't make room
+			}
+		}
+		
+		// Only log warnings periodically to prevent log flooding
+		if c.droppedMessages == 1 || c.droppedMessages % 100 == 0 {
+			log.Warn("Client send buffer full, dropping message", 
+				"dropped_count", c.droppedMessages,
+				"buffer_size", cap(c.sendCh),
+				"buffer_used", len(c.sendCh),
+				"client_id", c.id,
+				"client", c.ClientInfo())
+		}
 	}
 }
 
@@ -138,7 +212,8 @@ func (c *Client) GetWS() *websocket.Conn {
 
 func (c *Client) ClientInfo() string {
 	return fmt.Sprintf(
-		"Client Info - IP: %s, User-Agent: %s, Origin: %s, Connected At: %s, Active Subscriptions: %d",
+		"Client Info - ID: %s, IP: %s, User-Agent: %s, Origin: %s, Connected At: %s, Active Subscriptions: %d",
+		c.id,
 		c.ip,
 		c.userAgent,
 		c.origin,
@@ -164,12 +239,15 @@ func (c *Client) CloseClient() {
 
 	// Prevent closing `sendCh` multiple times
 	select {
-	case <-c.sendCh: // Check if already closed
+	case _, ok := <-c.sendCh:
+		if !ok {
+			// Channel already closed
+			return
+		}
 	default:
 		close(c.sendCh)
 	}
 }
-
 func clientReader(client *Client) {
 	ws := client.ws
 	defer func() {
@@ -196,7 +274,9 @@ func clientReader(client *Client) {
 		fullMessage := client.messageBuffer.String()
 
 		if !isValidJSON(fullMessage) {
-			log.Println("[INFO] Waiting for full JSON...")
+			log.Debug("Waiting for full JSON message", 
+			"client_id", client.id,
+			"client", client.ClientInfo())
 			continue
 		}
 
@@ -205,11 +285,23 @@ func clientReader(client *Client) {
 		var message []interface{}
 		err = json.Unmarshal([]byte(fullMessage), &message)
 		if err != nil {
-			log.Printf("[ERROR] JSON parse error: %v", err)
+			log.Error("JSON parse error", 
+			"error", err, 
+			"client_id", client.id,
+			"client", client.ClientInfo())
 			continue
 		}
 
-		messageType := message[0].(string)
+		if len(message) == 0 {
+			log.Warn("Empty message received", "client", client.ClientInfo())
+			continue
+		}
+
+		messageType, ok := message[0].(string)
+		if !ok {
+			log.Warn("Invalid message type", "client", client.ClientInfo())
+			continue
+		}
 
 		switch messageType {
 		case "REQ":
@@ -220,49 +312,117 @@ func clientReader(client *Client) {
 			if config.GetConfig().Auth.Enabled {
 				handlers.HandleAuth(client, message)
 			} else {
-				log.Println("[WARN] Received AUTH message, but AUTH is disabled")
+				log.Warn("Received AUTH message, but AUTH is disabled", "client", client.ClientInfo())
 			}
 		case "EVENT":
 			handlers.HandleEvent(client, message)
 		default:
-			log.Printf("[WARN] Unknown message type: %s", messageType)
+			log.Warn("Unknown message type", "type", messageType, "client", client.ClientInfo())
 		}
 	}
 }
 
 func clientWriter(client *Client) {
-	ws := client.ws
-	for msg := range client.sendCh {
-		if err := websocket.Message.Send(ws, msg); err != nil {
-			log.Printf("[ERROR] Failed to send message: %v | %s", err, client.ClientInfo())
-			return // Don't call CloseClient() here, let WebSocketHandler handle it
-		}
-	}
+    ws := client.ws
+    
+    // Use a ticker for paced sending of messages
+    ticker := time.NewTicker(10 * time.Millisecond)
+    defer ticker.Stop()
+    
+    // Track consecutive empty reads for adaptive pacing
+    consecEmptyReads := 0
+    pacingInterval := 10 * time.Millisecond
+    
+    // Batch size for sending multiple messages per tick
+    const batchSize = 5
+    
+    // Main loop - using range instead of select
+    for range ticker.C {
+        // Send up to batchSize messages per tick
+        sentInBatch := 0
+        
+        for i := 0; i < batchSize; i++ {
+            select {
+            case msg, ok := <-client.sendCh:
+                if !ok {
+                    // Channel closed, exit
+                    return
+                }
+                
+                if err := websocket.Message.Send(ws, msg); err != nil {
+                    log.Error("Failed to send message", 
+                        "error", err,
+                        "client_id", client.id)
+                    client.CloseClient()
+                    return
+                }
+                
+                sentInBatch++
+                consecEmptyReads = 0
+                
+            default:
+                // No more messages available
+                consecEmptyReads++
+                
+                // Adaptive pacing - slow down ticker when queue is empty
+                if consecEmptyReads > 50 && pacingInterval < 100*time.Millisecond {
+                    // Gradually increase pacing interval
+                    pacingInterval += 10 * time.Millisecond
+                    ticker.Reset(pacingInterval)
+                    
+                    log.Debug("Increased pacing interval", 
+                        "interval_ms", pacingInterval.Milliseconds(),
+                        "client_id", client.id)
+                }
+                
+                // Skip to next ticker iteration instead of using break
+                i = batchSize // This forces exit from the inner loop
+            }
+        }
+        
+        // If we're actively sending messages, speed up the ticker
+        if sentInBatch > 0 && pacingInterval > 10*time.Millisecond {
+            pacingInterval = 10 * time.Millisecond
+            ticker.Reset(pacingInterval)
+        }
+    }
 }
 
 func handleReadError(err error, ws *websocket.Conn) {
-	clientsMu.Lock()
-	client, exists := clients[ws]
-	clientsMu.Unlock()
+    clientsMu.Lock()
+    client, exists := clients[ws]
+    clientsMu.Unlock()
 
-	clientInfo := "Unknown Client"
-	if exists {
-		clientInfo = client.ClientInfo()
-	}
+    clientInfo := "Unknown Client"
+    clientID := "unknown"
+    if exists {
+        clientInfo = client.ClientInfo()
+        clientID = client.id
+    }
 
-	if errors.Is(err, io.EOF) {
-		log.Printf("[INFO] Client disconnected: %s", clientInfo)
-	} else {
-		log.Printf("[ERROR] WebSocket read error: %v | %s", err, clientInfo)
-	}
+    if errors.Is(err, io.EOF) {
+        log.Info("Client disconnected", 
+            "client_id", clientID,
+            "client", clientInfo)
+    } else {
+        log.Error("WebSocket read error", 
+            "error", err, 
+            "client_id", clientID,
+            "client", clientInfo)
+    }
 
-	// Avoid closing WebSocket multiple times
-	if exists {
-		client.CloseClient()
-	}
+    // Avoid closing WebSocket multiple times
+    if exists {
+        client.CloseClient()
+    }
 }
 
 func isValidJSON(s string) bool {
 	var js interface{}
 	return json.Unmarshal([]byte(s), &js) == nil
+}
+
+// Start stats monitoring
+func InitStatsMonitoring() {
+	go PrintStats()
 }
