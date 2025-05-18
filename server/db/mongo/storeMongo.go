@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/0ceanslim/grain/server/db/mongo/kinds"
+	"github.com/0ceanslim/grain/server/db/mongo/eventStore"
 	"github.com/0ceanslim/grain/server/handlers/response"
 	relay "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
@@ -30,25 +30,25 @@ func StoreMongoEvent(ctx context.Context, evt relay.Event, client relay.ClientIn
 	switch {
 	case evt.Kind == 2:
 		mongoLog.Debug("Handling deprecated event", "event_id", evt.ID)
-		err = kinds.HandleDeprecatedKind(ctx, evt, client)
+		err = eventStore.Deprecated(ctx, evt, client)
 		
 	case evt.Kind == 5:
 		mongoLog.Debug("Handling deletion event", "event_id", evt.ID)
-		err = kinds.HandleDeleteKind(ctx, evt, GetClient(), dbName, client)
+		err = eventStore.Delete(ctx, evt, GetClient(), dbName, client)
 		
 	case (evt.Kind >= 1000 && evt.Kind < 10000) ||
 		(evt.Kind >= 4 && evt.Kind < 45) || evt.Kind == 1:
 		mongoLog.Debug("Handling regular event", 
 			"event_id", evt.ID, 
 			"kind", evt.Kind)
-		err = kinds.HandleRegularKind(ctx, evt, collection, client)
+		err = eventStore.Regular(ctx, evt, collection, client)
 		
 	case (evt.Kind >= 10000 && evt.Kind < 20000) ||
 		evt.Kind == 0 || evt.Kind == 3:
 		mongoLog.Debug("Handling replaceable event", 
 			"event_id", evt.ID, 
 			"kind", evt.Kind)
-		err = kinds.HandleReplaceableKind(ctx, evt, collection, client)
+		err = eventStore.Replaceable(ctx, evt, collection, client)
 		
 	case evt.Kind >= 20000 && evt.Kind < 30000:
 		mongoLog.Info("Ephemeral event received and ignored", 
@@ -59,13 +59,13 @@ func StoreMongoEvent(ctx context.Context, evt relay.Event, client relay.ClientIn
 		mongoLog.Debug("Handling addressable event", 
 			"event_id", evt.ID, 
 			"kind", evt.Kind)
-		err = kinds.HandleAddressableKind(ctx, evt, collection, client)
+		err = eventStore.Addressable(ctx, evt, collection, client)
 		
 	default:
 		mongoLog.Warn("Handling unknown event kind", 
 			"event_id", evt.ID, 
 			"kind", evt.Kind)
-		err = kinds.HandleUnknownKind(ctx, evt, collection, client)
+		err = eventStore.Unknown(ctx, evt, collection, client)
 	}
 
 	if err != nil {

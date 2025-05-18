@@ -1,4 +1,4 @@
-package kinds
+package eventStore
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// HandleDeleteKind processes kind 5 delete events and removes matching events from the database
-func HandleDeleteKind(ctx context.Context, evt relay.Event, dbClient *mongo.Client, dbName string, client relay.ClientInterface) error {
+// Delete processes kind 5 delete events and removes matching events from the database
+func Delete(ctx context.Context, evt relay.Event, dbClient *mongo.Client, dbName string, client relay.ClientInterface) error {
 	for _, tag := range evt.Tags {
 		if len(tag) < 2 {
 			continue

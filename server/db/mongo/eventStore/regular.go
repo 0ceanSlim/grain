@@ -1,4 +1,4 @@
-package kinds
+package eventStore
 
 import (
 	"context"
@@ -10,8 +10,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// HandleRegularKind stores regular events in the database
-func HandleRegularKind(ctx context.Context, evt relay.Event, collection *mongo.Collection, client relay.ClientInterface) error {
+// Regular stores regular events in the database
+func Regular(ctx context.Context, evt relay.Event, collection *mongo.Collection, client relay.ClientInterface) error {
 	_, err := collection.InsertOne(ctx, evt)
 	if err != nil {
 		response.SendOK(client, evt.ID, false, "error: could not connect to the database")

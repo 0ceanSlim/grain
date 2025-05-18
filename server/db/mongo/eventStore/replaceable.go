@@ -1,4 +1,4 @@
-package kinds
+package eventStore
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// HandleReplaceableKind manages replaceable events by updating or inserting them
-func HandleReplaceableKind(ctx context.Context, evt relay.Event, collection *mongo.Collection, client relay.ClientInterface) error {
+// Replaceable manages replaceable events by updating or inserting them
+func Replaceable(ctx context.Context, evt relay.Event, collection *mongo.Collection, client relay.ClientInterface) error {
 	filter := bson.M{"pubkey": evt.PubKey, "kind": evt.Kind}
 	var existingEvent relay.Event
 	err := collection.FindOne(ctx, filter).Decode(&existingEvent)
