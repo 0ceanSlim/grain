@@ -13,7 +13,11 @@ const (
 	BufferMessageSizeLimit = 128000 // 128 KiloBytes
 )
 
-var bufferlog = slog.Default().With("component", "buffer")
+var bufferLog *slog.Logger
+
+func init() {
+	bufferLog = GetLogger("buffer")
+}
 
 // CalculateOptimalBufferSize determines buffer size based on system resources
 func CalculateOptimalBufferSize(cfg *configTypes.ServerConfig) int {
@@ -30,10 +34,10 @@ func CalculateOptimalBufferSize(cfg *configTypes.ServerConfig) int {
 	maxConnections := int64(cfg.Server.MaxConnections)
 	
 	// Reserve memory for other operations (75% of available)
-	MemoryForBuffers := availableMemory * 25 / 100
+	memoryForBuffers := availableMemory * 25 / 100
 	
 	// Calculate per-connection memory budget
-	memoryPerConnection := MemoryForBuffers / maxConnections
+	memoryPerConnection := memoryForBuffers / maxConnections
 	
 	// Calculate messages per connection buffer based on message size
 	messagesPerBuffer := memoryPerConnection / BufferMessageSizeLimit
@@ -50,15 +54,18 @@ func CalculateOptimalBufferSize(cfg *configTypes.ServerConfig) int {
 	result := int(messagesPerBuffer)
 	if result < minBufferSize {
 		result = minBufferSize
-		bufferlog.Warn("Buffer size increased to minimum", "size", minBufferSize)
+		bufferLog.Warn("Buffer size increased to minimum", "size", minBufferSize)
 	} else if result > maxBufferSize {
 		result = maxBufferSize
-		bufferlog.Debug("Buffer size capped at maximum", "size", maxBufferSize)
+		bufferLog.Debug("Buffer size capped at maximum", "size", maxBufferSize)
 	}
 	
-	bufferlog.Info("Calculated buffer size", "messages", result, 
+	bufferLog.Info("Calculated buffer size", 
+		"messages", result, 
 		"bytes_per_msg", BufferMessageSizeLimit, 
-		"total_buffer_mb", float64(result)*float64(BufferMessageSizeLimit)/(1024*1024))
+		"total_buffer_mb", float64(result)*float64(BufferMessageSizeLimit)/(1024*1024),
+		"available_memory_mb", availableMemory/(1024*1024),
+		"max_connections", maxConnections)
 	
 	return result
 }

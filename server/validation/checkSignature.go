@@ -3,7 +3,6 @@ package validation
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"log"
 
 	relay "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
@@ -16,7 +15,9 @@ func CheckSignature(evt relay.Event) bool {
 	// Serialize event correctly
 	serializedEvent := utils.SerializeEvent(evt)
 	if serializedEvent == "" {
-		log.Printf("Failed to serialize event")
+		validationLog.Error("Failed to serialize event", 
+			"event_id", evt.ID, 
+			"pubkey", evt.PubKey)
 		return false
 	}
 
@@ -26,43 +27,68 @@ func CheckSignature(evt relay.Event) bool {
 
 	// Validate event ID
 	if eventID != evt.ID {
-		log.Printf("Invalid ID: expected %s, got %s", eventID, evt.ID)
+		validationLog.Error("Invalid event ID", 
+			"expected", eventID, 
+			"actual", evt.ID, 
+			"pubkey", evt.PubKey,
+			"kind", evt.Kind)
 		return false
 	}
 
 	// Decode signature
 	sigBytes, err := hex.DecodeString(evt.Sig)
 	if err != nil || len(sigBytes) != 64 {
-		log.Printf("Invalid signature: %v", err)
+		validationLog.Error("Invalid signature format", 
+			"event_id", evt.ID, 
+			"pubkey", evt.PubKey, 
+			"sig_length", len(evt.Sig),
+			"error", err)
 		return false
 	}
 
 	// Parse signature
 	sig, err := schnorr.ParseSignature(sigBytes)
 	if err != nil {
-		log.Printf("Error parsing signature: %v", err)
+		validationLog.Error("Failed to parse signature", 
+			"event_id", evt.ID, 
+			"pubkey", evt.PubKey, 
+			"error", err)
 		return false
 	}
 
 	// Decode public key
 	pubKeyBytes, err := hex.DecodeString(evt.PubKey)
 	if err != nil || len(pubKeyBytes) != 32 {
-		log.Printf("Invalid public key length: %d", len(pubKeyBytes))
+		validationLog.Error("Invalid public key", 
+			"event_id", evt.ID, 
+			"pubkey", evt.PubKey, 
+			"pubkey_length", len(pubKeyBytes),
+			"error", err)
 		return false
 	}
 
 	// Parse X-only pubkey
 	pubKey, err := schnorr.ParsePubKey(pubKeyBytes)
 	if err != nil {
-		log.Printf("Error parsing public key: %v", err)
+		validationLog.Error("Failed to parse public key", 
+			"event_id", evt.ID, 
+			"pubkey", evt.PubKey, 
+			"error", err)
 		return false
 	}
 
 	// Verify signature
 	if !sig.Verify(hash[:], pubKey) {
-		log.Printf("Signature verification failed for event ID: %s", evt.ID)
+		validationLog.Error("Signature verification failed", 
+			"event_id", evt.ID, 
+			"pubkey", evt.PubKey,
+			"kind", evt.Kind)
 		return false
 	}
 
+	// Debug log for successful verification
+	// Commented out to avoid excessive logging for normal operations
+	// validationLog.Debug("Signature verified successfully", "event_id", evt.ID, "pubkey", evt.PubKey)
+	
 	return true
 }

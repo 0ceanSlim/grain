@@ -15,6 +15,12 @@ import (
 	cfgTypes "github.com/0ceanslim/grain/config/types"
 )
 
+var utilLog *slog.Logger
+
+func init() {
+	utilLog = GetLogger("util")
+}
+
 var Log *slog.Logger
 
 func InitializeLogger(cfg *cfgTypes.ServerConfig) {

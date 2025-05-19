@@ -2,18 +2,25 @@ package userSync
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/0ceanslim/grain/config"
 
 	configTypes "github.com/0ceanslim/grain/config/types"
 	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils"
 )
+
+var syncLog *slog.Logger
+
+func init() {
+   syncLog = utils.GetLogger("user-sync")
+}
 
 // UserSyncCheck determines if a user is new and triggers the initial sync if necessary.
 func UserSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, error) {
 	if !cfg.UserSync.UserSync {
-		log.Printf("Negentropy syncing is disabled. Skipping sync for event %s.", evt.ID)
+		syncLog.Debug("User syncing is disabled", "event_id", evt.ID)
 		return false, nil
 	}
 
@@ -23,12 +30,12 @@ func UserSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, error)
 	// Check if this is a new user
 	isNewUser, err := CheckIfUserExistsOnRelay(evt.PubKey, evt.ID, relays)
 	if err != nil {
-		log.Printf("Error checking if user exists: %v", err)
+		syncLog.Error("Error checking if user exists", "pubkey", evt.PubKey, "error", err)
 		return false, err
 	}
 
 	if !isNewUser {
-		log.Printf("User %s is known. Skipping initial sync.", evt.PubKey)
+		syncLog.Debug("User is known, skipping initial sync", "pubkey", evt.PubKey)
 		return false, nil
 	}
 
@@ -36,12 +43,12 @@ func UserSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, error)
 	if cfg.UserSync.ExcludeNonWhitelisted {
 		isWhitelisted := config.IsPubKeyWhitelisted(evt.PubKey, true)
 		if !isWhitelisted {
-			log.Printf("Pubkey %s is not whitelisted. Skipping sync due to ExcludeNonWhitelisted.", evt.PubKey)
+			syncLog.Info("Non-whitelisted pubkey, skipping sync", "pubkey", evt.PubKey)
 			return false, nil
 		}
 	}
 
-	log.Printf("Starting initial sync for new user %s.", evt.PubKey)
+	syncLog.Info("Starting initial sync for new user", "pubkey", evt.PubKey)
 
 	// Trigger the sync process
 	go triggerUserSync(evt.PubKey, &cfg.UserSync, cfg)

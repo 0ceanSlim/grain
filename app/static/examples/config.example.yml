@@ -26,7 +26,7 @@ auth:
   enabled: false # Enable or disable AUTH handling
   relay_url: "wss://relay.example.com/" # Specify the relay URL
 
-UserSync:
+UserSync: # EXPERIMENTAL FEATURE, (structured logging not implemented yet)
   user_sync: false
   disable_at_startup: true
   initial_sync_relays: [

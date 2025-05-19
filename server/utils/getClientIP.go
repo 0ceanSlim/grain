@@ -6,17 +6,31 @@ import (
 )
 
 func GetClientIP(r *http.Request) string {
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		ips := strings.Split(xff, ",")
-		if len(ips) > 0 {
-			return strings.TrimSpace(ips[0])
-		}
-	}
+    // Try X-Forwarded-For header first
+    xff := r.Header.Get("X-Forwarded-For")
+    if xff != "" {
+        ips := strings.Split(xff, ",")
+        if len(ips) > 0 {
+            clientIP := strings.TrimSpace(ips[0])
+            utilLog.Debug("Client IP determined from X-Forwarded-For", 
+                "ip", clientIP, 
+                "original_header", xff)
+            return clientIP
+        }
+    }
 
-	remoteAddr := r.RemoteAddr
-	if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
-		return remoteAddr[:idx]
-	}
-	return remoteAddr
+    // Fall back to RemoteAddr
+    remoteAddr := r.RemoteAddr
+    var clientIP string
+    
+    if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
+        clientIP = remoteAddr[:idx]
+    } else {
+        clientIP = remoteAddr
+    }
+    
+    utilLog.Debug("Client IP determined from RemoteAddr", 
+        "ip", clientIP, 
+        "remote_addr", remoteAddr)
+    return clientIP
 }

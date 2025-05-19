@@ -2,7 +2,6 @@ package utils
 
 import (
 	"encoding/json"
-	"log"
 
 	relay "github.com/0ceanslim/grain/server/types"
 )
@@ -17,10 +16,24 @@ func SerializeEvent(evt relay.Event) string {
 		evt.Tags,
 		evt.Content,
 	}
+	
 	jsonBytes, err := json.Marshal(eventData)
 	if err != nil {
-		log.Printf("Error serializing event: %v", err)
+		utilLog.Error("Failed to serialize event", 
+			"event_id", evt.ID,
+			"pubkey", evt.PubKey,
+			"kind", evt.Kind,
+			"error", err)
 		return ""
 	}
+	
+	// Only log at debug level for very important events or when troubleshooting
+	if evt.Kind == 0 || evt.Kind == 3 {
+		utilLog.Debug("Event serialized", 
+			"event_id", evt.ID,
+			"kind", evt.Kind,
+			"size_bytes", len(jsonBytes))
+	}
+	
 	return string(jsonBytes)
 }

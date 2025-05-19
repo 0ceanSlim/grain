@@ -87,7 +87,7 @@ func ToTime(data interface{}) *time.Time {
 	// Ensure data is a float64 which MongoDB uses for numbers
 	timestamp, ok := data.(float64)
 	if !ok {
-		fmt.Println("Invalid timestamp format")
+		utilLog.Warn("Invalid timestamp format", "value_type", fmt.Sprintf("%T", data))
 		return nil
 	}
 	t := time.Unix(int64(timestamp), 0).UTC()
