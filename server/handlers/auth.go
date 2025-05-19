@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -15,11 +14,7 @@ import (
 )
 
 // Package-level logger specific to auth handler
-var authLog *slog.Logger
-
-func init() {
-	authLog = utils.GetLogger("auth-handler")
-}
+var authLog = utils.GetLogger("auth-handler")
 
 // Mutex to protect auth data
 var authMu sync.Mutex

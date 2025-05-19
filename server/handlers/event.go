@@ -3,26 +3,18 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"log"
-	"log/slog"
 
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/db/mongo"
-	"github.com/0ceanslim/grain/server/utils/userSync"
-
 	"github.com/0ceanslim/grain/server/handlers/response"
-	"github.com/0ceanslim/grain/server/utils"
-	"github.com/0ceanslim/grain/server/validation"
-
 	relay "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/server/utils/userSync"
+	"github.com/0ceanslim/grain/server/validation"
 )
 
 // Package-level logger
-var eventLog *slog.Logger
-
-func init() {
-	eventLog = utils.GetLogger("event-handler")
-}
+var eventLog = utils.GetLogger("event-handler")
 
 // HandleEvent processes an "EVENT" message
 func HandleEvent(client relay.ClientInterface, message []interface{}) {
@@ -71,7 +63,7 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 
 	// Signature check
 	if !validation.CheckSignature(evt) {
-		eventLog.Error("Signature verification failed for event", "event_id", evt.ID)
+		eventLog.Error("Signature verification failed", "event_id", evt.ID)
 		response.SendOK(client, evt.ID, false, "invalid: signature verification failed")
 		return
 	}
@@ -81,7 +73,10 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	// Blacklist/Whitelist check
 	result := validation.CheckBlacklistAndWhitelist(evt)
 	if !result.Valid {
-		eventLog.Info("Event rejected by blacklist/whitelist", "event_id", evt.ID)
+		eventLog.Info("Event rejected by blacklist/whitelist", 
+			"event_id", evt.ID, 
+			"pubkey", evt.PubKey, 
+			"reason", result.Message)
 		response.SendOK(client, evt.ID, false, result.Message)
 		return
 	}
@@ -89,7 +84,11 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	// Rate and size limit checks
 	result = validation.CheckRateAndSizeLimits(evt, eventSize)
 	if !result.Valid {
-		eventLog.Info("Event rejected by rate/size limits", "event_id", evt.ID)
+		eventLog.Info("Event rejected by rate/size limits", 
+			"event_id", evt.ID, 
+			"kind", evt.Kind, 
+			"size", eventSize, 
+			"reason", result.Message)
 		response.SendOK(client, evt.ID, false, result.Message)
 		return
 	}
@@ -97,12 +96,15 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	// Duplicate event check
 	isDuplicate, err := mongo.CheckDuplicateEvent(context.TODO(), evt)
 	if err != nil {
-		log.Printf("[ERROR] Error checking for duplicate event: ID=%s, Error=%v", evt.ID, err)
+		eventLog.Error("Error checking for duplicate event", 
+			"event_id", evt.ID, 
+			"error", err)
 		response.SendOK(client, evt.ID, false, "error: internal server error during duplicate check")
 		return
 	}
+	
 	if isDuplicate {
-		log.Printf("[INFO] Duplicate event detected: ID=%s", evt.ID)
+		eventLog.Info("Duplicate event detected", "event_id", evt.ID)
 		response.SendOK(client, evt.ID, false, "blocked: the database already contains this event")
 		return
 	}
@@ -112,19 +114,30 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 
 	// Store event in MongoDB
 	mongo.StoreMongoEvent(context.TODO(), evt, client)
-	log.Printf("[INFO] Event stored successfully: ID=%s", evt.ID)
+	eventLog.Info("Event stored successfully", 
+		"event_id", evt.ID, 
+		"kind", evt.Kind, 
+		"pubkey", evt.PubKey)
 
 	// Send to backup relay
 	if cfg.BackupRelay.Enabled {
 		go func() {
 			err := utils.SendToBackupRelay(cfg.BackupRelay.URL, evt)
 			if err != nil {
-				log.Printf("[ERROR] Failed to send event %s to backup relay: %v", evt.ID, err)
+				eventLog.Error("Failed to send event to backup relay", 
+					"event_id", evt.ID, 
+					"relay_url", cfg.BackupRelay.URL, 
+					"error", err)
 			} else {
-				log.Printf("[INFO] Event %s successfully sent to backup relay", evt.ID)
+				eventLog.Info("Event sent to backup relay", 
+					"event_id", evt.ID, 
+					"relay_url", cfg.BackupRelay.URL)
 			}
 		}()
 	}
 
-	log.Printf("[INFO] Event processing completed: ID=%s", evt.ID)
+	eventLog.Info("Event processing completed", 
+		"event_id", evt.ID, 
+		"kind", evt.Kind, 
+		"pubkey", evt.PubKey)
 }

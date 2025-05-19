@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"fmt"
-
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/db/mongo"
 	"github.com/0ceanslim/grain/server/handlers/response"
@@ -10,10 +8,13 @@ import (
 	"github.com/0ceanslim/grain/server/utils"
 )
 
+// Package-level logger for request handler
+var reqLog = utils.GetLogger("req-handler")
+
 // HandleReq processes a new subscription request
 func HandleReq(client relay.ClientInterface, message []interface{}) {
 	if len(message) < 3 {
-		fmt.Println("Invalid REQ message format")
+		reqLog.Error("Invalid REQ message format")
 		response.SendClosed(client, "", "invalid: invalid REQ message format")
 		return
 	}
@@ -22,7 +23,9 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 
 	subID, ok := message[1].(string)
 	if !ok || len(subID) == 0 || len(subID) > 64 {
-		fmt.Println("Invalid subscription ID format or length")
+		reqLog.Error("Invalid subscription ID format or length", 
+			"sub_id", subID, 
+			"length", len(subID))
 		response.SendClosed(client, "", "invalid: subscription ID must be between 1 and 64 characters long")
 		return
 	}
@@ -35,7 +38,9 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 			break
 		}
 		delete(subscriptions, oldestSubID)
-		fmt.Println("Dropped oldest subscription:", oldestSubID)
+		reqLog.Info("Dropped oldest subscription", 
+			"old_sub_id", oldestSubID, 
+			"current_count", len(subscriptions))
 	}
 
 	// Parse and validate filters
@@ -43,7 +48,9 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 	for i, filter := range message[2:] {
 		filterData, ok := filter.(map[string]interface{})
 		if !ok {
-			fmt.Println("Invalid filter format")
+			reqLog.Error("Invalid filter format", 
+				"sub_id", subID, 
+				"filter_index", i)
 			response.SendClosed(client, subID, "invalid: invalid filter format")
 			return
 		}
@@ -62,17 +69,29 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 
 	// Add subscription
 	subscriptions[subID] = filters
-	fmt.Printf("Subscription updated: %s with %d filters\n", subID, len(filters))
+	reqLog.Info("Subscription updated", 
+		"sub_id", subID, 
+		"filter_count", len(filters), 
+		"total_subscriptions", len(subscriptions))
 
 	// Query database
 	dbName := config.GetConfig().MongoDB.Database
 	queriedEvents, err := mongo.QueryEvents(filters, mongo.GetClient(), dbName)
 	if err != nil {
-		fmt.Println("Error querying events:", err)
+		reqLog.Error("Error querying events", 
+			"sub_id", subID, 
+			"database", dbName, 
+			"error", err)
 		response.SendClosed(client, subID, "error: could not query events")
 		return
 	}
 
+	// Log event count for debugging and monitoring purposes
+	reqLog.Debug("Events retrieved from database", 
+		"sub_id", subID, 
+		"event_count", len(queriedEvents))
+
+	// Send events to client
 	for _, evt := range queriedEvents {
 		client.SendMessage([]interface{}{"EVENT", subID, evt})
 	}
@@ -80,5 +99,7 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 	// Send EOSE message
 	client.SendMessage([]interface{}{"EOSE", subID})
 
-	fmt.Println("Subscription handling completed.")
+	reqLog.Info("Subscription handling completed", 
+		"sub_id", subID, 
+		"events_sent", len(queriedEvents))
 }
