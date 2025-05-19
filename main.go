@@ -37,10 +37,10 @@ func main() {
 	utils.InitializeLogger(cfg) // Initialize logger with initial config
 	log = utils.GetLogger("main")
 
-	utils.EnsureFileExists("config.yml", "app/static/examples/config.example.yml")
-	utils.EnsureFileExists("whitelist.yml", "app/static/examples/whitelist.example.yml")
-	utils.EnsureFileExists("blacklist.yml", "app/static/examples/blacklist.example.yml")
-	utils.EnsureFileExists("relay_metadata.json", "app/static/examples/relay_metadata.example.json")
+	utils.EnsureFileExists("config.yml", "www/static/examples/config.example.yml")
+	utils.EnsureFileExists("whitelist.yml", "www/static/examples/whitelist.example.yml")
+	utils.EnsureFileExists("blacklist.yml", "www/static/examples/blacklist.example.yml")
+	utils.EnsureFileExists("relay_metadata.json", "www/static/examples/relay_metadata.example.json")
 
 	restartChan := make(chan struct{})
 	go config.WatchConfigFile("config.yml", restartChan)
@@ -130,9 +130,9 @@ func initApp() http.Handler {
 	mux.HandleFunc("/logout", handlers.LogoutHandler) // Logout process
 	mux.HandleFunc("/profile", routes.ProfileHandler)
 	// Serve static directory and favicon
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("app/static"))))
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("www/static"))))
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "app/static/img/favicon.ico")
+		http.ServeFile(w, r, "www/static/img/favicon.ico")
 	})
 	// Wrap with middleware
 	return middleware.UserMiddleware(mux)

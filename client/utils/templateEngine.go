@@ -1,7 +1,6 @@
 package utils
 
 import (
-	//"goFrame/src/types"
 	"html/template"
 	"net/http"
 	"path/filepath"
@@ -15,8 +14,8 @@ type PageData struct {
 
 // Define the base directories for views and templates
 const (
-	viewsDir     = "app/views/"
-	templatesDir = "app/views/templates/"
+	viewsDir     = "www/views/"
+	templatesDir = "www/views/templates/"
 )
 
 // Define the common layout templates filenames
@@ -32,12 +31,12 @@ var layout = PrependDir(templatesDir, templateFiles)
 var loginLayout = PrependDir(templatesDir, []string{"login-layout.html", "footer.html"})
 
 func RenderTemplate(w http.ResponseWriter, data PageData, view string, useLoginLayout bool) {
-	// Add global data if needed (e.g., app-wide constants or configurations)
+	// Add global data if needed (e.g., client-wide constants or configurations)
 	if data.CustomData == nil {
 		data.CustomData = make(map[string]interface{})
 	}
 
-	data.CustomData["appName"] = "GRAIN App" // Example global data
+	data.CustomData["appName"] = "grain client" // Example global data
 
 	viewTemplate := filepath.Join(viewsDir, view)
 	componentPattern := filepath.Join(viewsDir, "components", "*.html")

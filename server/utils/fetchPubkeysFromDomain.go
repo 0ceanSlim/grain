@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const cacheFile = "app/static/domain_pubkey_cache.json"
+const cacheFile = "www/static/domain_pubkey_cache.json"
 
 // Domain types
 type NostrJSON struct {
