@@ -11,10 +11,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var log *slog.Logger
-
-func init() {
-	log = utils.GetLogger("config")
+// Use a function to get the logger instead of a global variable
+func configLog() *slog.Logger {
+	return utils.GetLogger("config")
 }
 
 var (
@@ -46,7 +45,7 @@ func GetBlacklistConfig() *configTypes.BlacklistConfig {
 func ResetConfig() {
 	mu.Lock()
 	defer mu.Unlock()
-	log.Debug("Resetting server configuration")
+	configLog().Debug("Resetting server configuration")
 	cfg = nil
 	once = sync.Once{}
 }
@@ -55,7 +54,7 @@ func ResetConfig() {
 func ResetWhitelistConfig() {
 	mu.Lock()
 	defer mu.Unlock()
-	log.Debug("Resetting whitelist configuration")
+	configLog().Debug("Resetting whitelist configuration")
 	whitelistCfg = nil
 	whitelistOnce = sync.Once{}
 }
@@ -64,7 +63,7 @@ func ResetWhitelistConfig() {
 func ResetBlacklistConfig() {
 	mu.Lock()
 	defer mu.Unlock()
-	log.Debug("Resetting blacklist configuration")
+	configLog().Debug("Resetting blacklist configuration")
 	blacklistCfg = nil
 	blacklistOnce = sync.Once{}
 }
@@ -86,7 +85,7 @@ func LoadConfig(filename string) (*configTypes.ServerConfig, error) {
 
 	once.Do(func() {
 		cfg = &config
-		log.Info("Server configuration loaded", "file", filename)
+		configLog().Info("Server configuration loaded", "file", filename)
 	})
 
 	return cfg, nil
@@ -107,7 +106,7 @@ func LoadWhitelistConfig(filename string) (*configTypes.WhitelistConfig, error) 
 
 	whitelistOnce.Do(func() {
 		whitelistCfg = &config
-		log.Info("Whitelist configuration loaded", "file", filename)
+		configLog().Info("Whitelist configuration loaded", "file", filename)
 	})
 
 	return whitelistCfg, nil
@@ -128,7 +127,7 @@ func LoadBlacklistConfig(filename string) (*configTypes.BlacklistConfig, error) 
 
 	blacklistOnce.Do(func() {
 		blacklistCfg = &config
-		log.Info("Blacklist configuration loaded", "file", filename)
+		configLog().Info("Blacklist configuration loaded", "file", filename)
 	})
 
 	return blacklistCfg, nil

@@ -10,14 +10,14 @@ import (
 func WatchConfigFile(filePath string, restartChan chan<- struct{}) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Error("Error creating file watcher", "error", err)
+		configLog().Error("Error creating file watcher", "error", err)
 		os.Exit(1) // Manually exit after logging the error
 	}
 	defer watcher.Close()
 
 	err = watcher.Add(filePath)
 	if err != nil {
-		log.Error("Failed to add file to watcher", "file", filePath, "error", err)
+		configLog().Error("Failed to add file to watcher", "file", filePath, "error", err)
 		os.Exit(1) // Manually exit after logging the error
 	}
 
@@ -31,12 +31,12 @@ func WatchConfigFile(filePath string, restartChan chan<- struct{}) {
 				return
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				log.Info("Config file modified", "file", filePath)
+				configLog().Info("Config file modified", "file", filePath)
 				if debounceTimer != nil {
 					debounceTimer.Stop() // Cancel the previous timer
 				}
 				debounceTimer = time.AfterFunc(debounceDuration, func() {
-					log.Info("Config file change debounced, triggering restart", "file", filePath)
+					configLog().Info("Config file change debounced, triggering restart", "file", filePath)
 					select {
 					case restartChan <- struct{}{}:
 					default:
@@ -48,7 +48,7 @@ func WatchConfigFile(filePath string, restartChan chan<- struct{}) {
 			if !ok {
 				return
 			}
-			log.Error("Error watching file", "error", err)
+			configLog().Error("Error watching file", "error", err)
 		}
 	}
 }

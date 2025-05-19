@@ -10,14 +10,14 @@ import (
 )
 
 func SendToBackupRelay(backupURL string, evt relay.Event) error {
-    utilLog.Debug("Connecting to backup relay", 
+    utilLog().Debug("Connecting to backup relay", 
         "relay_url", backupURL, 
         "event_id", evt.ID,
         "event_kind", evt.Kind)
     
     conn, err := websocket.Dial(backupURL, "", "http://localhost/")
     if err != nil {
-        utilLog.Error("Failed to connect to backup relay", 
+        utilLog().Error("Failed to connect to backup relay", 
             "relay_url", backupURL, 
             "event_id", evt.ID, 
             "error", err)
@@ -29,19 +29,19 @@ func SendToBackupRelay(backupURL string, evt relay.Event) error {
     eventMessage := []interface{}{"EVENT", evt}
     eventMessageBytes, err := json.Marshal(eventMessage)
     if err != nil {
-        utilLog.Error("Failed to marshal event message for backup relay", 
+        utilLog().Error("Failed to marshal event message for backup relay", 
             "event_id", evt.ID, 
             "error", err)
         return fmt.Errorf("error marshaling event message: %w", err)
     }
 
-    utilLog.Debug("Sending event to backup relay", 
+    utilLog().Debug("Sending event to backup relay", 
         "relay_url", backupURL, 
         "event_id", evt.ID, 
         "message_size_bytes", len(eventMessageBytes))
         
     if _, err := conn.Write(eventMessageBytes); err != nil {
-        utilLog.Error("Failed to send event to backup relay", 
+        utilLog().Error("Failed to send event to backup relay", 
             "relay_url", backupURL, 
             "event_id", evt.ID, 
             "error", err)
@@ -49,7 +49,7 @@ func SendToBackupRelay(backupURL string, evt relay.Event) error {
     }
 
     // Log success and add small delay
-    utilLog.Info("Event successfully sent to backup relay", 
+    utilLog().Info("Event successfully sent to backup relay", 
         "relay_url", backupURL, 
         "event_id", evt.ID, 
         "event_kind", evt.Kind,

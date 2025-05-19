@@ -14,10 +14,9 @@ import (
 	"github.com/0ceanslim/grain/server/validation"
 )
 
-var authLog *slog.Logger
-
-func init() {
-    authLog = utils.GetLogger("auth-handler")
+// Set the logging component for AUTH handler
+func authLog() *slog.Logger {
+	return utils.GetLogger("auth-handler")
 }
 
 // Mutex to protect auth data
@@ -30,27 +29,27 @@ var authSessions = make(map[relay.ClientInterface]bool)
 // HandleAuth processes the "AUTH" message type as defined in NIP-42
 func HandleAuth(client relay.ClientInterface, message []interface{}) {
 	if !config.GetConfig().Auth.Enabled {
-		authLog.Debug("AUTH is disabled in configuration")
+		authLog().Debug("AUTH is disabled in configuration")
 		response.SendNotice(client, "", "AUTH is disabled")
 		return
 	}
 
 	if len(message) != 2 {
-		authLog.Debug("Invalid AUTH message format")
+		authLog().Debug("Invalid AUTH message format")
 		response.SendNotice(client, "", "Invalid AUTH message format")
 		return
 	}
 
 	authData, ok := message[1].(map[string]interface{})
 	if !ok {
-		authLog.Debug("Invalid auth data format")
+		authLog().Debug("Invalid auth data format")
 		response.SendNotice(client, "", "Invalid auth data format")
 		return
 	}
 
 	authBytes, err := json.Marshal(authData)
 	if err != nil {
-		authLog.Error("Error marshaling auth data", "error", err)
+		authLog().Error("Error marshaling auth data", "error", err)
 		response.SendNotice(client, "", "Error marshaling auth data")
 		return
 	}
@@ -58,21 +57,21 @@ func HandleAuth(client relay.ClientInterface, message []interface{}) {
 	var authEvent relay.Event
 	err = json.Unmarshal(authBytes, &authEvent)
 	if err != nil {
-		authLog.Error("Error unmarshaling auth data", "error", err)
+		authLog().Error("Error unmarshaling auth data", "error", err)
 		response.SendNotice(client, "", "Error unmarshaling auth data")
 		return
 	}
 
 	err = VerifyAuthEvent(authEvent)
 	if err != nil {
-		authLog.Info("Auth verification failed", "event_id", authEvent.ID, "pubkey", authEvent.PubKey, "error", err)
+		authLog().Info("Auth verification failed", "event_id", authEvent.ID, "pubkey", authEvent.PubKey, "error", err)
 		response.SendOK(client, authEvent.ID, false, err.Error())
 		return
 	}
 
 	// Mark the session as authenticated after successful verification
 	SetAuthenticated(client)
-	authLog.Info("Authentication successful", "pubkey", authEvent.PubKey)
+	authLog().Info("Authentication successful", "pubkey", authEvent.PubKey)
 	response.SendOK(client, authEvent.ID, true, "")
 }
 
@@ -133,7 +132,7 @@ func GetChallengeForConnection(pubKey string) string {
 func SetChallengeForConnection(pubKey, challenge string) {
 	authMu.Lock()
 	defer authMu.Unlock()
-	authLog.Debug("Setting challenge for connection", "pubkey", pubKey)
+	authLog().Debug("Setting challenge for connection", "pubkey", pubKey)
 	challenges[pubKey] = challenge
 }
 

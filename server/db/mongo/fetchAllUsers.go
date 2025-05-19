@@ -17,11 +17,11 @@ func GetAllAuthorsFromRelay(cfg *configTypes.ServerConfig) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	mongoLog.Debug("Fetching all unique authors from relay")
+	mongoLog().Debug("Fetching all unique authors from relay")
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoDB.URI))
 	if err != nil {
-		mongoLog.Error("Failed to connect to MongoDB", 
+		mongoLog().Error("Failed to connect to MongoDB", 
 			"uri", cfg.MongoDB.URI, 
 			"error", err)
 		return nil
@@ -31,13 +31,13 @@ func GetAllAuthorsFromRelay(cfg *configTypes.ServerConfig) []string {
 	db := client.Database(cfg.MongoDB.Database)
 	collectionNames, err := db.ListCollectionNames(ctx, bson.M{})
 	if err != nil {
-		mongoLog.Error("Failed to list collections", 
+		mongoLog().Error("Failed to list collections", 
 			"database", cfg.MongoDB.Database, 
 			"error", err)
 		return nil
 	}
 
-	mongoLog.Debug("Retrieved collection names", 
+	mongoLog().Debug("Retrieved collection names", 
 		"database", cfg.MongoDB.Database, 
 		"collection_count", len(collectionNames))
 
@@ -53,7 +53,7 @@ func GetAllAuthorsFromRelay(cfg *configTypes.ServerConfig) []string {
 		collection := db.Collection(collectionName)
 		cursor, err := collection.Distinct(ctx, "pubkey", bson.M{})
 		if err != nil {
-			mongoLog.Error("Failed to fetch distinct pubkeys",
+			mongoLog().Error("Failed to fetch distinct pubkeys",
 				"collection", collectionName,
 				"error", err)
 			continue
@@ -71,7 +71,7 @@ func GetAllAuthorsFromRelay(cfg *configTypes.ServerConfig) []string {
 		
 		collectionStats[collectionName] = pubkeysInCollection
 		
-		mongoLog.Debug("Processed collection",
+		mongoLog().Debug("Processed collection",
 			"collection", collectionName,
 			"pubkeys_found", pubkeysInCollection)
 	}
@@ -81,7 +81,7 @@ func GetAllAuthorsFromRelay(cfg *configTypes.ServerConfig) []string {
 		authors = append(authors, pubkey)
 	}
 
-	mongoLog.Info("Completed authors fetch",
+	mongoLog().Info("Completed authors fetch",
 		"total_unique_authors", len(authors),
 		"collections_processed", len(collectionStats))
 

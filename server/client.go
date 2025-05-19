@@ -19,11 +19,11 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-var log *slog.Logger
-
-func init() {
-	log = utils.GetLogger("client")
+// Set the logging component for client connections
+func clientLog() *slog.Logger {
+	return utils.GetLogger("client")
 }
+
 
 // Client implements ClientInterface
 type Client struct {
@@ -78,7 +78,7 @@ func PrintStats() {
 			dropRate = float64(dropped) / float64(sent+dropped) * 100
 		}
 		
-		log.Info("WebSocket message statistics", 
+		clientLog().Info("WebSocket message statistics", 
 			"sent", sent, 
 			"dropped", dropped, 
 			"drop_rate_pct", fmt.Sprintf("%.2f", dropRate),
@@ -130,7 +130,7 @@ func ClientHandler(ws *websocket.Conn) {
 	clients[ws] = client
 	clientsMu.Unlock()
 
-	log.Info("New connection established", 
+	clientLog().Info("New connection established", 
 		"client_id", client.id,
 		"ip", ip, 
 		"user_agent", userAgent, 
@@ -148,7 +148,7 @@ func ClientHandler(ws *websocket.Conn) {
 func (c *Client) SendMessage(msg interface{}) {
 	jsonMsg, err := json.Marshal(msg)
 	if err != nil {
-		log.Error("Failed to marshal message", "error", err)
+		clientLog().Error("Failed to marshal message", "error", err)
 		return
 	}
 	
@@ -180,12 +180,12 @@ func (c *Client) SendMessage(msg interface{}) {
 				// Try again
 				select {
 				case c.sendCh <- string(jsonMsg):
-					log.Debug("Forced high-priority message into buffer", 
+					clientLog().Debug("Forced high-priority message into buffer", 
 						"type", priority,
 						"client_id", c.id, 
 						"client", c.ClientInfo())
 				default:
-					log.Warn("Failed to send high-priority message even after making room",
+					clientLog().Warn("Failed to send high-priority message even after making room",
 						"client_id", c.id,
 						"client", c.ClientInfo())
 				}
@@ -196,7 +196,7 @@ func (c *Client) SendMessage(msg interface{}) {
 		
 		// Only log warnings periodically to prevent log flooding
 		if c.droppedMessages == 1 || c.droppedMessages % 100 == 0 {
-			log.Warn("Client send buffer full, dropping message", 
+			clientLog().Warn("Client send buffer full, dropping message", 
 				"dropped_count", c.droppedMessages,
 				"buffer_size", cap(c.sendCh),
 				"buffer_used", len(c.sendCh),
@@ -274,7 +274,7 @@ func clientReader(client *Client) {
 		fullMessage := client.messageBuffer.String()
 
 		if !isValidJSON(fullMessage) {
-			log.Debug("Waiting for full JSON message", 
+			clientLog().Debug("Waiting for full JSON message", 
 			"client_id", client.id,
 			"client", client.ClientInfo())
 			continue
@@ -285,7 +285,7 @@ func clientReader(client *Client) {
 		var message []interface{}
 		err = json.Unmarshal([]byte(fullMessage), &message)
 		if err != nil {
-			log.Error("JSON parse error", 
+			clientLog().Error("JSON parse error", 
 			"error", err, 
 			"client_id", client.id,
 			"client", client.ClientInfo())
@@ -293,13 +293,13 @@ func clientReader(client *Client) {
 		}
 
 		if len(message) == 0 {
-			log.Warn("Empty message received", "client", client.ClientInfo())
+			clientLog().Warn("Empty message received", "client", client.ClientInfo())
 			continue
 		}
 
 		messageType, ok := message[0].(string)
 		if !ok {
-			log.Warn("Invalid message type", "client", client.ClientInfo())
+			clientLog().Warn("Invalid message type", "client", client.ClientInfo())
 			continue
 		}
 
@@ -312,12 +312,12 @@ func clientReader(client *Client) {
 			if config.GetConfig().Auth.Enabled {
 				handlers.HandleAuth(client, message)
 			} else {
-				log.Warn("Received AUTH message, but AUTH is disabled", "client", client.ClientInfo())
+				clientLog().Warn("Received AUTH message, but AUTH is disabled", "client", client.ClientInfo())
 			}
 		case "EVENT":
 			handlers.HandleEvent(client, message)
 		default:
-			log.Warn("Unknown message type", "type", messageType, "client", client.ClientInfo())
+			clientLog().Warn("Unknown message type", "type", messageType, "client", client.ClientInfo())
 		}
 	}
 }
@@ -350,7 +350,7 @@ func clientWriter(client *Client) {
                 }
                 
                 if err := websocket.Message.Send(ws, msg); err != nil {
-                    log.Error("Failed to send message", 
+                    clientLog().Error("Failed to send message", 
                         "error", err,
                         "client_id", client.id)
                     client.CloseClient()
@@ -370,7 +370,7 @@ func clientWriter(client *Client) {
                     pacingInterval += 10 * time.Millisecond
                     ticker.Reset(pacingInterval)
                     
-                    log.Debug("Increased pacing interval", 
+                    clientLog().Debug("Increased pacing interval", 
                         "interval_ms", pacingInterval.Milliseconds(),
                         "client_id", client.id)
                 }
@@ -401,11 +401,11 @@ func handleReadError(err error, ws *websocket.Conn) {
     }
 
     if errors.Is(err, io.EOF) {
-        log.Info("Client disconnected", 
+        clientLog().Info("Client disconnected", 
             "client_id", clientID,
             "client", clientInfo)
     } else {
-        log.Error("WebSocket read error", 
+        clientLog().Error("WebSocket read error", 
             "error", err, 
             "client_id", clientID,
             "client", clientInfo)

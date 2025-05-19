@@ -14,7 +14,7 @@ import (
 func Regular(ctx context.Context, evt relay.Event, collection *mongo.Collection, client relay.ClientInterface) error {
 	result, err := collection.InsertOne(ctx, evt)
 	if err != nil {
-		log.Error("Failed to insert regular event", 
+		esLog().Error("Failed to insert regular event", 
 			"event_id", evt.ID, 
 			"kind", evt.Kind, 
 			"pubkey", evt.PubKey, 
@@ -23,7 +23,7 @@ func Regular(ctx context.Context, evt relay.Event, collection *mongo.Collection,
 		return fmt.Errorf("error inserting event kind %d into MongoDB: %v", evt.Kind, err)
 	}
 
-	log.Info("Inserted regular event", 
+	esLog().Info("Inserted regular event", 
 		"event_id", evt.ID, 
 		"kind", evt.Kind, 
 		"pubkey", evt.PubKey, 

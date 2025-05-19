@@ -7,10 +7,9 @@ import (
 	"github.com/0ceanslim/grain/server/utils"
 )
 
-var log *slog.Logger
-
-func init() {
-	log = utils.GetLogger("mongo-event")
+// Set the logging component for eventStore operations
+func esLog() *slog.Logger {
+	return utils.GetLogger("mongo-es")
 }
 
 func parseAddressableEventReference(tagA string) []string {

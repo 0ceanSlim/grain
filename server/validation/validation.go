@@ -14,23 +14,22 @@ type Result struct {
 	Message string
 }
 
-var validationLog *slog.Logger
-
-func init() {
-	validationLog = utils.GetLogger("event-validation")
+// Set the logging component for event validation
+func validationLog() *slog.Logger {
+	return utils.GetLogger("util")
 }
 
 // CheckBlacklistAndWhitelist checks if an event is allowed by the blacklist and whitelist rules
 func CheckBlacklistAndWhitelist(evt relay.Event) Result {
 	if blacklisted, msg := config.CheckBlacklist(evt.PubKey, evt.Content); blacklisted {
-		validationLog.Info("Event rejected by blacklist", 
+		validationLog().Info("Event rejected by blacklist", 
 			"event_id", evt.ID,
 			"pubkey", evt.PubKey)
 		return Result{Valid: false, Message: msg}
 	}
 
 	if isWhitelisted, msg := config.CheckWhitelist(evt); !isWhitelisted {
-		validationLog.Info("Event rejected by whitelist", 
+		validationLog().Info("Event rejected by whitelist", 
 			"event_id", evt.ID,
 			"pubkey", evt.PubKey)
 		return Result{Valid: false, Message: msg}
@@ -46,7 +45,7 @@ func CheckRateAndSizeLimits(evt relay.Event, eventSize int) Result {
 	category := utils.DetermineEventCategory(evt.Kind)
 
 	if allowed, msg := rateLimiter.AllowEvent(evt.Kind, category); !allowed {
-		validationLog.Info("Event rejected by rate limiter", 
+		validationLog().Info("Event rejected by rate limiter", 
 			"event_id", evt.ID,
 			"kind", evt.Kind,
 			"category", category)
@@ -54,7 +53,7 @@ func CheckRateAndSizeLimits(evt relay.Event, eventSize int) Result {
 	}
 
 	if allowed, msg := sizeLimiter.AllowSize(evt.Kind, eventSize); !allowed {
-		validationLog.Info("Event rejected by size limiter", 
+		validationLog().Info("Event rejected by size limiter", 
 			"event_id", evt.ID,
 			"kind", evt.Kind,
 			"size", eventSize)

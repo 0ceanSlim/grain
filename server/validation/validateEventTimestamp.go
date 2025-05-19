@@ -10,7 +10,7 @@ import (
 // ValidateEventTimestamp validates if an event's timestamp is within the allowed range
 func ValidateEventTimestamp(evt relay.Event, cfg *configTypes.ServerConfig) bool {
 	if cfg == nil {
-		validationLog.Error("Server configuration is not loaded")
+		validationLog().Error("Server configuration is not loaded")
 		return false
 	}
 
@@ -30,7 +30,7 @@ func ValidateEventTimestamp(evt relay.Event, cfg *configTypes.ServerConfig) bool
 
 	// Check if the event's created_at timestamp falls within the allowed range
 	if evt.CreatedAt < minCreatedAt || evt.CreatedAt > maxCreatedAt {
-		validationLog.Warn("Event timestamp out of range", 
+		validationLog().Warn("Event timestamp out of range", 
 			"event_id", evt.ID, 
 			"timestamp", evt.CreatedAt, 
 			"min", minCreatedAt, 

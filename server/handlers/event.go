@@ -14,30 +14,29 @@ import (
 	"github.com/0ceanslim/grain/server/validation"
 )
 
-var eventLog *slog.Logger
-
-func init() {
-    eventLog = utils.GetLogger("event-handler")
+// Set the logging component for EVENT handler
+func eventLog() *slog.Logger {
+	return utils.GetLogger("event-handler")
 }
 
 // HandleEvent processes an "EVENT" message
 func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	if len(message) != 2 {
-		eventLog.Error("Invalid EVENT message format")
+		eventLog().Error("Invalid EVENT message format")
 		response.SendNotice(client, "", "Invalid EVENT message format")
 		return
 	}
 
 	eventData, ok := message[1].(map[string]interface{})
 	if !ok {
-		eventLog.Error("Invalid event data format")
+		eventLog().Error("Invalid event data format")
 		response.SendNotice(client, "", "Invalid event data format")
 		return
 	}
 
 	eventBytes, err := json.Marshal(eventData)
 	if err != nil {
-		eventLog.Error("Error marshaling event data", "error", err)
+		eventLog().Error("Error marshaling event data", "error", err)
 		response.SendNotice(client, "", "Error marshaling event data")
 		return
 	}
@@ -45,7 +44,7 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	var evt relay.Event
 	err = json.Unmarshal(eventBytes, &evt)
 	if err != nil {
-		eventLog.Error("Error unmarshaling event data", "error", err)
+		eventLog().Error("Error unmarshaling event data", "error", err)
 		response.SendNotice(client, "", "Error unmarshaling event data")
 		return
 	}
@@ -53,21 +52,21 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	// Load config
 	cfg := config.GetConfig()
 	if cfg == nil {
-		eventLog.Error("Failed to get server configuration")
+		eventLog().Error("Failed to get server configuration")
 		response.SendOK(client, evt.ID, false, "error: internal server error")
 		return
 	}
 
 	// Validate event timestamps
 	if !validation.ValidateEventTimestamp(evt, cfg) {
-		eventLog.Warn("Invalid timestamp for event", "event_id", evt.ID)
+		eventLog().Warn("Invalid timestamp for event", "event_id", evt.ID)
 		response.SendOK(client, evt.ID, false, "invalid: event created_at timestamp is out of allowed range")
 		return
 	}
 
 	// Signature check
 	if !validation.CheckSignature(evt) {
-		eventLog.Error("Signature verification failed", "event_id", evt.ID)
+		eventLog().Error("Signature verification failed", "event_id", evt.ID)
 		response.SendOK(client, evt.ID, false, "invalid: signature verification failed")
 		return
 	}
@@ -77,7 +76,7 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	// Blacklist/Whitelist check
 	result := validation.CheckBlacklistAndWhitelist(evt)
 	if !result.Valid {
-		eventLog.Info("Event rejected by blacklist/whitelist", 
+		eventLog().Info("Event rejected by blacklist/whitelist", 
 			"event_id", evt.ID, 
 			"pubkey", evt.PubKey, 
 			"reason", result.Message)
@@ -88,7 +87,7 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	// Rate and size limit checks
 	result = validation.CheckRateAndSizeLimits(evt, eventSize)
 	if !result.Valid {
-		eventLog.Info("Event rejected by rate/size limits", 
+		eventLog().Info("Event rejected by rate/size limits", 
 			"event_id", evt.ID, 
 			"kind", evt.Kind, 
 			"size", eventSize, 
@@ -100,7 +99,7 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	// Duplicate event check
 	isDuplicate, err := mongo.CheckDuplicateEvent(context.TODO(), evt)
 	if err != nil {
-		eventLog.Error("Error checking for duplicate event", 
+		eventLog().Error("Error checking for duplicate event", 
 			"event_id", evt.ID, 
 			"error", err)
 		response.SendOK(client, evt.ID, false, "error: internal server error during duplicate check")
@@ -108,7 +107,7 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	}
 	
 	if isDuplicate {
-		eventLog.Info("Duplicate event detected", "event_id", evt.ID)
+		eventLog().Info("Duplicate event detected", "event_id", evt.ID)
 		response.SendOK(client, evt.ID, false, "blocked: the database already contains this event")
 		return
 	}
@@ -118,7 +117,7 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 
 	// Store event in MongoDB
 	mongo.StoreMongoEvent(context.TODO(), evt, client)
-	eventLog.Info("Event stored successfully", 
+	eventLog().Info("Event stored successfully", 
 		"event_id", evt.ID, 
 		"kind", evt.Kind, 
 		"pubkey", evt.PubKey)
@@ -128,19 +127,19 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 		go func() {
 			err := utils.SendToBackupRelay(cfg.BackupRelay.URL, evt)
 			if err != nil {
-				eventLog.Error("Failed to send event to backup relay", 
+				eventLog().Error("Failed to send event to backup relay", 
 					"event_id", evt.ID, 
 					"relay_url", cfg.BackupRelay.URL, 
 					"error", err)
 			} else {
-				eventLog.Info("Event sent to backup relay", 
+				eventLog().Info("Event sent to backup relay", 
 					"event_id", evt.ID, 
 					"relay_url", cfg.BackupRelay.URL)
 			}
 		}()
 	}
 
-	eventLog.Info("Event processing completed", 
+	eventLog().Info("Event processing completed", 
 		"event_id", evt.ID, 
 		"kind", evt.Kind, 
 		"pubkey", evt.PubKey)

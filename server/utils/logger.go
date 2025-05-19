@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -15,55 +16,126 @@ import (
 	cfgTypes "github.com/0ceanslim/grain/config/types"
 )
 
-var utilLog *slog.Logger
-
-func init() {
-	utilLog = GetLogger("util")
+// Set the logging component for general utility functions
+func utilLog() *slog.Logger {
+	return GetLogger("util")
 }
 
-var Log *slog.Logger
-
-func InitializeLogger(cfg *cfgTypes.ServerConfig) {
-    // Convert log level from config
-    cfg.Logging.Level = strings.TrimSpace(strings.ToLower(cfg.Logging.Level))
-    var logLevel slog.Level
-    if err := logLevel.UnmarshalText([]byte(cfg.Logging.Level)); err != nil {
-        fmt.Printf("Invalid log level in config: %s\n", cfg.Logging.Level)
-        os.Exit(1)
-    }
-
-    // Determine log file name based on structure setting
-    var logFilePath string
-    if cfg.Logging.Structure {
-        logFilePath = cfg.Logging.File + ".json"
-    } else {
-        logFilePath = cfg.Logging.File + ".log"
-    }
-
-    // Choose between structured JSON logs and pretty logs
-    var handler slog.Handler
-    if cfg.Logging.Structure {
-        handler = NewJSONLogWriter(logFilePath, logLevel, cfg.Logging.MaxSizeMB)
-    } else {
-        logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_SYNC, 0644)
-        if err != nil {
-            fmt.Printf("Failed to open log file: %v\n", err)
-            os.Exit(1)
-        }
-        handler = &PrettyLogWriter{output: logFile, level: logLevel}
-    }
-
-    // Set global logger
-    Log = slog.New(handler)
+// LoggerRegistry maintains a map of all loggers by component name
+type LoggerRegistry struct {
+	main      *slog.Logger
+	loggers   map[string]*slog.Logger
+	handler   slog.Handler
+	mu        sync.RWMutex
 }
 
-// GetLogger returns a logger with a specific component field
-func GetLogger(component string) *slog.Logger {
-	if Log == nil {
-		fmt.Println("Logger is not initialized. Returning default logger.")
-		return slog.New(slog.NewTextHandler(os.Stdout, nil)) // Prevents crash
+// Global registry instance
+var Registry = &LoggerRegistry{
+	loggers: make(map[string]*slog.Logger),
+}
+
+// InitializeLoggers sets up the central logging system with the given configuration
+func InitializeLoggers(cfg *cfgTypes.ServerConfig) {
+	// Convert log level from config
+	cfg.Logging.Level = strings.TrimSpace(strings.ToLower(cfg.Logging.Level))
+	var logLevel slog.Level
+	if err := logLevel.UnmarshalText([]byte(cfg.Logging.Level)); err != nil {
+		fmt.Printf("Invalid log level in config: %s\n", cfg.Logging.Level)
+		os.Exit(1)
 	}
-	return Log.With("component", component)
+
+	// Determine log file name based on structure setting
+	var logFilePath string
+	if cfg.Logging.Structure {
+		logFilePath = cfg.Logging.File + ".json"
+	} else {
+		logFilePath = cfg.Logging.File + ".log"
+	}
+
+	// Ensure directory exists
+	dir := strings.TrimSuffix(cfg.Logging.File, basename(cfg.Logging.File))
+	if dir != "" && dir != cfg.Logging.File {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			fmt.Printf("Failed to create log directory: %v\n", err)
+		}
+	}
+
+	// Choose between structured JSON logs and pretty logs
+	var handler slog.Handler
+	if cfg.Logging.Structure {
+		handler = NewJSONLogWriter(logFilePath, logLevel, cfg.Logging.MaxSizeMB)
+	} else {
+		logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_SYNC, 0644)
+		if err != nil {
+			fmt.Printf("Failed to open log file: %v\n", err)
+			os.Exit(1)
+		}
+		handler = &PrettyLogWriter{
+			output: logFile,
+			level:  logLevel,
+		}
+	}
+
+	// Lock the registry while updating
+	Registry.mu.Lock()
+	defer Registry.mu.Unlock()
+
+	// Set the main logger and handler
+	Registry.handler = handler
+	Registry.main = slog.New(handler)
+
+	// Print a console message just for initialization confirmation
+	fmt.Printf("Logger initialized: writing to %s\n", logFilePath)
+
+	// Now create all the component loggers
+	// Pre-creating all loggers you'll need in the application
+	components := []string{
+		"main", "mongo", "mongo-query", "mongo-store", "mongo-purge", "mongo-event",
+		"event-handler", "req-handler", "auth-handler", "close-handler",
+		"client", "config", "util", "event-validation", "buffer", "user-sync",
+	}
+
+	for _, component := range components {
+		Registry.loggers[component] = Registry.main.With("component", component)
+	}
+
+	// Log initialization message to the log file only
+	Registry.Get("main").Info("Logger system initialized",
+		"level", cfg.Logging.Level,
+		"file", logFilePath,
+		"structured", cfg.Logging.Structure,
+		"components", len(components))
+}
+
+// Get returns a logger for the specified component
+func (r *LoggerRegistry) Get(component string) *slog.Logger {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	// If the registry hasn't been initialized yet, return a no-op logger
+	if r.main == nil {
+		noopHandler := slog.NewTextHandler(io.Discard, nil)
+		return slog.New(noopHandler).With("component", component)
+	}
+
+	// Check if we have a pre-created logger for this component
+	if logger, exists := r.loggers[component]; exists {
+		return logger
+	}
+
+	// If not found, create one on-demand (shouldn't happen with proper initialization)
+	return r.main.With("component", component)
+}
+
+// Helper function to get basename
+func basename(path string) string {
+	parts := strings.Split(path, "/")
+	return parts[len(parts)-1]
+}
+
+// The GetLogger function now simply delegates to the registry
+func GetLogger(component string) *slog.Logger {
+	return Registry.Get(component)
 }
 
 // TrimLogFile checks log size and trims the oldest 20% if needed

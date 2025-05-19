@@ -12,7 +12,7 @@ func GetClientIP(r *http.Request) string {
         ips := strings.Split(xff, ",")
         if len(ips) > 0 {
             clientIP := strings.TrimSpace(ips[0])
-            utilLog.Debug("Client IP determined from X-Forwarded-For", 
+            utilLog().Debug("Client IP determined from X-Forwarded-For", 
                 "ip", clientIP, 
                 "original_header", xff)
             return clientIP
@@ -29,7 +29,7 @@ func GetClientIP(r *http.Request) string {
         clientIP = remoteAddr
     }
     
-    utilLog.Debug("Client IP determined from RemoteAddr", 
+    utilLog().Debug("Client IP determined from RemoteAddr", 
         "ip", clientIP, 
         "remote_addr", remoteAddr)
     return clientIP

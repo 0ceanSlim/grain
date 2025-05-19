@@ -11,7 +11,7 @@ import (
 
 // Unknown rejects events with unknown kinds
 func Unknown(ctx context.Context, evt relay.Event, collection *mongo.Collection, client relay.ClientInterface) error {
-	log.Warn("Rejecting unknown event kind", 
+	esLog().Warn("Rejecting unknown event kind", 
 		"event_id", evt.ID, 
 		"kind", evt.Kind, 
 		"pubkey", evt.PubKey)

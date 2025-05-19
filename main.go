@@ -34,7 +34,8 @@ func main() {
 		fmt.Printf("Failed to load initial config: %v\n", err)
 		os.Exit(1) // Exit if initial config load fails
 	}
-	utils.InitializeLogger(cfg) // Initialize logger with initial config
+	// Initialize the logging system with all component loggers
+	utils.InitializeLoggers(cfg)
 	log = utils.GetLogger("main")
 
 	utils.EnsureFileExists("config.yml", "www/static/examples/config.example.yml")
@@ -76,7 +77,7 @@ func main() {
 		}
 
 		// Re-initialize logger with new configuration
-		utils.InitializeLogger(cfg)
+		utils.InitializeLoggers(cfg)
 		log = utils.GetLogger("main") // Update global logger
 		config.SetResourceLimit(&cfg.ResourceLimits)
 		config.SetRateLimit(cfg)

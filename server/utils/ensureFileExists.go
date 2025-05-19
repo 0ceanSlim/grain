@@ -5,16 +5,16 @@ import (
 )
 
 func EnsureFileExists(filePath, examplePath string) {
-	utilLog.Debug("Checking if file exists", "path", filePath)
+	utilLog().Debug("Checking if file exists", "path", filePath)
 	
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		utilLog.Info("File does not exist, creating from example", 
+		utilLog().Info("File does not exist, creating from example", 
 			"target_path", filePath, 
 			"example_path", examplePath)
 		
 		err = copyFile(examplePath, filePath)
 		if err != nil {
-			utilLog.Error("Failed to copy example file", 
+			utilLog().Error("Failed to copy example file", 
 				"example_path", examplePath, 
 				"target_path", filePath, 
 				"error", err)
@@ -23,14 +23,14 @@ func EnsureFileExists(filePath, examplePath string) {
 			panic(err)
 		}
 		
-		utilLog.Info("Successfully created file from example", 
+		utilLog().Info("Successfully created file from example", 
 			"path", filePath)
 	} else if err != nil {
 		// Handle other potential errors from os.Stat
-		utilLog.Error("Error checking file existence", 
+		utilLog().Error("Error checking file existence", 
 			"path", filePath, 
 			"error", err)
 	} else {
-		utilLog.Debug("File already exists", "path", filePath)
+		utilLog().Debug("File already exists", "path", filePath)
 	}
 }

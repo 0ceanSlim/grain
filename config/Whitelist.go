@@ -10,23 +10,23 @@ import (
 func CheckWhitelist(evt nostr.Event) (bool, string) {
 	whitelistCfg := GetWhitelistConfig()
 	if whitelistCfg == nil {
-		log.Error("Whitelist configuration is missing")
+		configLog().Error("Whitelist configuration is missing")
 		return false, "Internal server error: whitelist configuration is missing"
 	}
 
 	// Check if the event's kind is whitelisted
 	if whitelistCfg.KindWhitelist.Enabled && !IsKindWhitelisted(evt.Kind) {
-		log.Warn("Event kind is not whitelisted", "kind", evt.Kind)
+		configLog().Warn("Event kind is not whitelisted", "kind", evt.Kind)
 		return false, "not allowed: event kind is not whitelisted"
 	}
 
 	// Check if the event's pubkey is whitelisted
 	if whitelistCfg.PubkeyWhitelist.Enabled && !IsPubKeyWhitelisted(evt.PubKey, false) {
-		log.Warn("Pubkey is not whitelisted", "pubkey", evt.PubKey)
+		configLog().Warn("Pubkey is not whitelisted", "pubkey", evt.PubKey)
 		return false, "not allowed: pubkey or npub is not whitelisted"
 	}
 
-	log.Debug("Whitelist check passed", "kind", evt.Kind, "pubkey", evt.PubKey)
+	configLog().Debug("Whitelist check passed", "kind", evt.Kind, "pubkey", evt.PubKey)
 	return true, ""
 }
 
@@ -55,7 +55,7 @@ func IsPubKeyWhitelisted(pubKey string, skipEnabledCheck bool) bool {
 	for _, npub := range cfg.PubkeyWhitelist.Npubs {
 		decodedPubKey, err := utils.DecodeNpub(npub)
 		if err != nil {
-			log.Error("Failed to decode npub", "npub", npub, "error", err)
+			configLog().Error("Failed to decode npub", "npub", npub, "error", err)
 			continue
 		}
 		if pubKey == decodedPubKey {
@@ -68,7 +68,7 @@ func IsPubKeyWhitelisted(pubKey string, skipEnabledCheck bool) bool {
 		domains := cfg.DomainWhitelist.Domains
 		pubkeys, err := utils.FetchPubkeysFromDomains(domains)
 		if err != nil {
-			log.Error("Failed to fetch pubkeys from domains", "domains", domains, "error", err)
+			configLog().Error("Failed to fetch pubkeys from domains", "domains", domains, "error", err)
 			return false // Consider errors as non-whitelisted for purging
 		}
 
@@ -92,7 +92,7 @@ func IsKindWhitelisted(kind int) bool {
 	for _, whitelistedKindStr := range cfg.KindWhitelist.Kinds {
 		whitelistedKind, err := strconv.Atoi(whitelistedKindStr)
 		if err != nil {
-			log.Error("Failed to convert whitelisted kind to int", "kind", whitelistedKindStr, "error", err)
+			configLog().Error("Failed to convert whitelisted kind to int", "kind", whitelistedKindStr, "error", err)
 			continue
 		}
 		if kind == whitelistedKind {

@@ -14,10 +14,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var queryLog *slog.Logger
-
-func init() {
-	queryLog = utils.GetLogger("mongo-query")
+// Set the logging component for MongoDB query operations
+func queryLog() *slog.Logger {
+	return utils.GetLogger("mongo-query")
 }
 
 // QueryEvents queries events from the MongoDB collection(s) based on filters
@@ -85,14 +84,14 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 	// Apply the appropriate limit
 	if lowestExplicitLimit != nil {
 		queryLimit = int64(*lowestExplicitLimit)
-		queryLog.Debug("Using explicit limit from filter", "limit", queryLimit)
+		queryLog().Debug("Using explicit limit from filter", "limit", queryLimit)
 	} else if implicitLimit > 0 {
 		queryLimit = int64(implicitLimit)
-		queryLog.Info("No explicit limit specified, applying implicit limit", 
+		queryLog().Info("No explicit limit specified, applying implicit limit", 
 			"implicit_limit", implicitLimit,
 			"database", databaseName)
 	} else {
-		queryLog.Warn("No limit specified and no implicit limit configured", 
+		queryLog().Warn("No limit specified and no implicit limit configured", 
 			"database", databaseName,
 			"query_filters", len(combinedFilters))
 	}
@@ -105,7 +104,7 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 	var collections []string
 	if len(filters) > 0 && len(filters[0].Kinds) == 0 {
 		collections, _ = client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
-		queryLog.Debug("No kinds specified, querying all collections", 
+		queryLog().Debug("No kinds specified, querying all collections", 
 			"collection_count", len(collections))
 	} else {
 		// Collect all kinds from filters and query those collections
@@ -121,7 +120,7 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 			collectionName := fmt.Sprintf("event-kind%d", kind)
 			collections = append(collections, collectionName)
 		}
-		queryLog.Debug("Querying specific kind collections", 
+		queryLog().Debug("Querying specific kind collections", 
 			"kind_count", len(kindsMap),
 			"collection_count", len(collections))
 	}
@@ -132,7 +131,7 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 		collection := client.Database(databaseName).Collection(collectionName)
 		cursor, err := collection.Find(context.TODO(), query, opts)
 		if err != nil {
-			queryLog.Error("Error querying collection", 
+			queryLog().Error("Error querying collection", 
 				"collection", collectionName, 
 				"error", err)
 			return nil, fmt.Errorf("error querying collection %s: %v", collectionName, err)
@@ -143,7 +142,7 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 		for cursor.Next(context.TODO()) {
 			var event relay.Event
 			if err := cursor.Decode(&event); err != nil {
-				queryLog.Error("Error decoding event", 
+				queryLog().Error("Error decoding event", 
 					"collection", collectionName, 
 					"error", err)
 				return nil, fmt.Errorf("error decoding event from collection %s: %v", collectionName, err)
@@ -155,19 +154,19 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 
 		// Handle cursor errors
 		if err := cursor.Err(); err != nil {
-			queryLog.Error("Cursor error", 
+			queryLog().Error("Cursor error", 
 				"collection", collectionName, 
 				"error", err)
 			return nil, fmt.Errorf("cursor error in collection %s: %v", collectionName, err)
 		}
 		
-		queryLog.Debug("Collection query complete", 
+		queryLog().Debug("Collection query complete", 
 			"collection", collectionName,
 			"events_found", collectionEvents,
 			"limit_applied", queryLimit > 0)
 	}
 
-	queryLog.Info("Query completed", 
+	queryLog().Info("Query completed", 
 		"total_collections", len(collections),
 		"total_events", totalEvents,
 		"limit_type", func() string {

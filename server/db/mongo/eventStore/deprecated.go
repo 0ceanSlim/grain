@@ -9,7 +9,7 @@ import (
 
 // Deprecated rejects kind 2 events since they are deprecated
 func Deprecated(ctx context.Context, evt relay.Event, client relay.ClientInterface) error {
-	log.Info("Rejecting deprecated event kind 2", 
+	esLog().Info("Rejecting deprecated event kind 2", 
 		"event_id", evt.ID, 
 		"pubkey", evt.PubKey)
 	

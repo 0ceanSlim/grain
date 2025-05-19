@@ -13,10 +13,9 @@ const (
 	BufferMessageSizeLimit = 128000 // 128 KiloBytes
 )
 
-var bufferLog *slog.Logger
-
-func init() {
-	bufferLog = GetLogger("buffer")
+// Set the logging component for WebSocket message buffer
+func bufferLog() *slog.Logger {
+	return GetLogger("buffer")
 }
 
 // CalculateOptimalBufferSize determines buffer size based on system resources
@@ -54,13 +53,13 @@ func CalculateOptimalBufferSize(cfg *configTypes.ServerConfig) int {
 	result := int(messagesPerBuffer)
 	if result < minBufferSize {
 		result = minBufferSize
-		bufferLog.Warn("Buffer size increased to minimum", "size", minBufferSize)
+		bufferLog().Warn("Buffer size increased to minimum", "size", minBufferSize)
 	} else if result > maxBufferSize {
 		result = maxBufferSize
-		bufferLog.Debug("Buffer size capped at maximum", "size", maxBufferSize)
+		bufferLog().Debug("Buffer size capped at maximum", "size", maxBufferSize)
 	}
 	
-	bufferLog.Info("Calculated buffer size", 
+	bufferLog().Info("Calculated buffer size", 
 		"messages", result, 
 		"bytes_per_msg", BufferMessageSizeLimit, 
 		"total_buffer_mb", float64(result)*float64(BufferMessageSizeLimit)/(1024*1024),
