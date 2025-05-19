@@ -109,6 +109,9 @@ func InitializeLoggers(cfg *cfgTypes.ServerConfig) {
         "file", logFilePath,
         "structured", cfg.Logging.Structure,
         "components", len(components))
+		    
+    // Start periodic log trimming - check every 15 minutes
+    StartPeriodicLogTrimmer(logFilePath, cfg.Logging.MaxSizeMB, 10)
 }
 
 // Get returns a logger for the specified component
@@ -142,47 +145,87 @@ func GetLogger(component string) *slog.Logger {
 	return Registry.Get(component)
 }
 
-// TrimLogFile checks log size and trims the oldest 20% if needed
-func TrimLogFile(filePath string, maxSizeMB int) {
+// Additional global variable to track last trim time
+var (
+	lastTrimTime     time.Time
+	trimMutex        sync.Mutex
+)
+
+// PeriodicLogTrimmer starts a goroutine that periodically checks log size and trims if needed
+func StartPeriodicLogTrimmer(logFilePath string, maxSizeMB int, checkIntervalMinutes int) {
+	lastTrimTime = time.Now()
+	
+	go func() {
+		ticker := time.NewTicker(time.Duration(checkIntervalMinutes) * time.Minute)
+		defer ticker.Stop()
+		
+		for range ticker.C {
+			trimMutex.Lock()
+			trimNeeded, sizeBytes := checkLogSize(logFilePath, maxSizeMB)
+			if trimNeeded {
+				utilLog().Info("Log file size exceeded limit, trimming...",
+					"file", logFilePath,
+					"current_size_mb", float64(sizeBytes)/(1024*1024),
+					"max_size_mb", maxSizeMB)
+				
+				err := trimLogFile(logFilePath)
+				if err != nil {
+					utilLog().Error("Failed to trim log file", 
+						"file", logFilePath,
+						"error", err)
+				} else {
+					lastTrimTime = time.Now()
+					utilLog().Info("Log file trimmed successfully", 
+						"file", logFilePath,
+						"time", lastTrimTime.Format(time.RFC3339))
+				}
+			}
+			trimMutex.Unlock()
+		}
+	}()
+	
+	utilLog().Info("Started periodic log trimmer", 
+		"check_interval_minutes", checkIntervalMinutes,
+		"max_size_mb", maxSizeMB)
+}
+
+// checkLogSize returns true if trimming is needed and the current file size
+func checkLogSize(filePath string, maxSizeMB int) (bool, int64) {
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
-		fmt.Printf("Error checking log file: %v\n", err)
-		return
+		utilLog().Error("Error checking log file size", "file", filePath, "error", err)
+		return false, 0
+	}
+	
+	maxSizeBytes := int64(maxSizeMB * 1024 * 1024)
+	return fileInfo.Size() > maxSizeBytes, fileInfo.Size()
+}
+
+// trimLogFile trims the oldest 20% of a log file
+func trimLogFile(filePath string) error {
+	// Read all lines
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	
+	if err := scanner.Err(); err != nil {
+		return err
 	}
 
-	// Convert max size to bytes
-	maxSizeBytes := maxSizeMB * 1024 * 1024
+	// Calculate how many lines to keep (80%)
+	trimCount := len(lines) / 5 // Remove 20%
+	remainingLines := lines[trimCount:]
 
-	// If file size exceeds the limit, start trimming
-	if fileInfo.Size() > int64(maxSizeBytes) {
-		fmt.Println("Log file size exceeded limit, trimming...")
-
-		// Read all lines
-		file, err := os.Open(filePath)
-		if err != nil {
-			fmt.Printf("Error opening log file: %v\n", err)
-			return
-		}
-		defer file.Close()
-
-		var lines []string
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			lines = append(lines, scanner.Text())
-		}
-
-		// Calculate how many lines to keep (80%)
-		trimCount := len(lines) / 5 // 20% to remove
-		remainingLines := lines[trimCount:]
-
-		// Reopen file in write mode and overwrite it with trimmed logs
-		err = os.WriteFile(filePath, []byte(strings.Join(remainingLines, "\n")+"\n"), 0644)
-		if err != nil {
-			fmt.Printf("Error writing trimmed log file: %v\n", err)
-		} else {
-			fmt.Println("Log file trimmed successfully")
-		}
-	}
+	// Reopen file in write mode and overwrite with trimmed logs
+	return os.WriteFile(filePath, []byte(strings.Join(remainingLines, "\n")+"\n"), 0644)
 }
 
 // PrettyLogWriter writes logs ONLY to a file
@@ -269,6 +312,7 @@ type JSONLogWriter struct {
 	attrs     []slog.Attr
 	mu        sync.Mutex // Mutex to protect file access
 	maxSizeMB int        // Maximum file size in MB
+	lastCheck time.Time  // Last time we checked the file size
 }
 
 // NewJSONLogWriter creates a new instance of JSONLogWriter
@@ -280,6 +324,7 @@ func NewJSONLogWriter(filePath string, level slog.Level, maxSizeMB int) *JSONLog
 		filePath:  filePath,
 		level:     level,
 		maxSizeMB: maxSizeMB,
+		lastCheck: time.Now(),
 	}
 }
 
@@ -332,8 +377,11 @@ func (j *JSONLogWriter) Handle(ctx context.Context, r slog.Record) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
-	// Check and trim log file if needed
-	j.checkAndTrimLogFile()
+	// Check and trim log file if needed - but only check every 5 minutes to avoid too frequent stat calls
+	if time.Since(j.lastCheck) > 10*time.Minute {
+		j.checkAndTrimLogFile()
+		j.lastCheck = time.Now()
+	}
 
 	// Collect all attributes including those from WithAttrs
 	allAttrs := make(map[string]interface{})
