@@ -12,12 +12,12 @@ import (
 // Periodically triggers user sync based on config interval.
 func StartPeriodicUserSync(cfg *configTypes.ServerConfig) {
 	if !cfg.UserSync.UserSync {
-		log.Println("User sync is disabled in the config. Skipping sync startup.")
+		syncLog().Debug("User sync is disabled in the config. Skipping sync startup.")
 		return
 	}
 
 	if cfg.UserSync.DisableAtStartup {
-		log.Println("User sync is disabled at startup. Skipping initial sync.")
+		syncLog().Debug("User sync is disabled at startup. Skipping initial sync.")
 	} else {
 		time.Sleep(30 * time.Second) // Wait before initial sync
 		log.Println("Running initial user sync...")

@@ -36,75 +36,79 @@ var Registry = &LoggerRegistry{
 
 // InitializeLoggers sets up the central logging system with the given configuration
 func InitializeLoggers(cfg *cfgTypes.ServerConfig) {
-	// Convert log level from config
-	cfg.Logging.Level = strings.TrimSpace(strings.ToLower(cfg.Logging.Level))
-	var logLevel slog.Level
-	if err := logLevel.UnmarshalText([]byte(cfg.Logging.Level)); err != nil {
-		fmt.Printf("Invalid log level in config: %s\n", cfg.Logging.Level)
-		os.Exit(1)
-	}
+    // Convert log level from config
+    cfg.Logging.Level = strings.TrimSpace(strings.ToLower(cfg.Logging.Level))
+    var logLevel slog.Level
+    if err := logLevel.UnmarshalText([]byte(cfg.Logging.Level)); err != nil {
+        fmt.Printf("Invalid log level in config: %s\n", cfg.Logging.Level)
+        os.Exit(1)
+    }
 
-	// Determine log file name based on structure setting
-	var logFilePath string
-	if cfg.Logging.Structure {
-		logFilePath = cfg.Logging.File + ".json"
-	} else {
-		logFilePath = cfg.Logging.File + ".log"
-	}
+    // Determine log file name based on structure setting
+    var logFilePath string
+    if cfg.Logging.Structure {
+        logFilePath = cfg.Logging.File + ".json"
+    } else {
+        logFilePath = cfg.Logging.File + ".log"
+    }
 
-	// Ensure directory exists
-	dir := strings.TrimSuffix(cfg.Logging.File, basename(cfg.Logging.File))
-	if dir != "" && dir != cfg.Logging.File {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			fmt.Printf("Failed to create log directory: %v\n", err)
-		}
-	}
+    // Ensure directory exists
+    dir := strings.TrimSuffix(cfg.Logging.File, basename(cfg.Logging.File))
+    if dir != "" && dir != cfg.Logging.File {
+        if err := os.MkdirAll(dir, 0755); err != nil {
+            fmt.Printf("Failed to create log directory: %v\n", err)
+        }
+    }
 
-	// Choose between structured JSON logs and pretty logs
-	var handler slog.Handler
-	if cfg.Logging.Structure {
-		handler = NewJSONLogWriter(logFilePath, logLevel, cfg.Logging.MaxSizeMB)
-	} else {
-		logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_SYNC, 0644)
-		if err != nil {
-			fmt.Printf("Failed to open log file: %v\n", err)
-			os.Exit(1)
-		}
-		handler = &PrettyLogWriter{
-			output: logFile,
-			level:  logLevel,
-		}
-	}
+    // Choose between structured JSON logs and pretty logs
+    var handler slog.Handler
+    if cfg.Logging.Structure {
+        handler = NewJSONLogWriter(logFilePath, logLevel, cfg.Logging.MaxSizeMB)
+    } else {
+        logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_SYNC, 0644)
+        if err != nil {
+            fmt.Printf("Failed to open log file: %v\n", err)
+            os.Exit(1)
+        }
+        handler = &PrettyLogWriter{
+            output: logFile,
+            level:  logLevel,
+        }
+    }
 
-	// Lock the registry while updating
-	Registry.mu.Lock()
-	defer Registry.mu.Unlock()
+    // Create main logger
+    mainLogger := slog.New(handler)
 
-	// Set the main logger and handler
-	Registry.handler = handler
-	Registry.main = slog.New(handler)
+    // Print a console message just for initialization confirmation. Supressed Line in produciton. 
+    //fmt.Printf("Logger initialized: writing to %s\n", logFilePath)
 
-	// Print a console message just for initialization confirmation
-	fmt.Printf("Logger initialized: writing to %s\n", logFilePath)
+    // Now create all the component loggers
+    // Pre-creating all loggers you'll need in the application
+    components := []string{
+        "main", "mongo", "mongo-query", "mongo-store", "mongo-purge", "mongo-event",
+        "event-handler", "req-handler", "auth-handler", "close-handler",
+        "client", "config", "util", "event-validation", "buffer", "user-sync",
+    }
 
-	// Now create all the component loggers
-	// Pre-creating all loggers you'll need in the application
-	components := []string{
-		"main", "mongo", "mongo-query", "mongo-store", "mongo-purge", "mongo-event",
-		"event-handler", "req-handler", "auth-handler", "close-handler",
-		"client", "config", "util", "event-validation", "buffer", "user-sync",
-	}
+    // Create a map of loggers before acquiring the lock
+    tempLoggers := make(map[string]*slog.Logger, len(components))
+    for _, component := range components {
+        tempLoggers[component] = mainLogger.With("component", component)
+    }
 
-	for _, component := range components {
-		Registry.loggers[component] = Registry.main.With("component", component)
-	}
+    // Lock the registry, update it, and unlock immediately
+    Registry.mu.Lock()
+    Registry.handler = handler
+    Registry.main = mainLogger
+    Registry.loggers = tempLoggers
+    Registry.mu.Unlock()
 
-	// Log initialization message to the log file only
-	Registry.Get("main").Info("Logger system initialized",
-		"level", cfg.Logging.Level,
-		"file", logFilePath,
-		"structured", cfg.Logging.Structure,
-		"components", len(components))
+    // Now that we've released the lock, we can safely log
+    GetLogger("main").Info("Logger system initialized",
+        "level", cfg.Logging.Level,
+        "file", logFilePath,
+        "structured", cfg.Logging.Structure,
+        "components", len(components))
 }
 
 // Get returns a logger for the specified component
