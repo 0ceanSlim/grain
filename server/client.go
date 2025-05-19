@@ -1,4 +1,4 @@
-package relay
+package server
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ import (
 
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/handlers"
-	relay "github.com/0ceanslim/grain/server/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
 
 	"golang.org/x/net/websocket"
@@ -22,14 +22,14 @@ import (
 var log *slog.Logger
 
 func init() {
-	log = utils.GetLogger("relay")
+	log = utils.GetLogger("client")
 }
 
 // Client implements ClientInterface
 type Client struct {
 	ws            *websocket.Conn
 	sendCh        chan string
-	subscriptions map[string][]relay.Filter
+	subscriptions map[string][]nostr.Filter
 	rateLimiter   *config.RateLimiter
 	messageBuffer strings.Builder
 
@@ -86,7 +86,7 @@ func PrintStats() {
 	}
 }
 
-func WebSocketHandler(ws *websocket.Conn) {
+func ClientHandler(ws *websocket.Conn) {
 	mu.Lock()
 	if currentConnections >= config.GetConfig().Server.MaxConnections {
 		_ = websocket.Message.Send(ws, `{"error": "too many connections"}`)
@@ -112,7 +112,7 @@ func WebSocketHandler(ws *websocket.Conn) {
 	client := &Client{
 		ws:            ws,
 		sendCh:        make(chan string, bufferSize),
-		subscriptions: make(map[string][]relay.Filter),
+		subscriptions: make(map[string][]nostr.Filter),
 		rateLimiter:   config.GetRateLimiter(),
 		messageBuffer: strings.Builder{},
 		id: fmt.Sprintf("c%d", time.Now().UnixNano()), // Simple unique ID
@@ -222,7 +222,7 @@ func (c *Client) ClientInfo() string {
 	)
 }
 
-func (c *Client) GetSubscriptions() map[string][]relay.Filter {
+func (c *Client) GetSubscriptions() map[string][]nostr.Filter {
 	return c.subscriptions
 }
 

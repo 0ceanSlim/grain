@@ -146,7 +146,7 @@ var wsServer = &websocket.Server{
 		// Skip origin check
 		return nil
 	},
-	Handler: websocket.Handler(relay.WebSocketHandler),
+	Handler: websocket.Handler(relay.ClientHandler),
 }
 
 func initRoot(w http.ResponseWriter, r *http.Request) {
