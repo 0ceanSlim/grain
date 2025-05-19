@@ -3,8 +3,8 @@ package routes
 import (
 	"net/http"
 
-	"github.com/0ceanslim/grain/web/middleware"
-	"github.com/0ceanslim/grain/web/utils"
+	"github.com/0ceanslim/grain/client/middleware"
+	"github.com/0ceanslim/grain/client/utils"
 )
 
 func ProfileHandler(w http.ResponseWriter, r *http.Request) {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/0ceanslim/grain/web/handlers"
+	"github.com/0ceanslim/grain/client/handlers"
 )
 
 type contextKey string

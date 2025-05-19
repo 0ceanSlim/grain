@@ -11,16 +11,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/0ceanslim/grain/client/api"
+	"github.com/0ceanslim/grain/client/handlers"
+	"github.com/0ceanslim/grain/client/middleware"
+	"github.com/0ceanslim/grain/client/routes"
 	"github.com/0ceanslim/grain/config"
 	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server"
 	"github.com/0ceanslim/grain/server/db/mongo"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/userSync"
-	"github.com/0ceanslim/grain/web/api"
-	"github.com/0ceanslim/grain/web/handlers"
-	"github.com/0ceanslim/grain/web/middleware"
-	"github.com/0ceanslim/grain/web/routes"
 
 	"golang.org/x/net/websocket"
 )

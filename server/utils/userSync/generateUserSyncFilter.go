@@ -1,8 +1,8 @@
 package userSync
 
 import (
+	"github.com/0ceanslim/grain/client/types"
 	config "github.com/0ceanslim/grain/config/types"
-	"github.com/0ceanslim/grain/web/types"
 )
 
 // generateUserSyncFilter creates a SubscriptionFilter based on UserSyncConfig settings.
