@@ -1,13 +1,18 @@
 package handlers
 
 import (
+	"log/slog"
+
 	"github.com/0ceanslim/grain/server/handlers/response"
 	relay "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
 )
 
-// Package-level logger for close handler
-var closeLog = utils.GetLogger("close-handler")
+var closeLog *slog.Logger
+
+func init() {
+    closeLog = utils.GetLogger("close-handler")
+}
 
 // HandleClose processes a "CLOSE" message from a client
 func HandleClose(client relay.ClientInterface, message []interface{}) {

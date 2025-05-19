@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"log/slog"
+
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/db/mongo"
 	"github.com/0ceanslim/grain/server/handlers/response"
@@ -8,8 +10,11 @@ import (
 	"github.com/0ceanslim/grain/server/utils"
 )
 
-// Package-level logger for request handler
-var reqLog = utils.GetLogger("req-handler")
+var reqLog *slog.Logger
+
+func init() {
+    reqLog = utils.GetLogger("req-handler")
+}
 
 // HandleReq processes a new subscription request
 func HandleReq(client relay.ClientInterface, message []interface{}) {

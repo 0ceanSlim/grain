@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/db/mongo"
@@ -13,8 +14,11 @@ import (
 	"github.com/0ceanslim/grain/server/validation"
 )
 
-// Package-level logger
-var eventLog = utils.GetLogger("event-handler")
+var eventLog *slog.Logger
+
+func init() {
+    eventLog = utils.GetLogger("event-handler")
+}
 
 // HandleEvent processes an "EVENT" message
 func HandleEvent(client relay.ClientInterface, message []interface{}) {
