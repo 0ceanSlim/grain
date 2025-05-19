@@ -1,10 +1,10 @@
 package config
 
-type EventTimeConstraints struct {
-	MinCreatedAt       int64  `yaml:"min_created_at"`        // Minimum allowed timestamp
-	MinCreatedAtString string `yaml:"min_created_at_string"` // Original string value for parsing (e.g., "now-5m")
-	MaxCreatedAt       int64  `yaml:"max_created_at"`        // Maximum allowed timestamp
-	MaxCreatedAtString string `yaml:"max_created_at_string"` // Original string value for parsing (e.g., "now+5m")
+type LogConfig struct {
+	Level     string `yaml:"level"`
+	File      string `yaml:"file"`
+	MaxSizeMB int    `yaml:"max_log_size_mb"`
+	Structure bool   `yaml:"structure"`
 }
 
 type UserSyncConfig struct {
@@ -16,13 +16,6 @@ type UserSyncConfig struct {
 	Limit                 *int     `yaml:"limit"`                   // Limit per kind
 	ExcludeNonWhitelisted bool     `yaml:"exclude_non_whitelisted"` // Sync only whitelisted users
 	Interval              int      `yaml:"interval"`                // Resync interval in hours
-}
-
-type LogConfig struct {
-	Level     string `yaml:"level"`
-	File      string `yaml:"file"`
-	MaxSizeMB int    `yaml:"max_log_size_mb"`
-	Structure bool   `yaml:"structure"`
 }
 
 type ServerConfig struct {

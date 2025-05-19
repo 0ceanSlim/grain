@@ -3,20 +3,17 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	"strings"
-
-	//"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
-	configTypes "github.com/0ceanslim/grain/config/types"
-	relay "github.com/0ceanslim/grain/server"
-
 	"github.com/0ceanslim/grain/config"
+	cfgType "github.com/0ceanslim/grain/config/types"
+	"github.com/0ceanslim/grain/server"
 	"github.com/0ceanslim/grain/server/db/mongo"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/userSync"
@@ -146,7 +143,7 @@ var wsServer = &websocket.Server{
 		// Skip origin check
 		return nil
 	},
-	Handler: websocket.Handler(relay.ClientHandler),
+	Handler: websocket.Handler(server.ClientHandler),
 }
 
 func initRoot(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +156,7 @@ func initRoot(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func initRelay(config *configTypes.ServerConfig, handler http.Handler, wg *sync.WaitGroup) *http.Server {
+func initRelay(config *cfgType.ServerConfig, handler http.Handler, wg *sync.WaitGroup) *http.Server {
 	server := &http.Server{
 		Addr:         config.Server.Port,
 		Handler:      handler,
