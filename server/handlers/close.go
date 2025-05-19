@@ -1,22 +1,30 @@
 package handlers
 
 import (
-	"fmt"
+	"log/slog"
 
 	"github.com/0ceanslim/grain/server/handlers/response"
 	relay "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils"
 )
+
+// Package-level logger specific to close handler
+var closeLog *slog.Logger
+
+func init() {
+	closeLog = utils.GetLogger("close-handler")
+}
 
 // HandleClose processes a "CLOSE" message from a client
 func HandleClose(client relay.ClientInterface, message []interface{}) {
 	if len(message) != 2 {
-		fmt.Println("Invalid CLOSE message format")
+		closeLog.Debug("Invalid CLOSE message format")
 		return
 	}
 
 	subID, ok := message[1].(string)
 	if !ok {
-		fmt.Println("Invalid subscription ID format")
+		closeLog.Debug("Invalid subscription ID format")
 		return
 	}
 
@@ -25,7 +33,7 @@ func HandleClose(client relay.ClientInterface, message []interface{}) {
 
 	// Remove the subscription
 	delete(subscriptions, subID)
-	fmt.Println("Subscription closed:", subID)
+	closeLog.Debug("Subscription closed", "subscription_id", subID)
 
 	// Send "CLOSED" response to client
 	response.SendClosed(client, subID, "Subscription closed")
