@@ -1,39 +1,20 @@
-package utils
+package validation
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"log"
 
 	relay "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils"
 
-	//"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
-
-// SerializeEvent manually constructs the JSON string for event serialization according to NIP-01
-func SerializeEvent(evt relay.Event) string {
-	eventData := []interface{}{
-		0,
-		evt.PubKey,
-		evt.CreatedAt,
-		evt.Kind,
-		evt.Tags,
-		evt.Content,
-	}
-	jsonBytes, err := json.Marshal(eventData)
-	if err != nil {
-		log.Printf("Error serializing event: %v", err)
-		return ""
-	}
-	return string(jsonBytes)
-}
 
 // CheckSignature verifies the event's signature and ID
 func CheckSignature(evt relay.Event) bool {
 	// Serialize event correctly
-	serializedEvent := SerializeEvent(evt)
+	serializedEvent := utils.SerializeEvent(evt)
 	if serializedEvent == "" {
 		log.Printf("Failed to serialize event")
 		return false

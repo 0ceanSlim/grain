@@ -11,6 +11,7 @@ import (
 	"github.com/0ceanslim/grain/server/handlers/response"
 	relay "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/server/validation"
 )
 
 // Package-level logger specific to auth handler
@@ -105,7 +106,7 @@ func VerifyAuthEvent(evt relay.Event) error {
 		return errors.New("invalid: relay URL does not match")
 	}
 
-	if !utils.CheckSignature(evt) {
+	if !validation.CheckSignature(evt) {
 		return errors.New("invalid: signature verification failed")
 	}
 

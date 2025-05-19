@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	config "github.com/0ceanslim/grain/config/types"
+	cfgTypes "github.com/0ceanslim/grain/config/types"
 )
 
 // Adjusts the event time constraints based on the configuration
-func AdjustEventTimeConstraints(cfg *config.ServerConfig) {
+func AdjustEventTimeConstraints(cfg *cfgTypes.ServerConfig) {
 	now := time.Now()
 
 	// Adjust min_created_at based on string value or default to January 1, 2020

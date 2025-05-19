@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	configTypes "github.com/0ceanslim/grain/config/types"
+	cfgTypes "github.com/0ceanslim/grain/config/types"
 )
 
 var Log *slog.Logger
 
-func InitializeLogger(cfg *configTypes.ServerConfig) {
+func InitializeLogger(cfg *cfgTypes.ServerConfig) {
     // Convert log level from config
     cfg.Logging.Level = strings.TrimSpace(strings.ToLower(cfg.Logging.Level))
     var logLevel slog.Level
