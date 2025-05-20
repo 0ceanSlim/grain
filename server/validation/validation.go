@@ -16,7 +16,7 @@ type Result struct {
 
 // Set the logging component for event validation
 func validationLog() *slog.Logger {
-	return utils.GetLogger("util")
+	return utils.GetLogger("event-validation")
 }
 
 // CheckBlacklistAndWhitelist checks if an event is allowed by the blacklist and whitelist rules

@@ -81,8 +81,6 @@ func LoadConfig(filename string) (*configTypes.ServerConfig, error) {
 		return nil, err
 	}
 
-	utils.AdjustEventTimeConstraints(&config)
-
 	once.Do(func() {
 		cfg = &config
 		configLog().Info("Server configuration loaded", "file", filename)
