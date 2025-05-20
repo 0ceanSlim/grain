@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/0ceanslim/grain/config"
-	types "github.com/0ceanslim/grain/config/types"
+	cfgTypes "github.com/0ceanslim/grain/config/types"
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
 
@@ -23,7 +23,7 @@ func purgeLog() *slog.Logger {
 
 
 // PurgeOldEvents removes old events based on the configuration and a list of whitelisted pubkeys.
-func PurgeOldEvents(cfg *types.EventPurgeConfig) {
+func PurgeOldEvents(cfg *cfgTypes.EventPurgeConfig) {
 	if !cfg.Enabled {
 		purgeLog().Debug("Event purging is disabled")
 		return
@@ -216,27 +216,32 @@ func getAllEventCollections(client *mongo.Client) []string {
 }
 
 // ScheduleEventPurging runs the event purging at a configurable interval.
-func ScheduleEventPurging(cfg *types.ServerConfig) {
-	if !cfg.EventPurge.Enabled {
-		purgeLog().Info("Event purging is disabled in configuration")
-		return
-	}
+func ScheduleEventPurging(cfg *cfgTypes.ServerConfig) {
+    if !cfg.EventPurge.Enabled {
+        purgeLog().Info("Event purging is disabled in configuration")
+        return
+    }
 
-	purgeInterval := time.Duration(cfg.EventPurge.PurgeIntervalMinutes) * time.Minute
-	purgeLog().Info("Starting scheduled event purging", 
-		"interval_minutes", cfg.EventPurge.PurgeIntervalMinutes,
-		"keep_hours", cfg.EventPurge.KeepIntervalHours)
+    purgeInterval := time.Duration(cfg.EventPurge.PurgeIntervalMinutes) * time.Minute
+    purgeLog().Info("Starting scheduled event purging", 
+        "interval_minutes", cfg.EventPurge.PurgeIntervalMinutes,
+        "keep_hours", cfg.EventPurge.KeepIntervalHours,
+        "disable_initial_purge", cfg.EventPurge.DisableAtStartup)
 
-	ticker := time.NewTicker(purgeInterval)
-	defer ticker.Stop()
+    ticker := time.NewTicker(purgeInterval)
+    defer ticker.Stop()
 
-	// Run initial purge immediately
-	purgeLog().Info("Running initial purge at startup")
-	PurgeOldEvents(&cfg.EventPurge)
+    // Run initial purge if not disabled
+    if !cfg.EventPurge.DisableAtStartup {
+        purgeLog().Info("Running initial purge at startup")
+        PurgeOldEvents(&cfg.EventPurge)
+    } else {
+        purgeLog().Info("Initial purge at startup is disabled")
+    }
 
-	for range ticker.C {
-		purgeLog().Info("Running scheduled purge")
-		PurgeOldEvents(&cfg.EventPurge)
-		purgeLog().Info("Scheduled purging completed")
-	}
+    for range ticker.C {
+        purgeLog().Info("Running scheduled purge")
+        PurgeOldEvents(&cfg.EventPurge)
+        purgeLog().Info("Scheduled purging completed")
+    }
 }

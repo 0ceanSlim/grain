@@ -45,6 +45,7 @@ backup_relay:
 
 event_purge:
   enabled: false # Toggle to enable/disable event purging
+  disable_at_startup: true # Disable purging at startup
   keep_interval_hours: 24 # Number of hours to keep events before purging
   purge_interval_minutes: 240 # Interval in minutes for running the purge
   purge_by_category: # Configure purging based on categories

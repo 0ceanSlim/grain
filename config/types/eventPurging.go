@@ -2,6 +2,7 @@ package config
 
 type EventPurgeConfig struct {
 	Enabled              bool            `yaml:"enabled"`
+	DisableAtStartup     bool            `yaml:"disable_at_startup"`
 	KeepIntervalHours    int             `yaml:"keep_interval_hours"`
 	PurgeIntervalMinutes int             `yaml:"purge_interval_minutes"`
 	PurgeByCategory      map[string]bool `yaml:"purge_by_category"`
