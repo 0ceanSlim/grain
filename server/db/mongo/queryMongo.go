@@ -37,10 +37,25 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 		if len(filter.Kinds) > 0 {
 			filterBson["kind"] = bson.M{"$in": filter.Kinds}
 		}
+		// Tag filtering implementation
 		if filter.Tags != nil {
 			for key, values := range filter.Tags {
-				if len(values) > 0 {
-					filterBson["tags."+key] = bson.M{"$in": values}
+				if len(values) > 0 && len(key) > 0 {
+					// Remove the # prefix if present
+					tagKey := key
+					if tagKey[0] == '#' {
+						tagKey = tagKey[1:]
+					}
+					
+					// Create a query that matches events with tags where:
+					// 1. The first element is the tag name (e.g., "e")
+					// 2. The second element is in the list of values
+					filterBson["tags"] = bson.M{
+						"$elemMatch": bson.M{
+							"0": tagKey,
+							"1": bson.M{"$in": values},
+						},
+					}
 				}
 			}
 		}
@@ -65,7 +80,10 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 	}
 
 	// Apply sorting by creation date (descending)
-	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
+	opts := options.Find().SetSort(bson.D{
+		{Key: "created_at", Value: -1},
+		{Key: "id", Value: 1}, // For events with same created_at, sort by ID
+	})
 
 	// Get limit from filters or use implicit limit
 	var queryLimit int64 = -1 // Default: no limit
@@ -126,8 +144,20 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 	}
 
 	totalEvents := 0
+	remainingLimit := queryLimit // Store the original limit
+
 	// Query each collection
 	for _, collectionName := range collections {
+		// If we've already reached the limit, stop querying
+		if remainingLimit == 0 && queryLimit > 0 {
+			break
+		}
+		
+		// Adjust the limit for this collection query
+		if remainingLimit > 0 {
+			opts.SetLimit(remainingLimit)
+		}
+		
 		collection := client.Database(databaseName).Collection(collectionName)
 		cursor, err := collection.Find(context.TODO(), query, opts)
 		if err != nil {
@@ -149,7 +179,21 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 			}
 			results = append(results, event)
 			collectionEvents++
+			
+			// Stop if we've reached the limit
+			if queryLimit > 0 && len(results) >= int(queryLimit) {
+				break
+			}
 		}
+		
+		// Update remaining limit
+		if remainingLimit > 0 {
+			remainingLimit -= int64(collectionEvents)
+			if remainingLimit < 0 {
+				remainingLimit = 0
+			}
+		}
+		
 		totalEvents += collectionEvents
 
 		// Handle cursor errors
@@ -163,7 +207,8 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 		queryLog().Debug("Collection query complete", 
 			"collection", collectionName,
 			"events_found", collectionEvents,
-			"limit_applied", queryLimit > 0)
+			"remaining_limit", remainingLimit,
+			"total_events_so_far", len(results))
 	}
 
 	queryLog().Info("Query completed", 
