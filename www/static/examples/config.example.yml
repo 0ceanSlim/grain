@@ -15,7 +15,6 @@ server:
   read_timeout: 10 # in seconds
   write_timeout: 10 # in seconds
   idle_timeout: 120 # in seconds
-  max_connections: 100
   max_subscriptions_per_client: 10
   implicit_req_limit: 500 # Default limit applied to REQ when no limit is specified
 

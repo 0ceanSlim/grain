@@ -31,7 +31,6 @@ type ServerConfig struct {
 		ReadTimeout               int    `yaml:"read_timeout"`
 		WriteTimeout              int    `yaml:"write_timeout"`
 		IdleTimeout               int    `yaml:"idle_timeout"`
-		MaxConnections            int    `yaml:"max_connections"`
 		MaxSubscriptionsPerClient int    `yaml:"max_subscriptions_per_client"`
 		ImplicitReqLimit          int    `yaml:"implicit_req_limit"` // New field for implicit REQ limit
 	} `yaml:"server"`

@@ -28,7 +28,6 @@ func clientLog() *slog.Logger {
 // Client implements ClientInterface
 type Client struct {
 	ws            *websocket.Conn
-	sendCh        chan string
 	subscriptions map[string][]nostr.Filter
 	rateLimiter   *config.RateLimiter
 	messageBuffer strings.Builder
@@ -41,10 +40,7 @@ type Client struct {
 	connectedAt time.Time
 
 	// Message monitoring
-	droppedMessages int
-	lastAdjustment  time.Time
 	messagesSent    int64
-	messagesDropped int64
 }
 
 // Track active clients
@@ -56,95 +52,69 @@ var (
 	
 	// Global stats
 	totalMessagesSent    int64
-	totalMessagesDropped int64
 )
 
-// PrintStats periodically logs messaging statistics
+// PrintStats periodically logs messaging and connection statistics
 func PrintStats() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
 	for range ticker.C {
 		sent := atomic.LoadInt64(&totalMessagesSent)
-		dropped := atomic.LoadInt64(&totalMessagesDropped)
 		
 		// Reset counters
 		atomic.StoreInt64(&totalMessagesSent, 0)
-		atomic.StoreInt64(&totalMessagesDropped, 0)
 		
-		// Calculate drop rate
-		dropRate := 0.0
-		if sent+dropped > 0 {
-			dropRate = float64(dropped) / float64(sent+dropped) * 100
-		}
+		// Get memory statistics from connection manager
+		memStats := connManager.GetMemoryStats()
 		
-		clientLog().Info("WebSocket message statistics", 
-			"sent", sent, 
-			"dropped", dropped, 
-			"drop_rate_pct", fmt.Sprintf("%.2f", dropRate),
-			"active_connections", currentConnections)
+		clientLog().Info("Connection and message statistics", 
+			"messages_sent", sent,
+			"active_connections", currentConnections,
+			"memory_used_pct", memStats["memory_used_percent"],
+			"estimated_mem_per_conn_mb", memStats["estimated_mem_per_conn_mb"])
 	}
 }
 
 func ClientHandler(ws *websocket.Conn) {
-	mu.Lock()
-	if currentConnections >= config.GetConfig().Server.MaxConnections {
-		_ = websocket.Message.Send(ws, `{"error": "too many connections"}`)
-		mu.Unlock()
-		ws.Close()
-		return
-	}
-	currentConnections++
-	mu.Unlock()
-
 	// Capture client info
 	ip := utils.GetClientIP(ws.Request())
 	userAgent := ws.Request().Header.Get("User-Agent")
 	origin := ws.Request().Header.Get("Origin")
 
-	// Get server config
-	cfg := config.GetConfig()
-	
-	// Calculate optimal buffer size based on average message size
-	bufferSize := utils.CalculateOptimalBufferSize(cfg)
-
-	// Create a new client with optimized buffer size
+	// Create a new client without buffer
 	client := &Client{
 		ws:            ws,
-		sendCh:        make(chan string, bufferSize),
 		subscriptions: make(map[string][]nostr.Filter),
 		rateLimiter:   config.GetRateLimiter(),
 		messageBuffer: strings.Builder{},
-		id: fmt.Sprintf("c%d", time.Now().UnixNano()), // Simple unique ID
+		id:            fmt.Sprintf("c%d", time.Now().UnixNano()),
 		ip:            ip,
 		userAgent:     userAgent,
 		origin:        origin,
 		connectedAt:   time.Now(),
-		
-		// Initialize monitoring fields
-		droppedMessages: 0,
-		lastAdjustment:  time.Now(),
 	}
 
 	clientsMu.Lock()
 	clients[ws] = client
+	currentConnections++
 	clientsMu.Unlock()
+
+	// Register with connection manager
+	connManager.RegisterConnection(client)
 
 	clientLog().Info("New connection established", 
 		"client_id", client.id,
 		"ip", ip, 
-		"user_agent", userAgent, 
-		"buffer_size", bufferSize, 
-		"buffer_mb", fmt.Sprintf("%.2f", float64(bufferSize)*float64(utils.BufferMessageSizeLimit)/(1024*1024)))
-
-	// Start goroutine to handle outgoing messages
-	go clientWriter(client)
+		"user_agent", userAgent,
+		"connections", currentConnections)
 
 	// Start processing incoming messages
 	clientReader(client)
 }
 
 // Implement `ClientInterface` methods
+// SendMessage sends a message directly to the WebSocket
 func (c *Client) SendMessage(msg interface{}) {
 	jsonMsg, err := json.Marshal(msg)
 	if err != nil {
@@ -152,58 +122,21 @@ func (c *Client) SendMessage(msg interface{}) {
 		return
 	}
 	
-	// Determine message priority (for logging and potential prioritization)
-	priority := "normal"
-	if arr, ok := msg.([]interface{}); ok && len(arr) > 0 {
-		if msgType, ok := arr[0].(string); ok {
-			switch msgType {
-			case "NOTICE", "EOSE", "CLOSED", "OK":
-				priority = "high"
-			}
-		}
+	// Send message directly to WebSocket
+	err = websocket.Message.Send(c.ws, string(jsonMsg))
+	if err != nil {
+		clientLog().Warn("Failed to send message directly",
+			"error", err,
+			"client_id", c.id)
+			
+		// Close the connection on send failure
+		c.CloseClient()
+		return
 	}
 	
-	// Try to send without blocking
-	select {
-	case c.sendCh <- string(jsonMsg):
-		atomic.AddInt64(&c.messagesSent, 1)
-		atomic.AddInt64(&totalMessagesSent, 1)
-	default:
-		c.droppedMessages++
-		atomic.AddInt64(&c.messagesDropped, 1)
-		atomic.AddInt64(&totalMessagesDropped, 1)
-		
-		// For high priority messages, attempt to force them through
-		if priority == "high" && c.droppedMessages < 1000 {
-			select {
-			case <-c.sendCh: // Remove one message from the buffer
-				// Try again
-				select {
-				case c.sendCh <- string(jsonMsg):
-					clientLog().Debug("Forced high-priority message into buffer", 
-						"type", priority,
-						"client_id", c.id, 
-						"client", c.ClientInfo())
-				default:
-					clientLog().Warn("Failed to send high-priority message even after making room",
-						"client_id", c.id,
-						"client", c.ClientInfo())
-				}
-			default:
-				// Couldn't make room
-			}
-		}
-		
-		// Only log warnings periodically to prevent log flooding
-		if c.droppedMessages == 1 || c.droppedMessages % 100 == 0 {
-			clientLog().Warn("Client send buffer full, dropping message", 
-				"dropped_count", c.droppedMessages,
-				"buffer_size", cap(c.sendCh),
-				"buffer_used", len(c.sendCh),
-				"client_id", c.id,
-				"client", c.ClientInfo())
-		}
-	}
+	// Update statistics
+	atomic.AddInt64(&c.messagesSent, 1)
+	atomic.AddInt64(&totalMessagesSent, 1)
 }
 
 func (c *Client) GetWS() *websocket.Conn {
@@ -231,23 +164,17 @@ func (c *Client) CloseClient() {
 	_, exists := clients[c.ws]
 	if exists {
 		delete(clients, c.ws)
+		currentConnections--
 	}
 	clientsMu.Unlock()
 
+	// Unregister from connection manager
+	connManager.RemoveConnection(c)
+
 	// Safely close WebSocket
 	c.ws.Close()
-
-	// Prevent closing `sendCh` multiple times
-	select {
-	case _, ok := <-c.sendCh:
-		if !ok {
-			// Channel already closed
-			return
-		}
-	default:
-		close(c.sendCh)
-	}
 }
+
 func clientReader(client *Client) {
 	ws := client.ws
 	defer func() {
@@ -258,6 +185,9 @@ func clientReader(client *Client) {
 		mu.Lock()
 		currentConnections--
 		mu.Unlock()
+
+		// Unregister from connection manager
+		connManager.RemoveConnection(client)
 
 		client.CloseClient()
 	}()
@@ -320,72 +250,6 @@ func clientReader(client *Client) {
 			clientLog().Warn("Unknown message type", "type", messageType, "client", client.ClientInfo())
 		}
 	}
-}
-
-func clientWriter(client *Client) {
-    ws := client.ws
-    
-    // Use a ticker for paced sending of messages
-    ticker := time.NewTicker(10 * time.Millisecond)
-    defer ticker.Stop()
-    
-    // Track consecutive empty reads for adaptive pacing
-    consecEmptyReads := 0
-    pacingInterval := 10 * time.Millisecond
-    
-    // Batch size for sending multiple messages per tick
-    const batchSize = 5
-    
-    // Main loop - using range instead of select
-    for range ticker.C {
-        // Send up to batchSize messages per tick
-        sentInBatch := 0
-        
-        for i := 0; i < batchSize; i++ {
-            select {
-            case msg, ok := <-client.sendCh:
-                if !ok {
-                    // Channel closed, exit
-                    return
-                }
-                
-                if err := websocket.Message.Send(ws, msg); err != nil {
-                    clientLog().Error("Failed to send message", 
-                        "error", err,
-                        "client_id", client.id)
-                    client.CloseClient()
-                    return
-                }
-                
-                sentInBatch++
-                consecEmptyReads = 0
-                
-            default:
-                // No more messages available
-                consecEmptyReads++
-                
-                // Adaptive pacing - slow down ticker when queue is empty
-                if consecEmptyReads > 50 && pacingInterval < 100*time.Millisecond {
-                    // Gradually increase pacing interval
-                    pacingInterval += 10 * time.Millisecond
-                    ticker.Reset(pacingInterval)
-                    
-                    clientLog().Debug("Increased pacing interval", 
-                        "interval_ms", pacingInterval.Milliseconds(),
-                        "client_id", client.id)
-                }
-                
-                // Skip to next ticker iteration instead of using break
-                i = batchSize // This forces exit from the inner loop
-            }
-        }
-        
-        // If we're actively sending messages, speed up the ticker
-        if sentInBatch > 0 && pacingInterval > 10*time.Millisecond {
-            pacingInterval = 10 * time.Millisecond
-            ticker.Reset(pacingInterval)
-        }
-    }
 }
 
 func handleReadError(err error, ws *websocket.Conn) {

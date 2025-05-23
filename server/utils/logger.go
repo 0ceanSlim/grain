@@ -88,7 +88,7 @@ func InitializeLoggers(cfg *cfgTypes.ServerConfig) {
     components := []string{
         "main", "mongo", "mongo-query", "mongo-store", "mongo-purge", "mongo-event",
         "event-handler", "req-handler", "auth-handler", "close-handler",
-        "client", "config", "util", "event-validation", "buffer", "user-sync",
+        "client", "config", "util", "event-validation", "conn-manager", "user-sync",
     }
 
     // Create a map of loggers before acquiring the lock
