@@ -60,23 +60,35 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 			}
 		}
 		if filter.Since != nil {
-			filterBson["created_at"] = bson.M{"$gte": *filter.Since}
+			filterBson["created_at"] = bson.M{"$gte": filter.Since.Unix()}
 		}
 		if filter.Until != nil {
 			if filterBson["created_at"] == nil {
-				filterBson["created_at"] = bson.M{"$lte": *filter.Until}
+				filterBson["created_at"] = bson.M{"$lte": filter.Until.Unix()}
 			} else {
-				filterBson["created_at"].(bson.M)["$lte"] = *filter.Until
+				filterBson["created_at"].(bson.M)["$lte"] = filter.Until.Unix()
 			}
 		}
 
 		combinedFilters = append(combinedFilters, filterBson)
 	}
 
-	// Combine all filter conditions using the $or operator
+	// **CRITICAL FIX**: Handle empty filters properly
 	query := bson.M{}
 	if len(combinedFilters) > 0 {
-		query["$or"] = combinedFilters
+		// Check if we have any actual filtering criteria
+		hasActualFilters := false
+		for _, filter := range combinedFilters {
+			if len(filter) > 0 {
+				hasActualFilters = true
+				break
+			}
+		}
+		
+		if hasActualFilters {
+			query["$or"] = combinedFilters
+		}
+		// If no actual filters, query remains empty (matches all)
 	}
 
 	// Apply sorting by creation date (descending)
@@ -118,22 +130,41 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 		opts.SetLimit(queryLimit) // Apply the limit
 	}
 
-	// If no kinds are specified in any filter, query all collections
+	// **IMPROVED COLLECTION SELECTION LOGIC**
 	var collections []string
-	if len(filters) > 0 && len(filters[0].Kinds) == 0 {
-		collections, _ = client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
-		queryLog().Debug("No kinds specified, querying all collections", 
-			"collection_count", len(collections))
-	} else {
-		// Collect all kinds from filters and query those collections
-		kindsMap := make(map[int]bool)
-		for _, filter := range filters {
+	
+	// Check if ANY filter specifies kinds
+	hasKindFilters := false
+	kindsMap := make(map[int]bool)
+	
+	for _, filter := range filters {
+		if len(filter.Kinds) > 0 {
+			hasKindFilters = true
 			for _, kind := range filter.Kinds {
 				kindsMap[kind] = true
 			}
 		}
-
-		// Construct collection names based on kinds
+	}
+	
+	if !hasKindFilters {
+		// No kinds specified in ANY filter, query all event collections
+		allCollections, err := client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
+		if err != nil {
+			queryLog().Error("Failed to list collections", "error", err)
+			return nil, fmt.Errorf("error listing collections: %v", err)
+		}
+		
+		// Filter to only event collections
+		for _, name := range allCollections {
+			if len(name) > 10 && name[:10] == "event-kind" {
+				collections = append(collections, name)
+			}
+		}
+		
+		queryLog().Debug("No kinds specified, querying all event collections", 
+			"collection_count", len(collections))
+	} else {
+		// Construct collection names based on specified kinds
 		for kind := range kindsMap {
 			collectionName := fmt.Sprintf("event-kind%d", kind)
 			collections = append(collections, collectionName)
@@ -145,6 +176,12 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 
 	totalEvents := 0
 	remainingLimit := queryLimit // Store the original limit
+
+	// Debug the query we're about to execute
+	queryLog().Debug("Executing MongoDB query", 
+		"query", fmt.Sprintf("%+v", query),
+		"is_empty_query", len(query) == 0,
+		"collections_to_query", len(collections))
 
 	// Query each collection
 	for _, collectionName := range collections {

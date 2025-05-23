@@ -16,23 +16,33 @@ func closeLog() *slog.Logger {
 // HandleClose processes a "CLOSE" message from a client
 func HandleClose(client relay.ClientInterface, message []interface{}) {
 	if len(message) != 2 {
-		closeLog().Debug("Invalid CLOSE message format")
+		closeLog().Debug("Invalid CLOSE message format", "message_length", len(message))
 		return
 	}
 
 	subID, ok := message[1].(string)
 	if !ok {
-		closeLog().Debug("Invalid subscription ID format")
+		closeLog().Debug("Invalid subscription ID format in CLOSE message")
 		return
 	}
 
 	// Get the client's subscription map
 	subscriptions := client.GetSubscriptions()
 
+	// Check if subscription exists before removing
+	if _, exists := subscriptions[subID]; !exists {
+		closeLog().Warn("Attempted to close non-existent subscription", 
+			"subscription_id", subID,
+			"active_subscriptions", len(subscriptions))
+		return
+	}
+
 	// Remove the subscription
 	delete(subscriptions, subID)
-	closeLog().Debug("Subscription closed", "subscription_id", subID)
+	closeLog().Info("Subscription closed by client request", 
+		"subscription_id", subID,
+		"remaining_subscriptions", len(subscriptions))
 
 	// Send "CLOSED" response to client
-	response.SendClosed(client, subID, "Subscription closed")
+	response.SendClosed(client, subID, "subscription closed")
 }

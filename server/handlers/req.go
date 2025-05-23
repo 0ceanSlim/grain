@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"log/slog"
 
 	"github.com/0ceanslim/grain/config"
@@ -15,7 +18,8 @@ func reqLog() *slog.Logger {
 	return utils.GetLogger("req-handler")
 }
 
-// HandleReq processes a new subscription request
+
+// HandleReq processes a new subscription request with proper subscription management
 func HandleReq(client relay.ClientInterface, message []interface{}) {
 	if len(message) < 3 {
 		reqLog().Error("Invalid REQ message format")
@@ -34,17 +38,16 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 		return
 	}
 
-	// Remove oldest subscription if needed
-	if len(subscriptions) >= config.GetConfig().Server.MaxSubscriptionsPerClient {
-		var oldestSubID string
-		for id := range subscriptions {
-			oldestSubID = id
-			break
+	// Add REQ rate limiting check
+	rateLimiter := config.GetRateLimiter()
+	if rateLimiter != nil {
+		if allowed, msg := rateLimiter.AllowReq(); !allowed {
+			reqLog().Warn("REQ rate limit exceeded", 
+				"sub_id", subID,
+				"reason", msg)
+			response.SendClosed(client, subID, "rate-limited: "+msg)
+			return
 		}
-		delete(subscriptions, oldestSubID)
-		reqLog().Info("Dropped oldest subscription", 
-			"old_sub_id", oldestSubID, 
-			"current_count", len(subscriptions))
 	}
 
 	// Parse and validate filters
@@ -71,14 +74,48 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 		filters[i] = f
 	}
 
-	// Add subscription
+	// Check if this is a duplicate subscription (same filters)
+	if existingFilters, exists := subscriptions[subID]; exists {
+		if areFiltersIdentical(existingFilters, filters) {
+			reqLog().Debug("Duplicate subscription detected, ignoring", 
+				"sub_id", subID,
+				"filter_count", len(filters))
+			// Still send EOSE for duplicate subscriptions to satisfy client expectations
+			client.SendMessage([]interface{}{"EOSE", subID})
+			return
+		} else {
+			reqLog().Info("Subscription updated with new filters", 
+				"sub_id", subID,
+				"old_filter_count", len(existingFilters),
+				"new_filter_count", len(filters))
+		}
+	}
+
+	// Remove oldest subscription if needed
+	if len(subscriptions) >= config.GetConfig().Server.MaxSubscriptionsPerClient {
+		var oldestSubID string
+		for id := range subscriptions {
+			if id != subID { // Don't remove the current subscription
+				oldestSubID = id
+				break
+			}
+		}
+		if oldestSubID != "" {
+			delete(subscriptions, oldestSubID)
+			reqLog().Info("Dropped oldest subscription", 
+				"old_sub_id", oldestSubID, 
+				"current_count", len(subscriptions))
+		}
+	}
+
+	// Add/update subscription - THIS IS CRUCIAL: subscription stays active after EOSE
 	subscriptions[subID] = filters
-	reqLog().Info("Subscription updated", 
+	reqLog().Info("Subscription created/updated", 
 		"sub_id", subID, 
 		"filter_count", len(filters), 
 		"total_subscriptions", len(subscriptions))
 
-	// Query database
+	// Query database for historical events
 	dbName := config.GetConfig().MongoDB.Database
 	queriedEvents, err := mongo.QueryEvents(filters, mongo.GetClient(), dbName)
 	if err != nil {
@@ -90,20 +127,48 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 		return
 	}
 
-	// Log event count for debugging and monitoring purposes
-	reqLog().Debug("Events retrieved from database", 
-		"sub_id", subID, 
-		"event_count", len(queriedEvents))
-
-	// Send events to client
+	// Send historical events to client
 	for _, evt := range queriedEvents {
 		client.SendMessage([]interface{}{"EVENT", subID, evt})
 	}
 
-	// Send EOSE message
+	// Send EOSE message to indicate end of stored events
 	client.SendMessage([]interface{}{"EOSE", subID})
 
-	reqLog().Info("Subscription handling completed", 
+	reqLog().Info("Subscription established", 
 		"sub_id", subID, 
-		"events_sent", len(queriedEvents))
+		"historical_events_sent", len(queriedEvents),
+		"status", "active")
+
+	// NOTE: Subscription remains ACTIVE after EOSE
+	// It will be closed only when:
+	// 1. Client sends CLOSE message
+	// 2. Client disconnects
+	// 3. New REQ with same subID (replaces this one)
+	// 4. Subscription limit reached (oldest removed)
+}
+
+// areFiltersIdentical compares two filter slices to detect duplicates
+func areFiltersIdentical(filters1, filters2 []relay.Filter) bool {
+	if len(filters1) != len(filters2) {
+		return false
+	}
+
+	// Simple approach: serialize both and compare hashes
+	hash1 := hashFilters(filters1)
+	hash2 := hashFilters(filters2)
+	
+	return hash1 == hash2
+}
+
+// hashFilters creates a deterministic hash of filter contents
+func hashFilters(filters []relay.Filter) string {
+	// Serialize filters to JSON for comparison
+	data, err := json.Marshal(filters)
+	if err != nil {
+		return "" // If serialization fails, treat as different
+	}
+	
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
 }

@@ -235,19 +235,39 @@ func clientReader(client *Client) {
 
 		switch messageType {
 		case "REQ":
+			clientLog().Debug("Processing REQ message", 
+				"client_id", client.id,
+				"message_length", len(message))
 			handlers.HandleReq(client, message)
 		case "CLOSE":
+			clientLog().Info("Processing CLOSE message", 
+				"client_id", client.id,
+				"sub_id", func() string {
+					if len(message) > 1 {
+						if subID, ok := message[1].(string); ok {
+							return subID
+						}
+					}
+					return "unknown"
+				}())
 			handlers.HandleClose(client, message)
 		case "AUTH":
 			if config.GetConfig().Auth.Enabled {
+				clientLog().Debug("Processing AUTH message", "client_id", client.id)
 				handlers.HandleAuth(client, message)
 			} else {
 				clientLog().Warn("Received AUTH message, but AUTH is disabled", "client", client.ClientInfo())
 			}
 		case "EVENT":
+			clientLog().Debug("Processing EVENT message", 
+				"client_id", client.id,
+				"message_length", len(message))
 			handlers.HandleEvent(client, message)
 		default:
-			clientLog().Warn("Unknown message type", "type", messageType, "client", client.ClientInfo())
+			clientLog().Warn("Unknown message type", 
+				"type", messageType, 
+				"client_id", client.id,
+				"full_message", fullMessage[:min(200, len(fullMessage))] + "...")
 		}
 	}
 }
