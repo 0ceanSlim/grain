@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/0ceanslim/grain/config"
 	relay "github.com/0ceanslim/grain/server/types"
@@ -21,7 +24,6 @@ func queryLog() *slog.Logger {
 
 // QueryEvents queries events from the MongoDB collection(s) based on filters
 func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName string) ([]relay.Event, error) {
-	var results []relay.Event
 	var combinedFilters []bson.M
 
 	// Build MongoDB filters for each relay.Filter
@@ -37,6 +39,7 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 		if len(filter.Kinds) > 0 {
 			filterBson["kind"] = bson.M{"$in": filter.Kinds}
 		}
+		
 		// Tag filtering implementation
 		if filter.Tags != nil {
 			for key, values := range filter.Tags {
@@ -47,9 +50,6 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 						tagKey = tagKey[1:]
 					}
 					
-					// Create a query that matches events with tags where:
-					// 1. The first element is the tag name (e.g., "e")
-					// 2. The second element is in the list of values
 					filterBson["tags"] = bson.M{
 						"$elemMatch": bson.M{
 							"0": tagKey,
@@ -73,10 +73,9 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 		combinedFilters = append(combinedFilters, filterBson)
 	}
 
-	// **CRITICAL FIX**: Handle empty filters properly
+	// Handle empty filters properly
 	query := bson.M{}
 	if len(combinedFilters) > 0 {
-		// Check if we have any actual filtering criteria
 		hasActualFilters := false
 		for _, filter := range combinedFilters {
 			if len(filter) > 0 {
@@ -88,20 +87,13 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 		if hasActualFilters {
 			query["$or"] = combinedFilters
 		}
-		// If no actual filters, query remains empty (matches all)
 	}
 
-	// Apply sorting by creation date (descending)
-	opts := options.Find().SetSort(bson.D{
-		{Key: "created_at", Value: -1},
-		{Key: "id", Value: 1}, // For events with same created_at, sort by ID
-	})
-
-	// Get limit from filters or use implicit limit
-	var queryLimit int64 = -1 // Default: no limit
+	// Determine the limit to apply
 	implicitLimit := config.GetConfig().Server.ImplicitReqLimit
+	var effectiveLimit int64 = -1
 
-	// First check if any filter has a limit
+	// Check if any filter has an explicit limit
 	var lowestExplicitLimit *int
 	for _, filter := range filters {
 		if filter.Limit != nil {
@@ -111,29 +103,16 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 		}
 	}
 
-	// Apply the appropriate limit
 	if lowestExplicitLimit != nil {
-		queryLimit = int64(*lowestExplicitLimit)
-		queryLog().Debug("Using explicit limit from filter", "limit", queryLimit)
+		effectiveLimit = int64(*lowestExplicitLimit)
+		queryLog().Debug("Using explicit limit", "limit", effectiveLimit)
 	} else if implicitLimit > 0 {
-		queryLimit = int64(implicitLimit)
-		queryLog().Info("No explicit limit specified, applying implicit limit", 
-			"implicit_limit", implicitLimit,
-			"database", databaseName)
-	} else {
-		queryLog().Warn("No limit specified and no implicit limit configured", 
-			"database", databaseName,
-			"query_filters", len(combinedFilters))
+		effectiveLimit = int64(implicitLimit)
+		queryLog().Debug("Using implicit limit", "limit", effectiveLimit)
 	}
 
-	if queryLimit > 0 {
-		opts.SetLimit(queryLimit) // Apply the limit
-	}
-
-	// **IMPROVED COLLECTION SELECTION LOGIC**
+	// Collection selection logic
 	var collections []string
-	
-	// Check if ANY filter specifies kinds
 	hasKindFilters := false
 	kindsMap := make(map[int]bool)
 	
@@ -147,119 +126,165 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 	}
 	
 	if !hasKindFilters {
-		// No kinds specified in ANY filter, query all event collections
+		// No kinds specified - get all event collections for cross-collection query
 		allCollections, err := client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
 		if err != nil {
 			queryLog().Error("Failed to list collections", "error", err)
 			return nil, fmt.Errorf("error listing collections: %v", err)
 		}
 		
-		// Filter to only event collections
 		for _, name := range allCollections {
 			if len(name) > 10 && name[:10] == "event-kind" {
 				collections = append(collections, name)
 			}
 		}
 		
-		queryLog().Debug("No kinds specified, querying all event collections", 
-			"collection_count", len(collections))
+		// For no-kind queries, use MongoDB aggregation for efficiency
+		return queryAcrossAllCollections(client, databaseName, collections, query, effectiveLimit)
 	} else {
-		// Construct collection names based on specified kinds
+		// Kinds specified - query each kind collection with limit per kind
 		for kind := range kindsMap {
 			collectionName := fmt.Sprintf("event-kind%d", kind)
 			collections = append(collections, collectionName)
 		}
-		queryLog().Debug("Querying specific kind collections", 
-			"kind_count", len(kindsMap),
-			"collection_count", len(collections))
+		
+		return querySpecificKinds(client, databaseName, collections, query, effectiveLimit)
+	}
+}
+
+// queryAcrossAllCollections efficiently queries the most recent events across all collections
+func queryAcrossAllCollections(client *mongo.Client, databaseName string, collections []string, query bson.M, limit int64) ([]relay.Event, error) {
+	queryLog().Debug("Querying across all collections for most recent events", 
+		"collection_count", len(collections), 
+		"limit", limit)
+	
+	if limit <= 0 {
+		queryLog().Warn("No limit specified for cross-collection query, using default", "default_limit", 1000)
+		limit = 1000 // Safety fallback
 	}
 
-	totalEvents := 0
-	remainingLimit := queryLimit // Store the original limit
+	// Use MongoDB aggregation to efficiently get the most recent events across collections
+	var allResults []relay.Event
+	
+	// Calculate a reasonable per-collection sample size
+	// Get more than we need from each collection to ensure we get the true "most recent"
+	sampleSize := limit * 2
+	if sampleSize > 10000 {
+		sampleSize = 10000 // Cap it to prevent excessive memory usage
+	}
 
-	// Debug the query we're about to execute
-	queryLog().Debug("Executing MongoDB query", 
-		"query", fmt.Sprintf("%+v", query),
-		"is_empty_query", len(query) == 0,
-		"collections_to_query", len(collections))
-
-	// Query each collection
 	for _, collectionName := range collections {
-		// If we've already reached the limit, stop querying
-		if remainingLimit == 0 && queryLimit > 0 {
-			break
-		}
-		
-		// Adjust the limit for this collection query
-		if remainingLimit > 0 {
-			opts.SetLimit(remainingLimit)
-		}
-		
 		collection := client.Database(databaseName).Collection(collectionName)
+		
+		// Get the most recent events from this collection
+		opts := options.Find().
+			SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "id", Value: 1}}).
+			SetLimit(sampleSize)
+		
 		cursor, err := collection.Find(context.TODO(), query, opts)
 		if err != nil {
-			queryLog().Error("Error querying collection", 
-				"collection", collectionName, 
-				"error", err)
-			return nil, fmt.Errorf("error querying collection %s: %v", collectionName, err)
-		}
-		defer cursor.Close(context.TODO())
-
-		collectionEvents := 0
-		for cursor.Next(context.TODO()) {
-			var event relay.Event
-			if err := cursor.Decode(&event); err != nil {
-				queryLog().Error("Error decoding event", 
-					"collection", collectionName, 
-					"error", err)
-				return nil, fmt.Errorf("error decoding event from collection %s: %v", collectionName, err)
-			}
-			results = append(results, event)
-			collectionEvents++
-			
-			// Stop if we've reached the limit
-			if queryLimit > 0 && len(results) >= int(queryLimit) {
-				break
-			}
+			queryLog().Error("Error querying collection", "collection", collectionName, "error", err)
+			continue // Skip this collection but continue with others
 		}
 		
-		// Update remaining limit
-		if remainingLimit > 0 {
-			remainingLimit -= int64(collectionEvents)
-			if remainingLimit < 0 {
-				remainingLimit = 0
-			}
+		var collectionEvents []relay.Event
+		if err := cursor.All(context.TODO(), &collectionEvents); err != nil {
+			queryLog().Error("Error decoding events", "collection", collectionName, "error", err)
+			cursor.Close(context.TODO())
+			continue
 		}
+		cursor.Close(context.TODO())
 		
-		totalEvents += collectionEvents
-
-		// Handle cursor errors
-		if err := cursor.Err(); err != nil {
-			queryLog().Error("Cursor error", 
-				"collection", collectionName, 
-				"error", err)
-			return nil, fmt.Errorf("cursor error in collection %s: %v", collectionName, err)
-		}
+		allResults = append(allResults, collectionEvents...)
 		
-		queryLog().Debug("Collection query complete", 
-			"collection", collectionName,
-			"events_found", collectionEvents,
-			"remaining_limit", remainingLimit,
-			"total_events_so_far", len(results))
+		queryLog().Debug("Sampled collection", 
+			"collection", collectionName, 
+			"events_found", len(collectionEvents))
 	}
 
-	queryLog().Info("Query completed", 
-		"total_collections", len(collections),
-		"total_events", totalEvents,
-		"limit_type", func() string {
-			if lowestExplicitLimit != nil {
-				return "explicit"
-			} else if queryLimit > 0 {
-				return "implicit"
-			}
-			return "none"
-		}(),
-		"limit_value", queryLimit)
+	// Sort all results by created_at (descending) and apply final limit
+	sort.Slice(allResults, func(i, j int) bool {
+		if allResults[i].CreatedAt != allResults[j].CreatedAt {
+			return allResults[i].CreatedAt > allResults[j].CreatedAt
+		}
+		return allResults[i].ID < allResults[j].ID
+	})
 
-	return results, nil
+	// Apply the final limit
+	if int64(len(allResults)) > limit {
+		allResults = allResults[:limit]
+	}
+
+	queryLog().Info("Cross-collection query completed", 
+		"collections_queried", len(collections),
+		"total_sampled", len(allResults),
+		"limit_applied", limit,
+		"final_count", len(allResults))
+
+	return allResults, nil
+}
+
+// querySpecificKinds queries specific kind collections with limit per kind
+func querySpecificKinds(client *mongo.Client, databaseName string, collections []string, query bson.M, limit int64) ([]relay.Event, error) {
+	queryLog().Debug("Querying specific kinds", 
+		"collection_count", len(collections), 
+		"limit_per_kind", limit)
+
+	var allResults []relay.Event
+	
+	for _, collectionName := range collections {
+		collection := client.Database(databaseName).Collection(collectionName)
+		
+		// Create fresh options for each collection
+		opts := options.Find().SetSort(bson.D{
+			{Key: "created_at", Value: -1},
+			{Key: "id", Value: 1},
+		})
+		
+		// Apply limit per kind if specified
+		if limit > 0 {
+			opts.SetLimit(limit)
+		}
+		
+		cursor, err := collection.Find(context.TODO(), query, opts)
+		if err != nil {
+			queryLog().Error("Error querying collection", "collection", collectionName, "error", err)
+			continue
+		}
+		
+		var collectionEvents []relay.Event
+		if err := cursor.All(context.TODO(), &collectionEvents); err != nil {
+			queryLog().Error("Error decoding events", "collection", collectionName, "error", err)
+			cursor.Close(context.TODO())
+			continue
+		}
+		cursor.Close(context.TODO())
+		
+		allResults = append(allResults, collectionEvents...)
+		
+		// Extract kind from collection name for logging
+		kindStr := strings.TrimPrefix(collectionName, "event-kind")
+		kind, _ := strconv.Atoi(kindStr)
+		
+		queryLog().Debug("Kind collection query complete", 
+			"collection", collectionName,
+			"kind", kind,
+			"events_found", len(collectionEvents),
+			"limit_applied", limit)
+	}
+
+	// Sort final results by created_at (descending)
+	sort.Slice(allResults, func(i, j int) bool {
+		if allResults[i].CreatedAt != allResults[j].CreatedAt {
+			return allResults[i].CreatedAt > allResults[j].CreatedAt
+		}
+		return allResults[i].ID < allResults[j].ID
+	})
+
+	queryLog().Info("Specific kinds query completed", 
+		"kinds_queried", len(collections),
+		"total_events", len(allResults),
+		"limit_per_kind", limit)
+
+	return allResults, nil
 }
