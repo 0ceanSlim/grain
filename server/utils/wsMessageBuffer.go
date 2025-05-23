@@ -10,7 +10,7 @@ import (
 // Constants based on your database analysis
 const (
 	// Conservative Note Size 
-	BufferMessageSizeLimit = 128000 // 128 KiloBytes
+	BufferMessageSizeLimit = 5000 // 5 KiloBytes
 )
 
 // Set the logging component for WebSocket message buffer
