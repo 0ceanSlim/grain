@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/0ceanslim/grain/config"
 	relay "github.com/0ceanslim/grain/server/types"
@@ -103,12 +104,38 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 		}
 	}
 
-	if lowestExplicitLimit != nil {
-		effectiveLimit = int64(*lowestExplicitLimit)
-		queryLog().Debug("Using explicit limit", "limit", effectiveLimit)
-	} else if implicitLimit > 0 {
-		effectiveLimit = int64(implicitLimit)
-		queryLog().Debug("Using implicit limit", "limit", effectiveLimit)
+	// Apply the limit logic: implicit limit is the maximum cap
+	if implicitLimit > 0 {
+		if lowestExplicitLimit != nil {
+			// Use the smaller of explicit limit and implicit limit
+			if *lowestExplicitLimit < implicitLimit {
+				effectiveLimit = int64(*lowestExplicitLimit)
+				queryLog().Debug("Using explicit limit (under implicit cap)", 
+					"explicit_limit", *lowestExplicitLimit,
+					"implicit_cap", implicitLimit)
+			} else {
+				effectiveLimit = int64(implicitLimit)
+				queryLog().Debug("Capping explicit limit to implicit maximum", 
+					"requested_limit", *lowestExplicitLimit,
+					"applied_limit", implicitLimit)
+			}
+		} else {
+			// No explicit limit, use implicit limit
+			effectiveLimit = int64(implicitLimit)
+			queryLog().Debug("Using implicit limit (no explicit limit provided)", 
+				"limit", implicitLimit)
+		}
+	} else {
+		// No implicit limit configured
+		if lowestExplicitLimit != nil {
+			effectiveLimit = int64(*lowestExplicitLimit)
+			queryLog().Debug("Using explicit limit (no implicit cap configured)", 
+				"limit", *lowestExplicitLimit)
+		} else {
+			// No limits at all - use a sensible default
+			effectiveLimit = 1000
+			queryLog().Warn("No limits configured, using default", "default_limit", 1000)
+		}
 	}
 
 	// Collection selection logic
@@ -154,72 +181,136 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 
 // queryAcrossAllCollections efficiently queries the most recent events across all collections
 func queryAcrossAllCollections(client *mongo.Client, databaseName string, collections []string, query bson.M, limit int64) ([]relay.Event, error) {
-	queryLog().Debug("Querying across all collections for most recent events", 
+	queryLog().Debug("Starting optimized cross-collection query", 
 		"collection_count", len(collections), 
 		"limit", limit)
 	
 	if limit <= 0 {
-		queryLog().Warn("No limit specified for cross-collection query, using default", "default_limit", 1000)
-		limit = 1000 // Safety fallback
+		queryLog().Warn("No limit specified, using default", "default_limit", 500)
+		limit = 500
 	}
 
-	// Use MongoDB aggregation to efficiently get the most recent events across collections
-	var allResults []relay.Event
-	
-	// Calculate a reasonable per-collection sample size
-	// Get more than we need from each collection to ensure we get the true "most recent"
-	sampleSize := limit * 2
-	if sampleSize > 10000 {
-		sampleSize = 10000 // Cap it to prevent excessive memory usage
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	// MUCH more conservative sampling strategy
+	// For 150 collections and limit=500, we want ~3-5 events per collection max
+	conservativeSampleSize := int64(10) // Start very small
+	if limit <= 50 {
+		conservativeSampleSize = 3
+	} else if limit <= 200 {
+		conservativeSampleSize = 5
+	} else {
+		conservativeSampleSize = 10
 	}
 
+	queryLog().Debug("Using conservative sampling", 
+		"sample_per_collection", conservativeSampleSize,
+		"max_total_samples", conservativeSampleSize*int64(len(collections)))
+
+	type collectionResult struct {
+		events []relay.Event
+		name   string
+	}
+
+	resultChan := make(chan collectionResult, len(collections))
+	semaphore := make(chan struct{}, 8) // Limit concurrent queries
+
+	// Query collections concurrently with strict limits
 	for _, collectionName := range collections {
-		collection := client.Database(databaseName).Collection(collectionName)
-		
-		// Get the most recent events from this collection
-		opts := options.Find().
-			SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "id", Value: 1}}).
-			SetLimit(sampleSize)
-		
-		cursor, err := collection.Find(context.TODO(), query, opts)
-		if err != nil {
-			queryLog().Error("Error querying collection", "collection", collectionName, "error", err)
-			continue // Skip this collection but continue with others
-		}
-		
-		var collectionEvents []relay.Event
-		if err := cursor.All(context.TODO(), &collectionEvents); err != nil {
-			queryLog().Error("Error decoding events", "collection", collectionName, "error", err)
-			cursor.Close(context.TODO())
-			continue
-		}
-		cursor.Close(context.TODO())
-		
-		allResults = append(allResults, collectionEvents...)
-		
-		queryLog().Debug("Sampled collection", 
-			"collection", collectionName, 
-			"events_found", len(collectionEvents))
+		go func(name string) {
+			semaphore <- struct{}{} // Acquire
+			defer func() { <-semaphore }() // Release
+
+			collection := client.Database(databaseName).Collection(name)
+			
+			// Use aggregation pipeline for efficiency
+			pipeline := []bson.M{
+				{"$match": query},
+				{"$sort": bson.M{"created_at": -1, "id": 1}},
+				{"$limit": conservativeSampleSize},
+			}
+
+			// Set a short timeout per collection
+			collectionCtx, collectionCancel := context.WithTimeout(ctx, 2*time.Second)
+			defer collectionCancel()
+
+			cursor, err := collection.Aggregate(collectionCtx, pipeline)
+			if err != nil {
+				queryLog().Debug("Error querying collection", 
+					"collection", name, 
+					"error", err)
+				resultChan <- collectionResult{name: name}
+				return
+			}
+			defer cursor.Close(collectionCtx)
+
+			var events []relay.Event
+			if err := cursor.All(collectionCtx, &events); err != nil {
+				queryLog().Debug("Error decoding events", 
+					"collection", name, 
+					"error", err)
+				resultChan <- collectionResult{name: name}
+				return
+			}
+
+			resultChan <- collectionResult{
+				events: events,
+				name:   name,
+			}
+		}(collectionName)
 	}
 
-	// Sort all results by created_at (descending) and apply final limit
-	sort.Slice(allResults, func(i, j int) bool {
-		if allResults[i].CreatedAt != allResults[j].CreatedAt {
-			return allResults[i].CreatedAt > allResults[j].CreatedAt
+	// Collect results with timeout protection
+	var allResults []relay.Event
+	collectionsProcessed := 0
+
+	collectLoop:
+		for collectionsProcessed < len(collections) {
+			select {
+			case result := <-resultChan:
+				collectionsProcessed++
+				if len(result.events) > 0 {
+					allResults = append(allResults, result.events...)
+					queryLog().Debug("Collected from collection", 
+						"collection", result.name,
+						"events", len(result.events),
+						"total_so_far", len(allResults))
+				}
+				
+				// Early termination if we have way more than needed
+				if int64(len(allResults)) >= limit*3 {
+					queryLog().Debug("Early termination - sufficient results collected")
+					break collectLoop
+				}
+
+			case <-ctx.Done():
+				queryLog().Warn("Query timeout reached", 
+					"processed", collectionsProcessed,
+					"total", len(collections))
+				break collectLoop
+			}
 		}
-		return allResults[i].ID < allResults[j].ID
-	})
 
-	// Apply the final limit
-	if int64(len(allResults)) > limit {
-		allResults = allResults[:limit]
-	}
+		// Sort all results by created_at (descending)
+		sort.Slice(allResults, func(i, j int) bool {
+			if allResults[i].CreatedAt != allResults[j].CreatedAt {
+				return allResults[i].CreatedAt > allResults[j].CreatedAt
+			}
+			return allResults[i].ID < allResults[j].ID
+		})
 
-	queryLog().Info("Cross-collection query completed", 
-		"collections_queried", len(collections),
-		"total_sampled", len(allResults),
-		"limit_applied", limit,
-		"final_count", len(allResults))
+		// Apply final limit
+		if int64(len(allResults)) > limit {
+			allResults = allResults[:limit]
+		}
+
+	queryLog().Info("Optimized cross-collection query completed", 
+		"collections_processed", collectionsProcessed,
+		"total_collections", len(collections),
+		"events_collected", len(allResults),
+		"final_count", len(allResults),
+		"sample_per_collection", conservativeSampleSize)
 
 	return allResults, nil
 }
