@@ -3,7 +3,7 @@ logging:
   file: "debug" # Log file name
   max_log_size_mb: 10 # Maximum log file size in MB before trimming
   structure: false # true = structured JSON logs, false = pretty logs
-  check_interval_min: 10 # Check every 15 minutes
+  check_interval_min: 10 # Check every 10 minutes
   backup_count: 2 # Keep 2 backup files (.bak1, .bak2)
 
 mongodb:
@@ -14,9 +14,7 @@ server:
   port: :8181
   read_timeout: 60 # Timeout for reading a single WebSocket message from client
   write_timeout: 20 # Timeout for writing a single WebSocket message to client
-  idle_timeout:
-    1200 # Connection-level timeout for inactive clients (in seconds)
-    # Set to 0 to disable idle timeout completely
+  idle_timeout: 1200 # Connection-level timeout for inactive clients (in seconds) ;  Set to 0 to disable idle timeout completely
   max_subscriptions_per_client: 10
   implicit_req_limit: 500 # Default limit applied to REQ when no limit is specified
 
