@@ -12,9 +12,11 @@ mongodb:
 
 server:
   port: :8181
-  read_timeout: 10 # in seconds
-  write_timeout: 10 # in seconds
-  idle_timeout: 120 # in seconds
+  read_timeout: 60 # Timeout for reading a single WebSocket message from client
+  write_timeout: 20 # Timeout for writing a single WebSocket message to client
+  idle_timeout:
+    1200 # Connection-level timeout for inactive clients (in seconds)
+    # Set to 0 to disable idle timeout completely
   max_subscriptions_per_client: 10
   implicit_req_limit: 500 # Default limit applied to REQ when no limit is specified
 
@@ -68,44 +70,45 @@ event_time_constraints:
   max_created_at_string: now+5m # Use a string to set a date for max created at in the future or past from current time
 
 rate_limit:
-  ws_limit: 100 # WebSocket messages per second
-  ws_burst: 200 # Allowed burst of WebSocket messages
-  event_limit: 50 # Events per second
-  event_burst: 100 # Allowed burst of events
-  req_limit: 50 # HTTP requests per second
-  req_burst: 100 # Allowed burst of HTTP requests
-  max_event_size: 51200 # Maximum size of an event in bytes
+  ws_limit: 50 # WebSocket messages per second
+  ws_burst: 100 # Allowed burst of WebSocket messages
+  event_limit: 10 # Events per second
+  event_burst: 20 # Allowed burst of events
+  req_limit: 5 # HTTP requests per second
+  req_burst: 15 # Allowed burst of HTTP requests
+  max_event_size: 524288 # 512KB - reasonable for most Nostr events - applies to both event validation AND WebSocket message buffer
 
   # Size limits for specific event kinds
   kind_size_limits:
-    - kind: 0
-      max_size: 10240 # Maximum size in bytes for kind 0 events
-    - kind: 1
-      max_size: 25600 # Maximum size in bytes for kind 1 events
+    - kind: 0 # User metadata (profile info)
+      max_size: 8192 # 8KB - sufficient for detailed profiles with images
+    - kind: 1 # Text notes
+      max_size: 4096 # 4KB - prevents spam while allowing normal posts
+    - kind: 3 # Follow lists
+      max_size: 65536 # 64KB - allows large Follow lists (1000+ Follows)
+    - kind: 7 # Reactions (likes, etc.)
+      max_size: 512 # 512B - reactions should be tiny
 
   # Rate limits for different event categories
   category_limits:
-    ephemeral:
-      limit: 100 # Events per second
-      burst: 200 # Allowed burst
-    addressable:
-      limit: 5
-      burst: 10
-    regular:
-      limit: 25
-      burst: 50
-    replaceable:
-      limit: 10
-      burst: 20
+    regular: # Kind 1, 4-44, 1000-9999 (most social media content)
+      limit: 8 # 8 events per second - most common events
+      burst: 16 # Allow posting several messages quickly
+    replaceable: # Kind 0, 3, 10000-19999 (profiles, contact lists)
+      limit: 2 # 2 events per second - these replace previous versions
+      burst: 5 # Lower burst since old events are deleted anyway
+    ephemeral: # Kind 20000-29999 (temporary events, not stored)
+      limit: 50 # 50 events per second - higher since not stored permanently
+      burst: 100 # Allow high bursts for real-time features
+    addressable: # Kind 30000-39999 (replaceable by d-tag)
+      limit: 3 # 3 events per second - often larger content
+      burst: 8 # Moderate burst for content creation sessions
 
   # Rate limits for specific event kinds
   kind_limits:
     - kind: 0
       limit: 1 # Events per second
-      burst: 5 # Allowed burst
+      burst: 2 # Allowed burst
     - kind: 1
-      limit: 25
-      burst: 50
-    - kind: 3
-      limit: 25
-      burst: 50
+      limit: 5
+      burst: 12
