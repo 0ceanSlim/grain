@@ -181,138 +181,73 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 
 // queryAcrossAllCollections efficiently queries the most recent events across all collections
 func queryAcrossAllCollections(client *mongo.Client, databaseName string, collections []string, query bson.M, limit int64) ([]relay.Event, error) {
-	queryLog().Debug("Starting optimized cross-collection query", 
+	queryLog().Debug("Starting unified cross-collection query with $unionWith", 
 		"collection_count", len(collections), 
 		"limit", limit)
-	
-	if limit <= 0 {
-		queryLog().Warn("No limit specified, using default", "default_limit", 500)
-		limit = 500
+
+	if len(collections) == 0 {
+		return []relay.Event{}, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
-	// MUCH more conservative sampling strategy
-	// For 150 collections and limit=500, we want ~3-5 events per collection max
-	conservativeSampleSize := int64(10) // Start very small
-	if limit <= 50 {
-		conservativeSampleSize = 3
-	} else if limit <= 200 {
-		conservativeSampleSize = 5
-	} else {
-		conservativeSampleSize = 10
-	}
+	start := time.Now()
 
-	queryLog().Debug("Using conservative sampling", 
-		"sample_per_collection", conservativeSampleSize,
-		"max_total_samples", conservativeSampleSize*int64(len(collections)))
+	// Build aggregation pipeline with $unionWith for all collections
+	pipeline := []bson.M{}
 
-	type collectionResult struct {
-		events []relay.Event
-		name   string
-	}
+	// Start with match on the first collection
+	pipeline = append(pipeline, bson.M{"$match": query})
 
-	resultChan := make(chan collectionResult, len(collections))
-	semaphore := make(chan struct{}, 8) // Limit concurrent queries
-
-	// Query collections concurrently with strict limits
-	for _, collectionName := range collections {
-		go func(name string) {
-			semaphore <- struct{}{} // Acquire
-			defer func() { <-semaphore }() // Release
-
-			collection := client.Database(databaseName).Collection(name)
-			
-			// Use aggregation pipeline for efficiency
-			pipeline := []bson.M{
-				{"$match": query},
-				{"$sort": bson.M{"created_at": -1, "id": 1}},
-				{"$limit": conservativeSampleSize},
-			}
-
-			// Set a short timeout per collection
-			collectionCtx, collectionCancel := context.WithTimeout(ctx, 2*time.Second)
-			defer collectionCancel()
-
-			cursor, err := collection.Aggregate(collectionCtx, pipeline)
-			if err != nil {
-				queryLog().Debug("Error querying collection", 
-					"collection", name, 
-					"error", err)
-				resultChan <- collectionResult{name: name}
-				return
-			}
-			defer cursor.Close(collectionCtx)
-
-			var events []relay.Event
-			if err := cursor.All(collectionCtx, &events); err != nil {
-				queryLog().Debug("Error decoding events", 
-					"collection", name, 
-					"error", err)
-				resultChan <- collectionResult{name: name}
-				return
-			}
-
-			resultChan <- collectionResult{
-				events: events,
-				name:   name,
-			}
-		}(collectionName)
-	}
-
-	// Collect results with timeout protection
-	var allResults []relay.Event
-	collectionsProcessed := 0
-
-	collectLoop:
-		for collectionsProcessed < len(collections) {
-			select {
-			case result := <-resultChan:
-				collectionsProcessed++
-				if len(result.events) > 0 {
-					allResults = append(allResults, result.events...)
-					queryLog().Debug("Collected from collection", 
-						"collection", result.name,
-						"events", len(result.events),
-						"total_so_far", len(allResults))
-				}
-				
-				// Early termination if we have way more than needed
-				if int64(len(allResults)) >= limit*3 {
-					queryLog().Debug("Early termination - sufficient results collected")
-					break collectLoop
-				}
-
-			case <-ctx.Done():
-				queryLog().Warn("Query timeout reached", 
-					"processed", collectionsProcessed,
-					"total", len(collections))
-				break collectLoop
-			}
-		}
-
-		// Sort all results by created_at (descending)
-		sort.Slice(allResults, func(i, j int) bool {
-			if allResults[i].CreatedAt != allResults[j].CreatedAt {
-				return allResults[i].CreatedAt > allResults[j].CreatedAt
-			}
-			return allResults[i].ID < allResults[j].ID
+	// Add $unionWith for all other collections
+	for _, collectionName := range collections[1:] {
+		pipeline = append(pipeline, bson.M{
+			"$unionWith": bson.M{
+				"coll": collectionName,
+				"pipeline": []bson.M{
+					{"$match": query},
+				},
+			},
 		})
+	}
 
-		// Apply final limit
-		if int64(len(allResults)) > limit {
-			allResults = allResults[:limit]
-		}
+	// Sort by created_at (most recent first) and apply limit
+	pipeline = append(pipeline, 
+		bson.M{"$sort": bson.M{"created_at": -1, "id": 1}},
+		bson.M{"$limit": limit},
+	)
 
-	queryLog().Info("Optimized cross-collection query completed", 
-		"collections_processed", collectionsProcessed,
-		"total_collections", len(collections),
-		"events_collected", len(allResults),
-		"final_count", len(allResults),
-		"sample_per_collection", conservativeSampleSize)
+	queryLog().Debug("Executing unified aggregation", 
+		"pipeline_stages", len(pipeline),
+		"collections_to_union", len(collections),
+		"base_collection", collections[0])
 
-	return allResults, nil
+	// Execute aggregation on the first collection
+	collection := client.Database(databaseName).Collection(collections[0])
+	cursor, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		queryLog().Error("Unified aggregation failed", 
+			"error", err,
+			"collections", len(collections))
+		return nil, fmt.Errorf("unified cross-collection query failed: %v", err)
+	}
+	defer cursor.Close(ctx)
+
+	var events []relay.Event
+	if err := cursor.All(ctx, &events); err != nil {
+		queryLog().Error("Failed to decode unified results", "error", err)
+		return nil, fmt.Errorf("failed to decode unified query results: %v", err)
+	}
+
+	duration := time.Since(start)
+	queryLog().Info("Unified cross-collection query completed", 
+		"duration_ms", duration.Milliseconds(),
+		"collections_unified", len(collections),
+		"results", len(events),
+		"chronological_order", "guaranteed")
+
+	return events, nil
 }
 
 // querySpecificKinds queries specific kind collections with limit per kind
