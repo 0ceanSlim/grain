@@ -203,6 +203,11 @@ func (c *Client) SendMessage(msg interface{}) {
 	default:
 	}
 
+	// Check if connection is still valid before attempting to send
+	if c.ws == nil {
+		return
+	}
+
 	jsonMsg, err := json.Marshal(msg)
 	if err != nil {
 		clientLog().Error("Failed to marshal message", 
@@ -214,14 +219,25 @@ func (c *Client) SendMessage(msg interface{}) {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 
+	// Double-check connection is still valid after acquiring lock
+	select {
+	case <-c.ctx.Done():
+		return
+	default:
+	}
+
 	// Set write deadline if timeout is configured
 	if c.writeTimeout > 0 {
 		deadline := time.Now().Add(c.writeTimeout)
 		if err := c.ws.SetWriteDeadline(deadline); err != nil {
-			clientLog().Error("Failed to set write deadline", 
-				"client_id", c.id,
-				"timeout_sec", int(c.writeTimeout.Seconds()),
-				"error", err)
+			// Don't log error if connection is already closed
+			if !isConnectionClosed(err) {
+				clientLog().Error("Failed to set write deadline", 
+					"client_id", c.id,
+					"timeout_sec", int(c.writeTimeout.Seconds()),
+					"error", err)
+			}
+			c.markDisconnected()
 			c.CloseClient()
 			return
 		}
@@ -236,16 +252,21 @@ func (c *Client) SendMessage(msg interface{}) {
 	}
 	
 	if err != nil {
-		// Determine if this was a timeout or other error
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			clientLog().Warn("Write timeout sending message",
-				"client_id", c.id,
-				"timeout_sec", int(c.writeTimeout.Seconds()))
-		} else {
-			clientLog().Warn("Failed to send message",
-				"error", err,
-				"client_id", c.id,
-				"error_type", fmt.Sprintf("%T", err))
+		// Mark as disconnected before logging/cleanup
+		c.markDisconnected()
+		
+		// Only log if it's not a connection closed error
+		if !isConnectionClosed(err) {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				clientLog().Warn("Write timeout sending message",
+					"client_id", c.id,
+					"timeout_sec", int(c.writeTimeout.Seconds()))
+			} else {
+				clientLog().Warn("Failed to send message",
+					"error", err,
+					"client_id", c.id,
+					"error_type", fmt.Sprintf("%T", err))
+			}
 		}
 		c.CloseClient()
 		return
@@ -255,6 +276,33 @@ func (c *Client) SendMessage(msg interface{}) {
 	c.updateActivity()
 	atomic.AddInt64(&c.messagesSent, 1)
 	atomic.AddInt64(&totalMessagesSent, 1)
+}
+
+// IsConnected returns true if the client connection is still active
+func (c *Client) IsConnected() bool {
+	select {
+	case <-c.ctx.Done():
+		return false
+	default:
+		return true
+	}
+}
+
+// markDisconnected marks the client as disconnected (internal use)
+func (c *Client) markDisconnected() {
+	c.cancel() // This will make IsConnected() return false
+}
+
+// Helper function to check if error is due to closed connection
+func isConnectionClosed(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "broken pipe") ||
+		   strings.Contains(errStr, "connection reset") ||
+		   strings.Contains(errStr, "use of closed network connection") ||
+		   strings.Contains(errStr, "connection refused")
 }
 
 // sendNoticeNoTimeout sends a notice without timeout (for cleanup scenarios)
@@ -292,7 +340,12 @@ func (c *Client) GetSubscriptions() map[string][]nostr.Filter {
 	return c.subscriptions
 }
 
+// CloseClient closes the client connection and cleans up resources
 func (c *Client) CloseClient() {
+	// Cancel context first to stop all goroutines
+	c.cancel()
+	
+	// Remove from client tracking
 	clientsMu.Lock()
 	_, exists := clients[c.ws]
 	if exists {
@@ -301,26 +354,53 @@ func (c *Client) CloseClient() {
 	}
 	clientsMu.Unlock()
 
+	// Only proceed if we were actually tracking this client
+	if !exists {
+		return
+	}
+
 	// Unregister from connection manager
 	connManager.RemoveConnection(c)
 
-	// Safely close WebSocket
-	c.ws.Close()
+	// Clear all subscriptions
+	for subID := range c.subscriptions {
+		delete(c.subscriptions, subID)
+	}
+
+	// Close WebSocket connection
+	if c.ws != nil {
+		c.ws.Close()
+	}
+
+	clientLog().Debug("Client connection closed and cleaned up", 
+		"client_id", c.id,
+		"remaining_connections", currentConnections)
 }
 
+// clientReader reads messages from the WebSocket connection and processes them
 func clientReader(client *Client) {
 	ws := client.ws
 	defer func() {
+		// Mark as disconnected first
+		client.markDisconnected()
+		
+		// Clean up tracking when function exits
 		clientsMu.Lock()
 		delete(clients, ws)
-		clientsMu.Unlock()
-
 		mu.Lock()
 		currentConnections--
 		mu.Unlock()
+		clientsMu.Unlock()
 
+		// Unregister from connection manager
 		connManager.RemoveConnection(client)
-		client.CloseClient()
+		
+		// Close the connection if not already closed
+		ws.Close()
+		
+		clientLog().Debug("Client reader exited and connection cleaned up", 
+			"client_id", client.id,
+			"remaining_connections", currentConnections)
 	}()
 
 	for {
@@ -337,10 +417,12 @@ func clientReader(client *Client) {
 		if client.readTimeout > 0 {
 			deadline := time.Now().Add(client.readTimeout)
 			if err := ws.SetReadDeadline(deadline); err != nil {
-				clientLog().Error("Failed to set read deadline", 
-					"client_id", client.id,
-					"timeout_sec", int(client.readTimeout.Seconds()),
-					"error", err)
+				if !isConnectionClosed(err) {
+					clientLog().Error("Failed to set read deadline", 
+						"client_id", client.id,
+						"timeout_sec", int(client.readTimeout.Seconds()),
+						"error", err)
+				}
 				return
 			}
 		}
@@ -365,7 +447,7 @@ func clientReader(client *Client) {
 					"client_id", client.id,
 					"reason", msg)
 				
-				// Send notice and close connection
+				// Send notice and close connection due to rate limiting
 				client.sendNoticeNoTimeout("rate-limited: " + msg)
 				return
 			}
@@ -439,7 +521,7 @@ func clientReader(client *Client) {
 					subID = id
 				}
 			}
-			clientLog().Info("Processing CLOSE message", 
+			clientLog().Debug("Processing CLOSE message", 
 				"client_id", client.id,
 				"sub_id", subID)
 			handlers.HandleClose(client, message)
@@ -471,6 +553,7 @@ func clientReader(client *Client) {
 	}
 }
 
+// handleReadError handles errors that occur during reading from the WebSocket connection
 func handleReadError(err error, client *Client) {
 	clientID := client.id
 	
@@ -482,6 +565,9 @@ func handleReadError(err error, client *Client) {
 		clientLog().Info("Client read timeout", 
 			"client_id", clientID,
 			"timeout_sec", int(client.readTimeout.Seconds()))
+	} else if isConnectionClosed(err) {
+		clientLog().Debug("Connection closed during read", 
+			"client_id", clientID)
 	} else {
 		clientLog().Error("WebSocket read error", 
 			"error", err, 
@@ -489,6 +575,7 @@ func handleReadError(err error, client *Client) {
 			"error_type", fmt.Sprintf("%T", err))
 	}
 }
+
 func isValidJSON(s string) bool {
 	var js interface{}
 	return json.Unmarshal([]byte(s), &js) == nil
