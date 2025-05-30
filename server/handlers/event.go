@@ -74,9 +74,18 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	eventSize := len(eventBytes)
 
 	// Blacklist/Whitelist check
-	result := validation.CheckBlacklistAndWhitelist(evt)
+	//result := validation.CheckBlacklistAndWhitelist(evt)
+	//if !result.Valid {
+	//	eventLog().Info("Event rejected by blacklist/whitelist", 
+	//		"event_id", evt.ID, 
+	//		"pubkey", evt.PubKey, 
+	//		"reason", result.Message)
+	//	response.SendOK(client, evt.ID, false, result.Message)
+	//	return
+	//}
+	result := validation.CheckBlacklistAndWhitelistCached(evt)
 	if !result.Valid {
-		eventLog().Info("Event rejected by blacklist/whitelist", 
+		eventLog().Info("Event rejected by cached blacklist/whitelist", 
 			"event_id", evt.ID, 
 			"pubkey", evt.PubKey, 
 			"reason", result.Message)
@@ -113,7 +122,8 @@ func HandleEvent(client relay.ClientInterface, message []interface{}) {
 	}
 
 	// Trigger Negentropy sync
-	go userSync.UserSyncCheck(evt, cfg)
+	//go userSync.UserSyncCheck(evt, cfg)
+	go userSync.UserSyncCheckCached(evt, cfg)
 
 	// Store event in MongoDB
 	mongo.StoreMongoEvent(context.TODO(), evt, client)

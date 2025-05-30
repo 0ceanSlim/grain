@@ -14,3 +14,5 @@ permanent_blacklist_npubs:
 mutelist_authors:
   - 3fe0ab6cbdb7ee27148202249e3fb3b89423c6f6cda6ef43ea5057c3d93088e4
 # mutelist Event MUST be stored in this relay for it to be retrieved.
+mutelist_cache_refresh_minutes: 30 # Refresh mutelist cache every 30 minutes
+

@@ -92,8 +92,12 @@ func main() {
 		mux := initApp()
 		server := initRelay(cfg, mux, &wg)
 
+		// Initialize pubkey cache system
+		config.InitializePubkeyCache()
+
 		// Start event purging in the background.
-		go mongo.ScheduleEventPurging(cfg)
+		//go mongo.ScheduleEventPurging(cfg)
+		go mongo.ScheduleEventPurgingOptimized(cfg)
 
 		// Start periodic user sync in a goroutine
 		go userSync.StartPeriodicUserSync(cfg)

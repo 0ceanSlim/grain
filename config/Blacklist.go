@@ -17,6 +17,72 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// CheckBlacklistCached uses cached pubkey lists instead of real-time lookups
+func CheckBlacklistCached(pubkey, eventContent string) (bool, string) {
+	blacklistConfig := GetBlacklistConfig()
+	if blacklistConfig == nil || !blacklistConfig.Enabled {
+		return false, ""
+	}
+
+	configLog().Debug("Checking cached blacklist for pubkey", "pubkey", pubkey)
+
+	pubkeyCache := GetPubkeyCache()
+
+	// Check cached permanent blacklist
+	if pubkeyCache.IsBlacklisted(pubkey) {
+		configLog().Warn("Pubkey found in cached blacklist", "pubkey", pubkey)
+		return true, "blocked: pubkey is blacklisted"
+	}
+
+	// Check for temporary ban (this still needs real-time checking)
+	if isPubKeyTemporarilyBlacklisted(pubkey) {
+		configLog().Warn("Pubkey temporarily blacklisted", "pubkey", pubkey)
+		return true, "blocked: pubkey is temporarily blacklisted"
+	}
+
+	// Check for permanent ban based on content (wordlist)
+	for _, word := range blacklistConfig.PermanentBanWords {
+		if strings.Contains(eventContent, word) {
+			err := AddToPermanentBlacklist(pubkey)
+			if err != nil {
+				configLog().Error("Failed to add pubkey to permanent blacklist", 
+					"pubkey", pubkey, 
+					"word", word, 
+					"error", err)
+				return true, fmt.Sprintf("pubkey %s is permanently banned and failed to save: %v", pubkey, err)
+			}
+			
+			// Trigger immediate blacklist refresh to include this pubkey
+			go GetPubkeyCache().RefreshBlacklist()
+			
+			configLog().Warn("Pubkey permanently banned due to wordlist match", 
+				"pubkey", pubkey, 
+				"word", word)
+			return true, "blocked: pubkey is permanently banned"
+		}
+	}
+
+	// Check for temporary ban based on content (wordlist)
+	for _, word := range blacklistConfig.TempBanWords {
+		if strings.Contains(eventContent, word) {
+			err := AddToTemporaryBlacklist(pubkey, *blacklistConfig)
+			if err != nil {
+				configLog().Error("Failed to add pubkey to temporary blacklist", 
+					"pubkey", pubkey, 
+					"word", word, 
+					"error", err)
+				return true, fmt.Sprintf("pubkey %s is temporarily banned and failed to save: %v", pubkey, err)
+			}
+			configLog().Warn("Pubkey temporarily banned due to wordlist match", 
+				"pubkey", pubkey, 
+				"word", word)
+			return true, "blocked: pubkey is temporarily banned"
+		}
+	}
+
+	return false, ""
+}
+
 // CheckBlacklist checks if a pubkey is in the blacklist based on event content
 func CheckBlacklist(pubkey, eventContent string) (bool, string) {
 	blacklistConfig := GetBlacklistConfig()

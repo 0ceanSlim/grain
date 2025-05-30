@@ -7,6 +7,48 @@ import (
 	"github.com/0ceanslim/grain/server/utils"
 )
 
+// CheckWhitelistCached uses cached pubkey lists instead of real-time lookups
+func CheckWhitelistCached(evt nostr.Event) (bool, string) {
+	whitelistCfg := GetWhitelistConfig()
+	if whitelistCfg == nil {
+		configLog().Error("Whitelist configuration is missing")
+		return false, "Internal server error: whitelist configuration is missing"
+	}
+
+	pubkeyCache := GetPubkeyCache()
+
+	// Check if the event's kind is whitelisted (no caching needed for this)
+	if whitelistCfg.KindWhitelist.Enabled && !IsKindWhitelisted(evt.Kind) {
+		configLog().Warn("Event kind is not whitelisted", "kind", evt.Kind)
+		return false, "not allowed: event kind is not whitelisted"
+	}
+
+	// Check if the event's pubkey is whitelisted using cache
+	if whitelistCfg.PubkeyWhitelist.Enabled && !pubkeyCache.IsWhitelisted(evt.PubKey) {
+		configLog().Warn("Pubkey is not whitelisted", "pubkey", evt.PubKey)
+		return false, "not allowed: pubkey or npub is not whitelisted"
+	}
+
+	configLog().Debug("Whitelist check passed", "kind", evt.Kind, "pubkey", evt.PubKey)
+	return true, ""
+}
+
+// IsPubKeyWhitelistedCached checks cache instead of real-time lookups
+func IsPubKeyWhitelistedCached(pubKey string) bool {
+	cfg := GetWhitelistConfig()
+	if cfg == nil {
+		return false
+	}
+
+	// If the whitelist is disabled, allow all pubkeys
+	if !cfg.PubkeyWhitelist.Enabled {
+		return true
+	}
+
+	// Use cached result
+	return GetPubkeyCache().IsWhitelisted(pubKey)
+}
+
 func CheckWhitelist(evt nostr.Event) (bool, string) {
 	whitelistCfg := GetWhitelistConfig()
 	if whitelistCfg == nil {

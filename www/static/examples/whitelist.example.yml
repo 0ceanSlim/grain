@@ -6,6 +6,7 @@ pubkey_whitelist:
   npubs:
     - npub18ls2km9aklhzw9yzqgjfu0anhz2z83hkeknw7sl22ptu8kfs3rjq54am44
     - npub2
+  cache_refresh_minutes: 60 # Refresh cache every hour
 
 kind_whitelist:
   enabled: false
@@ -18,3 +19,4 @@ domain_whitelist:
   domains:
     - "example.com"
     - "anotherdomain.com"
+  cache_refresh_minutes: 120 # Refresh domain cache every 2 hours

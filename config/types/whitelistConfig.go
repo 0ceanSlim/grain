@@ -2,9 +2,10 @@ package config
 
 type WhitelistConfig struct {
 	PubkeyWhitelist struct {
-		Enabled bool     `yaml:"enabled"`
-		Pubkeys []string `yaml:"pubkeys"`
-		Npubs   []string `yaml:"npubs"`
+		Enabled             bool     `yaml:"enabled"`
+		Pubkeys             []string `yaml:"pubkeys"`
+		Npubs               []string `yaml:"npubs"`
+		CacheRefreshMinutes int      `yaml:"cache_refresh_minutes"`
 	} `yaml:"pubkey_whitelist"`
 
 	KindWhitelist struct {
@@ -13,7 +14,8 @@ type WhitelistConfig struct {
 	} `yaml:"kind_whitelist"`
 
 	DomainWhitelist struct {
-		Enabled bool     `yaml:"enabled"`
-		Domains []string `yaml:"domains"`
+		Enabled             bool     `yaml:"enabled"`
+		Domains             []string `yaml:"domains"`
+		CacheRefreshMinutes int      `yaml:"cache_refresh_minutes"`
 	} `yaml:"domain_whitelist"`
 }
