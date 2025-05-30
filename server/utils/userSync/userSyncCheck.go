@@ -55,24 +55,6 @@ func UserSyncCheckCached(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, 
 	return true, nil // New user
 }
 
-// filterWhitelistedAuthorsCached uses cache for filtering
-func filterWhitelistedAuthorsCached(authors []string) []string {
-	pubkeyCache := config.GetPubkeyCache()
-	filtered := make([]string, 0, len(authors))
-	
-	for _, author := range authors {
-		if pubkeyCache.IsWhitelisted(author) {
-			filtered = append(filtered, author)
-		}
-	}
-	
-	syncLog().Debug("Filtered authors using cache", 
-		"total_authors", len(authors),
-		"whitelisted_authors", len(filtered))
-	
-	return filtered
-}
-
 // UserSyncCheck determines if a user is new and triggers the initial sync if necessary.
 func UserSyncCheck(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, error) {
 	if !cfg.UserSync.UserSync {

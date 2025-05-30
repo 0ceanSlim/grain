@@ -74,12 +74,31 @@ func runUserSync(cfg *configTypes.ServerConfig) {
 }
 
 // Filters only whitelisted authors.
-func filterWhitelistedAuthors(authors []string) []string {
-	filtered := []string{}
+//func filterWhitelistedAuthors(authors []string) []string {
+//	filtered := []string{}
+//	for _, author := range authors {
+//		if config.IsPubKeyWhitelisted(author, true) {
+//			filtered = append(filtered, author)
+//		}
+//	}
+//	return filtered
+//}
+// Move this function from userSyncCheck.go to here or make it a shared utility
+
+// filterWhitelistedAuthorsCached uses cache for filtering
+func filterWhitelistedAuthorsCached(authors []string) []string {
+	pubkeyCache := config.GetPubkeyCache()
+	filtered := make([]string, 0, len(authors))
+	
 	for _, author := range authors {
-		if config.IsPubKeyWhitelisted(author, true) {
+		if pubkeyCache.IsWhitelisted(author) {
 			filtered = append(filtered, author)
 		}
 	}
+	
+	syncLog().Debug("Filtered authors using cache", 
+		"total_authors", len(authors),
+		"whitelisted_authors", len(filtered))
+	
 	return filtered
 }
