@@ -26,12 +26,23 @@ type LoggerRegistry struct {
 	main      *slog.Logger
 	loggers   map[string]*slog.Logger
 	handler   slog.Handler
+	suppressedComponents map[string]bool
 	mu        sync.RWMutex
 }
 
 // Global registry instance
 var Registry = &LoggerRegistry{
 	loggers: make(map[string]*slog.Logger),
+	suppressedComponents: make(map[string]bool),
+}
+
+// shouldSuppressLog determines if a log should be suppressed based on component and level
+func shouldSuppressLog(component string, level slog.Level, suppressedComponents map[string]bool) bool {
+	if !suppressedComponents[component] {
+		return false
+	}
+	// Only suppress INFO and DEBUG levels for suppressed components
+	return level <= slog.LevelInfo
 }
 
 // InitializeLoggers sets up the central logging system with the given configuration
@@ -42,6 +53,12 @@ func InitializeLoggers(cfg *cfgTypes.ServerConfig) {
 	if err := logLevel.UnmarshalText([]byte(cfg.Logging.Level)); err != nil {
 		fmt.Printf("Invalid log level in config: %s\n", cfg.Logging.Level)
 		os.Exit(1)
+	}
+
+	// Build suppressed components map for fast lookup
+	suppressedComponents := make(map[string]bool)
+	for _, component := range cfg.Logging.SuppressComponents {
+		suppressedComponents[strings.TrimSpace(component)] = true
 	}
 
 	// Determine log file name based on structure setting
@@ -64,7 +81,7 @@ func InitializeLoggers(cfg *cfgTypes.ServerConfig) {
 	var handler slog.Handler
 	if cfg.Logging.Structure {
 		// Pass backup count to JSONLogWriter
-		handler = NewJSONLogWriter(logFilePath, logLevel, cfg.Logging.MaxSizeMB, cfg.Logging.BackupCount)
+		handler = NewJSONLogWriter(logFilePath, logLevel, cfg.Logging.MaxSizeMB, cfg.Logging.BackupCount, suppressedComponents)
 	} else {
 		logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_SYNC, 0644)
 		if err != nil {
@@ -74,6 +91,7 @@ func InitializeLoggers(cfg *cfgTypes.ServerConfig) {
 		handler = &PrettyLogWriter{
 			output: logFile,
 			level:  logLevel,
+			suppressedComponents: suppressedComponents,
 		}
 	}
 
@@ -102,6 +120,7 @@ func InitializeLoggers(cfg *cfgTypes.ServerConfig) {
     Registry.handler = handler
     Registry.main = mainLogger
     Registry.loggers = tempLoggers
+	Registry.suppressedComponents = suppressedComponents
     Registry.mu.Unlock()
 
     // Now that we've released the lock, we can safely log
@@ -346,10 +365,32 @@ type PrettyLogWriter struct {
 	output *os.File
 	level  slog.Level
 	attrs  []slog.Attr
+	suppressedComponents map[string]bool
 }
 
 // Handle writes logs to the log file
 func (h *PrettyLogWriter) Handle(ctx context.Context, r slog.Record) error {
+	// Extract component from attributes first
+	var component string
+	for _, attr := range h.attrs {
+		if attr.Key == "component" {
+			component = attr.Value.String()
+			break
+		}
+	}
+	r.Attrs(func(attr slog.Attr) bool {
+		if attr.Key == "component" {
+			component = attr.Value.String()
+			return false
+		}
+		return true
+	})
+
+	// Check if this log should be suppressed
+	if shouldSuppressLog(component, r.Level, h.suppressedComponents) {
+		return nil
+	}
+
 	var b strings.Builder
 
 	// Format timestamp
@@ -359,25 +400,9 @@ func (h *PrettyLogWriter) Handle(ctx context.Context, r slog.Record) error {
 	// Format log level as [LEVEL]
 	b.WriteString(fmt.Sprintf("[%s] ", strings.ToUpper(r.Level.String())))
 
-	// Extract component from attributes
-	var component string
-	for _, attr := range h.attrs {
-		if attr.Key == "component" {
-			component = fmt.Sprintf("[%s] ", attr.Value.String())
-			break
-		}
-	}
-	r.Attrs(func(attr slog.Attr) bool {
-		if attr.Key == "component" {
-			component = fmt.Sprintf("[%s] ", attr.Value.String())
-			return false
-		}
-		return true
-	})
-
 	// Append the component if found
 	if component != "" {
-		b.WriteString(component)
+		b.WriteString(fmt.Sprintf("[%s] ", component))
 	}
 
 	// Append message
@@ -412,6 +437,7 @@ func (h *PrettyLogWriter) WithAttrs(attrs []slog.Attr) slog.Handler {
 		output: h.output,
 		level:  h.level,
 		attrs:  append(h.attrs, attrs...),
+		suppressedComponents: h.suppressedComponents,
 	}
 }
 func (h *PrettyLogWriter) WithGroup(name string) slog.Handler {
@@ -427,10 +453,11 @@ type JSONLogWriter struct {
 	maxSizeMB   int        // Maximum file size in MB
 	backupCount int        // Number of backup files to keep
 	lastCheck   time.Time  // Last time we checked the file size
+	suppressedComponents map[string]bool
 }
 
 // NewJSONLogWriter creates a new instance of JSONLogWriter
-func NewJSONLogWriter(filePath string, level slog.Level, maxSizeMB int, backupCount int) *JSONLogWriter {
+func NewJSONLogWriter(filePath string, level slog.Level, maxSizeMB int, backupCount int, suppressedComponents map[string]bool) *JSONLogWriter {
 	// Ensure the file exists with a valid JSON array
 	ensureValidJSONFile(filePath)
 
@@ -440,6 +467,7 @@ func NewJSONLogWriter(filePath string, level slog.Level, maxSizeMB int, backupCo
 		maxSizeMB:   maxSizeMB,
 		backupCount: backupCount,
 		lastCheck:   time.Now(),
+		suppressedComponents: suppressedComponents,
 	}
 }
 
@@ -486,6 +514,27 @@ func ensureValidJSONFile(filePath string) {
 func (j *JSONLogWriter) Handle(ctx context.Context, r slog.Record) error {
 	// Check if log level is enabled
 	if !j.Enabled(ctx, r.Level) {
+		return nil
+	}
+
+	// Extract component from attributes to check suppression
+	var component string
+	for _, attr := range j.attrs {
+		if attr.Key == "component" {
+			component = attr.Value.String()
+			break
+		}
+	}
+	r.Attrs(func(attr slog.Attr) bool {
+		if attr.Key == "component" {
+			component = attr.Value.String()
+			return false
+		}
+		return true
+	})
+
+	// Check if this log should be suppressed
+	if shouldSuppressLog(component, r.Level, j.suppressedComponents) {
 		return nil
 	}
 
@@ -659,6 +708,7 @@ func (j *JSONLogWriter) WithAttrs(attrs []slog.Attr) slog.Handler {
 		maxSizeMB:   j.maxSizeMB,
 		backupCount: j.backupCount,
 		lastCheck:   j.lastCheck,
+		suppressedComponents: j.suppressedComponents,
 	}
 }
 

@@ -1,12 +1,13 @@
 package config
 
 type LogConfig struct {
-	Level            string `yaml:"level"`
-	File             string `yaml:"file"`
-	MaxSizeMB        int    `yaml:"max_log_size_mb"`
-	Structure        bool   `yaml:"structure"`
-	CheckIntervalMin int    `yaml:"check_interval_min"` // How often the program checks the size of the current log file
-	BackupCount      int    `yaml:"backup_count"`       // Number of backup logs to keep
+	Level              string   `yaml:"level"`
+	File               string   `yaml:"file"`
+	MaxSizeMB          int      `yaml:"max_log_size_mb"`
+	Structure          bool     `yaml:"structure"`
+	CheckIntervalMin   int      `yaml:"check_interval_min"`  // How often the program checks the size of the current log file
+	BackupCount        int      `yaml:"backup_count"`        // Number of backup logs to keep
+	SuppressComponents []string `yaml:"suppress_components"` // Components to suppress INFO/DEBUG logs from
 }
 
 type UserSyncConfig struct {

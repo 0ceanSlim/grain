@@ -5,6 +5,13 @@ logging:
   structure: false # true = structured JSON logs, false = pretty logs
   check_interval_min: 10 # Check every 10 minutes
   backup_count: 2 # Keep 2 backup files (.bak1, .bak2)
+  suppress_components: # Components to suppress INFO/DEBUG logs from
+    - "util" # Utility functions (file ops, helpers)
+    - "conn-manager" # Connection management (memory stats, counts)
+    - "client" # Client connection details
+    - "mongo-query" # Database query operations (can be verbose)
+# Available components: main, mongo, mongo-store, mongo-purge, event-handler,
+# req-handler, auth-handler, close-handler, config, event-validation, user-sync
 
 mongodb:
   uri: mongodb://localhost:27017/
