@@ -40,41 +40,6 @@ func CheckBlacklistAndWhitelistCached(evt relay.Event) Result {
 	return Result{Valid: true}
 }
 
-// IsPubKeyWhitelistedForSync checks cache for user sync operations
-func IsPubKeyWhitelistedForSync(pubKey string) bool {
-	whitelistCfg := config.GetWhitelistConfig()
-	if whitelistCfg == nil {
-		return false
-	}
-
-	// If whitelist is disabled, allow all
-	if !whitelistCfg.PubkeyWhitelist.Enabled {
-		return true
-	}
-
-	// Use cached result
-	return config.GetPubkeyCache().IsWhitelisted(pubKey)
-}
-
-// CheckBlacklistAndWhitelist checks if an event is allowed by the blacklist and whitelist rules
-func CheckBlacklistAndWhitelist(evt relay.Event) Result {
-	if blacklisted, msg := config.CheckBlacklist(evt.PubKey, evt.Content); blacklisted {
-		validationLog().Info("Event rejected by blacklist", 
-			"event_id", evt.ID,
-			"pubkey", evt.PubKey)
-		return Result{Valid: false, Message: msg}
-	}
-
-	if isWhitelisted, msg := config.CheckWhitelist(evt); !isWhitelisted {
-		validationLog().Info("Event rejected by whitelist", 
-			"event_id", evt.ID,
-			"pubkey", evt.PubKey)
-		return Result{Valid: false, Message: msg}
-	}
-
-	return Result{Valid: true}
-}
-
 // CheckRateAndSizeLimits checks if an event passes rate and size limits
 func CheckRateAndSizeLimits(evt relay.Event, eventSize int) Result {
 	rateLimiter := config.GetRateLimiter()
