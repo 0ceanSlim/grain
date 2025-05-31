@@ -45,11 +45,19 @@ func PurgeOldEventsOptimized(cfg *cfgTypes.EventPurgeConfig) {
 		"cutoff_unix", cutoff)
 
 	// Get cached whitelist if exclusion is enabled
+	// Use GetWhitelistedPubkeys() which ignores enabled state for purge operations
 	var whitelistedPubkeys []string
 	if cfg.ExcludeWhitelisted {
-		whitelistedPubkeys = config.GetPubkeyCache().GetWhitelistedPubkeys()
+		pubkeyCache := config.GetPubkeyCache()
+		whitelistedPubkeys = pubkeyCache.GetWhitelistedPubkeys()
+		
 		purgeLog().Info("Using cached whitelist for purge exclusion", 
-			"whitelisted_count", len(whitelistedPubkeys))
+			"whitelisted_count", len(whitelistedPubkeys),
+			"exclude_whitelisted", cfg.ExcludeWhitelisted)
+		
+		if len(whitelistedPubkeys) == 0 {
+			purgeLog().Warn("No whitelisted pubkeys found in cache, purge will include all pubkeys")
+		}
 	}
 
 	var collectionsToPurge []string
@@ -76,9 +84,14 @@ func PurgeOldEventsOptimized(cfg *cfgTypes.EventPurgeConfig) {
 		purged := purgeCollectionOptimized(client, dbName, collectionName, cutoff, cfg, whitelistedPubkeys)
 		totalPurged += purged
 		
-		purgeLog().Info("Collection purge completed", 
-			"collection", collectionName,
-			"purged", purged)
+		if purged > 0 {
+			purgeLog().Info("Collection purge completed", 
+				"collection", collectionName,
+				"purged", purged)
+		} else {
+			purgeLog().Debug("No documents purged from collection", 
+				"collection", collectionName)
+		}
 	}
 
 	purgeLog().Info("Optimized purging completed", 

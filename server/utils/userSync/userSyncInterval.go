@@ -1,7 +1,6 @@
 package userSync
 
 import (
-	"log"
 	"time"
 
 	"github.com/0ceanslim/grain/config"
@@ -9,7 +8,7 @@ import (
 	"github.com/0ceanslim/grain/server/db/mongo"
 )
 
-// Periodically triggers user sync based on config interval.
+// StartPeriodicUserSync periodically triggers user sync based on config interval
 func StartPeriodicUserSync(cfg *configTypes.ServerConfig) {
 	if !cfg.UserSync.UserSync {
 		syncLog().Debug("User sync is disabled in the config. Skipping sync startup.")
@@ -20,18 +19,20 @@ func StartPeriodicUserSync(cfg *configTypes.ServerConfig) {
 		syncLog().Debug("User sync is disabled at startup. Skipping initial sync.")
 	} else {
 		time.Sleep(30 * time.Second) // Wait before initial sync
-		log.Println("Running initial user sync...")
+		syncLog().Info("Running initial user sync...")
 		runUserSync(cfg)
 	}
 
 	interval := cfg.UserSync.Interval
 	if interval <= 0 {
-		log.Println("User sync interval is not set. Skipping periodic sync.")
+		syncLog().Warn("User sync interval is not set. Skipping periodic sync.")
 		return
 	}
 
 	ticker := time.NewTicker(time.Duration(interval) * time.Minute)
 	defer ticker.Stop()
+
+	syncLog().Info("Started periodic user sync", "interval_minutes", interval)
 
 	for {
 		<-ticker.C
@@ -39,58 +40,44 @@ func StartPeriodicUserSync(cfg *configTypes.ServerConfig) {
 	}
 }
 
-// Runs user sync for all relevant authors.
-//func runUserSync(cfg *configTypes.ServerConfig) {
-//	authors := mongo.GetAllAuthorsFromRelay(cfg)
-//
-//	// Filter authors if required
-//	if cfg.UserSync.ExcludeNonWhitelisted {
-//		authors = filterWhitelistedAuthors(authors)
-//	}
-//
-//	for _, author := range authors {
-//		log.Printf("Starting user sync for author: %s", author)
-//
-//		// Run sync sequentially (removes concurrency to avoid rate limiting)
-//		triggerUserSync(author, &cfg.UserSync, cfg)
-//
-//		// Optional: Small delay between each author's sync to further reduce load
-//		time.Sleep(2 * time.Second)
-//	}
-//}
+// runUserSync runs user sync for all relevant authors
 func runUserSync(cfg *configTypes.ServerConfig) {
+	syncLog().Info("Starting periodic user sync run")
+	
 	authors := mongo.GetAllAuthorsFromRelay(cfg)
+	syncLog().Debug("Retrieved authors from relay", "total_authors", len(authors))
 
-	// Filter authors if required using cache
+	// Filter authors if required using cache (ignores enabled state for sync operations)
 	if cfg.UserSync.ExcludeNonWhitelisted {
 		authors = filterWhitelistedAuthorsCached(authors)
+		syncLog().Info("Filtered authors for sync", 
+			"exclude_non_whitelisted", true,
+			"filtered_authors", len(authors))
 	}
 
+	successCount := 0
 	for _, author := range authors {
-		log.Printf("Starting user sync for author: %s", author)
+		syncLog().Debug("Starting user sync for author", "pubkey", author)
+		
 		triggerUserSync(author, &cfg.UserSync, cfg)
+		successCount++
+		
+		// Small delay between each author's sync to reduce load
 		time.Sleep(2 * time.Second)
 	}
+	
+	syncLog().Info("Periodic user sync run completed", 
+		"total_authors", len(authors),
+		"synced_authors", successCount)
 }
 
-// Filters only whitelisted authors.
-//func filterWhitelistedAuthors(authors []string) []string {
-//	filtered := []string{}
-//	for _, author := range authors {
-//		if config.IsPubKeyWhitelisted(author, true) {
-//			filtered = append(filtered, author)
-//		}
-//	}
-//	return filtered
-//}
-// Move this function from userSyncCheck.go to here or make it a shared utility
-
-// filterWhitelistedAuthorsCached uses cache for filtering
+// filterWhitelistedAuthorsCached uses cache for filtering (ignores enabled state for sync)
 func filterWhitelistedAuthorsCached(authors []string) []string {
 	pubkeyCache := config.GetPubkeyCache()
 	filtered := make([]string, 0, len(authors))
 	
 	for _, author := range authors {
+		// Use IsWhitelisted (not IsWhitelistedForValidation) to ignore enabled state
 		if pubkeyCache.IsWhitelisted(author) {
 			filtered = append(filtered, author)
 		}

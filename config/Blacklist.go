@@ -17,7 +17,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// CheckBlacklistCached uses cached pubkey lists instead of real-time lookups
+// CheckBlacklistCached uses cached pubkey lists and respects enabled state for validation
 func CheckBlacklistCached(pubkey, eventContent string) (bool, string) {
 	blacklistConfig := GetBlacklistConfig()
 	if blacklistConfig == nil || !blacklistConfig.Enabled {
@@ -28,8 +28,8 @@ func CheckBlacklistCached(pubkey, eventContent string) (bool, string) {
 
 	pubkeyCache := GetPubkeyCache()
 
-	// Check cached permanent blacklist
-	if pubkeyCache.IsBlacklisted(pubkey) {
+	// Check cached permanent blacklist (respects enabled state for validation)
+	if pubkeyCache.IsBlacklistedForValidation(pubkey) {
 		configLog().Warn("Pubkey found in cached blacklist", "pubkey", pubkey)
 		return true, "blocked: pubkey is blacklisted"
 	}

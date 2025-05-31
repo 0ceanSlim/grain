@@ -39,12 +39,17 @@ func UserSyncCheckCached(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, 
 	}
 
 	// Enforce whitelist check using cache if ExcludeNonWhitelisted is true
+	// Use cache regardless of enabled state since this is a sync operation
 	if cfg.UserSync.ExcludeNonWhitelisted {
-		isWhitelisted := config.GetPubkeyCache().IsWhitelisted(evt.PubKey)
+		pubkeyCache := config.GetPubkeyCache()
+		isWhitelisted := pubkeyCache.IsWhitelisted(evt.PubKey)
 		if !isWhitelisted {
-			syncLog().Info("Non-whitelisted pubkey, skipping sync", "pubkey", evt.PubKey)
+			syncLog().Info("Non-whitelisted pubkey, skipping sync", 
+				"pubkey", evt.PubKey,
+				"exclude_non_whitelisted", cfg.UserSync.ExcludeNonWhitelisted)
 			return false, nil
 		}
+		syncLog().Debug("Pubkey is whitelisted, proceeding with sync", "pubkey", evt.PubKey)
 	}
 
 	syncLog().Info("Starting initial sync for new user", "pubkey", evt.PubKey)

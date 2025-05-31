@@ -6,7 +6,7 @@ import (
 	nostr "github.com/0ceanslim/grain/server/types"
 )
 
-// CheckWhitelistCached uses cached pubkey lists instead of real-time lookups
+// CheckWhitelistCached uses cached pubkey lists and respects enabled state for validation
 func CheckWhitelistCached(evt nostr.Event) (bool, string) {
 	whitelistCfg := GetWhitelistConfig()
 	if whitelistCfg == nil {
@@ -14,16 +14,15 @@ func CheckWhitelistCached(evt nostr.Event) (bool, string) {
 		return false, "Internal server error: whitelist configuration is missing"
 	}
 
-	pubkeyCache := GetPubkeyCache()
-
 	// Check if the event's kind is whitelisted (no caching needed for this)
 	if whitelistCfg.KindWhitelist.Enabled && !IsKindWhitelisted(evt.Kind) {
 		configLog().Warn("Event kind is not whitelisted", "kind", evt.Kind)
 		return false, "not allowed: event kind is not whitelisted"
 	}
 
-	// Check if the event's pubkey is whitelisted using cache
-	if whitelistCfg.PubkeyWhitelist.Enabled && !pubkeyCache.IsWhitelisted(evt.PubKey) {
+	// Check if the event's pubkey is whitelisted using cache with enabled state check
+	pubkeyCache := GetPubkeyCache()
+	if whitelistCfg.PubkeyWhitelist.Enabled && !pubkeyCache.IsWhitelistedForValidation(evt.PubKey) {
 		configLog().Warn("Pubkey is not whitelisted", "pubkey", evt.PubKey)
 		return false, "not allowed: pubkey or npub is not whitelisted"
 	}
@@ -32,21 +31,17 @@ func CheckWhitelistCached(evt nostr.Event) (bool, string) {
 	return true, ""
 }
 
-// IsPubKeyWhitelistedCached checks cache instead of real-time lookups
-// with support for skipEnabledCheck parameter for purging operations
+// IsPubKeyWhitelistedCached for purging operations - always uses cache regardless of enabled state
 func IsPubKeyWhitelistedCached(pubKey string, skipEnabledCheck bool) bool {
-	cfg := GetWhitelistConfig()
-	if cfg == nil {
-		return false
+	pubkeyCache := GetPubkeyCache()
+	
+	if skipEnabledCheck {
+		// For purging operations - use cache regardless of enabled state
+		return pubkeyCache.IsWhitelisted(pubKey)
 	}
-
-	// If the whitelist is disabled but this check is for purging, we still evaluate it.
-	if !cfg.PubkeyWhitelist.Enabled && !skipEnabledCheck {
-		return true // Whitelisting is not enforced for posting if disabled.
-	}
-
-	// Use cached result - the cache already includes all sources (pubkeys, npubs, domains)
-	return GetPubkeyCache().IsWhitelisted(pubKey)
+	
+	// For validation operations - respect enabled state
+	return pubkeyCache.IsWhitelistedForValidation(pubKey)
 }
 
 // Check if a kind is whitelisted
