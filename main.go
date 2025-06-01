@@ -26,6 +26,12 @@ import (
 )
 
 func main() {
+
+	utils.EnsureFileExists("config.yml", "www/static/examples/config.example.yml")
+	utils.EnsureFileExists("whitelist.yml", "www/static/examples/whitelist.example.yml")
+	utils.EnsureFileExists("blacklist.yml", "www/static/examples/blacklist.example.yml")
+	utils.EnsureFileExists("relay_metadata.json", "www/static/examples/relay_metadata.example.json")
+
 	// Initial logger setup
 	cfg, err := config.LoadConfig("config.yml")
 	if err != nil {
@@ -34,11 +40,6 @@ func main() {
 	}
 	// Initialize the logging system with all component loggers
 	log.InitializeLoggers(cfg)
-
-	utils.EnsureFileExists("config.yml", "www/static/examples/config.example.yml")
-	utils.EnsureFileExists("whitelist.yml", "www/static/examples/whitelist.example.yml")
-	utils.EnsureFileExists("blacklist.yml", "www/static/examples/blacklist.example.yml")
-	utils.EnsureFileExists("relay_metadata.json", "www/static/examples/relay_metadata.example.json")
 
 	restartChan := make(chan struct{})
 	go config.WatchConfigFile("config.yml", restartChan)
