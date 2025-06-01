@@ -6,14 +6,14 @@ import (
 	"log"
 	"time"
 
-	config "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	nostr "github.com/0ceanslim/grain/server/types"
 
 	"github.com/gorilla/websocket"
 )
 
 // fetchLocalRelayEvents queries the local relay for events by the user.
-func fetchHaves(pubKey, localRelayURL string, syncConfig config.UserSyncConfig) ([]nostr.Event, error) {
+func fetchHaves(pubKey, localRelayURL string, syncConfig cfgType.UserSyncConfig) ([]nostr.Event, error) {
 	log.Printf("Connecting to local relay: %s", localRelayURL)
 
 	conn, _, err := websocket.DefaultDialer.Dial(localRelayURL, nil)

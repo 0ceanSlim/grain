@@ -5,13 +5,13 @@ import (
 
 	"github.com/0ceanslim/grain/config"
 
-	configTypes "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // UserSyncCheckCached uses cached whitelist for sync decisions
-func UserSyncCheckCached(evt nostr.Event, cfg *configTypes.ServerConfig) (bool, error) {
+func UserSyncCheckCached(evt nostr.Event, cfg *cfgType.ServerConfig) (bool, error) {
 	if !cfg.UserSync.UserSync {
 		log.UserSync().Debug("User syncing is disabled", "event_id", evt.ID)
 		return false, nil

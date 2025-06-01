@@ -4,13 +4,13 @@ import (
 	"time"
 
 	"github.com/0ceanslim/grain/config"
-	configTypes "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/db/mongo"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // StartPeriodicUserSync periodically triggers user sync based on config interval
-func StartPeriodicUserSync(cfg *configTypes.ServerConfig) {
+func StartPeriodicUserSync(cfg *cfgType.ServerConfig) {
 	if !cfg.UserSync.UserSync {
 		log.UserSync().Debug("User sync is disabled in the config. Skipping sync startup.")
 		return
@@ -42,7 +42,7 @@ func StartPeriodicUserSync(cfg *configTypes.ServerConfig) {
 }
 
 // runUserSync runs user sync for all relevant authors
-func runUserSync(cfg *configTypes.ServerConfig) {
+func runUserSync(cfg *cfgType.ServerConfig) {
 	log.UserSync().Info("Starting periodic user sync run")
 	
 	authors := mongo.GetAllAuthorsFromRelay(cfg)

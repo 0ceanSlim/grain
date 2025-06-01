@@ -8,12 +8,12 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	config "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	nostr "github.com/0ceanslim/grain/server/types"
 )
 
 // fetchNeeds fetches all events authored by the user from the provided relays concurrently.
-func fetchNeeds(pubKey string, relays []string, syncConfig config.UserSyncConfig) []nostr.Event {
+func fetchNeeds(pubKey string, relays []string, syncConfig cfgType.UserSyncConfig) []nostr.Event {
 	eventMap := make(map[string]nostr.Event)
 	var mu sync.Mutex
 	var wg sync.WaitGroup

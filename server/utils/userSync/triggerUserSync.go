@@ -9,14 +9,14 @@ import (
 	"sync"
 	"time"
 
-	configTypes "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	nostr "github.com/0ceanslim/grain/server/types"
 
 	"github.com/gorilla/websocket"
 )
 
 // triggerUserSync fetches Kind 10002 events and starts syncing missing events.
-func triggerUserSync(pubKey string, userSyncCfg *configTypes.UserSyncConfig, serverCfg *configTypes.ServerConfig) {
+func triggerUserSync(pubKey string, userSyncCfg *cfgType.UserSyncConfig, serverCfg *cfgType.ServerConfig) {
 	log.Printf("Starting user sync for pubkey: %s", pubKey)
 
 	initialRelays := userSyncCfg.InitialSyncRelays
@@ -111,7 +111,7 @@ func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
 }
 
 // batchAndSendEvents sends events in controlled batches.
-func batchAndSendEvents(events []nostr.Event, serverCfg *configTypes.ServerConfig) {
+func batchAndSendEvents(events []nostr.Event, serverCfg *cfgType.ServerConfig) {
 	sort.Slice(events, func(i, j int) bool {
 		return events[i].CreatedAt < events[j].CreatedAt
 	})
@@ -135,7 +135,7 @@ func batchAndSendEvents(events []nostr.Event, serverCfg *configTypes.ServerConfi
 }
 
 // processBatches ensures batched processing of events.
-func processBatches(events []nostr.Event, batchSize int, serverCfg *configTypes.ServerConfig, label string) {
+func processBatches(events []nostr.Event, batchSize int, serverCfg *cfgType.ServerConfig, label string) {
 	totalEvents := len(events)
 	totalSuccess := 0
 	totalFailure := 0

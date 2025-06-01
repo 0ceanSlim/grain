@@ -5,11 +5,11 @@ import (
 	"runtime/debug"
 	"time"
 
-	configTypes "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-func SetResourceLimit(cfg *configTypes.ResourceLimits) {
+func SetResourceLimit(cfg *cfgType.ResourceLimits) {
 	// Set CPU cores
 	runtime.GOMAXPROCS(cfg.CPUCores)
 	log.Config().Info("CPU cores limit set", "cores", cfg.CPUCores)

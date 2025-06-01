@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	types "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 
@@ -131,7 +131,7 @@ type tempBanEntry struct {
 }
 
 // Adds a pubkey to the temporary blacklist
-func AddToTemporaryBlacklist(pubkey string, blacklistConfig types.BlacklistConfig) error {
+func AddToTemporaryBlacklist(pubkey string, blacklistConfig cfgType.BlacklistConfig) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -227,7 +227,7 @@ func GetTemporaryBlacklist() []map[string]interface{} {
 	return tempBans
 }
 
-func isPubKeyPermanentlyBlacklisted(pubKey string, blacklistConfig *types.BlacklistConfig) bool {
+func isPubKeyPermanentlyBlacklisted(pubKey string, blacklistConfig *cfgType.BlacklistConfig) bool {
 	if blacklistConfig == nil || !blacklistConfig.Enabled {
 		return false
 	}
@@ -282,7 +282,7 @@ func AddToPermanentBlacklist(pubkey string) error {
 	return nil
 }
 
-func saveBlacklistConfig(blacklistConfig types.BlacklistConfig) error {
+func saveBlacklistConfig(blacklistConfig cfgType.BlacklistConfig) error {
 	data, err := yaml.Marshal(blacklistConfig)
 	if err != nil {
 		return fmt.Errorf("failed to marshal blacklist config: %v", err)

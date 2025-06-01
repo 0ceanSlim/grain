@@ -3,7 +3,7 @@ package config
 import (
 	"sync"
 
-	config "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -13,7 +13,7 @@ type SizeLimiter struct {
 	mu             sync.RWMutex
 }
 
-func SetSizeLimit(cfg *config.ServerConfig) {
+func SetSizeLimit(cfg *cfgType.ServerConfig) {
 	sizeLimiter := NewSizeLimiter(cfg.RateLimit.MaxEventSize)
 	log.Config().Info("Size limiter configured", "global_max_size", cfg.RateLimit.MaxEventSize)
 	for _, kindSizeLimit := range cfg.RateLimit.KindSizeLimits {

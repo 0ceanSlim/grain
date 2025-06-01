@@ -8,12 +8,12 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	configTypes "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	nostr "github.com/0ceanslim/grain/server/types"
 )
 
 // storeUserOutboxes forwards the event to the local relay via WebSocket and ensures graceful closure.
-func storeUserOutboxes(event nostr.Event, serverCfg *configTypes.ServerConfig) error {
+func storeUserOutboxes(event nostr.Event, serverCfg *cfgType.ServerConfig) error {
 	// Construct the WebSocket URL for the local relay
 	localRelayURL := fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port)
 

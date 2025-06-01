@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 
-	relay "github.com/0ceanslim/grain/server/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 
@@ -12,7 +12,7 @@ import (
 )
 
 // CheckSignature verifies the event's signature and ID
-func CheckSignature(evt relay.Event) bool {
+func CheckSignature(evt nostr.Event) bool {
 	// Serialize event correctly
 	serializedEvent := utils.SerializeEvent(evt)
 	if serializedEvent == "" {

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	relay "github.com/0ceanslim/grain/server/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 	"golang.org/x/net/websocket"
 )
 
-func SendToBackupRelay(backupURL string, evt relay.Event) error {
+func SendToBackupRelay(backupURL string, evt nostr.Event) error {
     log.Util().Debug("Connecting to backup relay", 
         "relay_url", backupURL, 
         "event_id", evt.ID,

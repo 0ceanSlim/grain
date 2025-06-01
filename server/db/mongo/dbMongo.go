@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	config "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -23,7 +23,7 @@ func GetClient() *mongo.Client {
 
 var databaseName string // Store the database name globally
 
-func InitDB(cfg *config.ServerConfig) (*mongo.Client, error) {
+func InitDB(cfg *cfgType.ServerConfig) (*mongo.Client, error) {
 	clientOptions := options.Client().ApplyURI(cfg.MongoDB.URI)
 	var err error
 

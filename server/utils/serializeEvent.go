@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"strings"
 
-	relay "github.com/0ceanslim/grain/server/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // SerializeEvent manually constructs the JSON string for event serialization according to NIP-01
-func SerializeEvent(evt relay.Event) string {
+func SerializeEvent(evt nostr.Event) string {
 	eventData := []interface{}{
 		0,
 		evt.PubKey,

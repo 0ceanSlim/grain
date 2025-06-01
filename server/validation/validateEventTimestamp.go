@@ -4,12 +4,12 @@ import (
 	"strings"
 	"time"
 
-	configTypes "github.com/0ceanslim/grain/config/types"
-	relay "github.com/0ceanslim/grain/server/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-func ValidateEventTimestamp(evt relay.Event, cfg *configTypes.ServerConfig) bool {
+func ValidateEventTimestamp(evt nostr.Event, cfg *cfgType.ServerConfig) bool {
     if cfg == nil {
         log.Validation().Error("Server configuration is not loaded")
         return false

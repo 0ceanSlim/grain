@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/0ceanslim/grain/config"
-	cfgTypes "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 
@@ -16,7 +16,7 @@ import (
 )
 
 // PurgeOldEventsOptimized removes old events using cached whitelist data for bulk operations
-func PurgeOldEventsOptimized(cfg *cfgTypes.EventPurgeConfig) {
+func PurgeOldEventsOptimized(cfg *cfgType.EventPurgeConfig) {
 	if !cfg.Enabled {
 		log.MongoPurge().Debug("Event purging is disabled")
 		return
@@ -95,7 +95,7 @@ func PurgeOldEventsOptimized(cfg *cfgTypes.EventPurgeConfig) {
 }
 
 // purgeCollectionOptimized performs bulk deletion on a single collection
-func purgeCollectionOptimized(client *mongo.Client, dbName, collectionName string, cutoff int64, cfg *cfgTypes.EventPurgeConfig, whitelistedPubkeys []string) int {
+func purgeCollectionOptimized(client *mongo.Client, dbName, collectionName string, cutoff int64, cfg *cfgType.EventPurgeConfig, whitelistedPubkeys []string) int {
 	collection := client.Database(dbName).Collection(collectionName)
 	
 	// Build base filter for old events
@@ -175,7 +175,7 @@ func purgeCollectionOptimized(client *mongo.Client, dbName, collectionName strin
 }
 
 // ScheduleEventPurgingOptimized runs the optimized event purging at configurable intervals
-func ScheduleEventPurgingOptimized(cfg *cfgTypes.ServerConfig) {
+func ScheduleEventPurgingOptimized(cfg *cfgType.ServerConfig) {
 	if !cfg.EventPurge.Enabled {
 		log.MongoPurge().Info("Event purging is disabled in configuration")
 		return

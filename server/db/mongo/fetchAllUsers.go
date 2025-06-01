@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	cfgTypes "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -14,7 +14,7 @@ import (
 )
 
 // GetAllAuthorsFromRelay fetches all unique authors from MongoDB.
-func GetAllAuthorsFromRelay(cfg *cfgTypes.ServerConfig) []string {
+func GetAllAuthorsFromRelay(cfg *cfgType.ServerConfig) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

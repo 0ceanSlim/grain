@@ -2,11 +2,11 @@ package userSync
 
 import (
 	"github.com/0ceanslim/grain/client/types"
-	config "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 )
 
 // generateUserSyncFilter creates a SubscriptionFilter based on UserSyncConfig settings.
-func generateUserSyncFilter(pubKey string, syncConfig config.UserSyncConfig) types.SubscriptionFilter {
+func generateUserSyncFilter(pubKey string, syncConfig cfgType.UserSyncConfig) types.SubscriptionFilter {
 	filter := types.SubscriptionFilter{
 		Authors: []string{pubKey},
 	}

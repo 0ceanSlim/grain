@@ -3,6 +3,7 @@ package eventStore
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/0ceanslim/grain/server/handlers/response"
 	nostr "github.com/0ceanslim/grain/server/types"
@@ -203,4 +204,8 @@ func storeDeletionEvent(ctx context.Context, dbName string, evt nostr.Event, dbC
 		"event_id", evt.ID, 
 		"inserted_id", result.InsertedID)
 	return nil
+}
+
+func parseAddressableEventReference(tagA string) []string {
+	return strings.Split(tagA, ":")
 }

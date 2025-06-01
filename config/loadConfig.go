@@ -4,16 +4,16 @@ import (
 	"os"
 	"sync"
 
-	configTypes "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 
 	"gopkg.in/yaml.v3"
 )
 
 var (
-	cfg           *configTypes.ServerConfig
-	whitelistCfg  *configTypes.WhitelistConfig
-	blacklistCfg  *configTypes.BlacklistConfig
+	cfg           *cfgType.ServerConfig
+	whitelistCfg  *cfgType.WhitelistConfig
+	blacklistCfg  *cfgType.BlacklistConfig
 	once          sync.Once
 	whitelistOnce sync.Once
 	blacklistOnce sync.Once
@@ -21,17 +21,17 @@ var (
 )
 
 // GetConfig returns the server configuration.
-func GetConfig() *configTypes.ServerConfig {
+func GetConfig() *cfgType.ServerConfig {
 	return cfg
 }
 
 // GetWhitelistConfig returns the whitelist configuration.
-func GetWhitelistConfig() *configTypes.WhitelistConfig {
+func GetWhitelistConfig() *cfgType.WhitelistConfig {
 	return whitelistCfg
 }
 
 // GetBlacklistConfig returns the blacklist configuration.
-func GetBlacklistConfig() *configTypes.BlacklistConfig {
+func GetBlacklistConfig() *cfgType.BlacklistConfig {
 	return blacklistCfg
 }
 
@@ -63,13 +63,13 @@ func ResetBlacklistConfig() {
 }
 
 // LoadConfig loads the server configuration from config.yml.
-func LoadConfig(filename string) (*configTypes.ServerConfig, error) {
+func LoadConfig(filename string) (*cfgType.ServerConfig, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	var config configTypes.ServerConfig
+	var config cfgType.ServerConfig
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, err
@@ -84,13 +84,13 @@ func LoadConfig(filename string) (*configTypes.ServerConfig, error) {
 }
 
 // LoadWhitelistConfig loads the whitelist configuration from whitelist.yml.
-func LoadWhitelistConfig(filename string) (*configTypes.WhitelistConfig, error) {
+func LoadWhitelistConfig(filename string) (*cfgType.WhitelistConfig, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	var config configTypes.WhitelistConfig
+	var config cfgType.WhitelistConfig
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, err
@@ -105,13 +105,13 @@ func LoadWhitelistConfig(filename string) (*configTypes.WhitelistConfig, error) 
 }
 
 // LoadBlacklistConfig loads the blacklist configuration from blacklist.yml.
-func LoadBlacklistConfig(filename string) (*configTypes.BlacklistConfig, error) {
+func LoadBlacklistConfig(filename string) (*cfgType.BlacklistConfig, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	var config configTypes.BlacklistConfig
+	var config cfgType.BlacklistConfig
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, err

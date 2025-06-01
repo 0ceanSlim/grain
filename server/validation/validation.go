@@ -2,7 +2,7 @@ package validation
 
 import (
 	"github.com/0ceanslim/grain/config"
-	relay "github.com/0ceanslim/grain/server/types"
+	noatr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -14,7 +14,7 @@ type Result struct {
 }
 
 // CheckBlacklistAndWhitelistCached uses cached pubkey lists for validation
-func CheckBlacklistAndWhitelistCached(evt relay.Event) Result {
+func CheckBlacklistAndWhitelistCached(evt noatr.Event) Result {
 	// Check blacklist using cache (but still check content for word-based bans)
 	if blacklisted, msg := config.CheckBlacklistCached(evt.PubKey, evt.Content); blacklisted {
 		log.Validation().Info("Event rejected by cached blacklist", 
@@ -35,7 +35,7 @@ func CheckBlacklistAndWhitelistCached(evt relay.Event) Result {
 }
 
 // CheckRateAndSizeLimits checks if an event passes rate and size limits
-func CheckRateAndSizeLimits(evt relay.Event, eventSize int) Result {
+func CheckRateAndSizeLimits(evt noatr.Event, eventSize int) Result {
 	rateLimiter := config.GetRateLimiter()
 	sizeLimiter := config.GetSizeLimiter()
 	category := utils.DetermineEventCategory(evt.Kind)

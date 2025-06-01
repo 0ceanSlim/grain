@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	cfgTypes "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 )
 
 // LoggerRegistry maintains a map of all loggers by component name
@@ -55,7 +55,7 @@ func GetLogger(component string) *slog.Logger {
 }
 
 // InitializeLoggers sets up the central logging system with the given configuration
-func InitializeLoggers(cfg *cfgTypes.ServerConfig) {
+func InitializeLoggers(cfg *cfgType.ServerConfig) {
 	// Convert log level from config
 	cfg.Logging.Level = strings.TrimSpace(strings.ToLower(cfg.Logging.Level))
 	var logLevel slog.Level

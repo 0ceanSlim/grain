@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	config "github.com/0ceanslim/grain/config/types"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 
 	"golang.org/x/time/rate"
@@ -34,7 +34,7 @@ type RateLimiter struct {
 var rateLimiterInstance *RateLimiter
 var rateOnce sync.Once
 
-func SetRateLimit(cfg *config.ServerConfig) {
+func SetRateLimit(cfg *cfgType.ServerConfig) {
 	rateLimiter := NewRateLimiter(
 		rate.Limit(cfg.RateLimit.WsLimit),
 		cfg.RateLimit.WsBurst,
