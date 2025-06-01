@@ -2,70 +2,226 @@
 
 ## Go Relay Architecture for Implementing Nostr
 
-GRAIN is an open-source Nostr relay implementation written in Go. This project aims to provide an efficient and configurable Nostr relay.
+GRAIN is a nostr relay designed for operators who need fine-grained control over their relay's behavior.
 
-## Features
+## What is Nostr?
 
-- **Dynamic Event Handling**: Capable of processing a wide range of events, categorized by type and kind, including support for event deletion as per NIP-09.
-- **Configurable and Extensible**: Easily customizable through configuration files, with plans for future GUI-based configuration management to streamline server adjustments.
-- **Efficient Rate Limiting**: Implements sophisticated rate limiting strategies to manage WebSocket messages, - events, and requests, ensuring fair resource allocation and protection against abuse.
-- **Extensive Blacklist and Whitelist Functions**:
-  - Implements a robust blacklisting system with support for temporary and permanent bans based on content, pubkeys, or npubs.
-  - Features word-based content filtering for automatic temporary or permanent bans.
-  - Includes a configurable system for escalating temporary bans to permanent bans after a set number of violations.
-  - Offers whitelist capabilities for pubkeys, npubs, event kinds, and domains, allowing fine-grained control over permitted content and users.
-- **Flexible Event Size Management**: Configurable size limits for events, with optional constraints based on - event kind, to maintain performance and prevent oversized data handling.
-- **MongoDB Integration 🍃**: Utilizes MongoDB for high-performance storage and management of events, ensuring data integrity and efficient query capabilities.
-- **Scalable Architecture**: Built with Go, leveraging its concurrency model to provide high throughput and scalability, suitable for handling large volumes of data and connections.
-- **Relay Metadata Support (NIP-11)**: Provides relay metadata in compliance with NIP-11, allowing clients to retrieve server capabilities and administrative contact information.
-- **User-Friendly Front-End**: Includes a web interface that displays recent events and supports potential future enhancements like configuration management.
-- **Open Source**: Licensed under the MIT License, making it free to use and modify.
+Nostr is a simple, open protocol for creating censorship-resistant social networks. Users publish signed events (posts, profiles, reactions) to relays, which store and distribute them. Unlike centralized platforms, users control their identity through cryptographic keys and can freely move between relays.
 
-## Prerequisites
+GRAIN acts as one of these relays - storing events, serving them to clients, and ensuring your relay operates according to your policies.
 
-### MongoDB Server 🍃
+## Why GRAIN?
 
-_I plan to add multiple other database types in the future (postgress, sqlite)_
-GRAIN 🌾 leverages MongoDB for efficient storage and management of events. MongoDB, known for its high performance and scalability, is an ideal choice for handling large volumes of real-time data. GRAIN 🌾 uses MongoDB collections to store events categorized by kind and ensures quick retrieval and manipulation of these events through its robust querying capabilities.
+### **Intelligent Content Control**
 
-You can get the free Community Server edition of MongoDB from the official MongoDB website:
-[MongoDB Community Server](https://www.mongodb.com/try/download/community)  
-MongoDB provides extensive documentation and support to help you get started with installation and configuration, ensuring a smooth integration with GRAIN.
+- Real-time blacklist/whitelist filtering with automatic caching
+- Word-based content filtering that escalates temporary bans to permanent ones
+- Import blacklists from Nostr mute lists (kind 10000 events)
+- Domain-based whitelisting by fetching pubkeys from `.well-known/nostr.json`
+
+### **Intelligent Management**
+
+- Hot configuration reloading - change settings without restarting
+- Comprehensive structured logging with automatic rotation
+- Memory-aware connection management prevents resource exhaustion
+- Multi-layer rate limiting (connections, events, queries) with per-kind controls
+
+### **Event Management**
+
+- Supports all Nostr event categories: regular posts, user profiles, replaceable events, and ephemeral messages
+- Automatic event deletion handling (kind 5 events) with proper cascade cleanup
+- Intelligent event purging with category-based retention policies
+- MongoDB storage optimized for Nostr's event structure
+
+### **Performance Focused**
+
+- Unified cross-collection database queries for efficient event retrieval
+- Per-kind MongoDB collections with automatic indexing
+- Configurable event size limits to prevent abuse
+- Connection pooling and timeout management
+
+## Installation
+
+### Using Pre-built Binaries (Recommended)
+
+1. **Download the latest release** for your system from the releases page
+2. **Extract the archive** and ensure both the binary and `www` folder are in the same directory:
+
+   grain/  
+   ├── grain (or grain.exe on Windows)  
+   └── www/
+
+**Start MongoDB** - GRAIN requires a running MongoDB instance (default: `localhost:27017`)
+**Run GRAIN** - `./grain` (Linux) or `grain.exe` (Windows)
+
+GRAIN will automatically create default configuration files on first run and start serving on port `:8181`.
+
+Edit config files and GRAIN automatically restarts with new settings
+
+### Building from Source
+
+If pre-built binaries aren't available for your architecture:
+
+```bash
+git clone https://github.com/0ceanslim/grain.git
+cd grain
+go build -o grain .
+./grain
+```
 
 ## Configuration
 
-Grain will automatically create the configurations and relay metadata files necessary if they do not already exist when you first run the program.
+GRAIN uses four main configuration files with hot-reload support:
 
-They are created in the root directory of Grain. You can change configurations and relay_metadata here and the server will automatically restart and use the new configurations. The relay must be restarted manually for new blacklist configurations to take effect.
+- `config.yml` - Server, database, and rate limiting settings
+- `whitelist.yml` - Allowed users, domains, and event types
+- `blacklist.yml` - Banned content and escalation policies
+- `relay_metadata.json` - Public relay information (NIP-11)
 
-## Development
+For detailed configuration options and examples, see:
 
-To contribute to GRAIN, follow these steps:
+[**Example configurations**](https://github.com/0ceanslim/grain/tree/main/www/static/examples)
 
-1. Fork the repository.
-2. Make your changes.
-3. Commit your changes:
+## Event Processing
 
-   ```sh
-   git commit -m "Description of changes"
-   ```
+GRAIN handles all Nostr event types according to protocol specifications:
 
-4. Push to the repo:
+- **Regular events** (kind 1 notes, kind 7 reactions) - stored permanently
+- **Replaceable events** (kind 0 profiles, kind 3 contact lists) - newest version kept
+- **Addressable events** (kind 30000+ with 'd' tags) - replaced by newer versions with same identifier
+- **Ephemeral events** (kind 20000-30000) - processed but not stored
+- **Deletion events** (kind 5) - removes referenced events if authored by same user
 
-   ```sh
-   git push
-   ```
+### Automatic Event Purging
 
-5. Create a Pull Request.
+Keep your database clean with configurable retention:
 
-### License
+```yaml
+event_purge:
+  enabled: true
+  keep_interval_hours: 720 # 30 days
+  purge_interval_minutes: 60 # check hourly
+  exclude_whitelisted: true # never purge whitelisted users
+  purge_by_category:
+    regular: true # purge old posts and reactions
+    ephemeral: true # purge ephemeral events (shouldn't be stored anyway)
+    replaceable: false # keep user profiles and contact lists
+```
+
+## User Synchronization (Experimental)
+
+⚠️ **Work in Progress**: User sync is an experimental feature that may contain bugs and is subject to change.
+
+GRAIN can attempt to automatically sync new users' event history from their preferred relays:
+
+```yaml
+UserSync: # EXPERIMENTAL FEATURE, (structured logging not implemented yet)
+  user_sync: false # disabled by default
+  disable_at_startup: true
+  initial_sync_relays: [
+      "wss://purplepag.es",
+      "wss://nos.lol",
+      "wss://relay.damus.io",
+    ] # These relays are used to initially fetch user Outboxes.
+  kinds: [1, 0, 7] # sync posts, profiles, reactions. If kinds is left empty, no kind is applied to the filter and any event is retrieved
+  limit: 100 # If limit is left empty, no limit will be applied to the filter
+  exclude_non_whitelisted: true # if set to true, only pubkeys on the whitelist will be synced.
+  interval: 360 # in minutes
+```
+
+When enabled and a new user posts to your relay, GRAIN attempts to:
+
+1. Query configured relays for the user's relay metadata (kind 10002)
+2. Fetch their recent events from their preferred "outbox" relays
+3. Store missing events locally
+
+**Known limitations**: This feature is experimental and may cause performance issues or sync failures. Use with caution in production environments.
+
+## Monitoring and Logs
+
+GRAIN provides detailed operational visibility:
+
+```yaml
+logging:
+  level: "info" # Log levels: "debug", "info", "warn", "error"
+  file: "debug" # Log file name
+  max_log_size_mb: 10 # Maximum log file size in MB before trimming
+  structure: false # true = structured JSON logs, false = pretty logs
+  check_interval_min: 10 # Check every 10 minutes
+  backup_count: 2 # Keep 2 backup files (.bak1, .bak2)
+  suppress_components: # Components to suppress INFO/DEBUG logs from (WARN/ERROR still shown)
+    - "util" # Utility functions (file ops, IP detection, metadata loading)
+    - "conn-manager" # Connection management (memory stats, connection counts)
+    - "client" # Client connection details (connects/disconnects, timeouts)
+    - "mongo-query" # Database query operations (can be very verbose)
+    - "event-store" # Event storage operations (insert/update confirmations)
+    - "close-handler" # Subscription close operations (routine cleanup)
+
+# Available components for suppression:
+# - "main"             # Main application lifecycle (startup, shutdown, restarts)
+# - "mongo"            # MongoDB connection and database operations
+# - "mongo-store"      # High-level event storage coordination
+# - "mongo-purge"      # Event purging and cleanup operations
+# - "event-handler"    # Event processing and validation coordination
+# - "req-handler"      # Subscription request handling
+# - "auth-handler"     # Authentication processing (NIP-42)
+# - "config"           # Configuration loading and caching
+# - "event-validation" # Event signature and content validation
+# - "user-sync"        # User synchronization operations
+# - "log"              # Logging system internal operations
+
+# Note: Suppression only affects INFO and DEBUG levels.
+# WARN and ERROR messages are always shown regardless of suppression.
+```
+
+Built-in metrics include:
+
+- Active WebSocket connections and memory usage
+- Event processing rates and error counts
+- Database query performance
+- Cache hit rates for whitelist/blacklist operations
+
+## Authentication
+
+Optional user authentication via NIP-42:
+
+```yaml
+auth:
+  enabled: false
+  relay_url: "wss://your-relay.com"
+```
+
+When enabled, clients must authenticate before publishing events or accessing restricted content.
+
+## Requirements
+
+- **Go** for building from source
+- **MongoDB** for event storage and indexing
+
+## Web Interface
+
+GRAIN includes a basic web interface accessible at `http://your-relay-domain:port`:
+
+- NIP-11 relay metadata served at the root with proper CORS headers for client discovery
+- User login system that displays basic profile information for users who exist on the relay
+- Simple API endpoints for checking lists and relay status
+- Static file serving including favicon and basic assets
+
+The frontend is currently minimal but functional. Future development will expand this into a reference Nostr client implementation with comprehensive relay metrics and management APIs.
+
+## License
 
 This project is Open Source and licensed under the MIT License. See the [LICENSE](license) file for details.
 
-### Acknowledgments
+## Contributing
 
-Special thanks to the Nostr community for their continuous support and contributions.
+I welcome contributions, bug reports, and feature requests via GitHub.
 
-Feel free to reach out with any questions or issues you encounter while using GRAIN.
+**Repository**: <https://github.com/0ceanslim/grain>  
+**Issues**: <https://github.com/0ceanslim/grain/issues>
 
-Open Source and made with 💜 by [OceanSlim](https://njump.me/npub1zmc6qyqdfnllhnzzxr5wpepfpnzcf8q6m3jdveflmgruqvd3qa9sjv7f60)
+---
+
+made with 💦 by [OceanSlim](https://njump.me/npub1zmc6qyqdfnllhnzzxr5wpepfpnzcf8q6m3jdveflmgruqvd3qa9sjv7f60)
+
+_Reliable infrastructure for the decentralized web._
