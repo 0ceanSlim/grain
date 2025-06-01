@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	relay "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // SerializeEvent manually constructs the JSON string for event serialization according to NIP-01
@@ -21,7 +22,7 @@ func SerializeEvent(evt relay.Event) string {
 	// Use Go's standard JSON marshaling first
 	jsonBytes, err := json.Marshal(eventData)
 	if err != nil {
-		utilLog().Error("Failed to serialize event", 
+		log.Util().Error("Failed to serialize event", 
 			"event_id", evt.ID,
 			"pubkey", evt.PubKey,
 			"kind", evt.Kind,
@@ -35,7 +36,7 @@ func SerializeEvent(evt relay.Event) string {
 	
 	// Only log at debug level for very important events or when troubleshooting
 	if evt.Kind == 0 || evt.Kind == 3 {
-		utilLog().Debug("Event serialized", 
+		log.Util().Debug("Event serialized", 
 			"event_id", evt.ID,
 			"kind", evt.Kind,
 			"size_bytes", len(jsonStr))

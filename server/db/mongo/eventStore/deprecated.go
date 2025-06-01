@@ -4,12 +4,13 @@ import (
 	"context"
 
 	"github.com/0ceanslim/grain/server/handlers/response"
-	relay "github.com/0ceanslim/grain/server/types"
+	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // Deprecated rejects kind 2 events since they are deprecated
-func Deprecated(ctx context.Context, evt relay.Event, client relay.ClientInterface) error {
-	esLog().Info("Rejecting deprecated event kind 2", 
+func Deprecated(ctx context.Context, evt nostr.Event, client nostr.ClientInterface) error {
+	log.EventStore().Info("Rejecting deprecated event kind 2", 
 		"event_id", evt.ID, 
 		"pubkey", evt.PubKey)
 	

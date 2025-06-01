@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	config "github.com/0ceanslim/grain/config/types"
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 type SizeLimiter struct {
@@ -14,10 +15,10 @@ type SizeLimiter struct {
 
 func SetSizeLimit(cfg *config.ServerConfig) {
 	sizeLimiter := NewSizeLimiter(cfg.RateLimit.MaxEventSize)
-	configLog().Info("Size limiter configured", "global_max_size", cfg.RateLimit.MaxEventSize)
+	log.Config().Info("Size limiter configured", "global_max_size", cfg.RateLimit.MaxEventSize)
 	for _, kindSizeLimit := range cfg.RateLimit.KindSizeLimits {
 		sizeLimiter.AddKindSizeLimit(kindSizeLimit.Kind, kindSizeLimit.MaxSize)
-		configLog().Info("Kind size limiter added", "kind", kindSizeLimit.Kind, "max_size", kindSizeLimit.MaxSize)
+		log.Config().Info("Kind size limiter added", "kind", kindSizeLimit.Kind, "max_size", kindSizeLimit.MaxSize)
 	}
 	SizeLimit(sizeLimiter)
 }
@@ -59,13 +60,13 @@ func (sl *SizeLimiter) AllowSize(kind int, size int) (bool, string) {
 	defer sl.mu.RUnlock()
 
 	if size > sl.globalMaxSize {
-		configLog().Debug("Event size exceeds global limit", "size", size, "limit", sl.globalMaxSize)
+		log.Config().Debug("Event size exceeds global limit", "size", size, "limit", sl.globalMaxSize)
 		return false, "Global event size limit exceeded"
 	}
 
 	if maxSize, exists := sl.kindSizeLimits[kind]; exists {
 		if size > maxSize {
-			configLog().Debug("Event size exceeds kind limit", "kind", kind, "size", size, "limit", maxSize)
+			log.Config().Debug("Event size exceeds kind limit", "kind", kind, "size", size, "limit", maxSize)
 			return false, "Event size limit exceeded for kind"
 		}
 	}

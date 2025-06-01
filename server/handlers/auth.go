@@ -3,80 +3,74 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/handlers/response"
-	relay "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils"
+	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils/log"
 	"github.com/0ceanslim/grain/server/validation"
 )
-
-// Set the logging component for AUTH handler
-func authLog() *slog.Logger {
-	return utils.GetLogger("auth-handler")
-}
 
 // Mutex to protect auth data
 var authMu sync.Mutex
 
 // Maps to track authentication sessions
 var challenges = make(map[string]string)
-var authSessions = make(map[relay.ClientInterface]bool)
+var authSessions = make(map[nostr.ClientInterface]bool)
 
 // HandleAuth processes the "AUTH" message type as defined in NIP-42
-func HandleAuth(client relay.ClientInterface, message []interface{}) {
+func HandleAuth(client nostr.ClientInterface, message []interface{}) {
 	if !config.GetConfig().Auth.Enabled {
-		authLog().Debug("AUTH is disabled in configuration")
+		log.Auth().Debug("AUTH is disabled in configuration")
 		response.SendNotice(client, "", "AUTH is disabled")
 		return
 	}
 
 	if len(message) != 2 {
-		authLog().Debug("Invalid AUTH message format")
+		log.Auth().Debug("Invalid AUTH message format")
 		response.SendNotice(client, "", "Invalid AUTH message format")
 		return
 	}
 
 	authData, ok := message[1].(map[string]interface{})
 	if !ok {
-		authLog().Debug("Invalid auth data format")
+		log.Auth().Debug("Invalid auth data format")
 		response.SendNotice(client, "", "Invalid auth data format")
 		return
 	}
 
 	authBytes, err := json.Marshal(authData)
 	if err != nil {
-		authLog().Error("Error marshaling auth data", "error", err)
+		log.Auth().Error("Error marshaling auth data", "error", err)
 		response.SendNotice(client, "", "Error marshaling auth data")
 		return
 	}
 
-	var authEvent relay.Event
+	var authEvent nostr.Event
 	err = json.Unmarshal(authBytes, &authEvent)
 	if err != nil {
-		authLog().Error("Error unmarshaling auth data", "error", err)
+		log.Auth().Error("Error unmarshaling auth data", "error", err)
 		response.SendNotice(client, "", "Error unmarshaling auth data")
 		return
 	}
 
 	err = VerifyAuthEvent(authEvent)
 	if err != nil {
-		authLog().Info("Auth verification failed", "event_id", authEvent.ID, "pubkey", authEvent.PubKey, "error", err)
+		log.Auth().Info("Auth verification failed", "event_id", authEvent.ID, "pubkey", authEvent.PubKey, "error", err)
 		response.SendOK(client, authEvent.ID, false, err.Error())
 		return
 	}
 
 	// Mark the session as authenticated after successful verification
 	SetAuthenticated(client)
-	authLog().Info("Authentication successful", "pubkey", authEvent.PubKey)
+	log.Auth().Info("Authentication successful", "pubkey", authEvent.PubKey)
 	response.SendOK(client, authEvent.ID, true, "")
 }
 
 // VerifyAuthEvent verifies the authentication event according to NIP-42
-func VerifyAuthEvent(evt relay.Event) error {
+func VerifyAuthEvent(evt nostr.Event) error {
 	if evt.Kind != 22242 {
 		return errors.New("invalid: event kind must be 22242")
 	}
@@ -132,19 +126,19 @@ func GetChallengeForConnection(pubKey string) string {
 func SetChallengeForConnection(pubKey, challenge string) {
 	authMu.Lock()
 	defer authMu.Unlock()
-	authLog().Debug("Setting challenge for connection", "pubkey", pubKey)
+	log.Auth().Debug("Setting challenge for connection", "pubkey", pubKey)
 	challenges[pubKey] = challenge
 }
 
 // SetAuthenticated marks a connection as authenticated
-func SetAuthenticated(client relay.ClientInterface) {
+func SetAuthenticated(client nostr.ClientInterface) {
 	authMu.Lock()
 	defer authMu.Unlock()
 	authSessions[client] = true
 }
 
 // IsAuthenticated checks if a connection is authenticated
-func IsAuthenticated(client relay.ClientInterface) bool {
+func IsAuthenticated(client nostr.ClientInterface) bool {
 	authMu.Lock()
 	defer authMu.Unlock()
 	return authSessions[client]

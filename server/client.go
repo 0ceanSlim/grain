@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -17,15 +16,10 @@ import (
 	"github.com/0ceanslim/grain/server/handlers"
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/server/utils/log"
 
 	"golang.org/x/net/websocket"
 )
-
-// Set the logging component for client connections
-func clientLog() *slog.Logger {
-	return utils.GetLogger("client")
-}
-
 
 // Client implements ClientInterface
 type Client struct {
@@ -84,7 +78,7 @@ func PrintStats() {
 		// Get memory statistics from connection manager
 		memStats := connManager.GetMemoryStats()
 		
-		clientLog().Info("Connection and message statistics", 
+		log.Client().Info("Connection and message statistics", 
 			"messages_sent", sent,
 			"active_connections", currentConnections,
 			"memory_used_pct", memStats["memory_used_percent"],
@@ -134,7 +128,7 @@ func ClientHandler(ws *websocket.Conn) {
 	// Register with connection manager
 	connManager.RegisterConnection(client)
 
-	clientLog().Info("New connection established", 
+	log.Client().Info("New connection established", 
 		"client_id", client.id,
 		"ip", ip, 
 		"user_agent", userAgent,
@@ -173,7 +167,7 @@ func (c *Client) monitorIdleTimeout() {
 			c.mu.RUnlock()
 
 			if idle > c.idleTimeout {
-				clientLog().Info("Closing idle connection", 
+				log.Client().Info("Closing idle connection", 
 					"client_id", c.id,
 					"idle_duration_sec", int(idle.Seconds()),
 					"idle_timeout_sec", int(c.idleTimeout.Seconds()))
@@ -210,7 +204,7 @@ func (c *Client) SendMessage(msg interface{}) {
 
 	jsonMsg, err := json.Marshal(msg)
 	if err != nil {
-		clientLog().Error("Failed to marshal message", 
+		log.Client().Error("Failed to marshal message", 
 			"client_id", c.id,
 			"error", err)
 		return
@@ -232,7 +226,7 @@ func (c *Client) SendMessage(msg interface{}) {
 		if err := c.ws.SetWriteDeadline(deadline); err != nil {
 			// Don't log error if connection is already closed
 			if !isConnectionClosed(err) {
-				clientLog().Error("Failed to set write deadline", 
+				log.Client().Error("Failed to set write deadline", 
 					"client_id", c.id,
 					"timeout_sec", int(c.writeTimeout.Seconds()),
 					"error", err)
@@ -258,11 +252,11 @@ func (c *Client) SendMessage(msg interface{}) {
 		// Only log if it's not a connection closed error
 		if !isConnectionClosed(err) {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				clientLog().Warn("Write timeout sending message",
+				log.Client().Warn("Write timeout sending message",
 					"client_id", c.id,
 					"timeout_sec", int(c.writeTimeout.Seconds()))
 			} else {
-				clientLog().Warn("Failed to send message",
+				log.Client().Warn("Failed to send message",
 					"error", err,
 					"client_id", c.id,
 					"error_type", fmt.Sprintf("%T", err))
@@ -372,7 +366,7 @@ func (c *Client) CloseClient() {
 		c.ws.Close()
 	}
 
-	clientLog().Debug("Client connection closed and cleaned up", 
+	log.Client().Debug("Client connection closed and cleaned up", 
 		"client_id", c.id,
 		"remaining_connections", currentConnections)
 }
@@ -398,7 +392,7 @@ func clientReader(client *Client) {
 		// Close the connection if not already closed
 		ws.Close()
 		
-		clientLog().Debug("Client reader exited and connection cleaned up", 
+		log.Client().Debug("Client reader exited and connection cleaned up", 
 			"client_id", client.id,
 			"remaining_connections", currentConnections)
 	}()
@@ -407,7 +401,7 @@ func clientReader(client *Client) {
 		// Check if context is cancelled
 		select {
 		case <-client.ctx.Done():
-			clientLog().Debug("Client reader stopping due to context cancellation", 
+			log.Client().Debug("Client reader stopping due to context cancellation", 
 				"client_id", client.id)
 			return
 		default:
@@ -418,7 +412,7 @@ func clientReader(client *Client) {
 			deadline := time.Now().Add(client.readTimeout)
 			if err := ws.SetReadDeadline(deadline); err != nil {
 				if !isConnectionClosed(err) {
-					clientLog().Error("Failed to set read deadline", 
+					log.Client().Error("Failed to set read deadline", 
 						"client_id", client.id,
 						"timeout_sec", int(client.readTimeout.Seconds()),
 						"error", err)
@@ -443,7 +437,7 @@ func clientReader(client *Client) {
 		rateLimiter := config.GetRateLimiter()
 		if rateLimiter != nil {
 			if allowed, msg := rateLimiter.AllowWs(); !allowed {
-				clientLog().Warn("WebSocket rate limit exceeded", 
+				log.Client().Warn("WebSocket rate limit exceeded", 
 					"client_id", client.id,
 					"reason", msg)
 				
@@ -468,13 +462,13 @@ func clientReader(client *Client) {
 			}
 			
 			if client.messageBuffer.Len() > maxEventSize {
-				clientLog().Warn("Message buffer exceeds max event size, closing connection", 
+				log.Client().Warn("Message buffer exceeds max event size, closing connection", 
 					"client_id", client.id,
 					"buffer_size", client.messageBuffer.Len(),
 					"max_event_size", maxEventSize)
 				return
 			}
-			clientLog().Debug("Waiting for full JSON message", 
+			log.Client().Debug("Waiting for full JSON message", 
 				"client_id", client.id,
 				"buffer_size", len(fullMessage),
 				"max_allowed", maxEventSize)
@@ -486,7 +480,7 @@ func clientReader(client *Client) {
 		var message []interface{}
 		err = json.Unmarshal([]byte(fullMessage), &message)
 		if err != nil {
-			clientLog().Error("JSON parse error", 
+			log.Client().Error("JSON parse error", 
 				"error", err, 
 				"client_id", client.id,
 				"message_length", len(fullMessage))
@@ -494,14 +488,14 @@ func clientReader(client *Client) {
 		}
 
 		if len(message) == 0 {
-			clientLog().Warn("Empty message received", 
+			log.Client().Warn("Empty message received", 
 				"client_id", client.id)
 			continue
 		}
 
 		messageType, ok := message[0].(string)
 		if !ok {
-			clientLog().Warn("Invalid message type", 
+			log.Client().Warn("Invalid message type", 
 				"client_id", client.id,
 				"message_type", fmt.Sprintf("%T", message[0]))
 			continue
@@ -510,7 +504,7 @@ func clientReader(client *Client) {
 		// Process message based on type
 		switch messageType {
 		case "REQ":
-			clientLog().Debug("Processing REQ message", 
+			log.Client().Debug("Processing REQ message", 
 				"client_id", client.id,
 				"message_parts", len(message))
 			handlers.HandleReq(client, message)
@@ -521,26 +515,26 @@ func clientReader(client *Client) {
 					subID = id
 				}
 			}
-			clientLog().Debug("Processing CLOSE message", 
+			log.Client().Debug("Processing CLOSE message", 
 				"client_id", client.id,
 				"sub_id", subID)
 			handlers.HandleClose(client, message)
 		case "AUTH":
 			if config.GetConfig().Auth.Enabled {
-				clientLog().Debug("Processing AUTH message", 
+				log.Client().Debug("Processing AUTH message", 
 					"client_id", client.id)
 				handlers.HandleAuth(client, message)
 			} else {
-				clientLog().Warn("Received AUTH message, but AUTH is disabled", 
+				log.Client().Warn("Received AUTH message, but AUTH is disabled", 
 					"client_id", client.id)
 			}
 		case "EVENT":
-			clientLog().Debug("Processing EVENT message", 
+			log.Client().Debug("Processing EVENT message", 
 				"client_id", client.id,
 				"message_parts", len(message))
 			handlers.HandleEvent(client, message)
 		default:
-			clientLog().Warn("Unknown message type", 
+			log.Client().Warn("Unknown message type", 
 				"type", messageType, 
 				"client_id", client.id,
 				"message_preview", func() string {
@@ -559,17 +553,17 @@ func handleReadError(err error, client *Client) {
 	
 	// Determine error type and log appropriately
 	if errors.Is(err, io.EOF) {
-		clientLog().Info("Client disconnected normally", 
+		log.Client().Info("Client disconnected normally", 
 			"client_id", clientID)
 	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-		clientLog().Info("Client read timeout", 
+		log.Client().Info("Client read timeout", 
 			"client_id", clientID,
 			"timeout_sec", int(client.readTimeout.Seconds()))
 	} else if isConnectionClosed(err) {
-		clientLog().Debug("Connection closed during read", 
+		log.Client().Debug("Connection closed during read", 
 			"client_id", clientID)
 	} else {
-		clientLog().Error("WebSocket read error", 
+		log.Client().Error("WebSocket read error", 
 			"error", err, 
 			"client_id", clientID,
 			"error_type", fmt.Sprintf("%T", err))

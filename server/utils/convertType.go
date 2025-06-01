@@ -3,6 +3,8 @@ package utils
 import (
 	"fmt"
 	"time"
+
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 func ToStringArray(i interface{}) []string {
@@ -87,7 +89,7 @@ func ToTime(data interface{}) *time.Time {
 	// Ensure data is a float64 which MongoDB uses for numbers
 	timestamp, ok := data.(float64)
 	if !ok {
-		utilLog().Warn("Invalid timestamp format", "value_type", fmt.Sprintf("%T", data))
+		log.Util().Warn("Invalid timestamp format", "value_type", fmt.Sprintf("%T", data))
 		return nil
 	}
 	t := time.Unix(int64(timestamp), 0).UTC()

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,12 +19,11 @@ import (
 	"github.com/0ceanslim/grain/server"
 	"github.com/0ceanslim/grain/server/db/mongo"
 	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/server/utils/log"
 	"github.com/0ceanslim/grain/server/utils/userSync"
 
 	"golang.org/x/net/websocket"
 )
-
-var log *slog.Logger
 
 func main() {
 	// Initial logger setup
@@ -35,8 +33,7 @@ func main() {
 		os.Exit(1) // Exit if initial config load fails
 	}
 	// Initialize the logging system with all component loggers
-	utils.InitializeLoggers(cfg)
-	log = utils.GetLogger("main")
+	log.InitializeLoggers(cfg)
 
 	utils.EnsureFileExists("config.yml", "www/static/examples/config.example.yml")
 	utils.EnsureFileExists("whitelist.yml", "www/static/examples/whitelist.example.yml")
@@ -58,27 +55,26 @@ func main() {
 
 		cfg, err := config.LoadConfig("config.yml")
 		if err != nil {
-			log.Error("Failed to load config", "error", err, "file", "config.yml")
+			log.Main().Error("Failed to load config", "error", err, "file", "config.yml")
 		}
 
 		_, err = config.LoadWhitelistConfig("whitelist.yml")
 		if err != nil {
-			log.Error("Failed to load whitelist config", "error", err, "file", "whitelist.yml")
+			log.Main().Error("Failed to load whitelist config", "error", err, "file", "whitelist.yml")
 		}
 
 		_, err = config.LoadBlacklistConfig("blacklist.yml")
 		if err != nil {
-			log.Error("Failed to load blacklist config", "error", err, "file", "blacklist.yml")
+			log.Main().Error("Failed to load blacklist config", "error", err, "file", "blacklist.yml")
 		}
 
 		client, err := mongo.InitDB(cfg)
 		if err != nil {
-			log.Error("Failed to initialize database", "error", err, "uri", cfg.MongoDB.URI)
+			log.Main().Error("Failed to initialize database", "error", err, "uri", cfg.MongoDB.URI)
 		}
 
 		// Re-initialize logger with new configuration
-		utils.InitializeLoggers(cfg)
-		log = utils.GetLogger("main") // Update global logger
+		log.InitializeLoggers(cfg)
 		config.SetResourceLimit(&cfg.ResourceLimits)
 		config.SetRateLimit(cfg)
 		config.SetSizeLimit(cfg)
@@ -86,7 +82,7 @@ func main() {
 
 		err = utils.LoadRelayMetadataJSON()
 		if err != nil {
-			log.Error("Failed to load relay metadata", "error", err, "file", "relay_metadata.json")
+			log.Main().Error("Failed to load relay metadata", "error", err, "file", "relay_metadata.json")
 		}
 
 		mux := initApp()
@@ -104,7 +100,7 @@ func main() {
 		// Monitor for server restart or shutdown signals.
 		select {
 		case <-restartChan:
-			log.Info("Restarting server...")
+			log.Main().Info("Restarting server...")
 			config.ResetConfig()
 			config.ResetWhitelistConfig()
 			config.ResetBlacklistConfig()
@@ -112,7 +108,7 @@ func main() {
 			wg.Wait()
 			time.Sleep(3 * time.Second)
 		case <-signalChan:
-			log.Info("Shutting down server...")
+			log.Main().Info("Shutting down server...")
 			server.Close()
 			mongo.DisconnectDB(client)
 			wg.Wait()
@@ -172,10 +168,10 @@ func initRelay(config *cfgType.ServerConfig, handler http.Handler, wg *sync.Wait
 	go func() {
 		defer wg.Done() // Notify that the server goroutine is done
 		fmt.Printf("Server is running on http://localhost%s\n", config.Server.Port)
-		log.Info(fmt.Sprintf("Server is running on http://localhost%s", strings.TrimSpace(config.Server.Port)))
+		log.Main().Info(fmt.Sprintf("Server is running on http://localhost%s", strings.TrimSpace(config.Server.Port)))
 		err := server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
-			log.Error(err.Error())
+			log.Main().Error(err.Error())
 		}
 	}()
 

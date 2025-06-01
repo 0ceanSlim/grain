@@ -4,14 +4,15 @@ import (
 	"context"
 
 	"github.com/0ceanslim/grain/server/handlers/response"
-	relay "github.com/0ceanslim/grain/server/types"
+	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils/log"
 
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // Unknown rejects events with unknown kinds
-func Unknown(ctx context.Context, evt relay.Event, collection *mongo.Collection, client relay.ClientInterface) error {
-	esLog().Warn("Rejecting unknown event kind", 
+func Unknown(ctx context.Context, evt nostr.Event, collection *mongo.Collection, client nostr.ClientInterface) error {
+	log.EventStore().Warn("Rejecting unknown event kind", 
 		"event_id", evt.ID, 
 		"kind", evt.Kind, 
 		"pubkey", evt.PubKey)

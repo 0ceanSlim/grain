@@ -4,20 +4,21 @@ import (
 	"os"
 	"time"
 
+	"github.com/0ceanslim/grain/server/utils/log"
 	"gopkg.in/fsnotify.v1"
 )
 
 func WatchConfigFile(filePath string, restartChan chan<- struct{}) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		configLog().Error("Error creating file watcher", "error", err)
+		log.Config().Error("Error creating file watcher", "error", err)
 		os.Exit(1) // Manually exit after logging the error
 	}
 	defer watcher.Close()
 
 	err = watcher.Add(filePath)
 	if err != nil {
-		configLog().Error("Failed to add file to watcher", "file", filePath, "error", err)
+		log.Config().Error("Failed to add file to watcher", "file", filePath, "error", err)
 		os.Exit(1) // Manually exit after logging the error
 	}
 
@@ -31,12 +32,12 @@ func WatchConfigFile(filePath string, restartChan chan<- struct{}) {
 				return
 			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				configLog().Info("Config file modified", "file", filePath)
+				log.Config().Info("Config file modified", "file", filePath)
 				if debounceTimer != nil {
 					debounceTimer.Stop() // Cancel the previous timer
 				}
 				debounceTimer = time.AfterFunc(debounceDuration, func() {
-					configLog().Info("Config file change debounced, triggering restart", "file", filePath)
+					log.Config().Info("Config file change debounced, triggering restart", "file", filePath)
 					select {
 					case restartChan <- struct{}{}:
 					default:
@@ -48,7 +49,7 @@ func WatchConfigFile(filePath string, restartChan chan<- struct{}) {
 			if !ok {
 				return
 			}
-			configLog().Error("Error watching file", "error", err)
+			log.Config().Error("Error watching file", "error", err)
 		}
 	}
 }

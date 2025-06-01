@@ -5,16 +5,17 @@ import (
 	"fmt"
 
 	"github.com/0ceanslim/grain/server/handlers/response"
-	relay "github.com/0ceanslim/grain/server/types"
+	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils/log"
 
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // Regular stores regular events in the database
-func Regular(ctx context.Context, evt relay.Event, collection *mongo.Collection, client relay.ClientInterface) error {
+func Regular(ctx context.Context, evt nostr.Event, collection *mongo.Collection, client nostr.ClientInterface) error {
 	result, err := collection.InsertOne(ctx, evt)
 	if err != nil {
-		esLog().Error("Failed to insert regular event", 
+		log.EventStore().Error("Failed to insert regular event", 
 			"event_id", evt.ID, 
 			"kind", evt.Kind, 
 			"pubkey", evt.PubKey, 
@@ -23,7 +24,7 @@ func Regular(ctx context.Context, evt relay.Event, collection *mongo.Collection,
 		return fmt.Errorf("error inserting event kind %d into MongoDB: %v", evt.Kind, err)
 	}
 
-	esLog().Info("Inserted regular event", 
+	log.EventStore().Info("Inserted regular event", 
 		"event_id", evt.ID, 
 		"kind", evt.Kind, 
 		"pubkey", evt.PubKey, 

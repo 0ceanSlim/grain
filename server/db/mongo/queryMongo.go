@@ -3,31 +3,25 @@ package mongo
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/0ceanslim/grain/config"
-	relay "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils"
+	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils/log"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Set the logging component for MongoDB query operations
-func queryLog() *slog.Logger {
-	return utils.GetLogger("mongo-query")
-}
-
 // QueryEvents queries events from the MongoDB collection(s) based on filters
-func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName string) ([]relay.Event, error) {
+func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName string) ([]nostr.Event, error) {
 	var combinedFilters []bson.M
 
-	// Build MongoDB filters for each relay.Filter
+	// Build MongoDB filters for each nostr.Filter
 	for _, filter := range filters {
 		filterBson := bson.M{}
 
@@ -110,31 +104,31 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 			// Use the smaller of explicit limit and implicit limit
 			if *lowestExplicitLimit < implicitLimit {
 				effectiveLimit = int64(*lowestExplicitLimit)
-				queryLog().Debug("Using explicit limit (under implicit cap)", 
+				log.MongoQuery().Debug("Using explicit limit (under implicit cap)", 
 					"explicit_limit", *lowestExplicitLimit,
 					"implicit_cap", implicitLimit)
 			} else {
 				effectiveLimit = int64(implicitLimit)
-				queryLog().Debug("Capping explicit limit to implicit maximum", 
+				log.MongoQuery().Debug("Capping explicit limit to implicit maximum", 
 					"requested_limit", *lowestExplicitLimit,
 					"applied_limit", implicitLimit)
 			}
 		} else {
 			// No explicit limit, use implicit limit
 			effectiveLimit = int64(implicitLimit)
-			queryLog().Debug("Using implicit limit (no explicit limit provided)", 
+			log.MongoQuery().Debug("Using implicit limit (no explicit limit provided)", 
 				"limit", implicitLimit)
 		}
 	} else {
 		// No implicit limit configured
 		if lowestExplicitLimit != nil {
 			effectiveLimit = int64(*lowestExplicitLimit)
-			queryLog().Debug("Using explicit limit (no implicit cap configured)", 
+			log.MongoQuery().Debug("Using explicit limit (no implicit cap configured)", 
 				"limit", *lowestExplicitLimit)
 		} else {
 			// No limits at all - use a sensible default
 			effectiveLimit = 1000
-			queryLog().Warn("No limits configured, using default", "default_limit", 1000)
+			log.MongoQuery().Warn("No limits configured, using default", "default_limit", 1000)
 		}
 	}
 
@@ -156,7 +150,7 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 		// No kinds specified - get all event collections for cross-collection query
 		allCollections, err := client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
 		if err != nil {
-			queryLog().Error("Failed to list collections", "error", err)
+			log.MongoQuery().Error("Failed to list collections", "error", err)
 			return nil, fmt.Errorf("error listing collections: %v", err)
 		}
 		
@@ -180,13 +174,13 @@ func QueryEvents(filters []relay.Filter, client *mongo.Client, databaseName stri
 }
 
 // queryAcrossAllCollections efficiently queries the most recent events across all collections
-func queryAcrossAllCollections(client *mongo.Client, databaseName string, collections []string, query bson.M, limit int64) ([]relay.Event, error) {
-	queryLog().Debug("Starting unified cross-collection query with $unionWith", 
+func queryAcrossAllCollections(client *mongo.Client, databaseName string, collections []string, query bson.M, limit int64) ([]nostr.Event, error) {
+	log.MongoQuery().Debug("Starting unified cross-collection query with $unionWith", 
 		"collection_count", len(collections), 
 		"limit", limit)
 
 	if len(collections) == 0 {
-		return []relay.Event{}, nil
+		return []nostr.Event{}, nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -218,7 +212,7 @@ func queryAcrossAllCollections(client *mongo.Client, databaseName string, collec
 		bson.M{"$limit": limit},
 	)
 
-	queryLog().Debug("Executing unified aggregation", 
+	log.MongoQuery().Debug("Executing unified aggregation", 
 		"pipeline_stages", len(pipeline),
 		"collections_to_union", len(collections),
 		"base_collection", collections[0])
@@ -227,21 +221,21 @@ func queryAcrossAllCollections(client *mongo.Client, databaseName string, collec
 	collection := client.Database(databaseName).Collection(collections[0])
 	cursor, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		queryLog().Error("Unified aggregation failed", 
+		log.MongoQuery().Error("Unified aggregation failed", 
 			"error", err,
 			"collections", len(collections))
 		return nil, fmt.Errorf("unified cross-collection query failed: %v", err)
 	}
 	defer cursor.Close(ctx)
 
-	var events []relay.Event
+	var events []nostr.Event
 	if err := cursor.All(ctx, &events); err != nil {
-		queryLog().Error("Failed to decode unified results", "error", err)
+		log.MongoQuery().Error("Failed to decode unified results", "error", err)
 		return nil, fmt.Errorf("failed to decode unified query results: %v", err)
 	}
 
 	duration := time.Since(start)
-	queryLog().Info("Unified cross-collection query completed", 
+	log.MongoQuery().Info("Unified cross-collection query completed", 
 		"duration_ms", duration.Milliseconds(),
 		"collections_unified", len(collections),
 		"results", len(events),
@@ -251,12 +245,12 @@ func queryAcrossAllCollections(client *mongo.Client, databaseName string, collec
 }
 
 // querySpecificKinds queries specific kind collections with limit per kind
-func querySpecificKinds(client *mongo.Client, databaseName string, collections []string, query bson.M, limit int64) ([]relay.Event, error) {
-	queryLog().Debug("Querying specific kinds", 
+func querySpecificKinds(client *mongo.Client, databaseName string, collections []string, query bson.M, limit int64) ([]nostr.Event, error) {
+	log.MongoQuery().Debug("Querying specific kinds", 
 		"collection_count", len(collections), 
 		"limit_per_kind", limit)
 
-	var allResults []relay.Event
+	var allResults []nostr.Event
 	
 	for _, collectionName := range collections {
 		collection := client.Database(databaseName).Collection(collectionName)
@@ -274,13 +268,13 @@ func querySpecificKinds(client *mongo.Client, databaseName string, collections [
 		
 		cursor, err := collection.Find(context.TODO(), query, opts)
 		if err != nil {
-			queryLog().Error("Error querying collection", "collection", collectionName, "error", err)
+			log.MongoQuery().Error("Error querying collection", "collection", collectionName, "error", err)
 			continue
 		}
 		
-		var collectionEvents []relay.Event
+		var collectionEvents []nostr.Event
 		if err := cursor.All(context.TODO(), &collectionEvents); err != nil {
-			queryLog().Error("Error decoding events", "collection", collectionName, "error", err)
+			log.MongoQuery().Error("Error decoding events", "collection", collectionName, "error", err)
 			cursor.Close(context.TODO())
 			continue
 		}
@@ -292,7 +286,7 @@ func querySpecificKinds(client *mongo.Client, databaseName string, collections [
 		kindStr := strings.TrimPrefix(collectionName, "event-kind")
 		kind, _ := strconv.Atoi(kindStr)
 		
-		queryLog().Debug("Kind collection query complete", 
+		log.MongoQuery().Debug("Kind collection query complete", 
 			"collection", collectionName,
 			"kind", kind,
 			"events_found", len(collectionEvents),
@@ -307,7 +301,7 @@ func querySpecificKinds(client *mongo.Client, databaseName string, collections [
 		return allResults[i].ID < allResults[j].ID
 	})
 
-	queryLog().Info("Specific kinds query completed", 
+	log.MongoQuery().Info("Specific kinds query completed", 
 		"kinds_queried", len(collections),
 		"total_events", len(allResults),
 		"limit_per_kind", limit)

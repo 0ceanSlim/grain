@@ -1,20 +1,14 @@
 package config
 
 import (
-	"log/slog"
 	"os"
 	"sync"
 
 	configTypes "github.com/0ceanslim/grain/config/types"
-	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/server/utils/log"
 
 	"gopkg.in/yaml.v3"
 )
-
-// Use a function to get the logger instead of a global variable
-func configLog() *slog.Logger {
-	return utils.GetLogger("config")
-}
 
 var (
 	cfg           *configTypes.ServerConfig
@@ -45,7 +39,7 @@ func GetBlacklistConfig() *configTypes.BlacklistConfig {
 func ResetConfig() {
 	mu.Lock()
 	defer mu.Unlock()
-	configLog().Debug("Resetting server configuration")
+	log.Config().Debug("Resetting server configuration")
 	cfg = nil
 	once = sync.Once{}
 }
@@ -54,7 +48,7 @@ func ResetConfig() {
 func ResetWhitelistConfig() {
 	mu.Lock()
 	defer mu.Unlock()
-	configLog().Debug("Resetting whitelist configuration")
+	log.Config().Debug("Resetting whitelist configuration")
 	whitelistCfg = nil
 	whitelistOnce = sync.Once{}
 }
@@ -63,7 +57,7 @@ func ResetWhitelistConfig() {
 func ResetBlacklistConfig() {
 	mu.Lock()
 	defer mu.Unlock()
-	configLog().Debug("Resetting blacklist configuration")
+	log.Config().Debug("Resetting blacklist configuration")
 	blacklistCfg = nil
 	blacklistOnce = sync.Once{}
 }
@@ -83,7 +77,7 @@ func LoadConfig(filename string) (*configTypes.ServerConfig, error) {
 
 	once.Do(func() {
 		cfg = &config
-		configLog().Info("Server configuration loaded", "file", filename)
+		log.Config().Info("Server configuration loaded", "file", filename)
 	})
 
 	return cfg, nil
@@ -104,7 +98,7 @@ func LoadWhitelistConfig(filename string) (*configTypes.WhitelistConfig, error) 
 
 	whitelistOnce.Do(func() {
 		whitelistCfg = &config
-		configLog().Info("Whitelist configuration loaded", "file", filename)
+		log.Config().Info("Whitelist configuration loaded", "file", filename)
 	})
 
 	return whitelistCfg, nil
@@ -125,7 +119,7 @@ func LoadBlacklistConfig(filename string) (*configTypes.BlacklistConfig, error) 
 
 	blacklistOnce.Do(func() {
 		blacklistCfg = &config
-		configLog().Info("Blacklist configuration loaded", "file", filename)
+		log.Config().Info("Blacklist configuration loaded", "file", filename)
 	})
 
 	return blacklistCfg, nil

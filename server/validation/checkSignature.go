@@ -6,6 +6,7 @@ import (
 
 	relay "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/server/utils/log"
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
@@ -15,7 +16,7 @@ func CheckSignature(evt relay.Event) bool {
 	// Serialize event correctly
 	serializedEvent := utils.SerializeEvent(evt)
 	if serializedEvent == "" {
-		validationLog().Error("Failed to serialize event", 
+		log.Validation().Error("Failed to serialize event", 
 			"event_id", evt.ID, 
 			"pubkey", evt.PubKey)
 		return false
@@ -27,7 +28,7 @@ func CheckSignature(evt relay.Event) bool {
 
 	// Validate event ID
 	if eventID != evt.ID {
-		validationLog().Error("Invalid event ID", 
+		log.Validation().Error("Invalid event ID", 
 			"expected", eventID, 
 			"actual", evt.ID, 
 			"pubkey", evt.PubKey,
@@ -38,7 +39,7 @@ func CheckSignature(evt relay.Event) bool {
 	// Decode signature
 	sigBytes, err := hex.DecodeString(evt.Sig)
 	if err != nil || len(sigBytes) != 64 {
-		validationLog().Error("Invalid signature format", 
+		log.Validation().Error("Invalid signature format", 
 			"event_id", evt.ID, 
 			"pubkey", evt.PubKey, 
 			"sig_length", len(evt.Sig),
@@ -49,7 +50,7 @@ func CheckSignature(evt relay.Event) bool {
 	// Parse signature
 	sig, err := schnorr.ParseSignature(sigBytes)
 	if err != nil {
-		validationLog().Error("Failed to parse signature", 
+		log.Validation().Error("Failed to parse signature", 
 			"event_id", evt.ID, 
 			"pubkey", evt.PubKey, 
 			"error", err)
@@ -59,7 +60,7 @@ func CheckSignature(evt relay.Event) bool {
 	// Decode public key
 	pubKeyBytes, err := hex.DecodeString(evt.PubKey)
 	if err != nil || len(pubKeyBytes) != 32 {
-		validationLog().Error("Invalid public key", 
+		log.Validation().Error("Invalid public key", 
 			"event_id", evt.ID, 
 			"pubkey", evt.PubKey, 
 			"pubkey_length", len(pubKeyBytes),
@@ -70,7 +71,7 @@ func CheckSignature(evt relay.Event) bool {
 	// Parse X-only pubkey
 	pubKey, err := schnorr.ParsePubKey(pubKeyBytes)
 	if err != nil {
-		validationLog().Error("Failed to parse public key", 
+		log.Validation().Error("Failed to parse public key", 
 			"event_id", evt.ID, 
 			"pubkey", evt.PubKey, 
 			"error", err)
@@ -79,7 +80,7 @@ func CheckSignature(evt relay.Event) bool {
 
 	// Verify signature
 	if !sig.Verify(hash[:], pubKey) {
-		validationLog().Error("Signature verification failed", 
+		log.Validation().Error("Signature verification failed", 
 			"event_id", evt.ID, 
 			"pubkey", evt.PubKey,
 			"kind", evt.Kind)
@@ -88,7 +89,7 @@ func CheckSignature(evt relay.Event) bool {
 
 	// Debug log for successful verification
 	// Commented out to avoid excessive logging for normal operations
-	// validationLog().Debug("Signature verified successfully", "event_id", evt.ID, "pubkey", evt.PubKey)
+	// log.Validation().Debug("Signature verified successfully", "event_id", evt.ID, "pubkey", evt.PubKey)
 	
 	return true
 }

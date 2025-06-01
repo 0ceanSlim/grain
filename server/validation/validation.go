@@ -1,11 +1,10 @@
 package validation
 
 import (
-	"log/slog"
-
 	"github.com/0ceanslim/grain/config"
 	relay "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // Result represents the outcome of a validation check
@@ -14,16 +13,11 @@ type Result struct {
 	Message string
 }
 
-// Set the logging component for event validation
-func validationLog() *slog.Logger {
-	return utils.GetLogger("event-validation")
-}
-
 // CheckBlacklistAndWhitelistCached uses cached pubkey lists for validation
 func CheckBlacklistAndWhitelistCached(evt relay.Event) Result {
 	// Check blacklist using cache (but still check content for word-based bans)
 	if blacklisted, msg := config.CheckBlacklistCached(evt.PubKey, evt.Content); blacklisted {
-		validationLog().Info("Event rejected by cached blacklist", 
+		log.Validation().Info("Event rejected by cached blacklist", 
 			"event_id", evt.ID,
 			"pubkey", evt.PubKey)
 		return Result{Valid: false, Message: msg}
@@ -31,7 +25,7 @@ func CheckBlacklistAndWhitelistCached(evt relay.Event) Result {
 
 	// Check whitelist using cache
 	if isWhitelisted, msg := config.CheckWhitelistCached(evt); !isWhitelisted {
-		validationLog().Info("Event rejected by cached whitelist", 
+		log.Validation().Info("Event rejected by cached whitelist", 
 			"event_id", evt.ID,
 			"pubkey", evt.PubKey)
 		return Result{Valid: false, Message: msg}
@@ -47,7 +41,7 @@ func CheckRateAndSizeLimits(evt relay.Event, eventSize int) Result {
 	category := utils.DetermineEventCategory(evt.Kind)
 
 	if allowed, msg := rateLimiter.AllowEvent(evt.Kind, category); !allowed {
-		validationLog().Info("Event rejected by rate limiter", 
+		log.Validation().Info("Event rejected by rate limiter", 
 			"event_id", evt.ID,
 			"kind", evt.Kind,
 			"category", category)
@@ -55,7 +49,7 @@ func CheckRateAndSizeLimits(evt relay.Event, eventSize int) Result {
 	}
 
 	if allowed, msg := sizeLimiter.AllowSize(evt.Kind, eventSize); !allowed {
-		validationLog().Info("Event rejected by size limiter", 
+		log.Validation().Info("Event rejected by size limiter", 
 			"event_id", evt.ID,
 			"kind", evt.Kind,
 			"size", eventSize)

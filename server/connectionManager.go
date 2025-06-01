@@ -1,12 +1,11 @@
 package server
 
 import (
-	"log/slog"
 	"runtime"
 	"sync"
 	"time"
 
-	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // ConnectionManager tracks connections and memory usage
@@ -22,11 +21,6 @@ var connManager = &ConnectionManager{
 	connections:         make(map[*Client]time.Time),
 	memoryThreshold:     0.85, // 85% memory threshold
 	estimatedMemPerConn: 2 * 1024 * 1024, // Start with 2MB estimate per connection
-}
-
-// For connection manager logging
-func cmLog() *slog.Logger {
-	return utils.GetLogger("conn-manager")
 }
 
 // RegisterConnection adds a connection to the manager
@@ -59,7 +53,7 @@ func (cm *ConnectionManager) isMemoryThresholdExceeded() bool {
 	memoryUsed := float64(memStats.Alloc) / float64(memStats.Sys)
 	
 	if memoryUsed > cm.memoryThreshold {
-		cmLog().Warn("Memory threshold exceeded", 
+		log.ConnMgr().Warn("Memory threshold exceeded", 
 			"memory_used_pct", memoryUsed*100,
 			"threshold_pct", cm.memoryThreshold*100,
 			"connections", len(cm.connections))
@@ -83,7 +77,7 @@ func (cm *ConnectionManager) dropOldestConnection() {
 	}
 	
 	if oldestClient != nil {
-		cmLog().Info("Dropping oldest connection due to memory pressure", 
+		log.ConnMgr().Info("Dropping oldest connection due to memory pressure", 
 			"client_id", oldestClient.id,
 			"connected_since", oldestTime.Format(time.RFC3339),
 			"age_seconds", time.Since(oldestTime).Seconds(),

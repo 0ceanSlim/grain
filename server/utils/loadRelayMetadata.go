@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 type RelayMetadata struct {
@@ -23,11 +25,11 @@ func LoadRelayMetadataJSON() error {
 }
 
 func LoadRelayMetadata(filename string) error {
-    utilLog().Info("Loading relay metadata", "file", filename)
+    log.Util().Info("Loading relay metadata", "file", filename)
     
     data, err := os.ReadFile(filename)
     if err != nil {
-        utilLog().Error("Failed to read relay metadata file", 
+        log.Util().Error("Failed to read relay metadata file", 
             "file", filename, 
             "error", err)
         return err
@@ -35,20 +37,20 @@ func LoadRelayMetadata(filename string) error {
 
     err = json.Unmarshal(data, &relayMetadata)
     if err != nil {
-        utilLog().Error("Failed to parse relay metadata JSON", 
+        log.Util().Error("Failed to parse relay metadata JSON", 
             "file", filename, 
             "error", err)
         return err
     }
 
-    utilLog().Info("Relay metadata loaded successfully", 
+    log.Util().Info("Relay metadata loaded successfully", 
         "relay_name", relayMetadata.Name, 
         "version", relayMetadata.Version,
         "nips_count", len(relayMetadata.SupportedNIPs))
         
     // Log supported NIPs for debugging
     if len(relayMetadata.SupportedNIPs) > 0 {
-        utilLog().Debug("Supported NIPs", "nips", relayMetadata.SupportedNIPs)
+        log.Util().Debug("Supported NIPs", "nips", relayMetadata.SupportedNIPs)
     }
     
     return nil
@@ -58,7 +60,7 @@ func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
     clientIP := GetClientIP(r)
     
     if r.Header.Get("Accept") != "application/nostr+json" {
-        utilLog().Warn("Invalid Accept header for relay info request", 
+        log.Util().Warn("Invalid Accept header for relay info request", 
             "client_ip", clientIP,
             "accept", r.Header.Get("Accept"),
             "path", r.URL.Path)
@@ -66,7 +68,7 @@ func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    utilLog().Debug("Serving relay info", 
+    log.Util().Debug("Serving relay info", 
         "client_ip", clientIP,
         "user_agent", r.UserAgent())
 
@@ -77,14 +79,14 @@ func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
 
     err := json.NewEncoder(w).Encode(relayMetadata)
     if err != nil {
-        utilLog().Error("Failed to encode relay metadata", 
+        log.Util().Error("Failed to encode relay metadata", 
             "client_ip", clientIP,
             "error", err)
         http.Error(w, "Internal Server Error", http.StatusInternalServerError)
         return
     }
     
-    utilLog().Info("Relay info served successfully", 
+    log.Util().Info("Relay info served successfully", 
         "client_ip", clientIP,
         "relay_name", relayMetadata.Name,
         "version", relayMetadata.Version)

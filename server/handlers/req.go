@@ -4,25 +4,19 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"log/slog"
 
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/db/mongo"
 	"github.com/0ceanslim/grain/server/handlers/response"
-	relay "github.com/0ceanslim/grain/server/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// Set the logging component for REQ handler
-func reqLog() *slog.Logger {
-	return utils.GetLogger("req-handler")
-}
-
-
 // HandleReq processes a new subscription request with proper subscription management
-func HandleReq(client relay.ClientInterface, message []interface{}) {
+func HandleReq(client nostr.ClientInterface, message []interface{}) {
 	if len(message) < 3 {
-		reqLog().Error("Invalid REQ message format")
+		log.Req().Error("Invalid REQ message format")
 		response.SendClosed(client, "", "invalid: invalid REQ message format")
 		return
 	}
@@ -31,7 +25,7 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 
 	subID, ok := message[1].(string)
 	if !ok || len(subID) == 0 || len(subID) > 64 {
-		reqLog().Error("Invalid subscription ID format or length", 
+		log.Req().Error("Invalid subscription ID format or length", 
 			"sub_id", subID, 
 			"length", len(subID))
 		response.SendClosed(client, "", "invalid: subscription ID must be between 1 and 64 characters long")
@@ -42,7 +36,7 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 	rateLimiter := config.GetRateLimiter()
 	if rateLimiter != nil {
 		if allowed, msg := rateLimiter.AllowReq(); !allowed {
-			reqLog().Warn("REQ rate limit exceeded", 
+			log.Req().Warn("REQ rate limit exceeded", 
 				"sub_id", subID,
 				"reason", msg)
 			response.SendClosed(client, subID, "rate-limited: "+msg)
@@ -51,18 +45,18 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 	}
 
 	// Parse and validate filters
-	filters := make([]relay.Filter, len(message)-2)
+	filters := make([]nostr.Filter, len(message)-2)
 	for i, filter := range message[2:] {
 		filterData, ok := filter.(map[string]interface{})
 		if !ok {
-			reqLog().Error("Invalid filter format", 
+			log.Req().Error("Invalid filter format", 
 				"sub_id", subID, 
 				"filter_index", i)
 			response.SendClosed(client, subID, "invalid: invalid filter format")
 			return
 		}
 
-		var f relay.Filter
+		var f nostr.Filter
 		f.IDs = utils.ToStringArray(filterData["ids"])
 		f.Authors = utils.ToStringArray(filterData["authors"])
 		f.Kinds = utils.ToIntArray(filterData["kinds"])
@@ -77,14 +71,14 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 	// Check if this is a duplicate subscription (same filters)
 	if existingFilters, exists := subscriptions[subID]; exists {
 		if areFiltersIdentical(existingFilters, filters) {
-			reqLog().Debug("Duplicate subscription detected, ignoring", 
+			log.Req().Debug("Duplicate subscription detected, ignoring", 
 				"sub_id", subID,
 				"filter_count", len(filters))
 			// Still send EOSE for duplicate subscriptions to satisfy client expectations
 			client.SendMessage([]interface{}{"EOSE", subID})
 			return
 		} else {
-			reqLog().Info("Subscription updated with new filters", 
+			log.Req().Info("Subscription updated with new filters", 
 				"sub_id", subID,
 				"old_filter_count", len(existingFilters),
 				"new_filter_count", len(filters))
@@ -102,7 +96,7 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 		}
 		if oldestSubID != "" {
 			delete(subscriptions, oldestSubID)
-			reqLog().Info("Dropped oldest subscription", 
+			log.Req().Info("Dropped oldest subscription", 
 				"old_sub_id", oldestSubID, 
 				"current_count", len(subscriptions))
 		}
@@ -110,7 +104,7 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 
 	// Add/update subscription - THIS IS CRUCIAL: subscription stays active after EOSE
 	subscriptions[subID] = filters
-	reqLog().Info("Subscription created/updated", 
+	log.Req().Info("Subscription created/updated", 
 		"sub_id", subID, 
 		"filter_count", len(filters), 
 		"total_subscriptions", len(subscriptions))
@@ -119,7 +113,7 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 	dbName := config.GetConfig().MongoDB.Database
 	queriedEvents, err := mongo.QueryEvents(filters, mongo.GetClient(), dbName)
 	if err != nil {
-		reqLog().Error("Error querying events", 
+		log.Req().Error("Error querying events", 
 			"sub_id", subID, 
 			"database", dbName, 
 			"error", err)
@@ -135,7 +129,7 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 	// Send EOSE message to indicate end of stored events
 	client.SendMessage([]interface{}{"EOSE", subID})
 
-	reqLog().Info("Subscription established", 
+	log.Req().Info("Subscription established", 
 		"sub_id", subID, 
 		"historical_events_sent", len(queriedEvents),
 		"status", "active")
@@ -149,7 +143,7 @@ func HandleReq(client relay.ClientInterface, message []interface{}) {
 }
 
 // areFiltersIdentical compares two filter slices to detect duplicates
-func areFiltersIdentical(filters1, filters2 []relay.Filter) bool {
+func areFiltersIdentical(filters1, filters2 []nostr.Filter) bool {
 	if len(filters1) != len(filters2) {
 		return false
 	}
@@ -162,7 +156,7 @@ func areFiltersIdentical(filters1, filters2 []relay.Filter) bool {
 }
 
 // hashFilters creates a deterministic hash of filter contents
-func hashFilters(filters []relay.Filter) string {
+func hashFilters(filters []nostr.Filter) string {
 	// Serialize filters to JSON for comparison
 	data, err := json.Marshal(filters)
 	if err != nil {

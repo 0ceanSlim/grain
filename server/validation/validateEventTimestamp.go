@@ -6,11 +6,12 @@ import (
 
 	configTypes "github.com/0ceanslim/grain/config/types"
 	relay "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 func ValidateEventTimestamp(evt relay.Event, cfg *configTypes.ServerConfig) bool {
     if cfg == nil {
-        validationLog().Error("Server configuration is not loaded")
+        log.Validation().Error("Server configuration is not loaded")
         return false
     }
 
@@ -22,7 +23,7 @@ func ValidateEventTimestamp(evt relay.Event, cfg *configTypes.ServerConfig) bool
         offset := strings.TrimPrefix(cfg.EventTimeConstraints.MinCreatedAtString, "now")
         duration, err := time.ParseDuration(offset)
         if err != nil {
-            validationLog().Error("Invalid time offset for min_created_at", "offset", offset, "error", err)
+            log.Validation().Error("Invalid time offset for min_created_at", "offset", offset, "error", err)
             minCreatedAt = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
         } else {
             minCreatedAt = now.Add(duration).Unix()
@@ -39,7 +40,7 @@ func ValidateEventTimestamp(evt relay.Event, cfg *configTypes.ServerConfig) bool
         offset := strings.TrimPrefix(cfg.EventTimeConstraints.MaxCreatedAtString, "now")
         duration, err := time.ParseDuration(offset)
         if err != nil {
-            validationLog().Error("Invalid time offset for max_created_at", "offset", offset, "error", err)
+            log.Validation().Error("Invalid time offset for max_created_at", "offset", offset, "error", err)
             maxCreatedAt = now.Unix() // Default to now if parsing fails
         } else {
             maxCreatedAt = now.Add(duration).Unix()
@@ -53,7 +54,7 @@ func ValidateEventTimestamp(evt relay.Event, cfg *configTypes.ServerConfig) bool
 
     // Check if the event's created_at timestamp falls within the allowed range
     if evt.CreatedAt < minCreatedAt || evt.CreatedAt > maxCreatedAt {
-        validationLog().Warn("Event timestamp out of range", 
+        log.Validation().Warn("Event timestamp out of range", 
             "event_id", evt.ID, 
             "timestamp", evt.CreatedAt, 
             "min", minCreatedAt, 

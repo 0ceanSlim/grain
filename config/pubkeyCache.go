@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // PubkeyCache manages cached pubkey lists for whitelist and blacklist operations
@@ -32,7 +33,7 @@ func GetPubkeyCache() *PubkeyCache {
 
 // InitializePubkeyCache starts the cache system with initial refresh and background updates
 func InitializePubkeyCache() {
-	configLog().Info("Initializing pubkey cache system")
+	log.Config().Info("Initializing pubkey cache system")
 	
 	// Set refresh intervals from config with defaults
 	whitelistCfg := GetWhitelistConfig()
@@ -57,7 +58,7 @@ func InitializePubkeyCache() {
 	// Start background refresh routines
 	globalPubkeyCache.startBackgroundRefresh()
 	
-	configLog().Info("Pubkey cache system initialized",
+	log.Config().Info("Pubkey cache system initialized",
 		"whitelist_interval_min", int(globalPubkeyCache.whitelistRefreshInterval.Minutes()),
 		"blacklist_interval_min", int(globalPubkeyCache.blacklistRefreshInterval.Minutes()))
 }
@@ -70,11 +71,11 @@ func (pc *PubkeyCache) RefreshWhitelist() error {
 	
 	whitelistCfg := GetWhitelistConfig()
 	if whitelistCfg == nil {
-		configLog().Warn("Whitelist configuration not available")
+		log.Config().Warn("Whitelist configuration not available")
 		return fmt.Errorf("whitelist configuration not available")
 	}
 	
-	configLog().Debug("Starting whitelist cache refresh")
+	log.Config().Debug("Starting whitelist cache refresh")
 	
 	// Always add direct pubkeys (regardless of enabled state)
 	directCount := 0
@@ -88,7 +89,7 @@ func (pc *PubkeyCache) RefreshWhitelist() error {
 	for _, npub := range whitelistCfg.PubkeyWhitelist.Npubs {
 		pubkey, err := utils.DecodeNpub(npub)
 		if err != nil {
-			configLog().Error("Failed to decode npub", "npub", npub, "error", err)
+			log.Config().Error("Failed to decode npub", "npub", npub, "error", err)
 			continue
 		}
 		newWhitelist[pubkey] = true
@@ -100,7 +101,7 @@ func (pc *PubkeyCache) RefreshWhitelist() error {
 	if len(whitelistCfg.DomainWhitelist.Domains) > 0 {
 		domainPubkeys, err := utils.FetchPubkeysFromDomains(whitelistCfg.DomainWhitelist.Domains)
 		if err != nil {
-			configLog().Error("Failed to fetch domain pubkeys", "error", err)
+			log.Config().Error("Failed to fetch domain pubkeys", "error", err)
 		} else {
 			for _, pubkey := range domainPubkeys {
 				newWhitelist[pubkey] = true
@@ -116,7 +117,7 @@ func (pc *PubkeyCache) RefreshWhitelist() error {
 	pc.mu.Unlock()
 	
 	duration := time.Since(start)
-	configLog().Info("Whitelist cache refreshed",
+	log.Config().Info("Whitelist cache refreshed",
 		"duration_ms", duration.Milliseconds(),
 		"total_pubkeys", len(newWhitelist),
 		"direct_pubkeys", directCount,
@@ -136,7 +137,7 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 	
 	blacklistCfg := GetBlacklistConfig()
 	if blacklistCfg == nil {
-		configLog().Debug("Blacklist configuration not available")
+		log.Config().Debug("Blacklist configuration not available")
 		// Don't return error - just cache empty list
 		pc.mu.Lock()
 		pc.blacklistedPubkeys = newBlacklist
@@ -145,7 +146,7 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 		return nil
 	}
 	
-	configLog().Debug("Starting blacklist cache refresh")
+	log.Config().Debug("Starting blacklist cache refresh")
 	
 	// Always add permanent banned pubkeys (regardless of enabled state)
 	directCount := 0
@@ -159,7 +160,7 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 	for _, npub := range blacklistCfg.PermanentBlacklistNpubs {
 		pubkey, err := utils.DecodeNpub(npub)
 		if err != nil {
-			configLog().Error("Failed to decode blacklisted npub", "npub", npub, "error", err)
+			log.Config().Error("Failed to decode blacklisted npub", "npub", npub, "error", err)
 			continue
 		}
 		newBlacklist[pubkey] = true
@@ -174,7 +175,7 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 			localRelayURL := fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port)
 			mutelistPubkeys, err := FetchPubkeysFromLocalMuteList(localRelayURL, blacklistCfg.MuteListAuthors)
 			if err != nil {
-				configLog().Error("Failed to fetch mutelist pubkeys", "error", err)
+				log.Config().Error("Failed to fetch mutelist pubkeys", "error", err)
 			} else {
 				for _, pubkey := range mutelistPubkeys {
 					newBlacklist[pubkey] = true
@@ -191,7 +192,7 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 	pc.mu.Unlock()
 	
 	duration := time.Since(start)
-	configLog().Info("Blacklist cache refreshed",
+	log.Config().Info("Blacklist cache refreshed",
 		"duration_ms", duration.Milliseconds(),
 		"total_pubkeys", len(newBlacklist),
 		"direct_pubkeys", directCount,
@@ -308,7 +309,7 @@ func (pc *PubkeyCache) startBackgroundRefresh() {
 		
 		for range ticker.C {
 			if err := pc.RefreshWhitelist(); err != nil {
-				configLog().Error("Failed to refresh whitelist cache", "error", err)
+				log.Config().Error("Failed to refresh whitelist cache", "error", err)
 			}
 		}
 	}()
@@ -320,10 +321,10 @@ func (pc *PubkeyCache) startBackgroundRefresh() {
 		
 		for range ticker.C {
 			if err := pc.RefreshBlacklist(); err != nil {
-				configLog().Error("Failed to refresh blacklist cache", "error", err)
+				log.Config().Error("Failed to refresh blacklist cache", "error", err)
 			}
 		}
 	}()
 	
-	configLog().Info("Background cache refresh routines started")
+	log.Config().Info("Background cache refresh routines started")
 }

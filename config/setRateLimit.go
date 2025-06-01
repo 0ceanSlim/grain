@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	config "github.com/0ceanslim/grain/config/types"
+	"github.com/0ceanslim/grain/server/utils/log"
 
 	"golang.org/x/time/rate"
 )
@@ -43,19 +44,19 @@ func SetRateLimit(cfg *config.ServerConfig) {
 		cfg.RateLimit.ReqBurst,
 	)
 
-	configLog().Info("Rate limiters configured", 
+	log.Config().Info("Rate limiters configured", 
     "ws_limit", cfg.RateLimit.WsLimit,
     "event_limit", cfg.RateLimit.EventLimit,
     "req_limit", cfg.RateLimit.ReqLimit)
 
 	for _, kindLimit := range cfg.RateLimit.KindLimits {
 		rateLimiter.AddKindLimit(kindLimit.Kind, rate.Limit(kindLimit.Limit), kindLimit.Burst)
-		configLog().Debug("Kind rate limiter added", "kind", kindLimit.Kind, "limit", kindLimit.Limit, "burst", kindLimit.Burst)
+		log.Config().Debug("Kind rate limiter added", "kind", kindLimit.Kind, "limit", kindLimit.Limit, "burst", kindLimit.Burst)
 	}
 
 	for category, categoryLimit := range cfg.RateLimit.CategoryLimits {
 		rateLimiter.AddCategoryLimit(category, rate.Limit(categoryLimit.Limit), categoryLimit.Burst)
-		configLog().Debug("Category rate limiter added", "category", category, "limit", categoryLimit.Limit, "burst", categoryLimit.Burst)
+		log.Config().Debug("Category rate limiter added", "category", category, "limit", categoryLimit.Limit, "burst", categoryLimit.Burst)
 	}
 
 	SetRateLimiter(rateLimiter)
@@ -83,7 +84,7 @@ func NewRateLimiter(wsLimit rate.Limit, wsBurst int, eventLimit rate.Limit, even
 
 func (rl *RateLimiter) AllowWs() (bool, string) {
 	if !rl.wsLimiter.Allow() {
-		configLog().Debug("WebSocket rate limit exceeded")
+		log.Config().Debug("WebSocket rate limit exceeded")
 		return false, "WebSocket message rate limit exceeded"
 	}
 	return true, ""
@@ -94,20 +95,20 @@ func (rl *RateLimiter) AllowEvent(kind int, category string) (bool, string) {
 	defer rl.mu.RUnlock()
 
 	if !rl.eventLimiter.Allow() {
-		configLog().Warn("Global event rate limit exceeded")
+		log.Config().Warn("Global event rate limit exceeded")
 		return false, "Global event rate limit exceeded"
 	}
 
 	if kindLimiter, exists := rl.kindLimiters[kind]; exists {
 		if !kindLimiter.Limiter.Allow() {
-			configLog().Debug("Rate limit exceeded for kind", "kind", kind)
+			log.Config().Debug("Rate limit exceeded for kind", "kind", kind)
 			return false, fmt.Sprintf("Rate limit exceeded for kind: %d", kind)
 		}
 	}
 
 	if categoryLimiter, exists := rl.categoryLimiters[category]; exists {
 		if !categoryLimiter.Limiter.Allow() {
-			configLog().Debug("Rate limit exceeded for category", "category", category)
+			log.Config().Debug("Rate limit exceeded for category", "category", category)
 			return false, fmt.Sprintf("Rate limit exceeded for category: %s", category)
 		}
 	}
@@ -117,7 +118,7 @@ func (rl *RateLimiter) AllowEvent(kind int, category string) (bool, string) {
 
 func (rl *RateLimiter) AllowReq() (bool, string) {
 	if !rl.reqLimiter.Allow() {
-		configLog().Debug("REQ rate limit exceeded")
+		log.Config().Debug("REQ rate limit exceeded")
 		return false, "REQ rate limit exceeded"
 	}
 	return true, ""

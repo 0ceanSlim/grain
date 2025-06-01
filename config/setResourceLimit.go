@@ -6,24 +6,25 @@ import (
 	"time"
 
 	configTypes "github.com/0ceanslim/grain/config/types"
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 func SetResourceLimit(cfg *configTypes.ResourceLimits) {
 	// Set CPU cores
 	runtime.GOMAXPROCS(cfg.CPUCores)
-	configLog().Info("CPU cores limit set", "cores", cfg.CPUCores)
+	log.Config().Info("CPU cores limit set", "cores", cfg.CPUCores)
 
 	// Set maximum heap size
 	if cfg.HeapSizeMB > 0 {
 		heapSize := int64(uint64(cfg.HeapSizeMB) * 1024 * 1024)
 		debug.SetMemoryLimit(heapSize)
-		configLog().Info("Heap size limit set", "size_mb", cfg.HeapSizeMB)
+		log.Config().Info("Heap size limit set", "size_mb", cfg.HeapSizeMB)
 	}
 
 	// Optional: Basic memory monitoring without goroutine management
 	if cfg.MemoryMB > 0 {
 		go monitorMemoryUsage(cfg.MemoryMB)
-		configLog().Info("Memory usage monitoring enabled", "limit_mb", cfg.MemoryMB)
+		log.Config().Info("Memory usage monitoring enabled", "limit_mb", cfg.MemoryMB)
 	}
 }
 
@@ -34,7 +35,7 @@ func monitorMemoryUsage(maxMemoryMB int) {
 
 		usedMemoryMB := int(memStats.Alloc / 1024 / 1024)
 		if usedMemoryMB > maxMemoryMB {
-			configLog().Warn("Memory usage exceeded limit", "used_mb", usedMemoryMB, "limit_mb", maxMemoryMB)
+			log.Config().Warn("Memory usage exceeded limit", "used_mb", usedMemoryMB, "limit_mb", maxMemoryMB)
 			debug.FreeOSMemory() // Attempt to free memory
 		}
 
