@@ -19,3 +19,4 @@ func Util() *slog.Logger       { return GetLogger("util") }
 func Validation() *slog.Logger { return GetLogger("event-validation") }
 func ConnMgr() *slog.Logger    { return GetLogger("conn-manager") }
 func UserSync() *slog.Logger   { return GetLogger("user-sync") }
+func Log() *slog.Logger        { return GetLogger("log") } 

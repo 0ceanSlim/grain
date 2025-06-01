@@ -11,11 +11,6 @@ import (
 	cfgTypes "github.com/0ceanslim/grain/config/types"
 )
 
-// Set the logging component for general utility functions
-func logLog() *slog.Logger {
-	return GetLogger("log")
-}
-
 // LoggerRegistry maintains a map of all loggers by component name
 type LoggerRegistry struct {
 	main      *slog.Logger

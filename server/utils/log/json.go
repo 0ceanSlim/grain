@@ -192,7 +192,7 @@ func (j *JSONLogWriter) checkAndManageJSONLogFile() {
 	// Handle based on backup configuration
 	if j.backupCount > 1 {
 		// Rotate JSON log files
-		logLog().Info("JSON log file size exceeded limit, rotating...", 
+		Log().Info("JSON log file size exceeded limit, rotating...", 
 			"file", j.filePath,
 			"current_size_mb", float64(sizeBytes)/(1024*1024),
 			"max_size_mb", j.maxSizeMB,
@@ -205,7 +205,7 @@ func (j *JSONLogWriter) checkAndManageJSONLogFile() {
 		ensureValidJSONFile(j.filePath)
 	} else {
 		// Trim JSON log file
-		logLog().Info("JSON log file size exceeded limit, trimming...", 
+		Log().Info("JSON log file size exceeded limit, trimming...", 
 			"file", j.filePath,
 			"current_size_mb", float64(sizeBytes)/(1024*1024),
 			"max_size_mb", j.maxSizeMB)
@@ -219,13 +219,13 @@ func trimJSONLogFile(filePath string) error {
 	// Read the current JSON array
 	file, err := os.ReadFile(filePath)
 	if err != nil {
-		logLog().Error("Error reading JSON log file for trimming", "file", filePath, "error", err)
+		Log().Error("Error reading JSON log file for trimming", "file", filePath, "error", err)
 		return err
 	}
 
 	var logs []json.RawMessage
 	if err := json.Unmarshal(file, &logs); err != nil {
-		logLog().Error("Error parsing JSON logs for trimming", "file", filePath, "error", err)
+		Log().Error("Error parsing JSON logs for trimming", "file", filePath, "error", err)
 		return err
 	}
 
@@ -245,16 +245,16 @@ func trimJSONLogFile(filePath string) error {
 	// Write back to file
 	newContent, err := json.MarshalIndent(trimmedLogs, "", "  ")
 	if err != nil {
-		logLog().Error("Error creating trimmed JSON logs", "file", filePath, "error", err)
+		Log().Error("Error creating trimmed JSON logs", "file", filePath, "error", err)
 		return err
 	}
 
 	if err := os.WriteFile(filePath, newContent, 0644); err != nil {
-		logLog().Error("Error writing trimmed JSON file", "file", filePath, "error", err)
+		Log().Error("Error writing trimmed JSON file", "file", filePath, "error", err)
 		return err
 	}
 
-	logLog().Info("JSON log file trimmed successfully", 
+	Log().Info("JSON log file trimmed successfully", 
 		"file", filePath,
 		"original_entries", len(logs),
 		"remaining_entries", logsToKeep)

@@ -21,14 +21,14 @@ func StartPeriodicLogTrimmer(logFilePath string, maxSizeMB int, checkIntervalMin
 		for range ticker.C {
 			err := manageLogFileSize(logFilePath, maxSizeMB, backupCount)
 			if err != nil {
-				logLog().Error("Failed to manage log file size", 
+				Log().Error("Failed to manage log file size", 
 					"file", logFilePath,
 					"error", err)
 			}
 		}
 	}()
 	
-	logLog().Info("Started periodic log manager", 
+	Log().Info("Started periodic log manager", 
 		"check_interval_minutes", checkIntervalMinutes,
 		"max_size_mb", maxSizeMB,
 		"backup_count", backupCount)
@@ -46,14 +46,14 @@ func manageLogFileSize(logFilePath string, maxSizeMB int, backupCount int) error
 
 	// Log the action we're about to take
 	if backupCount > 1 {
-		logLog().Info("Log file size exceeded limit, rotating logs...",
+		Log().Info("Log file size exceeded limit, rotating logs...",
 			"file", logFilePath,
 			"current_size_mb", float64(sizeBytes)/(1024*1024),
 			"max_size_mb", maxSizeMB,
 			"backup_count", backupCount)
 		return rotateLogFiles(logFilePath, backupCount)
 	} else {
-		logLog().Info("Log file size exceeded limit, trimming...",
+		Log().Info("Log file size exceeded limit, trimming...",
 			"file", logFilePath,
 			"current_size_mb", float64(sizeBytes)/(1024*1024),
 			"max_size_mb", maxSizeMB,
@@ -79,13 +79,13 @@ func rotateLogFiles(logFilePath string, backupCount int) error {
 		
 		// Rename the source to destination
 		if err := os.Rename(oldPath, newPath); err != nil {
-			logLog().Error("Failed to rotate log file", 
+			Log().Error("Failed to rotate log file", 
 				"from", oldPath, 
 				"to", newPath, 
 				"error", err)
 			// Continue even if one rotation fails
 		} else {
-			logLog().Debug("Rotated log file", 
+			Log().Debug("Rotated log file", 
 				"from", oldPath, 
 				"to", newPath)
 		}
@@ -97,7 +97,7 @@ func rotateLogFiles(logFilePath string, backupCount int) error {
 	// Try to read the current log
 	content, err := os.ReadFile(logFilePath)
 	if err != nil {
-		logLog().Error("Failed to read current log file", 
+		Log().Error("Failed to read current log file", 
 			"file", logFilePath, 
 			"error", err)
 		return err
@@ -105,7 +105,7 @@ func rotateLogFiles(logFilePath string, backupCount int) error {
 	
 	// Write it to backup
 	if err := os.WriteFile(backupPath, content, 0644); err != nil {
-		logLog().Error("Failed to create backup log file", 
+		Log().Error("Failed to create backup log file", 
 			"file", backupPath, 
 			"error", err)
 		return err
@@ -114,14 +114,14 @@ func rotateLogFiles(logFilePath string, backupCount int) error {
 	// Truncate current log file
 	file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		logLog().Error("Failed to truncate log file", 
+		Log().Error("Failed to truncate log file", 
 			"file", logFilePath, 
 			"error", err)
 		return err
 	}
 	defer file.Close()
 	
-	logLog().Info("Successfully rotated log files", 
+	Log().Info("Successfully rotated log files", 
 		"main_log", logFilePath, 
 		"backup_count", backupCount)
 	
@@ -132,7 +132,7 @@ func rotateLogFiles(logFilePath string, backupCount int) error {
 func checkLogSize(filePath string, maxSizeMB int) (bool, int64) {
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
-		logLog().Error("Error checking log file size", "file", filePath, "error", err)
+		Log().Error("Error checking log file size", "file", filePath, "error", err)
 		return false, 0
 	}
 	

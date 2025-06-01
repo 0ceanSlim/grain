@@ -5,13 +5,29 @@ logging:
   structure: false # true = structured JSON logs, false = pretty logs
   check_interval_min: 10 # Check every 10 minutes
   backup_count: 2 # Keep 2 backup files (.bak1, .bak2)
-  suppress_components: # Components to suppress INFO/DEBUG logs from
-    - "util" # Utility functions (file ops, helpers)
-    - "conn-manager" # Connection management (memory stats, counts)
-    - "client" # Client connection details
-    - "mongo-query" # Database query operations (can be verbose)
-# Available components: main, mongo, mongo-store, mongo-purge, event-handler,
-# req-handler, auth-handler, close-handler, config, event-validation, user-sync
+  suppress_components: # Components to suppress INFO/DEBUG logs from (WARN/ERROR still shown)
+    - "util" # Utility functions (file ops, IP detection, metadata loading)
+    - "conn-manager" # Connection management (memory stats, connection counts)
+    - "client" # Client connection details (connects/disconnects, timeouts)
+    - "mongo-query" # Database query operations (can be very verbose)
+    - "event-store" # Event storage operations (insert/update confirmations)
+    - "close-handler" # Subscription close operations (routine cleanup)
+
+# Available components for suppression:
+# - "main"             # Main application lifecycle (startup, shutdown, restarts)
+# - "mongo"            # MongoDB connection and database operations
+# - "mongo-store"      # High-level event storage coordination
+# - "mongo-purge"      # Event purging and cleanup operations
+# - "event-handler"    # Event processing and validation coordination
+# - "req-handler"      # Subscription request handling
+# - "auth-handler"     # Authentication processing (NIP-42)
+# - "config"           # Configuration loading and caching
+# - "event-validation" # Event signature and content validation
+# - "user-sync"        # User synchronization operations
+# - "log"              # Logging system internal operations
+
+# Note: Suppression only affects INFO and DEBUG levels.
+# WARN and ERROR messages are always shown regardless of suppression.
 
 mongodb:
   uri: mongodb://localhost:27017/
