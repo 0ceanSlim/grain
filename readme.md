@@ -51,7 +51,7 @@ GRAIN acts as one of these relays - storing events, serving them to clients, and
    ├── grain (or grain.exe on Windows)  
    └── www/
 
-**Start MongoDB** - GRAIN requires a running MongoDB instance (default: `localhost:27017`)
+**Start MongoDB** - GRAIN requires a running MongoDB instance (default: `localhost:27017`)  
 **Run GRAIN** - `./grain` (Linux) or `grain.exe` (Windows)
 
 GRAIN will automatically create default configuration files on first run and start serving on port `:8181`.
