@@ -52,6 +52,8 @@ GRAIN acts as one of these relays - storing events, serving them to clients, and
    └── www/
 
 **Start MongoDB** - GRAIN requires a running MongoDB instance (default: `localhost:27017`)  
+  <img src="https://www.mongodb.com//assets/images/global/favicon.ico" width="20"/> *[MongoDB Community Server Install Docs](https://www.mongodb.com/docs/manual/administration/install-community/)*
+  
 **Run GRAIN** - `./grain` (Linux) or `grain.exe` (Windows)
 
 GRAIN will automatically create default configuration files on first run and start serving on port `:8181`.
@@ -60,7 +62,9 @@ Edit config files and GRAIN automatically restarts with new settings
 
 ### Building from Source
 
-If pre-built binaries aren't available for your architecture:
+If pre-built binaries aren't available for your architecture you can clone this repo and build the binary from source:
+
+<img src="https://go.dev/images/favicon-gopher.svg" width="16"/> *Requires [Go](https://go.dev/)*
 
 ```bash
 git clone https://github.com/0ceanslim/grain.git
