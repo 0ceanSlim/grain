@@ -8,8 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/0ceanslim/grain/client/api"
-	"github.com/0ceanslim/grain/client/auth"
+	"github.com/0ceanslim/grain/client"
 	"github.com/0ceanslim/grain/client/middleware"
 	"github.com/0ceanslim/grain/client/routes"
 	"github.com/0ceanslim/grain/config"
@@ -258,12 +257,11 @@ func initClient() http.Handler {
 	// Main route handles WebSocket upgrades, NIP-11 relay info, and web interface
 	mux.HandleFunc("/", initRoot)
 
-	// API routes for relay management
-	api.RegisterAPIRoutes(mux)
-
+	// Registers the client views
 	routes.RegisterViewRoutes(mux)
 
-	auth.RegisterAuthEndpoints(mux)
+	// Register other endpoints
+	client.RegisterEndpoints(mux)
 
 	// Apply user middleware to all routes
 	return middleware.UserMiddleware(mux)
