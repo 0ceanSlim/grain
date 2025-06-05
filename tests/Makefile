@@ -51,23 +51,23 @@ test-file:
 	@if [ -z "$(FILE)" ]; then \
 		echo "Please specify a file: make test-file FILE=relay_test.go"; \
 		echo "Available files:"; \
-		ls integrations/*.go 2>/dev/null | sed 's/integrations\///' || echo "No test files found in integrations/"; \
+		ls integration/*.go 2>/dev/null | sed 's/integration\///' || echo "No test files found in integration/"; \
 		exit 1; \
 	fi
-	@if [ ! -f "integrations/$(FILE)" ]; then \
-		echo "File integrations/$(FILE) not found"; \
+	@if [ ! -f "integration/$(FILE)" ]; then \
+		echo "File integration/$(FILE) not found"; \
 		echo "Available files:"; \
-		ls integrations/*.go 2>/dev/null | sed 's/integrations\///' || echo "No test files found in integrations/"; \
+		ls integration/*.go 2>/dev/null | sed 's/integration\///' || echo "No test files found in integration/"; \
 		exit 1; \
 	fi
-	@echo "Running all tests in integrations/$(FILE)..."
-	@TESTS=$$(grep -o 'func Test[A-Za-z0-9_]*' integrations/$(FILE) | sed 's/func //' | tr '\n' '|' | sed 's/|$$//'); \
+	@echo "Running all tests in integration/$(FILE)..."
+	@TESTS=$$(grep -o 'func Test[A-Za-z0-9_]*' integration/$(FILE) | sed 's/func //' | tr '\n' '|' | sed 's/|$$//'); \
 	if [ -n "$$TESTS" ]; then \
 		echo "Found test functions: $$(echo $$TESTS | tr '|' ' ')"; \
 		mkdir -p $(TEST_LOG_DIR); \
-		go test -v ./integrations -run "$$TESTS" 2>&1 | tee $(TEST_LOG_DIR)/test-file-$(FILE)-$(TIMESTAMP).log; \
+		go test -v ./integration -run "$$TESTS" 2>&1 | tee $(TEST_LOG_DIR)/test-file-$(FILE)-$(TIMESTAMP).log; \
 	else \
-		echo "No test functions found in integrations/$(FILE)"; \
+		echo "No test functions found in integration/$(FILE)"; \
 		exit 1; \
 	fi
 

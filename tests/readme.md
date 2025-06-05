@@ -54,7 +54,7 @@ tests/                     # Run all commands from this directory
 ├── docker/                # Test environment
 │   ├── Dockerfile         # Test container build
 │   └── docker-compose.yml # Test services
-└── integrations/          # Integration tests
+└── integration/          # Integration tests
     ├── relay_test.go      # Core relay functionality
     ├── websocket_test.go  # WebSocket connection tests
     └── api_test.go        # HTTP API tests
