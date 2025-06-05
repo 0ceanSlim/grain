@@ -8,10 +8,17 @@
     CDNs are used for ease of development. In a Production enviornment, 
     build a proper minified custom CSS using the Tailwind CLI tool and serve
     the latest available minified htmx and custom css directly from your server.
+
+    Build the taiwind styling from the configuration 
+      in the /client/style directory
+    <link href="style/custom.min.css" rel="stylesheet" />
+
+    <link href="/static/htmx.min.js">
+
     To download a copy of htmx: https://htmx.org/docs/#download-a-copy
 
-    <link href="/static/tailwind.min.css" rel="stylesheet" />
-    <link href="/static/htmx.min.js">
+    To download a copy of Tailwind: https://tailwindcss.com/docs/installation
+
     -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script
@@ -19,12 +26,7 @@
       integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2"
       crossorigin="anonymous"
     ></script>
-    <!-- 
-      link the custom minified styling included in this repo, built from the configuration 
-      in the /client/style directory
-    -->
-    <link href="/static/custom.min.css" rel="stylesheet" />
-    <link rel="icon" href="/static/img/favicon.ico" type="image/x-icon" />
+    <link rel="icon" href="favicon.ico" type="image/x-icon" />
     <title>{{.Title}}</title>
     <style>
       .spinner {
@@ -48,7 +50,7 @@
     </style>
   </head>
   {{template "header" .}}
-  <body class="font-mono text-center text-textPrimary bg-bgPrimary">
+  <body class="font-mono text-center text-white bg-gray-800">
     {{template "view" .}}
   </body>
   {{template "footer" .}}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/0ceanslim/grain/client/handlers"
+	"github.com/0ceanslim/grain/client/auth"
 )
 
 type contextKey string
@@ -13,7 +13,7 @@ const UserContextKey contextKey = "user"
 
 func UserMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session, _ := handlers.User.Get(r, "session-name")
+		session, _ := auth.User.Get(r, "session-name")
 
 		userData := map[string]interface{}{
 			"publicKey":   session.Values["publicKey"],

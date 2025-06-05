@@ -28,9 +28,8 @@ var templateFiles = []string{
 // Initialize the common templates with full paths
 var layout = PrependDir(templatesDir, templateFiles)
 
-var loginLayout = PrependDir(templatesDir, []string{"login-layout.html", "footer.html"})
-
-func RenderTemplate(w http.ResponseWriter, data PageData, view string, useLoginLayout bool) {
+// RenderTemplate renders a template with the standard layout
+func RenderTemplate(w http.ResponseWriter, data PageData, view string) {
 	// Add global data if needed (e.g., client-wide constants or configurations)
 	if data.CustomData == nil {
 		data.CustomData = make(map[string]interface{})
@@ -46,12 +45,7 @@ func RenderTemplate(w http.ResponseWriter, data PageData, view string, useLoginL
 		return
 	}
 
-	var templates []string
-	if useLoginLayout {
-		templates = append(loginLayout, viewTemplate)
-	} else {
-		templates = append(layout, viewTemplate)
-	}
+	templates := append(layout, viewTemplate)
 	templates = append(templates, componentTemplates...)
 
 	tmpl, err := template.New("").Funcs(template.FuncMap{}).ParseFiles(templates...)
@@ -60,11 +54,7 @@ func RenderTemplate(w http.ResponseWriter, data PageData, view string, useLoginL
 		return
 	}
 
-	layoutName := "layout"
-	if useLoginLayout {
-		layoutName = "login-layout"
-	}
-	err = tmpl.ExecuteTemplate(w, layoutName, data)
+	err = tmpl.ExecuteTemplate(w, "layout", data)
 	if err != nil {
 		http.Error(w, "Error executing template: "+err.Error(), http.StatusInternalServerError)
 	}

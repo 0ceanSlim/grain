@@ -1,4 +1,4 @@
-package handlers
+package auth
 
 import (
 	"encoding/json"
@@ -12,6 +12,8 @@ import (
 
 const WebSocketTimeout = 2 * time.Second // Set timeout duration
 
+
+// THIS IS AN OLD FUNCTION, REPLACE IT WITH THE ONE IN NOSTRHERO OR LINK
 func FetchUserMetadata(publicKey string, relays []string) (*types.UserMetadata, error) {
 	for _, url := range relays {
 		log.Printf("Connecting to WebSocket: %s\n", url)

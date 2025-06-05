@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/0ceanslim/grain/client/api"
-	"github.com/0ceanslim/grain/client/handlers"
+	"github.com/0ceanslim/grain/client/auth"
 	"github.com/0ceanslim/grain/client/middleware"
 	"github.com/0ceanslim/grain/client/routes"
 	"github.com/0ceanslim/grain/config"
@@ -261,16 +261,9 @@ func initClient() http.Handler {
 	// API routes for relay management
 	api.RegisterAPIRoutes(mux)
 
-	// Authentication and user management routes
-	mux.HandleFunc("/do-login", handlers.LoginHandler)
-	mux.HandleFunc("/logout", handlers.LogoutHandler)
-	mux.HandleFunc("/profile", routes.ProfileHandler)
-	
-	// Static file serving
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("www/static"))))
-	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "www/static/img/favicon.ico")
-	})
+	routes.RegisterViewRoutes(mux)
+
+	auth.RegisterAuthEndpoints(mux)
 
 	// Apply user middleware to all routes
 	return middleware.UserMiddleware(mux)

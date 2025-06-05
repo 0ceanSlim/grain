@@ -1,8 +1,6 @@
 {{define "header"}}
-<header class="flex justify-between items-center mt-8 mb-8 mx-4">
-  <h1 class="text-3xl font-bold text-textSecondary">
-    Welcome to the GRAIN Frontend 🌾
-  </h1>
+<header class="flex items-center justify-between mx-4 mt-8 mb-8">
+  <h1 class="text-3xl font-bold">🌾 grain</h1>
   <div id="profile-nav">
     {{if .CustomData.publicKey}} {{template "profile-nav" .CustomData}} {{else}}
     {{template "login-button"}} {{end}}

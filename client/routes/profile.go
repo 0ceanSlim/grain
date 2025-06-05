@@ -11,9 +11,9 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 	userData := middleware.GetUserFromContext(r.Context())
 
 	data := utils.PageData{
-		Title:      "nostr Profile",
+		Title:      "👤",
 		CustomData: userData,
 	}
 
-	utils.RenderTemplate(w, data, "profile.html", false)
+	utils.RenderTemplate(w, data, "profile.html")
 }
