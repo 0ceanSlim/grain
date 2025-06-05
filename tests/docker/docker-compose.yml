@@ -1,0 +1,20 @@
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: grain-test-mongo
+    ports:
+      - "27017:27017"
+    restart: "no"
+
+  grain:
+    build:
+      context: ../../ # Build from project root
+      dockerfile: tests/docker/Dockerfile
+    container_name: grain-test-relay
+    ports:
+      - "8182:8182" # Use 8182 to match your test helpers
+    depends_on:
+      - mongo
+    environment:
+      - GRAIN_ENV=test
+    restart: "no"

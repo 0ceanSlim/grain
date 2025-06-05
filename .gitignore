@@ -5,6 +5,6 @@ blacklist.yml
 relay_metadata.json
 grain.exe
 /build
-/logs
+*/logs
 debug.*
 domain_pubkey_cache.json

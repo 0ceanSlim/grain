@@ -40,6 +40,34 @@ GRAIN acts as one of these relays - storing events, serving them to clients, and
 - Configurable event size limits to prevent abuse
 - Connection pooling and timeout management
 
+## Event Processing
+
+GRAIN handles all Nostr event types according to protocol specifications:
+
+- **Regular events** (kind 1 notes, kind 7 reactions) - stored permanently
+- **Replaceable events** (kind 0 profiles, kind 3 contact lists) - newest version kept
+- **Addressable events** (kind 30000+ with 'd' tags) - replaced by newer versions with same identifier
+- **Ephemeral events** (kind 20000-30000) - processed but not stored
+- **Deletion events** (kind 5) - removes referenced events if authored by same user
+
+## Web Interface
+
+GRAIN includes a basic web interface accessible at `http://your-relay-domain:port`:
+
+- NIP-11 relay metadata served at the root with proper CORS headers for client discovery
+- User login system that displays basic profile information for users who exist on the relay
+- Simple API endpoints for checking lists and relay status
+- Static file serving including favicon and basic assets
+
+The frontend is currently minimal but functional. Future development will expand this into a reference Nostr client implementation with comprehensive relay metrics and management APIs.
+
+## Requirements
+
+- **Go** if building from source
+  - <img src="https://go.dev/images/favicon-gopher.svg" width="16"/> _[Download Go](https://go.dev/)_
+- **MongoDB** for event storage and indexing
+  - <img src="https://www.mongodb.com//assets/images/global/favicon.ico" width="20"/> _[MongoDB Community Server Install Docs](https://www.mongodb.com/docs/manual/administration/install-community/)_
+
 ## Installation
 
 ### Using Pre-built Binaries (Recommended)
@@ -51,9 +79,8 @@ GRAIN acts as one of these relays - storing events, serving them to clients, and
    ├── grain (or grain.exe on Windows)  
    └── www/
 
-**Start MongoDB** - GRAIN requires a running MongoDB instance (default: `localhost:27017`)  
-  <img src="https://www.mongodb.com//assets/images/global/favicon.ico" width="20"/> *[MongoDB Community Server Install Docs](https://www.mongodb.com/docs/manual/administration/install-community/)*
-  
+**Start MongoDB** - GRAIN requires a running MongoDB instance (default: `localhost:27017`)
+
 **Run GRAIN** - `./grain` (Linux) or `grain.exe` (Windows)
 
 GRAIN will automatically create default configuration files on first run and start serving on port `:8181`.
@@ -63,8 +90,6 @@ Edit config files and GRAIN automatically restarts with new settings
 ### Building from Source
 
 If pre-built binaries aren't available for your architecture you can clone this repo and build the binary from source:
-
-<img src="https://go.dev/images/favicon-gopher.svg" width="16"/> *Requires [Go](https://go.dev/)*
 
 ```bash
 git clone https://github.com/0ceanslim/grain.git
@@ -86,62 +111,7 @@ For detailed configuration options and examples, see:
 
 [**Example configurations**](https://github.com/0ceanslim/grain/tree/main/www/static/examples)
 
-## Event Processing
-
-GRAIN handles all Nostr event types according to protocol specifications:
-
-- **Regular events** (kind 1 notes, kind 7 reactions) - stored permanently
-- **Replaceable events** (kind 0 profiles, kind 3 contact lists) - newest version kept
-- **Addressable events** (kind 30000+ with 'd' tags) - replaced by newer versions with same identifier
-- **Ephemeral events** (kind 20000-30000) - processed but not stored
-- **Deletion events** (kind 5) - removes referenced events if authored by same user
-
-### Automatic Event Purging
-
-Keep your database clean with configurable retention:
-
-```yaml
-event_purge:
-  enabled: true
-  keep_interval_hours: 720 # 30 days
-  purge_interval_minutes: 60 # check hourly
-  exclude_whitelisted: true # never purge whitelisted users
-  purge_by_category:
-    regular: true # purge old posts and reactions
-    ephemeral: true # purge ephemeral events (shouldn't be stored anyway)
-    replaceable: false # keep user profiles and contact lists
-```
-
-## User Synchronization (Experimental)
-
-⚠️ **Work in Progress**: User sync is an experimental feature that may contain bugs and is subject to change.
-
-GRAIN can attempt to automatically sync new users' event history from their preferred relays:
-
-```yaml
-UserSync: # EXPERIMENTAL FEATURE, (structured logging not implemented yet)
-  user_sync: false # disabled by default
-  disable_at_startup: true
-  initial_sync_relays: [
-      "wss://purplepag.es",
-      "wss://nos.lol",
-      "wss://relay.damus.io",
-    ] # These relays are used to initially fetch user Outboxes.
-  kinds: [1, 0, 7] # sync posts, profiles, reactions. If kinds is left empty, no kind is applied to the filter and any event is retrieved
-  limit: 100 # If limit is left empty, no limit will be applied to the filter
-  exclude_non_whitelisted: true # if set to true, only pubkeys on the whitelist will be synced.
-  interval: 360 # in minutes
-```
-
-When enabled and a new user posts to your relay, GRAIN attempts to:
-
-1. Query configured relays for the user's relay metadata (kind 10002)
-2. Fetch their recent events from their preferred "outbox" relays
-3. Store missing events locally
-
-**Known limitations**: This feature is experimental and may cause performance issues or sync failures. Use with caution in production environments.
-
-## Monitoring and Logs
+### Monitoring and Logs
 
 GRAIN provides detailed operational visibility:
 
@@ -185,7 +155,7 @@ Built-in metrics include:
 - Database query performance
 - Cache hit rates for whitelist/blacklist operations
 
-## Authentication
+### Authentication
 
 Optional user authentication via NIP-42:
 
@@ -197,21 +167,50 @@ auth:
 
 When enabled, clients must authenticate before publishing events or accessing restricted content.
 
-## Requirements
+### Automatic Event Purging
 
-- **Go** for building from source
-- **MongoDB** for event storage and indexing
+Keep your database clean with configurable retention:
 
-## Web Interface
+```yaml
+event_purge:
+  enabled: true
+  keep_interval_hours: 720 # 30 days
+  purge_interval_minutes: 60 # check hourly
+  exclude_whitelisted: true # never purge whitelisted users
+  purge_by_category:
+    regular: true # purge old posts and reactions
+    ephemeral: true # purge ephemeral events (shouldn't be stored anyway)
+    replaceable: false # keep user profiles and contact lists
+```
 
-GRAIN includes a basic web interface accessible at `http://your-relay-domain:port`:
+### User Synchronization (Experimental)
 
-- NIP-11 relay metadata served at the root with proper CORS headers for client discovery
-- User login system that displays basic profile information for users who exist on the relay
-- Simple API endpoints for checking lists and relay status
-- Static file serving including favicon and basic assets
+⚠️ **Work in Progress**: User sync is an experimental feature that may contain bugs and is subject to change.
 
-The frontend is currently minimal but functional. Future development will expand this into a reference Nostr client implementation with comprehensive relay metrics and management APIs.
+GRAIN can attempt to automatically sync new users' event history from their preferred relays:
+
+```yaml
+UserSync: # EXPERIMENTAL FEATURE, (structured logging not implemented yet)
+  user_sync: false # disabled by default
+  disable_at_startup: true
+  initial_sync_relays: [
+      "wss://purplepag.es",
+      "wss://nos.lol",
+      "wss://relay.damus.io",
+    ] # These relays are used to initially fetch user Outboxes.
+  kinds: [1, 0, 7] # sync posts, profiles, reactions. If kinds is left empty, no kind is applied to the filter and any event is retrieved
+  limit: 100 # If limit is left empty, no limit will be applied to the filter
+  exclude_non_whitelisted: true # if set to true, only pubkeys on the whitelist will be synced.
+  interval: 360 # in minutes
+```
+
+When enabled and a new user posts to your relay, GRAIN attempts to:
+
+1. Query configured relays for the user's relay metadata (kind 10002)
+2. Fetch their recent events from their preferred "outbox" relays
+3. Store missing events locally
+
+**Known limitations**: This feature is experimental and may cause performance issues or sync failures. Use with caution in production environments.
 
 ## License
 
