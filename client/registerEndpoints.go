@@ -7,7 +7,7 @@ import (
 	"github.com/0ceanslim/grain/client/auth"
 )
 
-// RegisterAuthEndpoints registers all API endpoints on the given mux
+// RegisterEndpoints registers all endpoints on the given mux
 func RegisterEndpoints(mux *http.ServeMux) {
 
 	// api endpoints
