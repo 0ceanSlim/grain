@@ -36,26 +36,28 @@ make test-run
 # 3. Run specific test function
 make test-single TEST=TestBasicConnection
 
-# 4. Stop environment and collect logs
+# 4. Run all tests in a file
+make test-file FILE=relay_test.go
+
+# 5. Stop environment and collect logs
 make test-stop
 ```
 
 ## Test Structure
 
 ```
-tests/                    # Run all commands from this directory
-├── Makefile              # Test commands
-├── README.md             # This file
-├── helpers.go            # Test utilities
-├── logs/                 # Generated test logs and results
-├── docker/               # Test environment
-│   ├── Dockerfile        # Test container build
-│   ├── docker-compose.yml # Test services
-│   └── README.md         # Docker setup docs
-└── integrations/         # Integration tests
-    ├── relay_test.go     # Core relay functionality
-    ├── websocket_test.go # WebSocket connection tests
-    └── api_test.go       # HTTP API tests
+tests/                     # Run all commands from this directory
+├── Makefile               # Test commands
+├── README.md              # This file
+├── helpers.go             # Test utilities
+├── logs/                  # Generated test logs and results
+├── docker/                # Test environment
+│   ├── Dockerfile         # Test container build
+│   └── docker-compose.yml # Test services
+└── integrations/          # Integration tests
+    ├── relay_test.go      # Core relay functionality
+    ├── websocket_test.go  # WebSocket connection tests
+    └── api_test.go        # HTTP API tests
 ```
 
 ## Available Commands
@@ -63,9 +65,10 @@ tests/                    # Run all commands from this directory
 | Command                          | Description                                  |
 | -------------------------------- | -------------------------------------------- |
 | `make test`                      | Start environment, run tests, prompt cleanup |
-| `make test-run`                  | Full automated cycle (start, test, stop)     |
 | `make test-start`                | Start test environment only                  |
+| `make test-run`                  | Full automated cycle (start, test, stop)     |
 | `make test-single TEST=TestName` | Run specific test function by name           |
+| `make test-file   TEST=fie.go  ` | Run all tests in a single go file            |
 | `make test-stop`                 | Stop environment and collect logs            |
 | `make test-clean-logs`           | Remove all log files                         |
 | `make help`                      | Show all available commands                  |

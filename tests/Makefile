@@ -9,12 +9,13 @@ MONGO_CONTAINER = grain-test-mongo
 
 help:
 	@echo "Available make targets:"
-	@echo "  make test              - Start environment, run all tests, then prompt to stop"
-	@echo "  make test-run          - Start, run all tests, stop and save logs"
-	@echo "  make test-start        - Start test Docker environment"
-	@echo "  make test-single TEST=TestName - Run a specific test by name"
-	@echo "  make test-stop         - Stop environment and collect logs"
-	@echo "  make test-clean-logs   - Remove old logs (keep last 10 per type)"
+	@echo "  make test              			- Start environment, run all tests, then prompt to stop"
+	@echo "  make test-start        			- Start test Docker environment"
+	@echo "  make test-run          			- Run all tests"
+	@echo "  make test-single TEST=TestName 	- Run a specific test by name"
+	@echo "  make test-file FILE=filename.go	- Run all tests in a specific file"
+	@echo "  make test-stop       				- Stop environment, collect log, and cleanup images"
+	@echo "  make test-clean-logs  				- Remove old logs from this directory"
 
 
 # Main entry point
@@ -27,8 +28,9 @@ test: test-start test-run
 		$(MAKE) test-stop; \
 	else \
 		echo "Test environment is still running."; \
-		echo "Use 'make test-stop' to stop and collect logs."; \
+		echo "Use 'make test-stop' to stop, collect logs and cleanup the test enviornment"; \
 		echo "Use 'make test-single TEST=YourTestName' to run individual tests."; \
+		echo "Use 'make test-file TEST=filename.go' to run all tests in a specific file."; \
 	fi
 
 # Start environment
@@ -43,6 +45,31 @@ test-start:
 test-run:
 	@echo "Running all tests..."
 	@go test -v ./... 2>&1 | tee $(TEST_LOG_DIR)/test-results-$(TIMESTAMP).log
+
+# Run all tests in a specific Go file
+test-file:
+	@if [ -z "$(FILE)" ]; then \
+		echo "Please specify a file: make test-file FILE=relay_test.go"; \
+		echo "Available files:"; \
+		ls integrations/*.go 2>/dev/null | sed 's/integrations\///' || echo "No test files found in integrations/"; \
+		exit 1; \
+	fi
+	@if [ ! -f "integrations/$(FILE)" ]; then \
+		echo "File integrations/$(FILE) not found"; \
+		echo "Available files:"; \
+		ls integrations/*.go 2>/dev/null | sed 's/integrations\///' || echo "No test files found in integrations/"; \
+		exit 1; \
+	fi
+	@echo "Running all tests in integrations/$(FILE)..."
+	@TESTS=$$(grep -o 'func Test[A-Za-z0-9_]*' integrations/$(FILE) | sed 's/func //' | tr '\n' '|' | sed 's/|$$//'); \
+	if [ -n "$$TESTS" ]; then \
+		echo "Found test functions: $$(echo $$TESTS | tr '|' ' ')"; \
+		mkdir -p $(TEST_LOG_DIR); \
+		go test -v ./integrations -run "$$TESTS" 2>&1 | tee $(TEST_LOG_DIR)/test-file-$(FILE)-$(TIMESTAMP).log; \
+	else \
+		echo "No test functions found in integrations/$(FILE)"; \
+		exit 1; \
+	fi
 
 # Run specific test with TEST=TestName
 test-single:
