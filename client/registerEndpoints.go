@@ -11,6 +11,9 @@ import (
 func RegisterEndpoints(mux *http.ServeMux) {
 
 	// api endpoints
+	mux.HandleFunc("/api/v1/session", api.GetSessionHandler)         // Get current session info
+	mux.HandleFunc("/api/v1/cache", api.GetCacheHandler)  	 // Get cached user data
+
 	mux.HandleFunc("/api/v1/whitelist/pubkeys", api.GetAllWhitelistedPubkeys)
 	mux.HandleFunc("/api/v1/blacklist/pubkeys", api.GetAllBlacklistedPubkeys)
 

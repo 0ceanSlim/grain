@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0ceanslim/grain/client/core"
 	"github.com/0ceanslim/grain/client/core/helpers"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -18,12 +17,10 @@ type SessionManager struct {
 	cookieMaxAge int
 }
 
-// UserSession represents an authenticated user session with relay connections
+// UserSession represents a lightweight authenticated user session
 type UserSession struct {
-	PublicKey   string
-	LastActive  time.Time
-	RelayPool   *core.SessionRelayPool
-	UserRelays  []string // User's preferred relays from their mailboxes
+	PublicKey  string
+	LastActive time.Time
 }
 
 // NewSessionManager creates a new session manager
@@ -59,18 +56,13 @@ func (sm *SessionManager) GetUserSession(token string) *UserSession {
 	return session
 }
 
-// CreateSession creates a new user session with relay connections
+// CreateSession creates a new lightweight user session
 func (sm *SessionManager) CreateSession(w http.ResponseWriter, publicKey string) (*UserSession, error) {
 	token := helpers.GenerateRandomToken(32)
-
-	// Create relay pool for this session
-	relayPool := core.NewSessionRelayPool(token)
 
 	session := &UserSession{
 		PublicKey:  publicKey,
 		LastActive: time.Now(),
-		RelayPool:  relayPool,
-		UserRelays: make([]string, 0),
 	}
 
 	sm.sessionMutex.Lock()
@@ -94,55 +86,13 @@ func (sm *SessionManager) CreateSession(w http.ResponseWriter, publicKey string)
 	return session, nil
 }
 
-// UpdateUserRelays updates the user's relay list and establishes connections
-func (sm *SessionManager) UpdateUserRelays(token string, relays []string) {
-	sm.sessionMutex.RLock()
-	session, exists := sm.sessions[token]
-	sm.sessionMutex.RUnlock()
-
-	if !exists {
-		return
-	}
-
-	// Disconnect from old relays that are not in the new list
-	oldRelays := make(map[string]bool)
-	for _, relay := range session.UserRelays {
-		oldRelays[relay] = true
-	}
-
-	newRelays := make(map[string]bool)
-	for _, relay := range relays {
-		newRelays[relay] = true
-	}
-
-	// Disconnect from relays no longer needed
-	for relay := range oldRelays {
-		if !newRelays[relay] {
-			session.RelayPool.Disconnect(relay)
-		}
-	}
-
-	// Update session relay list
-	session.UserRelays = relays
-
-	// Connect to new relays
-	session.RelayPool.ConnectToAll(relays)
-
-	log.Util().Info("Updated user relays", 
-		"pubkey", session.PublicKey,
-		"relay_count", len(relays))
-}
-
-// ClearSession removes a user session and closes relay connections
+// ClearSession removes a user session
 func (sm *SessionManager) ClearSession(w http.ResponseWriter, r *http.Request) {
 	token := sm.GetSessionToken(r)
 	if token != "" {
 		sm.sessionMutex.Lock()
 		if session, exists := sm.sessions[token]; exists {
-			// Disconnect from all relays
-			session.RelayPool.DisconnectAll()
-			log.Util().Info("Closed relay connections for session", 
-				"pubkey", session.PublicKey)
+			log.Util().Info("Clearing session", "pubkey", session.PublicKey)
 		}
 		delete(sm.sessions, token)
 		sm.sessionMutex.Unlock()
@@ -159,7 +109,7 @@ func (sm *SessionManager) ClearSession(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// CleanupSessions removes expired sessions and closes their relay connections
+// CleanupSessions removes expired sessions
 func (sm *SessionManager) CleanupSessions(maxAge time.Duration) {
 	sm.sessionMutex.Lock()
 	defer sm.sessionMutex.Unlock()
@@ -167,11 +117,8 @@ func (sm *SessionManager) CleanupSessions(maxAge time.Duration) {
 	now := time.Now()
 	for token, session := range sm.sessions {
 		if now.Sub(session.LastActive) > maxAge {
-			// Disconnect from all relays
-			session.RelayPool.DisconnectAll()
 			delete(sm.sessions, token)
-			log.Util().Info("Cleaned up expired session", 
-				"pubkey", session.PublicKey)
+			log.Util().Info("Cleaned up expired session", "pubkey", session.PublicKey)
 		}
 	}
 }
