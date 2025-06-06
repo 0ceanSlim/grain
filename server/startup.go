@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/0ceanslim/grain/client"
+	"github.com/0ceanslim/grain/client/auth"
 	"github.com/0ceanslim/grain/client/routes"
 	"github.com/0ceanslim/grain/config"
 	cfgType "github.com/0ceanslim/grain/config/types"
@@ -193,6 +194,17 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 
 	// Initialize pubkey cache system
 	config.InitializePubkeyCache()
+
+	// Initialize session manager
+	auth.SessionMgr = auth.NewSessionManager()
+	log.Main().Debug("Session manager initialized")
+
+	// Initialize app relays for user data fetching
+	auth.SetAppRelays([]string{
+		"wss://relay.damus.io",
+		"wss://nos.lol", 
+		"wss://relay.nostr.band",
+	}) // Configure these based on your needs
 
 	log.Main().Info("Server subsystems initialized successfully")
 	return nil
