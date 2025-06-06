@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: grain-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  grain:
+    build: .
+    container_name: grain-relay
+    ports:
+      - "8181:8181"
+    depends_on:
+      - mongo
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
