@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/0ceanslim/grain/client"
-	"github.com/0ceanslim/grain/client/middleware"
 	"github.com/0ceanslim/grain/client/routes"
 	"github.com/0ceanslim/grain/config"
 	cfgType "github.com/0ceanslim/grain/config/types"
@@ -263,8 +262,7 @@ func initClient() http.Handler {
 	// Register other endpoints
 	client.RegisterEndpoints(mux)
 
-	// Apply user middleware to all routes
-	return middleware.UserMiddleware(mux)
+	return mux // Return the mux as the HTTP handler
 }
 
 // wsServer handles WebSocket connections for the Nostr relay protocol

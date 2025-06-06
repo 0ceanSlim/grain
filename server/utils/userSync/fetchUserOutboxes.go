@@ -5,8 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/0ceanslim/grain/client/types"
-
 	"github.com/gorilla/websocket"
 
 	nostr "github.com/0ceanslim/grain/server/types"
@@ -26,7 +24,7 @@ func fetchUserOutboxes(pubKey string, relays []string) []nostr.Event {
 		defer conn.Close()
 
 		// Create subscription request
-		filter := types.SubscriptionFilter{
+		filter := nostr.Filter{
 			Authors: []string{pubKey},
 			Kinds:   []int{10002},
 		}

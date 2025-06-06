@@ -15,7 +15,7 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/blacklist/pubkeys", api.GetAllBlacklistedPubkeys)
 
 	// auth endpoints
-	mux.HandleFunc("/do-login", auth.LoginHandler)
+	mux.HandleFunc("/login", auth.LoginHandler)
 	mux.HandleFunc("/logout", auth.LogoutHandler)
 
 	// route endpoints are registerd with a function inside it's package 

@@ -1,33 +1,27 @@
 package auth
 
 import (
-	"log"
 	"net/http"
+
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// Assuming User is defined elsewhere, like in login.go
-// var User = sessions.NewCookieStore([]byte("your-secret-key"))
-
+// LogoutHandler handles user logout and session cleanup
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("LogoutHandler called")
+	log.Util().Debug("Logout handler called")
 
-	// Retrieve the session
-	session, _ := User.Get(r, "session-name")
-
-	// Clear session values
-	session.Values = map[interface{}]interface{}{}
-	session.Options.MaxAge = -1 // This will delete the session cookie
-
-	// Save the session to commit the changes
-	if err := session.Save(r, w); err != nil {
-		log.Printf("Failed to clear session: %v\n", err)
-		http.Error(w, "Failed to logout", http.StatusInternalServerError)
-		return
+	// Get current user session using the SessionManager method
+	user := SessionMgr.GetCurrentUser(r)
+	if user != nil {
+		log.Util().Info("User logging out", "pubkey", user.PublicKey)
 	}
 
-	log.Println("Session cleared successfully")
+	// Clear the session using the SessionManager
+	SessionMgr.ClearSession(w, r)
+
+	log.Util().Info("User session cleared successfully")
 
 	// Redirect to the root ("/")
 	http.Redirect(w, r, "/", http.StatusSeeOther)
-	log.Println("Redirecting to / after logout")
+	log.Util().Debug("Redirecting to / after logout")
 }

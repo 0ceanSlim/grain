@@ -5,8 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/0ceanslim/grain/client/types"
-
 	"github.com/gorilla/websocket"
 
 	nostr "github.com/0ceanslim/grain/server/types"
@@ -24,7 +22,7 @@ func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, er
 		defer conn.Close()
 
 		// Create a subscription filter to query for events by the pubkey
-		filter := types.SubscriptionFilter{
+		filter := nostr.Filter{
 			Authors: []string{pubKey}, // Filter by the author (pubkey)
 		}
 
