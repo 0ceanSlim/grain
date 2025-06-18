@@ -46,6 +46,9 @@ func (s *Subscription) Start() error {
 	
 	log.Util().Debug("Starting subscription", "sub_id", s.ID, "relay_count", len(s.Relays))
 	
+	// Register with relay pool for message routing
+	s.client.relayPool.RegisterSubscription(s.ID, s)
+	
 	// Send REQ message to all relays
 	reqMessage := []interface{}{"REQ", s.ID}
 	for _, filter := range s.Filters {
@@ -73,6 +76,8 @@ func (s *Subscription) Start() error {
 	}
 	
 	if sent == 0 && lastErr != nil {
+		// Unregister since we failed to start
+		s.client.relayPool.UnregisterSubscription(s.ID)
 		return lastErr
 	}
 	
@@ -95,6 +100,9 @@ func (s *Subscription) Close() error {
 	}
 	
 	log.Util().Debug("Closing subscription", "sub_id", s.ID)
+	
+	// Unregister from relay pool
+	s.client.relayPool.UnregisterSubscription(s.ID)
 	
 	// Send CLOSE message to all relays
 	closeMessage := []interface{}{"CLOSE", s.ID}

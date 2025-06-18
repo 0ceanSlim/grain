@@ -20,16 +20,16 @@ var coreClient *core.Client
 // Application relays for initial discovery
 var appRelays []string
 
-// InitializeCoreClient sets up the global core client
+// InitializeCoreClient sets up the global core client with retry
 func InitializeCoreClient(relays []string) error {
 	config := core.DefaultConfig()
 	config.DefaultRelays = relays
 	
 	coreClient = core.NewClient(config)
 	
-	// Connect to default relays
-	if err := coreClient.ConnectToRelays(relays); err != nil {
-		log.Util().Error("Failed to connect to relays", "error", err)
+	// Connect to default relays with retry
+	if err := coreClient.ConnectToRelaysWithRetry(relays, 3); err != nil {
+		log.Util().Error("Failed to connect to relays after retries", "error", err)
 		return err
 	}
 	
@@ -115,15 +115,31 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 func fetchAndCacheUserDataWithCoreClient(publicKey string) error {
 	log.Util().Debug("Fetching fresh user data with core client", "pubkey", publicKey)
 
-	// First, try to get user's mailboxes
+	// Ensure we have connected relays before proceeding
+	if err := ensureRelayConnections(); err != nil {
+		return fmt.Errorf("failed to ensure relay connections: %w", err)
+	}
+
+	// First, try to get user's mailboxes using connected relays
 	var relaysForMetadata []string
 	mailboxes, err := coreClient.GetUserRelays(publicKey)
 	if err != nil {
 		log.Util().Warn("Failed to fetch mailboxes, using app relays", "pubkey", publicKey, "error", err)
 		relaysForMetadata = appRelays
 	} else if mailboxes != nil {
-		relaysForMetadata = mailboxes.ToStringSlice()
-		log.Util().Debug("Using user mailboxes for metadata", "pubkey", publicKey, "relay_count", len(relaysForMetadata))
+		// Get user's preferred relays
+		userRelays := mailboxes.ToStringSlice()
+		log.Util().Debug("User has preferred relays", "pubkey", publicKey, "relay_count", len(userRelays))
+		
+		// BUT: Use connected app relays for profile fetch to ensure success
+		// This is more reliable than trying to connect to user's personal relays
+		connectedRelays := coreClient.GetConnectedRelays()
+		if len(connectedRelays) > 0 {
+			relaysForMetadata = connectedRelays
+			log.Util().Debug("Using connected app relays for metadata", "pubkey", publicKey, "relay_count", len(relaysForMetadata))
+		} else {
+			relaysForMetadata = appRelays
+		}
 	}
 
 	// Use app relays as fallback
@@ -132,7 +148,7 @@ func fetchAndCacheUserDataWithCoreClient(publicKey string) error {
 		log.Util().Info("Using app relays for metadata", "pubkey", publicKey, "relay_count", len(relaysForMetadata))
 	}
 
-	// Fetch user metadata (profile)
+	// Fetch user metadata (profile) using connected relays
 	userMetadata, err := coreClient.GetUserProfile(publicKey, relaysForMetadata)
 	if err != nil || userMetadata == nil {
 		return fmt.Errorf("failed to fetch user metadata: %w", err)
@@ -142,6 +158,39 @@ func fetchAndCacheUserDataWithCoreClient(publicKey string) error {
 	cacheUserData(publicKey, userMetadata, mailboxes)
 
 	log.Util().Info("User data fetched and cached successfully", "pubkey", publicKey)
+	return nil
+}
+
+// ensureRelayConnections checks and reconnects to relays if needed
+func ensureRelayConnections() error {
+	if coreClient == nil {
+		return fmt.Errorf("core client not initialized")
+	}
+	
+	// Check current connections
+	connectedRelays := coreClient.GetConnectedRelays()
+	log.Util().Debug("Current relay connections", "connected_count", len(connectedRelays))
+	
+	// If we have some connections, we're good
+	if len(connectedRelays) > 0 {
+		return nil
+	}
+	
+	// No connections, try to reconnect
+	log.Util().Warn("No relay connections found, attempting to reconnect")
+	
+	if err := coreClient.ConnectToRelaysWithRetry(appRelays, 3); err != nil {
+		log.Util().Error("Failed to reconnect to relays", "error", err)
+		return err
+	}
+	
+	// Verify we now have connections
+	connectedRelays = coreClient.GetConnectedRelays()
+	if len(connectedRelays) == 0 {
+		return fmt.Errorf("still no relay connections after reconnection attempt")
+	}
+	
+	log.Util().Info("Successfully reconnected to relays", "connected_count", len(connectedRelays))
 	return nil
 }
 
@@ -259,7 +308,37 @@ func SetAppRelays(relays []string) {
 	log.Util().Debug("App relays initialized for discovery", "relay_count", len(relays))
 }
 
-// GetCoreClient returns the global core client instance
+// GetCoreClientStatus returns status information about the core client
+func GetCoreClientStatus() map[string]interface{} {
+	if coreClient == nil {
+		return map[string]interface{}{
+			"initialized": false,
+			"error": "core client not initialized",
+		}
+	}
+	
+	connectedRelays := coreClient.GetConnectedRelays()
+	
+	return map[string]interface{}{
+		"initialized": true,
+		"connected_relays": connectedRelays,
+		"connected_count": len(connectedRelays),
+		"app_relays": appRelays,
+	}
+}
+
+// ReinitializeCoreClient reinitializes the core client (for recovery)
+func ReinitializeCoreClient() error {
+	log.Util().Warn("Reinitializing core client")
+	
+	// Close existing client if any
+	if coreClient != nil {
+		coreClient.Close()
+	}
+	
+	// Reinitialize
+	return InitializeCoreClient(appRelays)
+}
 func GetCoreClient() *core.Client {
 	return coreClient
 }

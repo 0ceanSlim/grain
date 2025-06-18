@@ -1,3 +1,4 @@
+// client/registerEndpoints.go
 package client
 
 import (
@@ -25,31 +26,23 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	// to avoid circular imports
 
 	// Core Nostr client function endpoints
-	// These will be implemented in Phase 4 of the migration
 	registerCoreClientEndpoints(mux)
 }
 
 // registerCoreClientEndpoints registers endpoints for core Nostr client functions
 func registerCoreClientEndpoints(mux *http.ServeMux) {
-	// Phase 4: These endpoints will provide direct access to core client functionality
-	
 	// Event publishing endpoints
-	// mux.HandleFunc("/api/v1/publish", api.PublishEventHandler)
-	
-	// Subscription management endpoints  
-	// mux.HandleFunc("/api/v1/subscribe", api.SubscribeHandler)
-	// mux.HandleFunc("/api/v1/unsubscribe", api.UnsubscribeHandler)
+	mux.HandleFunc("/api/v1/publish", api.PublishEventHandler)
 	
 	// User data fetching endpoints
-	// mux.HandleFunc("/api/v1/user/profile", api.GetUserProfileHandler)
-	// mux.HandleFunc("/api/v1/user/relays", api.GetUserRelaysHandler)
-	
-	// Relay management endpoints
-	// mux.HandleFunc("/api/v1/relays/connect", api.ConnectRelayHandler)
-	// mux.HandleFunc("/api/v1/relays/disconnect", api.DisconnectRelayHandler)
-	// mux.HandleFunc("/api/v1/relays/status", api.GetRelayStatusHandler)
+	mux.HandleFunc("/api/v1/user/profile", api.GetUserProfileHandler)
+	mux.HandleFunc("/api/v1/user/relays", api.GetUserRelaysHandler)
 	
 	// Event querying endpoints
-	// mux.HandleFunc("/api/v1/events/query", api.QueryEventsHandler)
-	// mux.HandleFunc("/api/v1/events/count", api.CountEventsHandler)
+	mux.HandleFunc("/api/v1/events/query", api.QueryEventsHandler)
+	
+	// Relay management endpoints
+	mux.HandleFunc("/api/v1/relays/connect", api.ConnectRelayHandler)
+	mux.HandleFunc("/api/v1/relays/disconnect", api.DisconnectRelayHandler)
+	mux.HandleFunc("/api/v1/relays/status", api.GetRelayStatusHandler)
 }

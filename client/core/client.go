@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -47,10 +48,14 @@ func (c *Client) ConnectToRelays(urls []string) error {
 	}
 	
 	if connected == 0 && lastErr != nil {
-		return lastErr
+		return fmt.Errorf("failed to connect to any relays: %w", lastErr)
 	}
 	
 	log.Util().Info("Connected to relays", "connected", connected, "total", len(urls))
+	
+	// Wait a moment for connections to stabilize
+	time.Sleep(500 * time.Millisecond)
+	
 	return nil
 }
 
@@ -62,6 +67,10 @@ func (c *Client) Subscribe(filters []nostr.Filter, relayHints []string) (*Subscr
 	targetRelays := relayHints
 	if len(targetRelays) == 0 {
 		targetRelays = c.relayPool.GetConnectedRelays()
+	}
+	
+	if len(targetRelays) == 0 {
+		return nil, &ClientError{Message: "no relays available for subscription"}
 	}
 	
 	sub := NewSubscription(subID, filters, targetRelays, c)
@@ -76,13 +85,75 @@ func (c *Client) Subscribe(filters []nostr.Filter, relayHints []string) (*Subscr
 		c.mu.Lock()
 		delete(c.subscriptions, subID)
 		c.mu.Unlock()
-		return nil, err
+		return nil, fmt.Errorf("failed to start subscription: %w", err)
 	}
 	
 	return sub, nil
 }
 
-// GetUserProfile retrieves user profile data using the core client
+
+// GetConnectedRelays returns a list of currently connected relay URLs
+func (c *Client) GetConnectedRelays() []string {
+	return c.relayPool.GetConnectedRelays()
+}
+
+// GetRelayStatus returns detailed status of all relay connections
+func (c *Client) GetRelayStatus() map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	
+	status := make(map[string]string)
+	connectedRelays := c.relayPool.GetConnectedRelays()
+	
+	// Mark connected relays
+	for _, relay := range connectedRelays {
+		status[relay] = "connected"
+	}
+	
+	// Add configured relays that aren't connected
+	for _, relay := range c.config.DefaultRelays {
+		if _, exists := status[relay]; !exists {
+			status[relay] = "disconnected"
+		}
+	}
+	
+	return status
+}
+
+// ConnectToRelaysWithRetry establishes connections with retry logic
+func (c *Client) ConnectToRelaysWithRetry(urls []string, maxRetries int) error {
+	if maxRetries < 1 {
+		maxRetries = 1
+	}
+	
+	var lastErr error
+	
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		log.Util().Debug("Connection attempt", "attempt", attempt, "max_retries", maxRetries)
+		
+		err := c.ConnectToRelays(urls)
+		if err == nil {
+			return nil // Success
+		}
+		
+		lastErr = err
+		
+		// Check if any relays are connected
+		connected := c.relayPool.GetConnectedRelays()
+		if len(connected) > 0 {
+			log.Util().Info("Partial connection success", "connected_relays", len(connected))
+			return nil // Partial success is acceptable
+		}
+		
+		if attempt < maxRetries {
+			delay := time.Duration(attempt) * c.config.RetryDelay
+			log.Util().Info("Retrying connection", "attempt", attempt, "delay", delay)
+			time.Sleep(delay)
+		}
+	}
+	
+	return fmt.Errorf("failed to connect after %d attempts: %w", maxRetries, lastErr)
+}
 func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Event, error) {
 	log.Util().Debug("Fetching user profile", "pubkey", pubkey)
 	
@@ -126,7 +197,13 @@ func (c *Client) GetUserRelays(pubkey string) (*Mailboxes, error) {
 		Limit:   &[]int{1}[0],
 	}
 	
-	sub, err := c.Subscribe([]nostr.Filter{filter}, nil)
+	// Use connected relays for relay list queries
+	connectedRelays := c.relayPool.GetConnectedRelays()
+	if len(connectedRelays) == 0 {
+		return nil, &ClientError{Message: "no connected relays available"}
+	}
+	
+	sub, err := c.Subscribe([]nostr.Filter{filter}, connectedRelays)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +224,7 @@ func (c *Client) GetUserRelays(pubkey string) (*Mailboxes, error) {
 	case <-timeout:
 		return nil, &ClientError{Message: "timeout waiting for relay list"}
 	case <-sub.Done:
-		return nil, &ClientError{Message: "subscription closed before relay list received"}
+		return nil, &ClientError{Message: "subscription completed without receiving relay list"}
 	}
 }
 
