@@ -6,17 +6,19 @@ import (
 
 	"github.com/0ceanslim/grain/client/api"
 	"github.com/0ceanslim/grain/client/auth"
+	relay "github.com/0ceanslim/grain/server/api"
 )
 
 // RegisterEndpoints registers all endpoints on the given mux
 func RegisterEndpoints(mux *http.ServeMux) {
 
-	// api endpoints
+	// client api endpoints
 	mux.HandleFunc("/api/v1/session", api.GetSessionHandler)         // Get current session info
 	mux.HandleFunc("/api/v1/cache", api.GetCacheHandler)  	        // Get cached user data
 
-	mux.HandleFunc("/api/v1/whitelist/pubkeys", api.GetAllWhitelistedPubkeys)
-	mux.HandleFunc("/api/v1/blacklist/pubkeys", api.GetAllBlacklistedPubkeys)
+	// relay api endpoints
+	mux.HandleFunc("/api/v1/whitelist/pubkeys", relay.GetAllWhitelistedPubkeys)
+	mux.HandleFunc("/api/v1/blacklist/pubkeys", relay.GetAllBlacklistedPubkeys)
 
 	// auth endpoints
 	mux.HandleFunc("/login", auth.LoginHandler)

@@ -1,11 +1,12 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/0ceanslim/grain/client/core/helpers"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -58,7 +59,7 @@ func (sm *SessionManager) GetUserSession(token string) *UserSession {
 
 // CreateSession creates a new lightweight user session
 func (sm *SessionManager) CreateSession(w http.ResponseWriter, publicKey string) (*UserSession, error) {
-	token := helpers.GenerateRandomToken(32)
+	token := GenerateRandomToken(32)
 
 	session := &UserSession{
 		PublicKey:  publicKey,
@@ -130,4 +131,17 @@ func (sm *SessionManager) GetCurrentUser(r *http.Request) *UserSession {
 		return nil
 	}
 	return sm.GetUserSession(token)
+}
+
+// GenerateRandomToken creates a cryptographically secure random token
+// of the specified length in bytes (output will be twice this length as hex)
+func GenerateRandomToken(length int) string {
+	b := make([]byte, length)
+	_, err := rand.Read(b)
+	if err != nil {
+		// In a real application, handle this error better
+		// For now, let's log and generate something less secure but still random
+		return hex.EncodeToString([]byte(time.Now().String()))
+	}
+	return hex.EncodeToString(b)
 }

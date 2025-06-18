@@ -18,6 +18,7 @@ type Config struct {
 	UserAgent         string        `json:"user_agent"`
 }
 
+// Default Relays should not be hardcoded, TODO: Make this configurable later
 // DefaultConfig returns a sensible default configuration
 func DefaultConfig() *Config {
 	return &Config{
