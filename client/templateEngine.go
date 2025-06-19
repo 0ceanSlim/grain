@@ -9,7 +9,6 @@ import (
 type PageData struct {
 	Title      string
 	Theme      string
-	CustomData map[string]interface{}
 }
 
 // Define the base directories for views and templates
@@ -30,12 +29,6 @@ var layout = PrependDir(templatesDir, templateFiles)
 
 // RenderTemplate renders a template with the standard layout
 func RenderTemplate(w http.ResponseWriter, data PageData, view string) {
-	// Add global data if needed (e.g., client-wide constants or configurations)
-	if data.CustomData == nil {
-		data.CustomData = make(map[string]interface{})
-	}
-
-	data.CustomData["appName"] = "grain client" // Example global data
 
 	viewTemplate := filepath.Join(viewsDir, view)
 	componentPattern := filepath.Join(viewsDir, "components", "*.html")

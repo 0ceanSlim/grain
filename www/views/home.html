@@ -1,0 +1,94 @@
+<div class="flex flex-col items-center justify-center p-8">
+  <div class="text-center max-w-2xl">
+    <h2 class="text-3xl font-bold mb-6">Welcome to Grain 🌾</h2>
+    <p class="text-gray-300 mb-8 text-lg">
+      A powerful Nostr relay with an integrated web client. Connect to the
+      decentralized social network.
+    </p>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div class="bg-gray-700 p-6 rounded-lg">
+        <h3 class="text-xl font-semibold mb-2 text-purple-400">🔗 Relay</h3>
+        <p class="text-gray-300">
+          High-performance Nostr relay with advanced filtering and rate limiting
+        </p>
+      </div>
+
+      <div class="bg-gray-700 p-6 rounded-lg">
+        <h3 class="text-xl font-semibold mb-2 text-purple-400">👥 Client</h3>
+        <p class="text-gray-300">
+          Web-based Nostr client for posting, reading, and managing your profile
+        </p>
+      </div>
+
+      <div class="bg-gray-700 p-6 rounded-lg">
+        <h3 class="text-xl font-semibold mb-2 text-purple-400">
+          ⚡ Performance
+        </h3>
+        <p class="text-gray-300">
+          Optimized for speed with MongoDB storage and intelligent caching
+        </p>
+      </div>
+    </div>
+
+    <div id="session-status" class="mb-6">
+      <!-- Session status will be loaded here -->
+    </div>
+
+    <div class="space-y-4">
+      <button
+        class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+        onclick="loadView('/views/login.html')"
+        id="login-btn"
+      >
+        Connect Your Nostr Account
+      </button>
+
+      <div class="text-sm text-gray-400">
+        <p>
+          Don't have a Nostr account? Try
+          <a href="https://damus.io" class="text-purple-400 hover:underline"
+            >Damus</a
+          >
+          or
+          <a href="https://iris.to" class="text-purple-400 hover:underline"
+            >Iris</a
+          >
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Check session status on load
+  document.addEventListener("DOMContentLoaded", function () {
+    fetch("/api/v1/session")
+      .then((response) => {
+        if (response.ok) {
+          return response.json();
+        }
+        throw new Error("No session");
+      })
+      .then((data) => {
+        // User is logged in
+        document.getElementById("session-status").innerHTML = `
+          <div class="bg-green-800 border border-green-600 text-green-200 px-4 py-3 rounded">
+            <p>✅ Connected as: <span class="font-mono">${data.publicKey.substring(
+              0,
+              16
+            )}...</span></p>
+          </div>
+        `;
+        document.getElementById("login-btn").style.display = "none";
+      })
+      .catch(() => {
+        // No session, show login button
+        document.getElementById("session-status").innerHTML = `
+          <div class="bg-yellow-800 border border-yellow-600 text-yellow-200 px-4 py-3 rounded">
+            <p>⚠️ Not connected to Nostr</p>
+          </div>
+        `;
+      });
+  });
+</script>

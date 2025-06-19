@@ -21,7 +21,8 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Util().Info("User session cleared successfully")
 
-	// Redirect to the root ("/")
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-	log.Util().Debug("Redirecting to / after logout")
+	// Return success response for HTMX instead of redirect
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Logout successful"))
+	log.Util().Debug("Logout successful response sent")
 }

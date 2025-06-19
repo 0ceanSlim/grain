@@ -1,0 +1,174 @@
+<div class="flex flex-col items-center justify-center p-8">
+  <div class="bg-gray-700 rounded-lg p-8 w-full max-w-md">
+    <h2 class="text-2xl font-bold text-center mb-6">🔐 Connect to Nostr</h2>
+
+    <form id="login-form" onsubmit="handleLogin(event)">
+      <div class="mb-4">
+        <label
+          for="publicKey"
+          class="block text-sm font-medium text-gray-300 mb-2"
+        >
+          Public Key (npub or hex)
+        </label>
+        <input
+          type="text"
+          id="publicKey"
+          name="publicKey"
+          required
+          placeholder="npub1... or hex key"
+          class="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+        />
+      </div>
+
+      <button
+        type="submit"
+        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-colors"
+      >
+        Connect
+      </button>
+    </form>
+
+    <div id="login-result" class="mt-4">
+      <!-- Login results will appear here -->
+    </div>
+
+    <div class="mt-6 text-center text-sm text-gray-400">
+      <p class="mb-2">Need a Nostr account?</p>
+      <div class="space-x-4">
+        <a
+          href="https://damus.io"
+          target="_blank"
+          class="text-purple-400 hover:underline"
+          >Damus</a
+        >
+        <a
+          href="https://iris.to"
+          target="_blank"
+          class="text-purple-400 hover:underline"
+          >Iris</a
+        >
+        <a
+          href="https://primal.net"
+          target="_blank"
+          class="text-purple-400 hover:underline"
+          >Primal</a
+        >
+      </div>
+    </div>
+
+    <div class="mt-4 text-center">
+      <button
+        class="text-gray-400 hover:text-white text-sm underline"
+        onclick="loadView('/views/home.html')"
+      >
+        ← Back to Home
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Handle login form submission
+  function handleLogin(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const publicKeyInput = form.querySelector('input[name="publicKey"]');
+    const publicKey = publicKeyInput.value.trim();
+
+    console.log("Login attempt with publicKey:", publicKey); // Debug log
+
+    if (!publicKey) {
+      showLoginResult("error", "Please enter your public key");
+      return;
+    }
+
+    // Show loading state
+    showLoginResult("loading", "Connecting...");
+
+    // Create URLSearchParams for proper form encoding
+    const formData = new URLSearchParams();
+    formData.append("publicKey", publicKey);
+
+    console.log("Sending form data:", formData.toString()); // Debug log
+
+    fetch("/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formData,
+    })
+      .then((response) => {
+        console.log("Login response status:", response.status); // Debug log
+
+        if (response.ok) {
+          showLoginResult("success", "Login successful! Redirecting...");
+          setTimeout(() => {
+            loadView("/views/profile.html");
+            updateNavigation(); // Update header navigation
+          }, 1000);
+        } else {
+          return response.text().then((text) => {
+            console.error("Login failed with response:", text); // Debug log
+            throw new Error(text || "Login failed");
+          });
+        }
+      })
+      .catch((error) => {
+        console.error("Login error:", error);
+        showLoginResult("error", "Login failed: " + error.message);
+      });
+  }
+
+  function showLoginResult(type, message) {
+    const resultDiv = document.getElementById("login-result");
+    let className, icon;
+
+    switch (type) {
+      case "success":
+        className = "bg-green-800 border-green-600 text-green-200";
+        icon = "✅";
+        break;
+      case "error":
+        className = "bg-red-800 border-red-600 text-red-200";
+        icon = "❌";
+        break;
+      case "loading":
+        className = "bg-blue-800 border-blue-600 text-blue-200";
+        icon = "⏳";
+        break;
+      default:
+        className = "bg-gray-800 border-gray-600 text-gray-200";
+        icon = "ℹ️";
+    }
+
+    resultDiv.innerHTML = `
+      <div class="${className} border px-4 py-3 rounded">
+        <p>${icon} ${message}</p>
+      </div>
+    `;
+  }
+
+  // Auto-format public key input
+  document.getElementById("publicKey").addEventListener("input", function (e) {
+    let value = e.target.value.trim();
+
+    // Basic validation feedback
+    if (value.length > 0) {
+      if (value.startsWith("npub1") && value.length === 63) {
+        e.target.classList.add("border-green-500");
+        e.target.classList.remove("border-red-500", "border-gray-500");
+      } else if (value.length === 64 && /^[0-9a-fA-F]+$/.test(value)) {
+        e.target.classList.add("border-green-500");
+        e.target.classList.remove("border-red-500", "border-gray-500");
+      } else {
+        e.target.classList.add("border-red-500");
+        e.target.classList.remove("border-green-500", "border-gray-500");
+      }
+    } else {
+      e.target.classList.remove("border-green-500", "border-red-500");
+      e.target.classList.add("border-gray-500");
+    }
+  });
+</script>

@@ -1,43 +1,296 @@
-{{define "view"}}
-<main
-  class="flex flex-col items-center justify-center p-8"
-  style="
-    background-color: var(--color-bgPrimary);
-    color: var(--color-textPrimary);
-  "
->
-  <div
-    class="text-center max-w-md w-full p-6 rounded-lg"
-    style="background-color: var(--color-bgSecondary)"
-  >
-    <div class="relative mb-16">
-      <img
-        src="{{if .CustomData.picture}}{{.CustomData.picture}}{{else}}/default-avatar.png{{end}}"
-        alt="Profile Picture"
-        class="w-32 h-32 object-cover rounded-lg mx-auto border-4"
-        style="border-color: var(--color-bgInverted)"
-      />
+<div class="flex flex-col items-center p-8">
+  <div class="w-full max-w-4xl">
+    <div id="loading" class="text-center">
+      <div class="spinner mx-auto mb-4"></div>
+      <p class="text-gray-400">Loading profile...</p>
     </div>
 
-    <h1 class="text-2xl font-bold mb-4">
-      {{if
-      .CustomData.displayName}}{{.CustomData.displayName}}{{else}}Anonymous{{end}}
-    </h1>
+    <div id="profile-content" class="hidden">
+      <!-- Profile Header -->
+      <div class="bg-gray-700 rounded-lg p-6 mb-6">
+        <div class="flex items-start space-x-4">
+          <div
+            id="profile-avatar"
+            class="w-20 h-20 bg-gray-600 rounded-full flex items-center justify-center text-2xl"
+          >
+            👤
+          </div>
+          <div class="flex-1">
+            <h1 id="profile-name" class="text-2xl font-bold text-white mb-2">
+              Loading...
+            </h1>
+            <p id="profile-about" class="text-gray-300 mb-3">Loading bio...</p>
+            <p class="text-sm text-gray-400">
+              <span class="font-mono" id="profile-pubkey"
+                >Loading public key...</span
+              >
+            </p>
+          </div>
+        </div>
+      </div>
 
-    {{if .CustomData.about}}
-    <div class="mb-6">
-      <p style="color: var(--color-textSecondary)">{{.CustomData.about}}</p>
+      <!-- Profile Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-gray-700 p-4 rounded-lg text-center">
+          <h3 class="text-lg font-semibold text-purple-400 mb-2">Relays</h3>
+          <p id="relay-count" class="text-2xl font-bold">-</p>
+          <p class="text-sm text-gray-400">Connected</p>
+        </div>
+
+        <div class="bg-gray-700 p-4 rounded-lg text-center">
+          <h3 class="text-lg font-semibold text-purple-400 mb-2">
+            Read Relays
+          </h3>
+          <p id="read-relay-count" class="text-2xl font-bold">-</p>
+          <p class="text-sm text-gray-400">For receiving</p>
+        </div>
+
+        <div class="bg-gray-700 p-4 rounded-lg text-center">
+          <h3 class="text-lg font-semibold text-purple-400 mb-2">
+            Write Relays
+          </h3>
+          <p id="write-relay-count" class="text-2xl font-bold">-</p>
+          <p class="text-sm text-gray-400">For publishing</p>
+        </div>
+      </div>
+
+      <!-- Relay Lists -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-gray-700 p-4 rounded-lg">
+          <h3 class="text-lg font-semibold text-purple-400 mb-3">
+            📥 Read Relays
+          </h3>
+          <div id="read-relays" class="space-y-2 text-sm">
+            <p class="text-gray-400">Loading...</p>
+          </div>
+        </div>
+
+        <div class="bg-gray-700 p-4 rounded-lg">
+          <h3 class="text-lg font-semibold text-purple-400 mb-3">
+            📤 Write Relays
+          </h3>
+          <div id="write-relays" class="space-y-2 text-sm">
+            <p class="text-gray-400">Loading...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="text-center space-x-4">
+        <button
+          class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-colors"
+          onclick="refreshProfile()"
+        >
+          🔄 Refresh Profile
+        </button>
+
+        <button
+          class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors"
+          hx-post="/logout"
+          hx-confirm="Are you sure you want to logout?"
+          hx-redirect="/"
+        >
+          🚪 Logout
+        </button>
+      </div>
     </div>
-    {{end}}
 
-    <div class="mt-8">
-      <p class="italic" style="color: var(--color-textMuted)">
-        Profile page with Details and Event list Coming Soon
-      </p>
-      <p class="text-sm mt-2" style="color: var(--color-textMuted)">
-        API First
-      </p>
+    <div id="error-content" class="hidden text-center">
+      <div
+        class="bg-red-800 border border-red-600 text-red-200 px-6 py-4 rounded-lg"
+      >
+        <h2 class="text-xl font-bold mb-2">❌ Profile Error</h2>
+        <p id="error-message">Failed to load profile data</p>
+        <button
+          class="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors"
+          hx-get="/views/home.html"
+          hx-target="#main-content"
+        >
+          🏠 Return Home
+        </button>
+      </div>
     </div>
   </div>
-</main>
-{{end}}
+</div>
+
+<script>
+  // Load profile data immediately when this script runs (not waiting for DOMContentLoaded)
+  console.log("Profile script running, starting data fetch...");
+  loadProfileData();
+
+  function loadProfileData() {
+    console.log("Loading profile data...");
+
+    // First check if user has an active session
+    fetch("/api/v1/session")
+      .then((response) => {
+        console.log("Session response status:", response.status);
+        if (!response.ok) {
+          throw new Error("No active session");
+        }
+        return response.json();
+      })
+      .then((sessionData) => {
+        console.log("Session data:", sessionData);
+        // Load cached profile data
+        return fetch("/api/v1/cache");
+      })
+      .then((response) => {
+        console.log("Cache response status:", response.status);
+        if (!response.ok) {
+          throw new Error("Failed to load profile cache");
+        }
+        return response.json();
+      })
+      .then((cacheData) => {
+        console.log("Cache data received:", cacheData);
+        displayProfile(cacheData);
+      })
+      .catch((error) => {
+        console.error("Profile load error:", error);
+        showError(error.message);
+      });
+  }
+
+  function displayProfile(data) {
+    console.log("Displaying profile with data:", data);
+
+    // Hide loading and show content
+    document.getElementById("loading").classList.add("hidden");
+    document.getElementById("profile-content").classList.remove("hidden");
+
+    // Update profile information
+    if (data.metadata && data.metadata.content) {
+      console.log("Processing metadata content:", data.metadata.content);
+
+      let profileContent;
+      try {
+        // Parse the content string which contains the actual profile data
+        profileContent = JSON.parse(data.metadata.content);
+        console.log("Parsed profile content:", profileContent);
+      } catch (e) {
+        console.error("Failed to parse metadata content:", e);
+        profileContent = {};
+      }
+
+      // Update profile fields with the parsed content
+      document.getElementById("profile-name").textContent =
+        profileContent.display_name ||
+        profileContent.displayName ||
+        profileContent.name ||
+        "Anonymous";
+      document.getElementById("profile-about").textContent =
+        profileContent.about || "No bio available";
+      document.getElementById("profile-pubkey").textContent =
+        data.publicKey || data.metadata.pubkey || "Unknown";
+
+      // Update avatar if available
+      if (profileContent.picture) {
+        document.getElementById(
+          "profile-avatar"
+        ).innerHTML = `<img src="${profileContent.picture}" alt="Profile" class="w-full h-full rounded-full object-cover">`;
+      }
+    } else {
+      console.log("No metadata.content found in response");
+      // Set default values
+      document.getElementById("profile-name").textContent = "Anonymous";
+      document.getElementById("profile-about").textContent = "No bio available";
+      document.getElementById("profile-pubkey").textContent =
+        data.publicKey || "Unknown";
+    }
+
+    // Update relay information
+    if (data.mailboxes) {
+      console.log("Processing mailboxes:", data.mailboxes);
+
+      const mailboxes = data.mailboxes; // Already parsed as object
+      console.log("Mailboxes object:", mailboxes);
+
+      // Update counts
+      const readCount =
+        (mailboxes.read?.length || 0) + (mailboxes.both?.length || 0);
+      const writeCount =
+        (mailboxes.write?.length || 0) + (mailboxes.both?.length || 0);
+      const totalCount =
+        (mailboxes.read?.length || 0) +
+        (mailboxes.write?.length || 0) +
+        (mailboxes.both?.length || 0);
+
+      document.getElementById("relay-count").textContent = totalCount;
+      document.getElementById("read-relay-count").textContent = readCount;
+      document.getElementById("write-relay-count").textContent = writeCount;
+
+      // Display relay lists
+      const readRelays = [...(mailboxes.read || []), ...(mailboxes.both || [])];
+      const writeRelays = [
+        ...(mailboxes.write || []),
+        ...(mailboxes.both || []),
+      ];
+
+      displayRelayList("read-relays", readRelays);
+      displayRelayList("write-relays", writeRelays);
+    } else {
+      console.log("No mailboxes found in response");
+      // Set default values
+      document.getElementById("relay-count").textContent = "0";
+      document.getElementById("read-relay-count").textContent = "0";
+      document.getElementById("write-relay-count").textContent = "0";
+
+      displayRelayList("read-relays", []);
+      displayRelayList("write-relays", []);
+    }
+  }
+
+  function displayRelayList(elementId, relays) {
+    const container = document.getElementById(elementId);
+    if (!relays || relays.length === 0) {
+      container.innerHTML = '<p class="text-gray-400">No relays configured</p>';
+      return;
+    }
+
+    container.innerHTML = relays
+      .map(
+        (relay) =>
+          `<div class="bg-gray-600 px-3 py-1 rounded text-xs font-mono">${relay}</div>`
+      )
+      .join("");
+  }
+
+  function refreshProfile() {
+    console.log("Refreshing profile...");
+    // Show loading state
+    document.getElementById("loading").classList.remove("hidden");
+    document.getElementById("profile-content").classList.add("hidden");
+    document.getElementById("error-content").classList.add("hidden");
+
+    // Reload data
+    loadProfileData();
+  }
+
+  function showError(message) {
+    console.log("Showing error:", message);
+    document.getElementById("loading").classList.add("hidden");
+    document.getElementById("profile-content").classList.add("hidden");
+    document.getElementById("error-content").classList.remove("hidden");
+    document.getElementById("error-message").textContent = message;
+  }
+
+  // Logout function
+  function logout() {
+    if (confirm("Are you sure you want to logout?")) {
+      fetch("/logout", { method: "POST" })
+        .then((response) => {
+          if (response.ok) {
+            console.log("Logout successful");
+            loadView("/views/home.html");
+            updateNavigation();
+          } else {
+            console.error("Logout failed");
+          }
+        })
+        .catch((error) => {
+          console.error("Logout error:", error);
+        });
+    }
+  }
+</script>

@@ -56,7 +56,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Check if user is already logged in
 	if session := SessionMgr.GetCurrentUser(r); session != nil {
 		log.Util().Info("User already logged in", "pubkey", session.PublicKey)
-		http.Redirect(w, r, "/profile", http.StatusSeeOther)
+		// Return success response instead of redirect
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Already logged in"))
 		return
 	}
 
@@ -79,36 +81,40 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if cachedData, exists := cache.GetUserData(publicKey); exists {
 		log.Util().Debug("Found cached user data", "pubkey", publicKey)
 		
-		// Validate cached data before using
 		if isValidCachedData(cachedData) {
 			if err := createSessionFromCache(w, publicKey, cachedData); err != nil {
-				log.Util().Error("Failed to create session from cache", "pubkey", publicKey, "error", err)
-				// Fall through to fetch fresh data
-			} else {
-				log.Util().Info("Login successful using cached data", "pubkey", publicKey)
+				log.Util().Error("Failed to create session from cache", "error", err)
+				http.Error(w, "Session creation failed", http.StatusInternalServerError)
 				return
 			}
-		} else {
-			log.Util().Warn("Cached data is invalid, clearing cache", "pubkey", publicKey)
-			cache.ClearUserData(publicKey)
+			
+			log.Util().Info("Login successful using cached data", "pubkey", publicKey)
+			// Return success response for HTMX
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Login successful"))
+			return
 		}
 	}
 
-	// Fetch fresh data using core client
+	// Fetch fresh data and create session
 	if err := fetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
 		log.Util().Error("Failed to fetch user data", "pubkey", publicKey, "error", err)
-		http.Error(w, "User not found or unreachable", http.StatusNotFound)
+		http.Error(w, "Failed to fetch user data: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Create session with fresh data
-	if _, err := SessionMgr.CreateSession(w, publicKey); err != nil {
-		log.Util().Error("Failed to create session", "pubkey", publicKey, "error", err)
-		http.Error(w, "Failed to create session", http.StatusInternalServerError)
+	// Create session after successful data fetch
+	session, err := SessionMgr.CreateSession(w, publicKey)
+	if err != nil {
+		log.Util().Error("Failed to create session", "error", err)
+		http.Error(w, "Session creation failed", http.StatusInternalServerError)
 		return
 	}
 
-	log.Util().Info("Login successful with fresh data", "pubkey", publicKey)
+	log.Util().Info("Login successful with fresh data", "pubkey", session.PublicKey)
+	// Return success response for HTMX
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Login successful"))
 }
 
 // fetchAndCacheUserDataWithCoreClient fetches user data using the core client

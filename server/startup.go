@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/0ceanslim/grain/client"
-	"github.com/0ceanslim/grain/client/routes"
 	"github.com/0ceanslim/grain/config"
 	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/db/mongo"
@@ -194,6 +193,8 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 	// Initialize pubkey cache system
 	config.InitializePubkeyCache()
 
+	// TODO: make these configurable. Change the dfdefault config for the client
+	// package to the same defaults I put in the example config. 
 	// Initialize client package (includes session manager and core client)
 	appRelays := []string{
 		"wss://relay.damus.io",
@@ -268,10 +269,7 @@ func initClient() http.Handler {
 	// Main route handles WebSocket upgrades, NIP-11 relay info, and web interface
 	mux.HandleFunc("/", initRoot)
 
-	// Registers the client views
-	routes.RegisterViewRoutes(mux)
-
-	// Register other endpoints
+	// Register API endpoints only (no view routes)
 	client.RegisterEndpoints(mux)
 
 	return mux // Return the mux as the HTTP handler
@@ -295,8 +293,15 @@ func initRoot(w http.ResponseWriter, r *http.Request) {
 	case r.Header.Get("Accept") == "application/nostr+json":
 		// Handle NIP-11 relay information requests
 		utils.RelayInfoHandler(w, r)
+	case r.URL.Path == "/":
+		// Serve the main application template
+		data := client.PageData{
+			Title: "🌾 grain",
+		}
+		client.RenderTemplate(w, data, "app.html")
 	default:
-		// Handle web interface requests
-		routes.IndexHandler(w, r)
+		// Serve static files from www directory
+		fileServer := http.FileServer(http.Dir("www"))
+		http.StripPrefix("/", fileServer).ServeHTTP(w, r)
 	}
 }
