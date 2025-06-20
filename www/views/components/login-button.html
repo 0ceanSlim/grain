@@ -1,83 +1,12 @@
 {{define "login-button"}}
-<div id="login-container" class="flex flex-col items-center justify-center">
+<div id="login-template">
   <button
-    id="login-button"
-    class="p-2 text-2xl font-bold text-white bg-purple-600 rounded-md"
+    class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded transition-colors"
+    hx-get="/views/login.html"
+    hx-target="#main-content"
+    hx-push-url="/login"
   >
-    login
+    🔐 Login
   </button>
-  <div id="spinner" class="spinner" style="display: none"></div>
 </div>
-
-<script>
-  document.getElementById("login-button").onclick = async function () {
-    const loginButton = document.getElementById("login-button");
-    const spinner = document.getElementById("spinner");
-
-    if (window.nostr) {
-      loginButton.style.display = "none";
-      spinner.style.display = "block";
-
-      try {
-        const publicKey = await window.nostr.getPublicKey();
-
-        const response = await fetch("/login", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({ publicKey }).toString(),
-        });
-
-        if (response.ok) {
-          // Redirect to /profile after successful login
-          window.location.href = "/profile";
-        } else {
-          const errorMessage = await response.text();
-          if (response.status === 404) {
-            showErrorPopup(errorMessage);
-          } else {
-            showErrorPopup("Server error: " + errorMessage);
-          }
-          loginButton.style.display = "block";
-        }
-      } catch (err) {
-        console.error("Failed to fetch:", err);
-
-        if (err.message.includes("Failed to fetch")) {
-          showErrorPopup("Cannot connect to relay. Please try again later.");
-        } else {
-          showErrorPopup("An unexpected error occurred.");
-        }
-        loginButton.style.display = "block";
-      } finally {
-        spinner.style.display = "none";
-      }
-    } else {
-      showErrorPopup(
-        "Nostr extension not available. Please install and try again."
-      );
-    }
-  };
-
-  function showErrorPopup(message) {
-    const popup = document.createElement("div");
-    popup.innerHTML = `
-      <div class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-        <div class="p-6 text-center rounded-lg shadow-lg bg-bgPrimary w-80">
-          <p class="font-semibold text-red-600">${message}</p>
-          <button onclick="closePopup()" class="px-4 py-2 mt-4 border-2 rounded bg-bgPrimary border-bgInverted hover:text-textInverted hover:border-bgPrimary hover:bg-bgInverted">
-            OK
-          </button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(popup);
-  }
-
-  function closePopup() {
-    document.querySelector(".fixed.inset-0").remove();
-  }
-</script>
-
 {{end}}

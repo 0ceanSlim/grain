@@ -2,7 +2,23 @@
   <div class="bg-gray-700 rounded-lg p-8 w-full max-w-md">
     <h2 class="text-2xl font-bold text-center mb-6">🔐 Connect to Nostr</h2>
 
-    <form id="login-form" onsubmit="handleLogin(event)">
+    <form
+      id="login-form"
+      hx-post="/login"
+      hx-swap="none"
+      _="on htmx:beforeRequest 
+               call showLoginResult('loading', 'Connecting...')
+           on htmx:afterRequest
+               if event.detail.xhr.status == 200
+                 call showLoginResult('success', 'Login successful! Redirecting...')
+                 wait 1s
+                 htmx.ajax('GET', '/views/profile.html', '#main-content')
+                 htmx.pushUrl('/profile')
+                 send updateNav to body
+               else
+                 call showLoginResult('error', 'Login failed: ' + event.detail.xhr.responseText)
+               end"
+    >
       <div class="mb-4">
         <label
           for="publicKey"
@@ -17,6 +33,27 @@
           required
           placeholder="npub1... or hex key"
           class="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          _="on input 
+                   set value to my.value.trim()
+                   if value.length > 0
+                     if value.startsWith('npub1') and value.length == 63
+                       add .border-green-500 to me
+                       remove .border-red-500 from me
+                       remove .border-gray-500 from me
+                     else if value.length == 64 and call isValidHex(value)
+                       add .border-green-500 to me
+                       remove .border-red-500 from me
+                       remove .border-gray-500 from me
+                     else
+                       add .border-red-500 to me
+                       remove .border-green-500 from me
+                       remove .border-gray-500 from me
+                     end
+                   else
+                     remove .border-green-500 from me
+                     remove .border-red-500 from me
+                     add .border-gray-500 to me
+                   end"
         />
       </div>
 
@@ -59,7 +96,9 @@
     <div class="mt-4 text-center">
       <button
         class="text-gray-400 hover:text-white text-sm underline"
-        onclick="loadView('/views/home.html')"
+        hx-get="/views/home.html"
+        hx-target="#main-content"
+        hx-push-url="/"
       >
         ← Back to Home
       </button>
@@ -68,107 +107,31 @@
 </div>
 
 <script>
-  // Handle login form submission
-  function handleLogin(event) {
-    event.preventDefault();
-
-    const form = event.target;
-    const publicKeyInput = form.querySelector('input[name="publicKey"]');
-    const publicKey = publicKeyInput.value.trim();
-
-    console.log("Login attempt with publicKey:", publicKey); // Debug log
-
-    if (!publicKey) {
-      showLoginResult("error", "Please enter your public key");
-      return;
-    }
-
-    // Show loading state
-    showLoginResult("loading", "Connecting...");
-
-    // Create URLSearchParams for proper form encoding
-    const formData = new URLSearchParams();
-    formData.append("publicKey", publicKey);
-
-    console.log("Sending form data:", formData.toString()); // Debug log
-
-    fetch("/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: formData,
-    })
-      .then((response) => {
-        console.log("Login response status:", response.status); // Debug log
-
-        if (response.ok) {
-          showLoginResult("success", "Login successful! Redirecting...");
-          setTimeout(() => {
-            loadView("/views/profile.html");
-            updateNavigation(); // Update header navigation
-          }, 1000);
-        } else {
-          return response.text().then((text) => {
-            console.error("Login failed with response:", text); // Debug log
-            throw new Error(text || "Login failed");
-          });
-        }
-      })
-      .catch((error) => {
-        console.error("Login error:", error);
-        showLoginResult("error", "Login failed: " + error.message);
-      });
-  }
-
   function showLoginResult(type, message) {
-    const resultDiv = document.getElementById("login-result");
     let className, icon;
 
-    switch (type) {
-      case "success":
-        className = "bg-green-800 border-green-600 text-green-200";
-        icon = "✅";
-        break;
-      case "error":
-        className = "bg-red-800 border-red-600 text-red-200";
-        icon = "❌";
-        break;
-      case "loading":
-        className = "bg-blue-800 border-blue-600 text-blue-200";
-        icon = "⏳";
-        break;
-      default:
-        className = "bg-gray-800 border-gray-600 text-gray-200";
-        icon = "ℹ️";
+    if (type === "success") {
+      className = "bg-green-800 border-green-600 text-green-200";
+      icon = "✅";
+    } else if (type === "error") {
+      className = "bg-red-800 border-red-600 text-red-200";
+      icon = "❌";
+    } else if (type === "loading") {
+      className = "bg-blue-800 border-blue-600 text-blue-200";
+      icon = "⏳";
+    } else {
+      className = "bg-gray-800 border-gray-600 text-gray-200";
+      icon = "ℹ️";
     }
 
-    resultDiv.innerHTML = `
-      <div class="${className} border px-4 py-3 rounded">
-        <p>${icon} ${message}</p>
-      </div>
-    `;
+    const resultDiv = document.getElementById("login-result");
+    if (resultDiv) {
+      resultDiv.innerHTML = `<div class="${className} border px-4 py-3 rounded"><p>${icon} ${message}</p></div>`;
+    }
   }
 
-  // Auto-format public key input
-  document.getElementById("publicKey").addEventListener("input", function (e) {
-    let value = e.target.value.trim();
-
-    // Basic validation feedback
-    if (value.length > 0) {
-      if (value.startsWith("npub1") && value.length === 63) {
-        e.target.classList.add("border-green-500");
-        e.target.classList.remove("border-red-500", "border-gray-500");
-      } else if (value.length === 64 && /^[0-9a-fA-F]+$/.test(value)) {
-        e.target.classList.add("border-green-500");
-        e.target.classList.remove("border-red-500", "border-gray-500");
-      } else {
-        e.target.classList.add("border-red-500");
-        e.target.classList.remove("border-green-500", "border-gray-500");
-      }
-    } else {
-      e.target.classList.remove("border-green-500", "border-red-500");
-      e.target.classList.add("border-gray-500");
-    }
-  });
+  // Helper function for hex validation that Hyperscript can call
+  function isValidHex(value) {
+    return /^[0-9a-fA-F]+$/.test(value);
+  }
 </script>

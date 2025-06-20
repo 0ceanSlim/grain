@@ -5,7 +5,9 @@
 >
   <h1
     class="text-3xl font-bold cursor-pointer"
-    onclick="loadView('/views/home.html')"
+    hx-get="/views/home.html"
+    hx-target="#main-content"
+    hx-push-url="/"
   >
     🌾 grain
   </h1>
@@ -13,133 +15,56 @@
   <nav class="flex items-center space-x-4">
     <button
       class="text-gray-300 hover:text-white px-3 py-2 rounded transition-colors"
-      onclick="loadView('/views/home.html')"
+      hx-get="/views/home.html"
+      hx-target="#main-content"
+      hx-push-url="/"
     >
       🏠 Home
     </button>
 
-    <div id="profile-nav">
-      <button
-        class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded transition-colors"
-        hx-get="/views/login.html"
-        hx-target="#main-content"
-        hx-push-url="/login"
-      >
-        > 🔐 Login
-      </button>
-    </div>
+    <div id="profile-nav">{{template "login-button"}}</div>
   </nav>
 </header>
 
-<script>
-  // Simple view loading function that works without HTMX dependencies
-  function loadView(url) {
-    console.log("Loading view:", url);
+<!-- Hidden templates -->
+<div class="hidden">
+  {{template "login-button"}} {{template "profile-button"}} {{template
+  "logout-button"}}
+</div>
 
-    fetch(url)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        return response.text();
-      })
-      .then((html) => {
-        const mainContent = document.getElementById("main-content");
-        if (mainContent) {
-          mainContent.innerHTML = html;
+<div
+  _="
+  def updateNavigation()
+    fetch '/api/v1/session' then
+      if the result's ok
+        get #profile-template then
+        get the first <button/> in it then
+        put it into #profile-nav then
+        get #logout-template then
+        get the first <button/> in it then
+        put it after the last <button/> in #profile-nav then
+        htmx.process(#profile-nav)
+      else
+        get #login-template then
+        get the first <button/> in it then
+        put it into #profile-nav then
+        htmx.process(#profile-nav)
+      end
+  end
 
-          // Execute any scripts in the loaded content
-          const scripts = mainContent.querySelectorAll("script");
-          scripts.forEach((script) => {
-            const newScript = document.createElement("script");
-            newScript.textContent = script.textContent;
-            document.head.appendChild(newScript);
-          });
+  def logoutUser()
+    if confirm('Are you sure you want to logout?')
+      fetch '/logout' with method:'POST' then
+        if the result's ok
+          htmx.ajax('GET', '/views/home.html', '#main-content')
+          htmx.pushUrl('/')
+          call updateNavigation()
+        end
+    end
+  end
 
-          console.log("View loaded successfully:", url);
-        } else {
-          console.error("Main content element not found");
-        }
-      })
-      .catch((error) => {
-        console.error("Failed to load view:", url, error);
-        const mainContent = document.getElementById("main-content");
-        if (mainContent) {
-          mainContent.innerHTML = `
-          <div class="text-center text-red-400 p-8">
-            <h2 class="text-xl font-bold mb-2">Failed to load view</h2>
-            <p>Error: ${error.message}</p>
-          </div>
-        `;
-        }
-      });
-  }
-
-  // Update navigation based on login status
-  function updateNavigation() {
-    fetch("/api/v1/session")
-      .then((response) => {
-        if (response.ok) {
-          return response.json();
-        }
-        throw new Error("No session");
-      })
-      .then((data) => {
-        // User is logged in - show profile link and logout
-        document.getElementById("profile-nav").innerHTML = `
-        <button 
-          class="text-gray-300 hover:text-white px-3 py-2 rounded transition-colors"
-          onclick="loadView('/views/profile.html')">
-          👤 Profile
-        </button>
-        <button 
-          class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition-colors"
-          onclick="logout()">
-          🚪 Logout
-        </button>
-      `;
-      })
-      .catch(() => {
-        // No session - show login button
-        // No session - show login button
-        document.getElementById("profile-nav").innerHTML = `
-        <button 
-          class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded transition-colors"
-          onclick="loadViewWithUrl('/views/login.html', '/login')">
-          🔐 Login
-        </button>
-        `;
-      });
-  }
-
-  // Logout function
-  function logout() {
-    if (confirm("Are you sure you want to logout?")) {
-      fetch("/logout", { method: "POST" })
-        .then((response) => {
-          if (response.ok) {
-            console.log("Logout successful");
-            loadView("/views/home.html");
-            updateNavigation();
-          } else {
-            console.error("Logout failed");
-          }
-        })
-        .catch((error) => {
-          console.error("Logout error:", error);
-        });
-    }
-  }
-
-  // Initialize on page load
-  document.addEventListener("DOMContentLoaded", function () {
-    console.log("Header initialized");
-    updateNavigation();
-  });
-
-  function loadViewWithUrl(viewPath, url) {
-    loadView(viewPath);
-    history.pushState(null, "", url);
-  }
-</script>
+  on load call updateNavigation()
+  on updateNav call updateNavigation()
+"
+></div>
 {{end}}
