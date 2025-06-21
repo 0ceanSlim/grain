@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -299,9 +300,19 @@ func initRoot(w http.ResponseWriter, r *http.Request) {
 			Title: "🌾 grain",
 		}
 		client.RenderTemplate(w, data, "app.html")
-	default:
-		// Serve static files from www directory
+	case strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/login") || strings.HasPrefix(r.URL.Path, "/logout"):
+		// Let API and auth endpoints fall through to be handled by registered endpoints
+		http.NotFound(w, r)
+	case strings.HasPrefix(r.URL.Path, "/views/") || strings.HasPrefix(r.URL.Path, "/static/") || strings.HasPrefix(r.URL.Path, "/style/"):
+		// Serve actual static files (CSS, JS, view templates, etc.)
 		fileServer := http.FileServer(http.Dir("www"))
 		http.StripPrefix("/", fileServer).ServeHTTP(w, r)
+	default:
+		// All other routes: serve main app template for frontend routing
+		data := client.PageData{
+			Title: "🌾 grain",
+		}
+		client.RenderTemplate(w, data, "app.html")
 	}
+
 }

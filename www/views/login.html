@@ -1,6 +1,6 @@
 <div class="flex flex-col items-center justify-center p-8">
-  <div class="bg-gray-700 rounded-lg p-8 w-full max-w-md">
-    <h2 class="text-2xl font-bold text-center mb-6">🔐 Connect to Nostr</h2>
+  <div class="w-full max-w-md p-8 bg-gray-700 rounded-lg">
+    <h2 class="mb-6 text-2xl font-bold text-center">🔐 Connect to Nostr</h2>
 
     <form
       id="login-form"
@@ -13,8 +13,9 @@
                  call showLoginResult('success', 'Login successful! Redirecting...')
                  wait 1s
                  htmx.ajax('GET', '/views/profile.html', '#main-content')
-                 htmx.pushUrl('/profile')
-                 send updateNav to body
+                 js window.history.pushState({}, '', '/profile') end
+                 wait 1s
+                 js window.updateNavigation() end
                else
                  call showLoginResult('error', 'Login failed: ' + event.detail.xhr.responseText)
                end"
@@ -22,7 +23,7 @@
       <div class="mb-4">
         <label
           for="publicKey"
-          class="block text-sm font-medium text-gray-300 mb-2"
+          class="block mb-2 text-sm font-medium text-gray-300"
         >
           Public Key (npub or hex)
         </label>
@@ -32,7 +33,7 @@
           name="publicKey"
           required
           placeholder="npub1... or hex key"
-          class="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          class="w-full px-3 py-2 text-white placeholder-gray-400 bg-gray-600 border border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
           _="on input 
                    set value to my.value.trim()
                    if value.length > 0
@@ -59,7 +60,7 @@
 
       <button
         type="submit"
-        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-colors"
+        class="w-full px-4 py-2 font-bold text-white transition-colors bg-purple-600 rounded hover:bg-purple-700"
       >
         Connect
       </button>
@@ -69,33 +70,14 @@
       <!-- Login results will appear here -->
     </div>
 
-    <div class="mt-6 text-center text-sm text-gray-400">
+    <div class="mt-6 text-sm text-center text-gray-400">
       <p class="mb-2">Need a Nostr account?</p>
-      <div class="space-x-4">
-        <a
-          href="https://damus.io"
-          target="_blank"
-          class="text-purple-400 hover:underline"
-          >Damus</a
-        >
-        <a
-          href="https://iris.to"
-          target="_blank"
-          class="text-purple-400 hover:underline"
-          >Iris</a
-        >
-        <a
-          href="https://primal.net"
-          target="_blank"
-          class="text-purple-400 hover:underline"
-          >Primal</a
-        >
-      </div>
+      <!-- TODO: link to https://nstart.me/en -->
     </div>
 
     <div class="mt-4 text-center">
       <button
-        class="text-gray-400 hover:text-white text-sm underline"
+        class="text-sm text-gray-400 underline hover:text-white"
         hx-get="/views/home.html"
         hx-target="#main-content"
         hx-push-url="/"
