@@ -1,106 +1,624 @@
 {{define "login-modal"}}
 <div
-  id="login-modal"
+  id="auth-modal"
   class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden"
 >
-  <div class="bg-gray-700 rounded-lg p-8 max-w-md w-full mx-4">
-    <h2 class="text-2xl font-bold text-center text-purple-400 mb-6">
-      🔐 Connect to Nostr
-    </h2>
+  <div
+    class="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-600"
+  >
+    <!-- Header -->
+    <div class="text-center mb-6">
+      <h2 class="text-2xl font-bold text-purple-400 mb-2">
+        🔐 Connect to Nostr
+      </h2>
+      <p class="text-gray-300 text-sm">Choose how you'd like to authenticate</p>
+    </div>
 
-    <form
-      id="login-form"
-      hx-post="/login"
-      hx-swap="none"
-      hx-target="#login-result"
-      _="on htmx:beforeRequest 
-           call showLoginResult('loading', 'Connecting...')
-         on htmx:afterRequest
-           if event.detail.xhr.status == 200
-             call showLoginResult('success', 'Login successful! Updating...')
-             wait 1s
-             call hideLoginModal()
-             js window.updateNavigation() end
-             wait 0.5s
-             htmx.ajax('GET', '/views/profile.html', '#main-content')
-             js window.history.pushState({}, '', '/profile') end
-           else
-             call showLoginResult('error', 'Login failed: ' + event.detail.xhr.responseText)
-           end"
-    >
+    <!-- Auth Method Selection -->
+    <div id="auth-method-selection" class="space-y-4">
+      <!-- Primary Options -->
+      <div class="space-y-3">
+        <!-- Extension Option -->
+        <button
+          id="auth-extension"
+          type="button"
+          class="w-full p-4 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 rounded-lg border border-purple-500 transition-all duration-200 hover:shadow-lg"
+          onclick="selectAuthMethod('extension')"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="text-2xl">🧩</div>
+              <div class="text-left">
+                <div class="font-semibold text-white">Browser Extension</div>
+                <div class="text-sm text-purple-200">Alby, nos2x, etc.</div>
+              </div>
+            </div>
+            <div class="text-purple-200">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fill-rule="evenodd"
+                  d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                  clip-rule="evenodd"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </button>
+
+        <!-- Amber Option -->
+        <button
+          id="auth-amber"
+          type="button"
+          class="w-full p-4 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 rounded-lg border border-orange-500 transition-all duration-200 hover:shadow-lg"
+          onclick="selectAuthMethod('amber')"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="text-2xl">📱</div>
+              <div class="text-left">
+                <div class="font-semibold text-white">Amber Signer</div>
+                <div class="text-sm text-orange-200">Android remote signer</div>
+              </div>
+            </div>
+            <div class="text-orange-200">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fill-rule="evenodd"
+                  d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                  clip-rule="evenodd"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      <!-- Divider -->
+      <div class="flex items-center my-6">
+        <div class="flex-1 border-t border-gray-600"></div>
+        <span class="px-3 text-gray-400 text-sm">or</span>
+        <div class="flex-1 border-t border-gray-600"></div>
+      </div>
+
+      <!-- Secondary Options -->
+      <div class="space-y-2">
+        <!-- Read Only Option -->
+        <button
+          id="auth-readonly"
+          type="button"
+          class="w-full p-3 bg-gray-700 hover:bg-gray-600 rounded-lg border border-gray-600 transition-colors duration-200"
+          onclick="selectAuthMethod('readonly')"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="text-xl">👁️</div>
+              <div class="text-left">
+                <div class="font-medium text-white">Read Only</div>
+                <div class="text-xs text-gray-300">Browse with public key</div>
+              </div>
+            </div>
+            <div class="text-gray-400">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fill-rule="evenodd"
+                  d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                  clip-rule="evenodd"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </button>
+
+        <!-- Advanced Option Toggle -->
+        <button
+          id="show-advanced"
+          type="button"
+          class="w-full p-3 bg-gray-700 hover:bg-gray-600 rounded-lg border border-gray-600 transition-colors duration-200"
+          onclick="toggleAdvanced()"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="text-xl">⚠️</div>
+              <div class="text-left">
+                <div class="font-medium text-white">Advanced Options</div>
+                <div class="text-xs text-gray-300">Less secure methods</div>
+              </div>
+            </div>
+            <div class="text-gray-400">
+              <svg
+                id="advanced-arrow"
+                class="w-4 h-4 transition-transform duration-200"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                  clip-rule="evenodd"
+                ></path>
+              </svg>
+            </div>
+          </div>
+        </button>
+
+        <!-- Advanced Options (Hidden by default) -->
+        <div
+          id="advanced-options"
+          class="hidden mt-2 p-3 bg-yellow-900 bg-opacity-20 border border-yellow-600 rounded-lg"
+        >
+          <div class="mb-3">
+            <div class="flex items-center space-x-2 mb-2">
+              <div class="text-yellow-500">⚠️</div>
+              <span class="text-sm font-medium text-yellow-400"
+                >Security Warning</span
+              >
+            </div>
+            <p class="text-xs text-yellow-300">
+              These methods require entering your private key. Only use on
+              trusted devices and be careful where you paste your key.
+            </p>
+          </div>
+
+          <button
+            id="auth-privkey"
+            type="button"
+            class="w-full p-3 bg-yellow-800 hover:bg-yellow-700 rounded-lg border border-yellow-600 transition-colors duration-200"
+            onclick="selectAuthMethod('privkey')"
+          >
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-3">
+                <div class="text-xl">🔑</div>
+                <div class="text-left">
+                  <div class="font-medium text-white">Private Key</div>
+                  <div class="text-xs text-yellow-200">
+                    Encrypted in session
+                  </div>
+                </div>
+              </div>
+              <div class="text-yellow-200">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fill-rule="evenodd"
+                    d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                    clip-rule="evenodd"
+                  ></path>
+                </svg>
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Auth Forms (Hidden by default) -->
+
+    <!-- Extension Auth Form -->
+    <div id="extension-form" class="hidden">
+      <div class="mb-4">
+        <h3 class="text-lg font-semibold text-purple-400 mb-2">
+          Browser Extension
+        </h3>
+        <p class="text-sm text-gray-300 mb-4">
+          We'll request access to your extension to get your public key and sign
+          events.
+        </p>
+      </div>
+
+      <div
+        id="extension-status"
+        class="mb-4 p-3 rounded-lg bg-blue-800 border border-blue-600"
+      >
+        <div class="text-blue-200">🔍 Checking for extension...</div>
+      </div>
+
+      <div class="flex space-x-3">
+        <button
+          id="connect-extension"
+          type="button"
+          class="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+          onclick="connectExtension()"
+          disabled
+        >
+          Connect Extension
+        </button>
+        <button
+          type="button"
+          class="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+          onclick="goBack()"
+        >
+          Back
+        </button>
+      </div>
+    </div>
+
+    <!-- Amber Auth Form -->
+    <div id="amber-form" class="hidden">
+      <div class="mb-4">
+        <h3 class="text-lg font-semibold text-orange-400 mb-2">Amber Signer</h3>
+        <p class="text-sm text-gray-300 mb-4">
+          Enter your Amber bunker URL to connect to your Android signer.
+        </p>
+      </div>
+
       <div class="mb-4">
         <label
-          for="publicKey"
+          for="bunker-url"
           class="block mb-2 text-sm font-medium text-gray-300"
         >
-          Public Key (npub or hex)
+          Bunker URL
         </label>
         <input
           type="text"
-          id="publicKey"
-          name="publicKey"
-          required
-          placeholder="npub1... or hex key"
-          class="w-full px-3 py-2 text-white placeholder-gray-400 bg-gray-600 border border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-          _="on input 
-               set value to my.value.trim()
-               if value.length > 0
-                 if value.startsWith('npub1') and value.length == 63
-                   add .border-green-500 to me
-                   remove .border-red-500 from me
-                   remove .border-gray-500 from me
-                 else if value.length == 64 and call isValidHex(value)
-                   add .border-green-500 to me
-                   remove .border-red-500 from me
-                   remove .border-gray-500 from me
-                 else
-                   add .border-red-500 to me
-                   remove .border-green-500 from me
-                   remove .border-gray-500 from me
-                 end
-               else
-                 remove .border-green-500 from me
-                 remove .border-red-500 from me
-                 add .border-gray-500 to me
-               end"
+          id="bunker-url"
+          name="bunkerUrl"
+          placeholder="bunker://pubkey?relay=wss://..."
+          class="w-full px-3 py-2 text-white placeholder-gray-400 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
         />
       </div>
 
-      <button
-        type="submit"
-        class="w-full px-4 py-2 font-bold text-white transition-colors bg-purple-600 rounded hover:bg-purple-700 mb-4"
-      >
-        Connect
-      </button>
+      <div class="flex space-x-3">
+        <button
+          type="button"
+          class="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
+          onclick="connectAmber()"
+        >
+          Connect Amber
+        </button>
+        <button
+          type="button"
+          class="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+          onclick="goBack()"
+        >
+          Back
+        </button>
+      </div>
+    </div>
 
-      <div id="login-result" class="mb-4">
-        <!-- Login results will appear here -->
+    <!-- Read Only Auth Form -->
+    <div id="readonly-form" class="hidden">
+      <div class="mb-4">
+        <h3 class="text-lg font-semibold text-gray-400 mb-2">Read Only Mode</h3>
+        <p class="text-sm text-gray-300 mb-4">
+          Enter your public key to browse in read-only mode. You won't be able
+          to sign events.
+        </p>
       </div>
 
+      <form
+        id="readonly-login-form"
+        hx-post="/login"
+        hx-swap="none"
+        hx-target="#auth-result"
+        _="on htmx:beforeRequest 
+             call showAuthResult('loading', 'Connecting...')
+           on htmx:afterRequest
+             if event.detail.xhr.status == 200
+               call showAuthResult('success', 'Connected in read-only mode!')
+               wait 1s
+               call hideAuthModal()
+               js window.updateNavigation() end
+               wait 0.5s
+               htmx.ajax('GET', '/views/profile.html', '#main-content')
+               js window.history.pushState({}, '', '/profile') end
+             else
+               call showAuthResult('error', 'Connection failed: ' + event.detail.xhr.responseText)
+             end"
+      >
+        <div class="mb-4">
+          <label
+            for="readonly-pubkey"
+            class="block mb-2 text-sm font-medium text-gray-300"
+          >
+            Public Key (npub or hex)
+          </label>
+          <input
+            type="text"
+            id="readonly-pubkey"
+            name="publicKey"
+            required
+            placeholder="npub1... or hex key"
+            class="w-full px-3 py-2 text-white placeholder-gray-400 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500"
+          />
+        </div>
+
+        <div class="flex space-x-3">
+          <button
+            type="submit"
+            class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+          >
+            Connect Read-Only
+          </button>
+          <button
+            type="button"
+            class="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+            onclick="goBack()"
+          >
+            Back
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Private Key Auth Form -->
+    <div id="privkey-form" class="hidden">
+      <div class="mb-4">
+        <h3 class="text-lg font-semibold text-yellow-400 mb-2">
+          Private Key Authentication
+        </h3>
+        <div
+          class="p-3 bg-red-900 bg-opacity-20 border border-red-600 rounded-lg mb-4"
+        >
+          <div class="flex items-center space-x-2 mb-2">
+            <div class="text-red-500">🛡️</div>
+            <span class="text-sm font-medium text-red-400"
+              >Security Notice</span
+            >
+          </div>
+          <p class="text-xs text-red-300">
+            Your private key will be encrypted with a password and stored only
+            for this session. Never share your private key with anyone.
+          </p>
+        </div>
+      </div>
+
+      <form id="privkey-login-form">
+        <div class="mb-4">
+          <label
+            for="private-key"
+            class="block mb-2 text-sm font-medium text-gray-300"
+          >
+            Private Key (nsec or hex)
+          </label>
+          <input
+            type="password"
+            id="private-key"
+            name="privateKey"
+            required
+            placeholder="nsec1... or hex key"
+            class="w-full px-3 py-2 text-white placeholder-gray-400 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+          />
+        </div>
+
+        <div class="mb-4">
+          <label
+            for="session-password"
+            class="block mb-2 text-sm font-medium text-gray-300"
+          >
+            Session Password
+          </label>
+          <input
+            type="password"
+            id="session-password"
+            name="sessionPassword"
+            required
+            placeholder="Password to encrypt your key"
+            class="w-full px-3 py-2 text-white placeholder-gray-400 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+          />
+          <p class="text-xs text-gray-400 mt-1">
+            You'll be asked for this password when signing events
+          </p>
+        </div>
+
+        <div class="flex space-x-3">
+          <button
+            type="button"
+            class="flex-1 px-4 py-2 bg-yellow-700 hover:bg-yellow-600 text-white rounded-lg transition-colors"
+            onclick="connectPrivateKey()"
+          >
+            Connect with Private Key
+          </button>
+          <button
+            type="button"
+            class="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+            onclick="goBack()"
+          >
+            Back
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Result Display -->
+    <div id="auth-result" class="mt-4"></div>
+
+    <!-- Close button for method selection -->
+    <div id="close-button" class="mt-6 text-center">
       <button
         type="button"
-        class="w-full px-4 py-2 text-gray-400 hover:text-white transition-colors"
-        onclick="hideLoginModal()"
+        class="text-gray-400 hover:text-white transition-colors"
+        onclick="hideAuthModal()"
       >
         Cancel
       </button>
-    </form>
+    </div>
   </div>
 </div>
 
 <script>
-  function showLoginModal() {
-    document.getElementById("login-modal").classList.remove("hidden");
-    document.getElementById("publicKey").focus();
+  // Global state
+  let currentAuthMethod = null;
+
+  // Main modal functions
+  function showAuthModal() {
+    document.getElementById("auth-modal").classList.remove("hidden");
+    resetModal();
   }
 
-  function hideLoginModal() {
-    document.getElementById("login-modal").classList.add("hidden");
-    document.getElementById("login-form").reset();
-    document.getElementById("login-result").innerHTML = "";
+  function hideAuthModal() {
+    document.getElementById("auth-modal").classList.add("hidden");
+    resetModal();
   }
 
-  function showLoginResult(type, message) {
+  function resetModal() {
+    // Hide all forms
+    ["extension-form", "amber-form", "readonly-form", "privkey-form"].forEach(
+      (id) => {
+        document.getElementById(id).classList.add("hidden");
+      }
+    );
+
+    // Show method selection
+    document.getElementById("auth-method-selection").classList.remove("hidden");
+    document.getElementById("close-button").classList.remove("hidden");
+
+    // Reset advanced options
+    document.getElementById("advanced-options").classList.add("hidden");
+    document.getElementById("advanced-arrow").classList.remove("rotate-180");
+
+    // Clear forms
+    document.getElementById("bunker-url").value = "";
+    document.getElementById("readonly-pubkey").value = "";
+    document.getElementById("private-key").value = "";
+    document.getElementById("session-password").value = "";
+
+    // Clear results
+    document.getElementById("auth-result").innerHTML = "";
+
+    currentAuthMethod = null;
+  }
+
+  // Method selection
+  function selectAuthMethod(method) {
+    currentAuthMethod = method;
+
+    // Hide method selection
+    document.getElementById("auth-method-selection").classList.add("hidden");
+    document.getElementById("close-button").classList.add("hidden");
+
+    // Show appropriate form
+    const formId = method + "-form";
+    document.getElementById(formId).classList.remove("hidden");
+
+    // Special handling for extension
+    if (method === "extension") {
+      checkForExtension();
+    }
+  }
+
+  function goBack() {
+    resetModal();
+  }
+
+  // Advanced options toggle
+  function toggleAdvanced() {
+    const advancedOptions = document.getElementById("advanced-options");
+    const arrow = document.getElementById("advanced-arrow");
+
+    if (advancedOptions.classList.contains("hidden")) {
+      advancedOptions.classList.remove("hidden");
+      arrow.classList.add("rotate-180");
+    } else {
+      advancedOptions.classList.add("hidden");
+      arrow.classList.remove("rotate-180");
+    }
+  }
+
+  // Extension handling
+  function checkForExtension() {
+    const statusEl = document.getElementById("extension-status");
+    const connectBtn = document.getElementById("connect-extension");
+
+    if (window.nostr) {
+      statusEl.innerHTML =
+        '<div class="text-green-200">✅ Extension detected!</div>';
+      statusEl.className =
+        "mb-4 p-3 rounded-lg bg-green-800 border border-green-600";
+      connectBtn.disabled = false;
+    } else {
+      statusEl.innerHTML =
+        '<div class="text-red-200">❌ No extension found. Please install Alby, nos2x, or another Nostr extension.</div>';
+      statusEl.className =
+        "mb-4 p-3 rounded-lg bg-red-800 border border-red-600";
+      connectBtn.disabled = true;
+    }
+  }
+
+  async function connectExtension() {
+    try {
+      showAuthResult("loading", "Requesting access from extension...");
+
+      const publicKey = await window.nostr.getPublicKey();
+
+      // Create form data and submit
+      const formData = new FormData();
+      formData.append("publicKey", publicKey);
+      formData.append("authMethod", "extension");
+
+      const response = await fetch("/login", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        showAuthResult("success", "Connected via extension!");
+        setTimeout(() => {
+          hideAuthModal();
+          window.updateNavigation();
+          // Navigate to profile
+          setTimeout(() => {
+            htmx.ajax("GET", "/views/profile.html", "#main-content");
+            window.history.pushState({}, "", "/profile");
+          }, 500);
+        }, 1000);
+      } else {
+        const errorText = await response.text();
+        showAuthResult("error", "Connection failed: " + errorText);
+      }
+    } catch (error) {
+      showAuthResult("error", "Extension error: " + error.message);
+    }
+  }
+
+  // Amber handling
+  function connectAmber() {
+    const bunkerUrl = document.getElementById("bunker-url").value.trim();
+
+    if (!bunkerUrl) {
+      showAuthResult("error", "Please enter a bunker URL");
+      return;
+    }
+
+    if (!bunkerUrl.startsWith("bunker://")) {
+      showAuthResult("error", "Invalid bunker URL format");
+      return;
+    }
+
+    showAuthResult("loading", "Connecting to Amber...");
+
+    // TODO: Implement Amber connection logic
+    // This would involve parsing the bunker URL and establishing NIP-46 connection
+    setTimeout(() => {
+      showAuthResult("error", "Amber integration coming soon!");
+    }, 1000);
+  }
+
+  // Private key handling
+  function connectPrivateKey() {
+    const privateKey = document.getElementById("private-key").value.trim();
+    const sessionPassword = document.getElementById("session-password").value;
+
+    if (!privateKey || !sessionPassword) {
+      showAuthResult("error", "Please fill in all fields");
+      return;
+    }
+
+    showAuthResult("loading", "Encrypting and storing key...");
+
+    // TODO: Implement private key encryption and storage
+    // This would involve:
+    // 1. Validating the private key format
+    // 2. Deriving the public key
+    // 3. Encrypting the private key with the session password
+    // 4. Storing encrypted key in session/memory
+    // 5. Creating session with derived public key
+
+    setTimeout(() => {
+      showAuthResult("error", "Private key authentication coming soon!");
+    }, 1000);
+  }
+
+  // Result display helper
+  function showAuthResult(type, message) {
     let className, icon;
 
     if (type === "success") {
@@ -117,14 +635,14 @@
       icon = "ℹ️";
     }
 
-    const resultDiv = document.getElementById("login-result");
+    const resultDiv = document.getElementById("auth-result");
     if (resultDiv) {
       resultDiv.innerHTML = `<div class="${className} border px-4 py-3 rounded"><p>${icon} ${message}</p></div>`;
     }
   }
 
-  function isValidHex(value) {
-    return /^[0-9a-fA-F]+$/.test(value);
-  }
+  // Expose functions globally for modal triggering
+  window.showAuthModal = showAuthModal;
+  window.hideAuthModal = hideAuthModal;
 </script>
 {{end}}

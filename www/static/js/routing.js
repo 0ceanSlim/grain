@@ -1,6 +1,7 @@
 /**
  * Simple client-side routing for HTMX navigation
  * Handles initial page loads and browser back/forward buttons
+ * Updated to use login modal instead of login route
  */
 
 // Handle initial route loading based on current URL path
@@ -22,42 +23,35 @@ document.addEventListener("DOMContentLoaded", function () {
           if (response.ok) {
             targetView = "/views/profile.html";
           } else {
-            // No session, redirect to login
-            targetView = "/views/login.html";
-            window.history.pushState({}, "", "/login");
+            // No session, redirect to home and show login modal
+            targetView = "/views/home.html";
+            window.history.pushState({}, "", "/");
+
+            // Show login modal after home loads
+            setTimeout(() => {
+              const loginModal = document.getElementById("login-modal");
+              if (loginModal) {
+                loginModal.classList.remove("hidden");
+              }
+            }, 100);
           }
           console.log("Loading view:", targetView);
           htmx.ajax("GET", targetView, { target: "#main-content" });
         })
         .catch(() => {
-          // Error checking session, go to login
-          targetView = "/views/login.html";
-          window.history.pushState({}, "", "/login");
+          // Error checking session, go to home and show login modal
+          targetView = "/views/home.html";
+          window.history.pushState({}, "", "/");
           console.log("Loading view:", targetView);
           htmx.ajax("GET", targetView, { target: "#main-content" });
-        });
-      return; // Exit early since we're handling this asynchronously
-    case "/login":
-      // Check if user is already logged in before loading login page
-      fetch("/api/v1/session")
-        .then((response) => {
-          if (response.ok) {
-            // User is already logged in, redirect to profile
-            console.log("User already logged in, redirecting to profile");
-            targetView = "/views/profile.html";
-            window.history.pushState({}, "", "/profile");
-          } else {
-            // Not logged in, show login page
-            targetView = "/views/login.html";
-          }
-          console.log("Loading view:", targetView);
-          htmx.ajax("GET", targetView, { target: "#main-content" });
-        })
-        .catch(() => {
-          // Error checking session, show login page
-          targetView = "/views/login.html";
-          console.log("Loading view:", targetView);
-          htmx.ajax("GET", targetView, { target: "#main-content" });
+
+          // Show login modal after home loads
+          setTimeout(() => {
+            const loginModal = document.getElementById("login-modal");
+            if (loginModal) {
+              loginModal.classList.remove("hidden");
+            }
+          }, 100);
         });
       return; // Exit early since we're handling this asynchronously
     default:
@@ -85,13 +79,30 @@ window.addEventListener("popstate", function (event) {
       targetView = "/views/home.html";
       break;
     case "/profile":
-      targetView = "/views/profile.html";
-      break;
-    case "/login":
-      targetView = "/views/login.html";
-      break;
+      // Check if user has valid session for profile route
+      fetch("/api/v1/session")
+        .then((response) => {
+          if (response.ok) {
+            targetView = "/views/profile.html";
+          } else {
+            // No session, redirect to home
+            targetView = "/views/home.html";
+            window.history.replaceState({}, "", "/");
+          }
+          console.log("Loading view via popstate:", targetView);
+          htmx.ajax("GET", targetView, { target: "#main-content" });
+        })
+        .catch(() => {
+          // Error checking session, go to home
+          targetView = "/views/home.html";
+          window.history.replaceState({}, "", "/");
+          console.log("Loading view via popstate:", targetView);
+          htmx.ajax("GET", targetView, { target: "#main-content" });
+        });
+      return; // Exit early since we're handling this asynchronously
     default:
       targetView = "/views/home.html";
+      window.history.replaceState({}, "", "/");
       break;
   }
 
