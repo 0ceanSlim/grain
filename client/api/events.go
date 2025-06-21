@@ -39,7 +39,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get current session
-	session := auth.SessionMgr.GetCurrentUser(r)
+	session := auth.EnhancedSessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return
@@ -145,7 +145,7 @@ func GetUserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	pubkey := r.URL.Query().Get("pubkey")
 	if pubkey == "" {
 		// Use current session pubkey if not provided
-		session := auth.SessionMgr.GetCurrentUser(r)
+		session := auth.EnhancedSessionMgr.GetCurrentUser(r)
 		if session == nil {
 			http.Error(w, "Authentication required or pubkey parameter needed", http.StatusUnauthorized)
 			return
@@ -181,7 +181,7 @@ func GetUserRelaysHandler(w http.ResponseWriter, r *http.Request) {
 	pubkey := r.URL.Query().Get("pubkey")
 	if pubkey == "" {
 		// Use current session pubkey if not provided
-		session := auth.SessionMgr.GetCurrentUser(r)
+		session := auth.EnhancedSessionMgr.GetCurrentUser(r)
 		if session == nil {
 			http.Error(w, "Authentication required or pubkey parameter needed", http.StatusUnauthorized)
 			return

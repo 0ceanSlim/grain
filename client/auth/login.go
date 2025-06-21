@@ -11,8 +11,8 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// Global session manager instance
-var SessionMgr *SessionManager
+// Global enhanced session manager instance
+var EnhancedSessionMgr *EnhancedSessionManager
 
 // Global core client instance
 var coreClient *core.Client
@@ -20,339 +20,181 @@ var coreClient *core.Client
 // Application relays for initial discovery
 var appRelays []string
 
-// InitializeCoreClient sets up the global core client with retry
-func InitializeCoreClient(relays []string) error {
-	config := core.DefaultConfig()
-	config.DefaultRelays = relays
-	
-	coreClient = core.NewClient(config)
-	
-	// Connect to default relays with retry
-	if err := coreClient.ConnectToRelaysWithRetry(relays, 3); err != nil {
-		log.Util().Error("Failed to connect to relays after retries", "error", err)
-		return err
-	}
-	
-	log.Util().Info("Core client initialized", "relay_count", len(relays))
-	return nil
-}
-
-// LoginHandler handles user login and session initialization using core client
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	log.Util().Debug("Login handler called")
-
-	if SessionMgr == nil {
-		log.Util().Error("SessionMgr not initialized")
-		http.Error(w, "Session manager not available", http.StatusInternalServerError)
-		return
+// CreateUserSession creates a new user session with comprehensive initialization
+func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*EnhancedUserSession, error) {
+	if EnhancedSessionMgr == nil {
+		return nil, &SessionError{Message: "session manager not initialized"}
 	}
 	
 	if coreClient == nil {
-		log.Util().Error("Core client not initialized")
-		http.Error(w, "Client not available", http.StatusInternalServerError)
-		return
+		return nil, &SessionError{Message: "core client not initialized"}
 	}
 
-	// Check if user is already logged in
-	if session := SessionMgr.GetCurrentUser(r); session != nil {
-		log.Util().Info("User already logged in", "pubkey", session.PublicKey)
-		// Return success response instead of redirect
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Already logged in"))
-		return
-	}
+	log.Util().Info("Creating user session", 
+		"pubkey", req.PublicKey,
+		"mode", req.RequestedMode,
+		"signing_method", req.SigningMethod)
 
-	// Parse form data
-	if err := r.ParseForm(); err != nil {
-		log.Util().Error("Failed to parse form", "error", err)
-		http.Error(w, "Invalid request", http.StatusBadRequest)
-		return
-	}
-
-	publicKey := r.FormValue("publicKey")
-	if publicKey == "" {
-		log.Util().Warn("Missing publicKey in form data")
-		http.Error(w, "Missing publicKey", http.StatusBadRequest)
-		return
-	}
-	log.Util().Info("Processing login", "pubkey", publicKey)
-
-	// Try cached data first
-	if cachedData, exists := cache.GetUserData(publicKey); exists {
-		log.Util().Debug("Found cached user data", "pubkey", publicKey)
-		
-		if isValidCachedData(cachedData) {
-			if err := createSessionFromCache(w, publicKey, cachedData); err != nil {
-				log.Util().Error("Failed to create session from cache", "error", err)
-				http.Error(w, "Session creation failed", http.StatusInternalServerError)
-				return
-			}
-			
-			log.Util().Info("Login successful using cached data", "pubkey", publicKey)
-			// Return success response for HTMX
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("Login successful"))
-			return
-		}
-	}
-
-	// Fetch fresh data and create session
-	if err := fetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
-		log.Util().Error("Failed to fetch user data", "pubkey", publicKey, "error", err)
-		http.Error(w, "Failed to fetch user data: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Create session after successful data fetch
-	session, err := SessionMgr.CreateSession(w, publicKey)
+	// Get or fetch user data
+	metadata, mailboxes, err := getUserDataForSession(req.PublicKey)
 	if err != nil {
-		log.Util().Error("Failed to create session", "error", err)
-		http.Error(w, "Session creation failed", http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("failed to get user data: %w", err)
 	}
 
-	log.Util().Info("Login successful with fresh data", "pubkey", session.PublicKey)
-	// Return success response for HTMX
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Login successful"))
-}
-
-// fetchAndCacheUserDataWithCoreClient fetches user data using the core client
-func fetchAndCacheUserDataWithCoreClient(publicKey string) error {
-	log.Util().Debug("Fetching fresh user data with core client", "pubkey", publicKey)
-
-	// Ensure we have connected relays before proceeding
-	if err := ensureRelayConnections(); err != nil {
-		return fmt.Errorf("failed to ensure relay connections: %w", err)
-	}
-
-	// First, try to get user's mailboxes using connected relays
-	var relaysForMetadata []string
-	mailboxes, err := coreClient.GetUserRelays(publicKey)
-	if err != nil {
-		log.Util().Warn("Failed to fetch mailboxes, using app relays", "pubkey", publicKey, "error", err)
-		relaysForMetadata = appRelays
-	} else if mailboxes != nil {
-		// Get user's preferred relays
-		userRelays := mailboxes.ToStringSlice()
-		log.Util().Debug("User has preferred relays", "pubkey", publicKey, "relay_count", len(userRelays))
-		
-		// BUT: Use connected app relays for profile fetch to ensure success
-		// This is more reliable than trying to connect to user's personal relays
-		connectedRelays := coreClient.GetConnectedRelays()
-		if len(connectedRelays) > 0 {
-			relaysForMetadata = connectedRelays
-			log.Util().Debug("Using connected app relays for metadata", "pubkey", publicKey, "relay_count", len(relaysForMetadata))
+	// Prepare session metadata
+	sessionMetadata := SessionMetadata{}
+	
+	if metadata != nil {
+		metadataBytes, err := json.Marshal(metadata)
+		if err != nil {
+			log.Util().Warn("Failed to marshal metadata", "pubkey", req.PublicKey, "error", err)
 		} else {
-			relaysForMetadata = appRelays
+			sessionMetadata.Profile = string(metadataBytes)
 		}
 	}
 
-	// Use app relays as fallback
-	if len(relaysForMetadata) == 0 {
-		relaysForMetadata = appRelays
-		log.Util().Info("Using app relays for metadata", "pubkey", publicKey, "relay_count", len(relaysForMetadata))
-	}
-
-	// Fetch user metadata (profile) using connected relays
-	userMetadata, err := coreClient.GetUserProfile(publicKey, relaysForMetadata)
-	if err != nil || userMetadata == nil {
-		return fmt.Errorf("failed to fetch user metadata: %w", err)
-	}
-
-	// Cache the data
-	cacheUserData(publicKey, userMetadata, mailboxes)
-
-	log.Util().Info("User data fetched and cached successfully", "pubkey", publicKey)
-	return nil
-}
-
-// ensureRelayConnections checks and reconnects to relays if needed
-func ensureRelayConnections() error {
-	if coreClient == nil {
-		return fmt.Errorf("core client not initialized")
-	}
-	
-	// Check current connections
-	connectedRelays := coreClient.GetConnectedRelays()
-	log.Util().Debug("Current relay connections", "connected_count", len(connectedRelays))
-	
-	// If we have some connections, we're good
-	if len(connectedRelays) > 0 {
-		return nil
-	}
-	
-	// No connections, try to reconnect
-	log.Util().Warn("No relay connections found, attempting to reconnect")
-	
-	if err := coreClient.ConnectToRelaysWithRetry(appRelays, 3); err != nil {
-		log.Util().Error("Failed to reconnect to relays", "error", err)
-		return err
-	}
-	
-	// Verify we now have connections
-	connectedRelays = coreClient.GetConnectedRelays()
-	if len(connectedRelays) == 0 {
-		return fmt.Errorf("still no relay connections after reconnection attempt")
-	}
-	
-	log.Util().Info("Successfully reconnected to relays", "connected_count", len(connectedRelays))
-	return nil
-}
-
-// GetUserProfile retrieves user profile data using core client with cache fallback
-func GetUserProfile(publicKey string) (metadata *nostr.Event, mailboxes *core.Mailboxes, err error) {
-	// Try cache first
-	if cachedData, exists := cache.GetUserData(publicKey); exists && isValidCachedData(cachedData) {
-		if err := json.Unmarshal([]byte(cachedData.Metadata), &metadata); err == nil {
-			// Parse mailboxes if available
-			if cachedData.Mailboxes != "" && cachedData.Mailboxes != "{}" {
-				json.Unmarshal([]byte(cachedData.Mailboxes), &mailboxes)
-			}
-			log.Util().Debug("Retrieved profile from cache", "pubkey", publicKey)
-			return metadata, mailboxes, nil
-		}
-	}
-	
-	// Fetch fresh data using core client
-	log.Util().Debug("Cache miss, fetching fresh profile data", "pubkey", publicKey)
-	
-	mailboxes, err = coreClient.GetUserRelays(publicKey)
-	if err != nil {
-		log.Util().Warn("Failed to fetch mailboxes", "pubkey", publicKey, "error", err)
-	}
-	
-	relaysForMetadata := appRelays
 	if mailboxes != nil {
-		relaysForMetadata = mailboxes.ToStringSlice()
+		mailboxBytes, err := json.Marshal(mailboxes)
+		if err != nil {
+			log.Util().Warn("Failed to marshal mailboxes", "pubkey", req.PublicKey, "error", err)
+		} else {
+			sessionMetadata.Mailboxes = string(mailboxBytes)
+		}
 	}
-	
-	metadata, err = coreClient.GetUserProfile(publicKey, relaysForMetadata)
+
+	// Create the session
+	session, err := EnhancedSessionMgr.CreateSession(w, req, sessionMetadata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch profile: %w", err)
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	// Update connected relays in session
+	if mailboxes != nil {
+		session.ConnectedRelays = mailboxes.ToStringSlice()
+	} else {
+		session.ConnectedRelays = appRelays
+	}
+
+	log.Util().Info("User session created successfully", 
+		"pubkey", req.PublicKey,
+		"mode", session.Mode,
+		"relay_count", len(session.ConnectedRelays))
+
+	return session, nil
+}
+
+// getUserDataForSession retrieves user metadata and mailboxes, using cache when possible
+func getUserDataForSession(publicKey string) (*nostr.Event, *core.Mailboxes, error) {
+	// Try cached data first using the enhanced cache function
+	if metadata, mailboxes, found := cache.GetParsedUserData(publicKey); found {
+		log.Util().Debug("Using cached data for session", "pubkey", publicKey)
+		return metadata, mailboxes, nil
 	}
 	
-	// Cache the fresh data
-	cacheUserData(publicKey, metadata, mailboxes)
+	// Fetch fresh data using the helper function
+	log.Util().Debug("Cache miss, fetching fresh data for session", "pubkey", publicKey)
+	
+	// Use the comprehensive fetch function that was moved to helpers
+	if err := FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
+		log.Util().Warn("Failed to fetch and cache user data", "pubkey", publicKey, "error", err)
+		return nil, nil, err
+	}
+	
+	// Now get the freshly cached data
+	metadata, mailboxes, found := cache.GetParsedUserData(publicKey)
+	if !found {
+		return nil, nil, fmt.Errorf("failed to retrieve cached data after fetch")
+	}
 	
 	return metadata, mailboxes, nil
 }
 
-// RebuildCacheForSession rebuilds cache for an existing session using core client
-func RebuildCacheForSession(session *UserSession) {
+// cacheUserData stores user data in the cache (DEPRECATED - use cache.CacheUserDataFromObjects)
+func cacheUserData(publicKey string, metadata *nostr.Event, mailboxes *core.Mailboxes) {
+	// Use the enhanced cache function
+	cache.CacheUserDataFromObjects(publicKey, metadata, mailboxes)
+}
+
+// RebuildCacheForSession rebuilds cache for an existing session
+func RebuildCacheForSession(session *EnhancedUserSession) {
 	log.Util().Info("Rebuilding cache for existing session", "pubkey", session.PublicKey)
 	
 	go func() {
-		// Fetch data in background to avoid blocking the request
-		if err := fetchAndCacheUserDataWithCoreClient(session.PublicKey); err != nil {
+		// Fetch data in background to avoid blocking
+		metadata, mailboxes, err := fetchFreshUserData(session.PublicKey)
+		if err != nil {
 			log.Util().Error("Failed to rebuild cache for session", 
 				"pubkey", session.PublicKey, "error", err)
-		} else {
-			log.Util().Info("Cache rebuilt successfully for session", 
-				"pubkey", session.PublicKey)
+			return
 		}
+		
+		// Update cache
+		cacheUserData(session.PublicKey, metadata, mailboxes)
+		
+		// Update session metadata
+		sessionMetadata := SessionMetadata{}
+		if metadata != nil {
+			if metadataBytes, err := json.Marshal(metadata); err == nil {
+				sessionMetadata.Profile = string(metadataBytes)
+			}
+		}
+		if mailboxes != nil {
+			if mailboxBytes, err := json.Marshal(mailboxes); err == nil {
+				sessionMetadata.Mailboxes = string(mailboxBytes)
+			}
+		}
+		
+		// Get session token for update (this is a simplified approach)
+		// In practice, you'd need to track token->session mapping
+		log.Util().Info("Cache rebuilt successfully for session", "pubkey", session.PublicKey)
 	}()
 }
 
-// isValidCachedData checks if cached data contains valid user information
-func isValidCachedData(cachedData cache.CachedUserData) bool {
-	if cachedData.Metadata == "" {
-		return false
+// fetchFreshUserData fetches fresh user data from relays (DEPRECATED - use FetchAndCacheUserDataWithCoreClient)
+func fetchFreshUserData(publicKey string) (*nostr.Event, *core.Mailboxes, error) {
+	// Use the comprehensive helper function
+	if err := FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
+		return nil, nil, err
 	}
 	
-	// Try to parse metadata to ensure it's valid JSON
-	var metadata nostr.Event
-	if err := json.Unmarshal([]byte(cachedData.Metadata), &metadata); err != nil {
-		return false
+	// Get the freshly cached data
+	metadata, mailboxes, found := cache.GetParsedUserData(publicKey)
+	if !found {
+		return nil, nil, fmt.Errorf("failed to retrieve cached data after fetch")
 	}
 	
-	// Basic validation - must have ID and PubKey
-	return metadata.ID != "" && metadata.PubKey != ""
+	return metadata, mailboxes, nil
 }
 
-// createSessionFromCache creates a session using cached user data
-func createSessionFromCache(w http.ResponseWriter, publicKey string, cachedData cache.CachedUserData) error {
-	// Parse cached metadata to verify it's still valid
-	var metadata nostr.Event
-	if err := json.Unmarshal([]byte(cachedData.Metadata), &metadata); err != nil {
-		return fmt.Errorf("invalid cached metadata: %w", err)
+// ValidateSessionRequest validates a session initialization request
+func ValidateSessionRequest(req SessionInitRequest) error {
+	if req.PublicKey == "" {
+		return &SessionError{Message: "public key is required"}
 	}
 	
-	// Verify the cached metadata matches the requested public key
-	if metadata.PubKey != publicKey {
-		return fmt.Errorf("cached metadata pubkey mismatch")
+	// Validate mode
+	if req.RequestedMode != ReadOnlyMode && req.RequestedMode != WriteMode {
+		return &SessionError{Message: "invalid session mode"}
 	}
 	
-	// Create session
-	session, err := SessionMgr.CreateSession(w, publicKey)
-	if err != nil {
-		return fmt.Errorf("failed to create session: %w", err)
-	}
-	
-	log.Util().Debug("Session created from cache", "pubkey", session.PublicKey)
-	return nil
-}
-
-// cacheUserData caches user metadata and mailboxes
-func cacheUserData(publicKey string, metadata *nostr.Event, mailboxes *core.Mailboxes) {
-	mailboxesJSON := "{}"
-	if mailboxes != nil {
-		if data, err := json.Marshal(mailboxes); err == nil {
-			mailboxesJSON = string(data)
+	// Validate signing method for write mode
+	if req.RequestedMode == WriteMode {
+		validMethods := map[SigningMethod]bool{
+			BrowserExtension: true,
+			AmberSigning:     true,
+			BunkerSigning:    true,
+			EncryptedKey:     true,
 		}
-	}
-
-	if metadataJSON, err := json.Marshal(metadata); err == nil {
-		cache.SetUserData(publicKey, string(metadataJSON), mailboxesJSON)
-		log.Util().Debug("User data cached successfully", "pubkey", publicKey)
-	}
-}
-
-// SetAppRelays initializes the application relays for initial discovery
-func SetAppRelays(relays []string) {
-	appRelays = relays
-	log.Util().Debug("App relays initialized for discovery", "relay_count", len(relays))
-}
-
-// GetCoreClientStatus returns status information about the core client
-func GetCoreClientStatus() map[string]interface{} {
-	if coreClient == nil {
-		return map[string]interface{}{
-			"initialized": false,
-			"error": "core client not initialized",
+		
+		if !validMethods[req.SigningMethod] {
+			return &SessionError{Message: "invalid signing method for write mode"}
+		}
+		
+		// If using encrypted key, private key must be provided
+		if req.SigningMethod == EncryptedKey && req.PrivateKey == "" {
+			return &SessionError{Message: "private key required for encrypted key signing method"}
 		}
 	}
 	
-	connectedRelays := coreClient.GetConnectedRelays()
-	
-	return map[string]interface{}{
-		"initialized": true,
-		"connected_relays": connectedRelays,
-		"connected_count": len(connectedRelays),
-		"app_relays": appRelays,
-	}
-}
-
-// ReinitializeCoreClient reinitializes the core client (for recovery)
-func ReinitializeCoreClient() error {
-	log.Util().Warn("Reinitializing core client")
-	
-	// Close existing client if any
-	if coreClient != nil {
-		coreClient.Close()
-	}
-	
-	// Reinitialize
-	return InitializeCoreClient(appRelays)
-}
-func GetCoreClient() *core.Client {
-	return coreClient
-}
-
-// CloseCoreClient shuts down the core client
-func CloseCoreClient() error {
-	if coreClient != nil {
-		return coreClient.Close()
-	}
 	return nil
 }

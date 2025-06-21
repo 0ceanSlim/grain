@@ -10,17 +10,17 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// GetSessionHandler returns the current user's session data as JSON
+// GetSessionHandler returns the current user's enhanced session data as JSON
 func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 	// Get current session
-	session := auth.SessionMgr.GetCurrentUser(r)
+	session := auth.EnhancedSessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "No active session found", http.StatusUnauthorized)
 		log.Util().Debug("No active session found for request")
 		return
 	}
 
-	// Get relay info from cache instead of session
+	// Get fresh relay info from cache
 	var relayInfo map[string]interface{}
 	if cachedData, found := cache.GetUserData(session.PublicKey); found {
 		var mailboxes core.Mailboxes
@@ -36,10 +36,15 @@ func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Create lightweight session response
+	// Create comprehensive session response
 	sessionData := map[string]interface{}{
-		"publicKey":  session.PublicKey,
-		"lastActive": session.LastActive,
+		"publicKey":        session.PublicKey,
+		"lastActive":       session.LastActive,
+		"mode":            session.Mode,
+		"capabilities":    session.Capabilities,
+		"connectedRelays": session.ConnectedRelays,
+		"isReadOnly":      session.IsReadOnly(),
+		"canCreateEvents": session.CanCreateEvents(),
 	}
 
 	// Add relay info if available
@@ -47,7 +52,9 @@ func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 		sessionData["relays"] = relayInfo
 	}
 
-	log.Util().Debug("Returning session data", "pubkey", session.PublicKey)
+	log.Util().Debug("Returning enhanced session data", 
+		"pubkey", session.PublicKey,
+		"mode", session.Mode)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(sessionData); err != nil {
@@ -56,5 +63,5 @@ func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Util().Info("Session data retrieved successfully", "pubkey", session.PublicKey)
+	log.Util().Info("Enhanced session data retrieved successfully", "pubkey", session.PublicKey)
 }
