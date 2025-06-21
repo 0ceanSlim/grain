@@ -1,0 +1,49 @@
+{{define "user-dropdown"}}
+<div id="user-dropdown-template" class="relative">
+  <button
+    id="user-menu-button"
+    class="flex items-center px-3 py-2 space-x-2 text-gray-300 transition-colors rounded hover:text-white"
+    onclick="toggleUserDropdown()"
+    type="button"
+  >
+    <span>👤</span>
+    <span class="hidden sm:inline">Profile</span>
+    <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
+      <path
+        fill-rule="evenodd"
+        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+        clip-rule="evenodd"
+      ></path>
+    </svg>
+  </button>
+
+  <!-- Dropdown menu -->
+  <div
+    id="user-dropdown-menu"
+    class="absolute right-0 z-50 hidden w-48 mt-2 bg-gray-700 border border-gray-600 rounded-lg shadow-lg"
+  >
+    <div class="py-1">
+      <button
+        class="flex w-full px-4 py-2 text-sm text-left text-gray-300 transition-colors hover:bg-gray-600 hover:text-white"
+        hx-get="/views/profile.html"
+        hx-target="#main-content"
+        hx-push-url="/profile"
+        onclick="closeUserDropdown()"
+      >
+        <span class="mr-2">👤</span>
+        View Profile
+      </button>
+
+      <hr class="border-gray-600" />
+
+      <button
+        class="flex w-full px-4 py-2 text-sm text-left text-red-300 transition-colors hover:bg-red-600 hover:text-white"
+        onclick="window.logoutUser(); closeUserDropdown();"
+      >
+        <span class="mr-2">🚪</span>
+        Logout
+      </button>
+    </div>
+  </div>
+</div>
+{{end}}

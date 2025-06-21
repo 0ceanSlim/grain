@@ -1,0 +1,130 @@
+{{define "login-modal"}}
+<div
+  id="login-modal"
+  class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden"
+>
+  <div class="bg-gray-700 rounded-lg p-8 max-w-md w-full mx-4">
+    <h2 class="text-2xl font-bold text-center text-purple-400 mb-6">
+      🔐 Connect to Nostr
+    </h2>
+
+    <form
+      id="login-form"
+      hx-post="/login"
+      hx-swap="none"
+      hx-target="#login-result"
+      _="on htmx:beforeRequest 
+           call showLoginResult('loading', 'Connecting...')
+         on htmx:afterRequest
+           if event.detail.xhr.status == 200
+             call showLoginResult('success', 'Login successful! Updating...')
+             wait 1s
+             call hideLoginModal()
+             js window.updateNavigation() end
+             wait 0.5s
+             htmx.ajax('GET', '/views/profile.html', '#main-content')
+             js window.history.pushState({}, '', '/profile') end
+           else
+             call showLoginResult('error', 'Login failed: ' + event.detail.xhr.responseText)
+           end"
+    >
+      <div class="mb-4">
+        <label
+          for="publicKey"
+          class="block mb-2 text-sm font-medium text-gray-300"
+        >
+          Public Key (npub or hex)
+        </label>
+        <input
+          type="text"
+          id="publicKey"
+          name="publicKey"
+          required
+          placeholder="npub1... or hex key"
+          class="w-full px-3 py-2 text-white placeholder-gray-400 bg-gray-600 border border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+          _="on input 
+               set value to my.value.trim()
+               if value.length > 0
+                 if value.startsWith('npub1') and value.length == 63
+                   add .border-green-500 to me
+                   remove .border-red-500 from me
+                   remove .border-gray-500 from me
+                 else if value.length == 64 and call isValidHex(value)
+                   add .border-green-500 to me
+                   remove .border-red-500 from me
+                   remove .border-gray-500 from me
+                 else
+                   add .border-red-500 to me
+                   remove .border-green-500 from me
+                   remove .border-gray-500 from me
+                 end
+               else
+                 remove .border-green-500 from me
+                 remove .border-red-500 from me
+                 add .border-gray-500 to me
+               end"
+        />
+      </div>
+
+      <button
+        type="submit"
+        class="w-full px-4 py-2 font-bold text-white transition-colors bg-purple-600 rounded hover:bg-purple-700 mb-4"
+      >
+        Connect
+      </button>
+
+      <div id="login-result" class="mb-4">
+        <!-- Login results will appear here -->
+      </div>
+
+      <button
+        type="button"
+        class="w-full px-4 py-2 text-gray-400 hover:text-white transition-colors"
+        onclick="hideLoginModal()"
+      >
+        Cancel
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+  function showLoginModal() {
+    document.getElementById("login-modal").classList.remove("hidden");
+    document.getElementById("publicKey").focus();
+  }
+
+  function hideLoginModal() {
+    document.getElementById("login-modal").classList.add("hidden");
+    document.getElementById("login-form").reset();
+    document.getElementById("login-result").innerHTML = "";
+  }
+
+  function showLoginResult(type, message) {
+    let className, icon;
+
+    if (type === "success") {
+      className = "bg-green-800 border-green-600 text-green-200";
+      icon = "✅";
+    } else if (type === "error") {
+      className = "bg-red-800 border-red-600 text-red-200";
+      icon = "❌";
+    } else if (type === "loading") {
+      className = "bg-blue-800 border-blue-600 text-blue-200";
+      icon = "⏳";
+    } else {
+      className = "bg-gray-800 border-gray-600 text-gray-200";
+      icon = "ℹ️";
+    }
+
+    const resultDiv = document.getElementById("login-result");
+    if (resultDiv) {
+      resultDiv.innerHTML = `<div class="${className} border px-4 py-3 rounded"><p>${icon} ${message}</p></div>`;
+    }
+  }
+
+  function isValidHex(value) {
+    return /^[0-9a-fA-F]+$/.test(value);
+  }
+</script>
+{{end}}

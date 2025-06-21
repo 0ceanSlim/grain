@@ -29,94 +29,13 @@
 <!-- Hidden templates -->
 <div class="hidden">
   {{template "login-button"}} {{template "profile-button"}} {{template
-  "logout-button"}}
+  "logout-button"}} {{template "user-dropdown"}}
 </div>
 
-<script>
-  // Global navigation update function
-  window.updateNavigation = function () {
-    console.log("Updating navigation...");
+<!-- Login Modal -->
+{{template "login-modal"}}
 
-    fetch("/api/v1/session")
-      .then((response) => {
-        if (response.ok) {
-          console.log("Session found, showing profile nav");
-
-          // Get profile button from template
-          const profileTemplate = document.querySelector("#profile-template");
-          const profileButton = profileTemplate
-            .querySelector("button")
-            .cloneNode(true);
-
-          // Get logout button from template
-          const logoutTemplate = document.querySelector("#logout-template");
-          const logoutButton = logoutTemplate
-            .querySelector("button")
-            .cloneNode(true);
-
-          // Clear and update profile nav
-          const profileNav = document.getElementById("profile-nav");
-          profileNav.innerHTML = "";
-          profileNav.appendChild(profileButton);
-          profileNav.appendChild(logoutButton);
-
-          // Process HTMX attributes on new buttons
-          htmx.process(profileNav);
-        } else {
-          console.log("No session, showing login nav");
-
-          // Get login button from template
-          const loginTemplate = document.querySelector("#login-template");
-          const loginButton = loginTemplate
-            .querySelector("button")
-            .cloneNode(true);
-
-          // Update profile nav
-          const profileNav = document.getElementById("profile-nav");
-          profileNav.innerHTML = "";
-          profileNav.appendChild(loginButton);
-
-          // Process HTMX attributes on new button
-          htmx.process(profileNav);
-        }
-      })
-      .catch((error) => {
-        console.error("Navigation update error:", error);
-      });
-  };
-
-  // Call on page load
-  document.addEventListener("DOMContentLoaded", function () {
-    console.log("DOM loaded, updating navigation");
-    window.updateNavigation();
-  });
-
-  // Listen for custom updateNav events
-  document.body.addEventListener("updateNav", function () {
-    console.log("Received updateNav event");
-    window.updateNavigation();
-  });
-
-  // Listen for HTMX events
-  document.body.addEventListener("htmx:afterSettle", function () {
-    console.log("HTMX after settle, updating navigation");
-    setTimeout(window.updateNavigation, 100);
-  });
-
-  // Global logout function for buttons to use
-  window.logoutUser = function () {
-    if (confirm("Are you sure you want to logout?")) {
-      fetch("/logout", { method: "POST" }).then((response) => {
-        if (response.ok) {
-          htmx.ajax("GET", "/views/home.html", "#main-content");
-          window.history.pushState({}, "", "/");
-          setTimeout(window.updateNavigation, 100);
-        }
-      });
-    }
-  };
-</script>
-
+<!-- Hyperscript handlers for navigation events -->
 <div
   _="
   def logoutUser()

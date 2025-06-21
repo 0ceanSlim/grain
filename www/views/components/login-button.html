@@ -1,10 +1,8 @@
 {{define "login-button"}}
 <div id="login-template">
   <button
-    class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded transition-colors"
-    hx-get="/views/login.html"
-    hx-target="#main-content"
-    hx-push-url="/login"
+    class="px-3 py-2 text-white transition-colors bg-purple-600 rounded hover:bg-purple-700"
+    onclick="showLoginModal()"
   >
     🔐 Login
   </button>

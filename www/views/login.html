@@ -1,78 +1,83 @@
-<div class="flex flex-col items-center justify-center p-8">
-  <div class="w-full max-w-md p-8 bg-gray-700 rounded-lg">
-    <h2 class="mb-6 text-2xl font-bold text-center">🔐 Connect to Nostr</h2>
+<div class="flex items-center justify-center min-h-screen">
+  <div class="w-full max-w-md p-8 bg-gray-700 rounded-lg shadow-lg">
+    <h2 class="mb-6 text-2xl font-bold text-center text-purple-400">
+      🔐 Login to Grain
+    </h2>
+
+    <div id="login-result" class="mb-4"></div>
 
     <form
-      id="login-form"
       hx-post="/login"
-      hx-swap="none"
-      _="on htmx:beforeRequest 
-               call showLoginResult('loading', 'Connecting...')
-           on htmx:afterRequest
-               if event.detail.xhr.status == 200
-                 call showLoginResult('success', 'Login successful! Redirecting...')
-                 wait 1s
-                 htmx.ajax('GET', '/views/profile.html', '#main-content')
-                 js window.history.pushState({}, '', '/profile') end
-                 wait 1s
-                 js window.updateNavigation() end
-               else
-                 call showLoginResult('error', 'Login failed: ' + event.detail.xhr.responseText)
-               end"
+      hx-target="#login-result"
+      hx-indicator=".spinner"
+      class="space-y-4"
     >
-      <div class="mb-4">
+      <div>
         <label
           for="publicKey"
-          class="block mb-2 text-sm font-medium text-gray-300"
+          class="block mb-2 text-sm font-bold text-gray-300"
         >
-          Public Key (npub or hex)
+          Public Key (hex):
         </label>
         <input
           type="text"
           id="publicKey"
           name="publicKey"
+          placeholder="Enter your public key..."
+          class="w-full px-3 py-2 text-white bg-gray-600 border border-gray-500 rounded focus:outline-none focus:border-purple-500"
           required
-          placeholder="npub1... or hex key"
-          class="w-full px-3 py-2 text-white placeholder-gray-400 bg-gray-600 border border-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-          _="on input 
-                   set value to my.value.trim()
-                   if value.length > 0
-                     if value.startsWith('npub1') and value.length == 63
-                       add .border-green-500 to me
-                       remove .border-red-500 from me
-                       remove .border-gray-500 from me
-                     else if value.length == 64 and call isValidHex(value)
-                       add .border-green-500 to me
-                       remove .border-red-500 from me
-                       remove .border-gray-500 from me
-                     else
-                       add .border-red-500 to me
-                       remove .border-green-500 from me
-                       remove .border-gray-500 from me
-                     end
-                   else
-                     remove .border-green-500 from me
-                     remove .border-red-500 from me
-                     add .border-gray-500 to me
-                   end"
+          _="
+            on keyup
+              if isValidHex(my.value) or my.value.length == 0
+                remove .border-red-500 from me
+                add .border-gray-500 to me
+              else
+                remove .border-gray-500 from me
+                add .border-red-500 to me
+              end
+          "
         />
+        <p class="mt-1 text-xs text-gray-400">
+          64-character hexadecimal string
+        </p>
       </div>
 
-      <button
-        type="submit"
-        class="w-full px-4 py-2 font-bold text-white transition-colors bg-purple-600 rounded hover:bg-purple-700"
-      >
-        Connect
-      </button>
+      <div class="flex items-center space-x-4">
+        <button
+          type="submit"
+          class="flex-1 px-4 py-2 font-bold text-white transition-colors bg-purple-600 rounded hover:bg-purple-700 focus:outline-none focus:bg-purple-700"
+          _="
+            on htmx:beforeRequest
+              call showLoginResult('loading', 'Authenticating...')
+            end
+            on htmx:responseError
+              call handleLoginError(event.detail.xhr, 'Login failed. Please check your public key.')
+            end
+            on htmx:afterRequest
+              if event.detail.xhr.status == 200
+                call handleLoginSuccess(event.detail.xhr.responseText)
+              else
+                call handleLoginError(event.detail.xhr, 'Invalid public key or authentication failed.')
+              end
+            end
+          "
+        >
+          Login
+        </button>
+        <div class="spinner"></div>
+      </div>
     </form>
 
-    <div id="login-result" class="mt-4">
-      <!-- Login results will appear here -->
-    </div>
-
     <div class="mt-6 text-sm text-center text-gray-400">
-      <p class="mb-2">Need a Nostr account?</p>
-      <!-- TODO: link to https://nstart.me/en -->
+      <p class="mb-2">
+        📝 <span class="font-semibold">New to Nostr?</span> You'll need a Nostr
+        client to generate your keys first.
+      </p>
+      <p>
+        🔑 <span class="font-semibold">Security:</span> Your private key never
+        leaves your device. We only need your public key to fetch your profile.
+      </p>
+      <!-- Add any helpful links for getting started with Nostr here -->
     </div>
 
     <div class="mt-4 text-center">
@@ -86,34 +91,7 @@
       </button>
     </div>
   </div>
+
+  <!-- Load login-specific JavaScript -->
+  <script src="/static/js/login.js"></script>
 </div>
-
-<script>
-  function showLoginResult(type, message) {
-    let className, icon;
-
-    if (type === "success") {
-      className = "bg-green-800 border-green-600 text-green-200";
-      icon = "✅";
-    } else if (type === "error") {
-      className = "bg-red-800 border-red-600 text-red-200";
-      icon = "❌";
-    } else if (type === "loading") {
-      className = "bg-blue-800 border-blue-600 text-blue-200";
-      icon = "⏳";
-    } else {
-      className = "bg-gray-800 border-gray-600 text-gray-200";
-      icon = "ℹ️";
-    }
-
-    const resultDiv = document.getElementById("login-result");
-    if (resultDiv) {
-      resultDiv.innerHTML = `<div class="${className} border px-4 py-3 rounded"><p>${icon} ${message}</p></div>`;
-    }
-  }
-
-  // Helper function for hex validation that Hyperscript can call
-  function isValidHex(value) {
-    return /^[0-9a-fA-F]+$/.test(value);
-  }
-</script>
