@@ -1,30 +1,97 @@
 <div class="flex flex-col items-center p-8">
-  <div class="w-full max-w-4xl">
+  <div class="w-full max-w-5xl">
     <div id="loading" class="text-center">
       <div class="mx-auto mb-4 spinner"></div>
       <p class="text-gray-400">Loading profile...</p>
     </div>
 
     <div id="profile-content" class="hidden">
+      <!-- Banner (if available) -->
+      <div id="profile-banner-container" class="hidden mb-6">
+        <div class="relative h-48 overflow-hidden bg-gray-700 rounded-lg">
+          <img
+            id="profile-banner"
+            class="object-cover w-full h-full"
+            alt="Profile banner"
+          />
+        </div>
+      </div>
+
       <!-- Profile Header -->
       <div class="p-6 mb-6 bg-gray-700 rounded-lg">
         <div class="flex items-start space-x-4">
-          <div
-            id="profile-avatar"
-            class="flex items-center justify-center w-20 h-20 text-2xl bg-gray-600 rounded-full"
-          >
-            👤
+          <div class="relative">
+            <img
+              id="profile-picture"
+              class="object-cover w-20 h-20 bg-gray-600 rounded-full"
+              alt="Profile picture"
+              style="display: none"
+            />
+            <div
+              id="profile-picture-fallback"
+              class="flex items-center justify-center w-20 h-20 text-2xl bg-gray-600 rounded-full"
+            >
+              👤
+            </div>
           </div>
           <div class="flex-1">
             <h1 id="profile-name" class="mb-2 text-2xl font-bold text-white">
               Loading...
             </h1>
-            <p id="profile-about" class="mb-3 text-gray-300">Loading bio...</p>
-            <p class="text-sm text-gray-400">
-              <span class="font-mono" id="profile-pubkey"
-                >Loading public key...</span
-              >
+            <p
+              id="profile-display-name"
+              class="hidden mb-2 text-lg text-purple-300"
+            >
+              <!-- Display name if different from name -->
             </p>
+            <p id="profile-about" class="mb-3 text-gray-300">Loading bio...</p>
+
+            <!-- Contact/Verification Info -->
+            <div class="space-y-1 text-sm">
+              <div id="profile-nip05-container" class="hidden">
+                <span class="text-gray-400">Verified:</span>
+                <span
+                  id="profile-nip05"
+                  class="font-mono text-green-400"
+                ></span>
+                <span class="text-green-400">✓</span>
+              </div>
+
+              <div id="profile-website-container" class="hidden">
+                <span class="text-gray-400">Website:</span>
+                <a
+                  id="profile-website"
+                  class="text-blue-400 underline hover:text-blue-300"
+                  target="_blank"
+                ></a>
+              </div>
+
+              <div id="profile-lightning-container" class="hidden">
+                <span class="text-gray-400">⚡ Lightning:</span>
+                <span
+                  id="profile-lightning"
+                  class="font-mono text-yellow-400"
+                ></span>
+              </div>
+            </div>
+
+            <!-- Public Key Info -->
+            <div class="pt-3 mt-3 border-t border-gray-600">
+              <p class="mb-1 text-xs text-gray-400">Public Key:</p>
+              <p
+                class="font-mono text-xs text-gray-300 break-all"
+                id="profile-pubkey"
+              >
+                Loading public key...
+              </p>
+              <p class="mt-1 text-xs text-gray-400">npub:</p>
+              <p
+                class="font-mono text-xs text-gray-300 break-all"
+                id="profile-npub"
+              >
+                Loading npub...
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -32,9 +99,11 @@
       <!-- Profile Stats -->
       <div class="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
         <div class="p-4 text-center bg-gray-700 rounded-lg">
-          <h3 class="mb-2 text-lg font-semibold text-purple-400">Relays</h3>
+          <h3 class="mb-2 text-lg font-semibold text-purple-400">
+            Total Relays
+          </h3>
           <p id="relay-count" class="text-2xl font-bold">-</p>
-          <p class="text-sm text-gray-400">Connected</p>
+          <p class="text-sm text-gray-400">Configured</p>
         </div>
 
         <div class="p-4 text-center bg-gray-700 rounded-lg">
@@ -54,11 +123,42 @@
         </div>
       </div>
 
+      <!-- Session Info -->
+      <div class="p-4 mb-6 bg-gray-700 rounded-lg">
+        <h3 class="mb-3 text-lg font-semibold text-purple-400">Session Info</h3>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <span class="text-gray-400">Mode:</span>
+            <span id="session-mode" class="ml-2 font-semibold text-white"
+              >-</span
+            >
+          </div>
+          <div>
+            <span class="text-gray-400">Signing Method:</span>
+            <span id="signing-method" class="ml-2 font-semibold text-white"
+              >-</span
+            >
+          </div>
+          <div>
+            <span class="text-gray-400">Can Create Events:</span>
+            <span id="can-create-events" class="ml-2 font-semibold text-white"
+              >-</span
+            >
+          </div>
+          <div>
+            <span class="text-gray-400">Cache Updated:</span>
+            <span id="cache-age" class="ml-2 font-mono text-sm text-white"
+              >-</span
+            >
+          </div>
+        </div>
+      </div>
+
       <!-- Relay Lists -->
-      <div class="grid grid-cols-1 gap-6 mb-6 md:grid-cols-2">
+      <div class="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-3">
         <div class="p-4 bg-gray-700 rounded-lg">
           <h3 class="mb-3 text-lg font-semibold text-purple-400">
-            📥 Read Relays
+            📥 Read Only Relays
           </h3>
           <div id="read-relays" class="space-y-2 text-sm">
             <p class="text-gray-400">Loading...</p>
@@ -67,13 +167,35 @@
 
         <div class="p-4 bg-gray-700 rounded-lg">
           <h3 class="mb-3 text-lg font-semibold text-purple-400">
-            📤 Write Relays
+            📤 Write Only Relays
           </h3>
           <div id="write-relays" class="space-y-2 text-sm">
             <p class="text-gray-400">Loading...</p>
           </div>
         </div>
+
+        <div class="p-4 bg-gray-700 rounded-lg">
+          <h3 class="mb-3 text-lg font-semibold text-purple-400">
+            📬 Read & Write Relays
+          </h3>
+          <div id="both-relays" class="space-y-2 text-sm">
+            <p class="text-gray-400">Loading...</p>
+          </div>
+        </div>
       </div>
+
+      <!-- Raw Data (Debug) -->
+      <details class="mb-6">
+        <summary class="text-gray-400 cursor-pointer hover:text-white">
+          🔍 Debug Info
+        </summary>
+        <div class="p-4 mt-3 bg-gray-800 rounded-lg">
+          <pre
+            id="debug-data"
+            class="overflow-auto text-xs text-gray-300 max-h-64"
+          ></pre>
+        </div>
+      </details>
 
       <!-- Actions -->
       <div class="space-x-4 text-center">
@@ -85,10 +207,22 @@
         </button>
 
         <button
+          class="px-4 py-2 font-bold text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
+          onclick="copyPublicKey()"
+        >
+          📋 Copy Public Key
+        </button>
+
+        <button
+          class="px-4 py-2 font-bold text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
+          onclick="copyNpub()"
+        >
+          📋 Copy npub
+        </button>
+
+        <button
           class="px-4 py-2 font-bold text-white transition-colors bg-red-600 rounded hover:bg-red-700"
-          hx-post="/logout"
-          hx-confirm="Are you sure you want to logout?"
-          hx-redirect="/"
+          onclick="logout()"
         >
           🚪 Logout
         </button>

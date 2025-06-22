@@ -1,4 +1,3 @@
-// client/api/auth.go
 package api
 
 import (
@@ -10,6 +9,8 @@ import (
 )
 
 // LoginHandler handles user login requests via API
+// Initializes user by fetching mailboxes, setting app relays, getting metadata from outboxes,
+// caching the data, and creating session with appropriate signing capabilities
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -48,18 +49,54 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Default to read-only mode if not specified
+	// Set defaults if not specified
 	if loginReq.RequestedMode == "" {
 		loginReq.RequestedMode = auth.ReadOnlyMode
 		loginReq.SigningMethod = auth.NoSigning
 	}
 
-	log.Util().Info("Processing API login", 
+	// Validate signing method matches requested mode
+	if loginReq.RequestedMode == auth.WriteMode && loginReq.SigningMethod == auth.NoSigning {
+		log.Util().Warn("Write mode requires signing method", "pubkey", loginReq.PublicKey)
+		http.Error(w, "Write mode requires a signing method", http.StatusBadRequest)
+		return
+	}
+
+	if loginReq.RequestedMode == auth.ReadOnlyMode && loginReq.SigningMethod != auth.NoSigning {
+		log.Util().Debug("Overriding signing method for read-only mode", "pubkey", loginReq.PublicKey)
+		loginReq.SigningMethod = auth.NoSigning
+	}
+
+	log.Util().Info("Processing user login", 
 		"pubkey", loginReq.PublicKey,
 		"mode", loginReq.RequestedMode,
 		"signing_method", loginReq.SigningMethod)
 
-	// Delegate to auth package for session creation
+	// Validate the session request
+	if err := auth.ValidateSessionRequest(loginReq); err != nil {
+		log.Util().Error("Invalid session request", "error", err)
+		
+		response := auth.SessionResponse{
+			Success: false,
+			Message: "Invalid request: " + err.Error(),
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Initialize user data: fetch mailboxes, set app relays, get metadata from outboxes, cache everything
+	log.Util().Debug("Fetching and caching user data", "pubkey", loginReq.PublicKey)
+	
+	if err := auth.FetchAndCacheUserDataWithCoreClient(loginReq.PublicKey); err != nil {
+		log.Util().Warn("Failed to fetch user data, proceeding with session creation", 
+			"pubkey", loginReq.PublicKey, "error", err)
+		// Continue with session creation even if fetch fails - user might be new or relays unavailable
+	}
+
+	// Create session with the fetched/cached data and remember how they logged in
 	session, err := auth.CreateUserSession(w, loginReq)
 	if err != nil {
 		log.Util().Error("Failed to create session", "error", err)
@@ -83,9 +120,13 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		RedirectURL: "/profile",
 	}
 
-	log.Util().Info("API login successful", 
+	log.Util().Info("User login successful", 
 		"pubkey", loginReq.PublicKey,
-		"mode", session.Mode)
+		"mode", session.Mode,
+		"signing_method", session.Capabilities.SigningMethod,
+		"can_sign", session.Capabilities.CanWrite,
+		"cached_profile", session.Metadata.Profile != "",
+		"cached_mailboxes", session.Metadata.Mailboxes != "")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
@@ -105,7 +146,8 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	if user != nil {
 		log.Util().Info("User logging out", 
 			"pubkey", user.PublicKey,
-			"mode", user.Mode)
+			"mode", user.Mode,
+			"signing_method", user.Capabilities.SigningMethod)
 	}
 
 	// Clear the session
@@ -121,4 +163,3 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
-

@@ -1,3 +1,4 @@
+// client/api/cache.go
 package api
 
 import (
@@ -12,6 +13,7 @@ import (
 )
 
 // GetCacheHandler returns the cached user data as JSON
+// Automatically refreshes cache if expired or missing
 func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 	// Get current session using the enhanced session manager
 	session := auth.EnhancedSessionMgr.GetCurrentUser(r)
@@ -23,10 +25,39 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 
 	publicKey := session.PublicKey
 	cachedData, found := cache.GetUserData(publicKey)
+	
+	// If cache is missing or expired, try to refresh it
 	if !found {
-		http.Error(w, "No cached data found", http.StatusNotFound)
-		log.Util().Warn("No cached data found", "pubkey", publicKey)
-		return
+		log.Util().Info("Cache miss or expired, attempting refresh", "pubkey", publicKey)
+		
+		// Try to fetch fresh data in the background
+		if err := auth.FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
+			log.Util().Error("Failed to refresh cache", "pubkey", publicKey, "error", err)
+			
+			// Return error response with refresh suggestion
+			response := map[string]interface{}{
+				"error":           "Cache expired and refresh failed",
+				"message":         "Please try refreshing the page or logging in again",
+				"pubkey":          publicKey,
+				"refresh_failed":  true,
+				"session_active":  true,
+			}
+			
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		
+		// Try to get cached data again after refresh
+		cachedData, found = cache.GetUserData(publicKey)
+		if !found {
+			log.Util().Error("Cache still empty after refresh", "pubkey", publicKey)
+			http.Error(w, "Failed to load user data", http.StatusInternalServerError)
+			return
+		}
+		
+		log.Util().Info("Cache refreshed successfully", "pubkey", publicKey)
 	}
 
 	// Parse metadata to extract useful fields
@@ -55,6 +86,7 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 		"npub":           npub,
 		"cacheTimestamp": cachedData.Timestamp,
 		"cacheAge":       cachedData.Timestamp.Format("2006-01-02 15:04:05"),
+		"refreshed":      !found, // Indicate if data was refreshed
 		// Include session information
 		"sessionMode":     session.Mode,
 		"capabilities":    session.Capabilities,
@@ -102,4 +134,51 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Util().Info("Cached data with session info retrieved successfully", "pubkey", publicKey)
+}
+
+// RefreshCacheHandler manually refreshes cache for the current user
+func RefreshCacheHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get current session
+	session := auth.EnhancedSessionMgr.GetCurrentUser(r)
+	if session == nil {
+		http.Error(w, "User not logged in", http.StatusUnauthorized)
+		return
+	}
+
+	publicKey := session.PublicKey
+	log.Util().Info("Manual cache refresh requested", "pubkey", publicKey)
+
+	// Clear existing cache first
+	cache.ClearUserData(publicKey)
+
+	// Fetch fresh data
+	if err := auth.FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
+		log.Util().Error("Manual cache refresh failed", "pubkey", publicKey, "error", err)
+		
+		response := map[string]interface{}{
+			"success": false,
+			"message": "Failed to refresh cache: " + err.Error(),
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Cache refreshed successfully",
+		"pubkey":  publicKey,
+	}
+
+	log.Util().Info("Manual cache refresh successful", "pubkey", publicKey)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }

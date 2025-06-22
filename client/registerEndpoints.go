@@ -14,7 +14,9 @@ func RegisterEndpoints(mux *http.ServeMux) {
 
 	// client api endpoints
 	mux.HandleFunc("/api/v1/session", api.GetSessionHandler)         // Get current session info
-	mux.HandleFunc("/api/v1/cache", api.GetCacheHandler)  	        // Get cached user data
+	// Cache endpoints
+	mux.HandleFunc("/api/v1/cache", api.GetCacheHandler)           // GET for cache data
+	mux.HandleFunc("/api/v1/cache/refresh", api.RefreshCacheHandler) // POST for manual refresh
 
 	// Auth API endpoints (preferred)
 	mux.HandleFunc("/api/v1/auth/login", api.LoginHandler)      // Login via API
@@ -24,12 +26,9 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/whitelist/pubkeys", relay.GetAllWhitelistedPubkeys)
 	mux.HandleFunc("/api/v1/blacklist/pubkeys", relay.GetAllBlacklistedPubkeys)
 
-	// auth endpoints
+	// auth legacy endpoints
 	mux.HandleFunc("/login", auth.LegacyLoginHandler)
 	mux.HandleFunc("/logout", auth.LegacyLogoutHandler)
-
-	// route endpoints are registered with a function inside it's package 
-	// to avoid circular imports
 
 	// Core Nostr client function endpoints
 	registerCoreClientEndpoints(mux)
