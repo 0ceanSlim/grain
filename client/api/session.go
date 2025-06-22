@@ -10,10 +10,10 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// GetSessionHandler returns the current user's enhanced session data as JSON
+// GetSessionHandler returns the current user's  session data as JSON
 func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 	// Get current session
-	session := auth.EnhancedSessionMgr.GetCurrentUser(r)
+	session := auth.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "No active session found", http.StatusUnauthorized)
 		log.Util().Debug("No active session found for request")
@@ -52,7 +52,7 @@ func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 		sessionData["relays"] = relayInfo
 	}
 
-	log.Util().Debug("Returning enhanced session data", 
+	log.Util().Debug("Returning  session data", 
 		"pubkey", session.PublicKey,
 		"mode", session.Mode)
 
@@ -63,5 +63,5 @@ func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Util().Info("Enhanced session data retrieved successfully", "pubkey", session.PublicKey)
+	log.Util().Info(" session data retrieved successfully", "pubkey", session.PublicKey)
 }

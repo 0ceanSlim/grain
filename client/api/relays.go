@@ -34,7 +34,7 @@ func ConnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check authentication
-	session := auth.EnhancedSessionMgr.GetCurrentUser(r)
+	session := auth.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return
@@ -91,7 +91,7 @@ func DisconnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check authentication
-	session := auth.EnhancedSessionMgr.GetCurrentUser(r)
+	session := auth.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return
@@ -135,7 +135,7 @@ func DisconnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 // GetRelayStatusHandler returns the status of all relay connections
 func GetRelayStatusHandler(w http.ResponseWriter, r *http.Request) {
 	// Check authentication
-	session := auth.EnhancedSessionMgr.GetCurrentUser(r)
+	session := auth.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return

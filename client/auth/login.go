@@ -11,8 +11,8 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// Global enhanced session manager instance
-var EnhancedSessionMgr *EnhancedSessionManager
+// Global session manager instance
+var SessionMgr *SessionManager
 
 // Global core client instance
 var coreClient *core.Client
@@ -21,8 +21,8 @@ var coreClient *core.Client
 var appRelays []string
 
 // CreateUserSession creates a new user session with comprehensive initialization
-func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*EnhancedUserSession, error) {
-	if EnhancedSessionMgr == nil {
+func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSession, error) {
+	if SessionMgr == nil {
 		return nil, &SessionError{Message: "session manager not initialized"}
 	}
 	
@@ -63,7 +63,7 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*Enhanced
 	}
 
 	// Create the session
-	session, err := EnhancedSessionMgr.CreateSession(w, req, sessionMetadata)
+	session, err := SessionMgr.CreateSession(w, req, sessionMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
@@ -85,7 +85,7 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*Enhanced
 
 // getUserDataForSession retrieves user metadata and mailboxes, using cache when possible
 func getUserDataForSession(publicKey string) (*nostr.Event, *core.Mailboxes, error) {
-	// Try cached data first using the enhanced cache function
+	// Try cached data first using the  cache function
 	if metadata, mailboxes, found := cache.GetParsedUserData(publicKey); found {
 		log.Util().Debug("Using cached data for session", "pubkey", publicKey)
 		return metadata, mailboxes, nil
@@ -111,12 +111,12 @@ func getUserDataForSession(publicKey string) (*nostr.Event, *core.Mailboxes, err
 
 // cacheUserData stores user data in the cache (DEPRECATED - use cache.CacheUserDataFromObjects)
 func cacheUserData(publicKey string, metadata *nostr.Event, mailboxes *core.Mailboxes) {
-	// Use the enhanced cache function
+	// Use the  cache function
 	cache.CacheUserDataFromObjects(publicKey, metadata, mailboxes)
 }
 
 // RebuildCacheForSession rebuilds cache for an existing session
-func RebuildCacheForSession(session *EnhancedUserSession) {
+func RebuildCacheForSession(session *UserSession) {
 	log.Util().Info("Rebuilding cache for existing session", "pubkey", session.PublicKey)
 	
 	go func() {

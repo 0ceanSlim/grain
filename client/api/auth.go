@@ -20,7 +20,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	log.Util().Debug("API login handler called")
 
 	// Check if user is already logged in
-	if session := auth.EnhancedSessionMgr.GetCurrentUser(r); session != nil {
+	if session := auth.SessionMgr.GetCurrentUser(r); session != nil {
 		log.Util().Info("User already logged in", "pubkey", session.PublicKey)
 		
 		response := auth.SessionResponse{
@@ -141,7 +141,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	log.Util().Debug("API logout handler called")
 
 	// Get current user session
-	user := auth.EnhancedSessionMgr.GetCurrentUser(r)
+	user := auth.SessionMgr.GetCurrentUser(r)
 	if user != nil {
 		log.Util().Info("User logging out", 
 			"pubkey", user.PublicKey,
@@ -150,7 +150,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Clear the session
-	auth.EnhancedSessionMgr.ClearSession(w, r)
+	auth.SessionMgr.ClearSession(w, r)
 
 	response := map[string]interface{}{
 		"success": true,

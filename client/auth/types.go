@@ -49,8 +49,8 @@ type SessionMetadata struct {
 	Mailboxes string `json:"mailboxes"` // JSON serialized kind 10002 relay list
 }
 
-// EnhancedUserSession represents a comprehensive user session
-type EnhancedUserSession struct {
+// UserSession represents a comprehensive user session
+type UserSession struct {
 	// Core session data
 	PublicKey  string    `json:"public_key"`
 	LastActive time.Time `json:"last_active"`
@@ -70,17 +70,17 @@ type EnhancedUserSession struct {
 }
 
 // IsReadOnly returns true if the session is in read-only mode
-func (s *EnhancedUserSession) IsReadOnly() bool {
+func (s *UserSession) IsReadOnly() bool {
 	return s.Mode == ReadOnlyMode
 }
 
 // CanCreateEvents returns true if the user can create new events
-func (s *EnhancedUserSession) CanCreateEvents() bool {
+func (s *UserSession) CanCreateEvents() bool {
 	return s.Mode == WriteMode && s.Capabilities.CanWrite
 }
 
 // GetUserRelays returns the user's relay list as a string slice
-func (s *EnhancedUserSession) GetUserRelays() []string {
+func (s *UserSession) GetUserRelays() []string {
 	if s.Metadata.Mailboxes == "" {
 		return s.ConnectedRelays
 	}
@@ -106,6 +106,6 @@ type SessionInitRequest struct {
 type SessionResponse struct {
 	Success      bool                `json:"success"`
 	Message      string              `json:"message"`
-	Session      *EnhancedUserSession `json:"session,omitempty"`
+	Session      *UserSession `json:"session,omitempty"`
 	RedirectURL  string              `json:"redirect_url,omitempty"`
 }

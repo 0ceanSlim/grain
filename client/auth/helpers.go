@@ -55,7 +55,7 @@ func GetAppRelays() []string {
 
 // IsSessionManagerInitialized checks if the session manager is properly initialized
 func IsSessionManagerInitialized() bool {
-	return EnhancedSessionMgr != nil
+	return SessionMgr != nil
 }
 
 // IsCoreClientInitialized checks if the core client is properly initialized

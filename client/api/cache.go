@@ -15,8 +15,8 @@ import (
 // GetCacheHandler returns the cached user data as JSON
 // Automatically refreshes cache if expired or missing
 func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
-	// Get current session using the enhanced session manager
-	session := auth.EnhancedSessionMgr.GetCurrentUser(r)
+	// Get current session using the  session manager
+	session := auth.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "User not logged in", http.StatusUnauthorized)
 		log.Util().Debug("No active session found for cache request")
@@ -144,7 +144,7 @@ func RefreshCacheHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get current session
-	session := auth.EnhancedSessionMgr.GetCurrentUser(r)
+	session := auth.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "User not logged in", http.StatusUnauthorized)
 		return

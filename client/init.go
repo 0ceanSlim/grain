@@ -8,12 +8,12 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// InitializeClient sets up the client package with enhanced session management
+// InitializeClient sets up the client package with  session management
 func InitializeClient(relays []string) error {
-	log.Util().Info("Initializing client package with enhanced session management", "relay_count", len(relays))
+	log.Util().Info("Initializing client package with  session management", "relay_count", len(relays))
 
-	// Initialize enhanced session manager
-	if err := initializeEnhancedSessionManager(); err != nil {
+	// Initialize  session manager
+	if err := initializeSessionManager(); err != nil {
 		return err
 	}
 
@@ -31,18 +31,18 @@ func InitializeClient(relays []string) error {
 	// Start cache cleanup
 	startCacheCleanup()
 
-	log.Util().Info("Client package initialized successfully with enhanced features")
+	log.Util().Info("Client package initialized successfully with  features")
 	return nil
 }
 
-// initializeEnhancedSessionManager sets up the enhanced session manager
-func initializeEnhancedSessionManager() error {
-	auth.EnhancedSessionMgr = auth.NewEnhancedSessionManager()
-	if auth.EnhancedSessionMgr == nil {
-		return &ClientInitError{Message: "failed to create enhanced session manager"}
+// initializeSessionManager sets up the  session manager
+func initializeSessionManager() error {
+	auth.SessionMgr = auth.NewSessionManager()
+	if auth.SessionMgr == nil {
+		return &ClientInitError{Message: "failed to create  session manager"}
 	}
 
-	log.Util().Debug("Enhanced session manager initialized")
+	log.Util().Debug(" session manager initialized")
 	return nil
 }
 
@@ -55,12 +55,12 @@ func startSessionCleanup() {
 		for {
 			select {
 			case <-ticker.C:
-				if auth.EnhancedSessionMgr != nil {
+				if auth.SessionMgr != nil {
 					// Clean up sessions older than 24 hours of inactivity
-					auth.EnhancedSessionMgr.CleanupSessions(24 * time.Hour)
+					auth.SessionMgr.CleanupSessions(24 * time.Hour)
 					
 					// Log session statistics
-					stats := auth.EnhancedSessionMgr.GetSessionStats()
+					stats := auth.SessionMgr.GetSessionStats()
 					log.Util().Debug("Session cleanup completed", 
 						"total_sessions", stats["total_sessions"],
 						"read_only", stats["read_only"],
@@ -102,7 +102,7 @@ func ShutdownClient() error {
 	}
 
 	// Clear session manager
-	auth.EnhancedSessionMgr = nil
+	auth.SessionMgr = nil
 
 	log.Util().Info("Client package shutdown complete")
 	return nil
@@ -115,13 +115,13 @@ func GetCoreClient() interface{} {
 
 // GetSessionStats returns current session statistics
 func GetSessionStats() map[string]interface{} {
-	if auth.EnhancedSessionMgr == nil {
+	if auth.SessionMgr == nil {
 		return map[string]interface{}{
 			"error": "session manager not initialized",
 		}
 	}
 	
-	return auth.EnhancedSessionMgr.GetSessionStats()
+	return auth.SessionMgr.GetSessionStats()
 }
 
 // ClientInitError represents initialization errors

@@ -10,25 +10,25 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// EnhancedSessionManager handles comprehensive user authentication and session tracking
-type EnhancedSessionManager struct {
-	sessions     map[string]*EnhancedUserSession
+// SessionManager handles comprehensive user authentication and session tracking
+type SessionManager struct {
+	sessions     map[string]*UserSession
 	sessionMutex sync.RWMutex
 	cookieName   string
 	cookieMaxAge int
 }
 
-// NewEnhancedSessionManager creates a new enhanced session manager
-func NewEnhancedSessionManager() *EnhancedSessionManager {
-	return &EnhancedSessionManager{
-		sessions:     make(map[string]*EnhancedUserSession),
+// NewSessionManager creates a new session manager
+func NewSessionManager() *SessionManager {
+	return &SessionManager{
+		sessions:     make(map[string]*UserSession),
 		cookieName:   "grain-session",
 		cookieMaxAge: 86400 * 7, // 7 days
 	}
 }
 
 // GetSessionToken extracts the session token from a request
-func (sm *EnhancedSessionManager) GetSessionToken(r *http.Request) string {
+func (sm *SessionManager) GetSessionToken(r *http.Request) string {
 	cookie, err := r.Cookie(sm.cookieName)
 	if err != nil {
 		return ""
@@ -37,7 +37,7 @@ func (sm *EnhancedSessionManager) GetSessionToken(r *http.Request) string {
 }
 
 // GetUserSession retrieves a user session by token and updates last active time
-func (sm *EnhancedSessionManager) GetUserSession(token string) *EnhancedUserSession {
+func (sm *SessionManager) GetUserSession(token string) *UserSession {
 	sm.sessionMutex.RLock()
 	defer sm.sessionMutex.RUnlock()
 
@@ -52,7 +52,7 @@ func (sm *EnhancedSessionManager) GetUserSession(token string) *EnhancedUserSess
 }
 
 // CreateSession creates a new comprehensive user session
-func (sm *EnhancedSessionManager) CreateSession(w http.ResponseWriter, req SessionInitRequest, metadata SessionMetadata) (*EnhancedUserSession, error) {
+func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRequest, metadata SessionMetadata) (*UserSession, error) {
 	token := GenerateRandomToken(32)
 
 	// Determine capabilities based on signing method
@@ -64,7 +64,7 @@ func (sm *EnhancedSessionManager) CreateSession(w http.ResponseWriter, req Sessi
 		ShowEditUI:    req.RequestedMode == WriteMode,
 	}
 
-	session := &EnhancedUserSession{
+	session := &UserSession{
 		PublicKey:    req.PublicKey,
 		LastActive:   time.Now(),
 		Mode:         req.RequestedMode,
@@ -94,7 +94,7 @@ func (sm *EnhancedSessionManager) CreateSession(w http.ResponseWriter, req Sessi
 		SameSite: http.SameSiteStrictMode,
 	})
 
-	log.Util().Info("Created enhanced user session", 
+	log.Util().Info("Created  user session", 
 		"pubkey", req.PublicKey,
 		"mode", req.RequestedMode,
 		"signing_method", req.SigningMethod,
@@ -104,7 +104,7 @@ func (sm *EnhancedSessionManager) CreateSession(w http.ResponseWriter, req Sessi
 }
 
 // UpdateSessionCapabilities updates the capabilities of an existing session
-func (sm *EnhancedSessionManager) UpdateSessionCapabilities(token string, capabilities UserCapabilities) error {
+func (sm *SessionManager) UpdateSessionCapabilities(token string, capabilities UserCapabilities) error {
 	sm.sessionMutex.Lock()
 	defer sm.sessionMutex.Unlock()
 
@@ -125,7 +125,7 @@ func (sm *EnhancedSessionManager) UpdateSessionCapabilities(token string, capabi
 }
 
 // UpdateSessionMetadata updates cached metadata for a session
-func (sm *EnhancedSessionManager) UpdateSessionMetadata(token string, metadata SessionMetadata) error {
+func (sm *SessionManager) UpdateSessionMetadata(token string, metadata SessionMetadata) error {
 	sm.sessionMutex.Lock()
 	defer sm.sessionMutex.Unlock()
 
@@ -142,7 +142,7 @@ func (sm *EnhancedSessionManager) UpdateSessionMetadata(token string, metadata S
 }
 
 // ClearSession removes a user session and clears the cookie
-func (sm *EnhancedSessionManager) ClearSession(w http.ResponseWriter, r *http.Request) {
+func (sm *SessionManager) ClearSession(w http.ResponseWriter, r *http.Request) {
 	token := sm.GetSessionToken(r)
 	if token != "" {
 		sm.sessionMutex.Lock()
@@ -168,7 +168,7 @@ func (sm *EnhancedSessionManager) ClearSession(w http.ResponseWriter, r *http.Re
 }
 
 // GetCurrentUser retrieves the current user session from the request
-func (sm *EnhancedSessionManager) GetCurrentUser(r *http.Request) *EnhancedUserSession {
+func (sm *SessionManager) GetCurrentUser(r *http.Request) *UserSession {
 	token := sm.GetSessionToken(r)
 	if token == "" {
 		return nil
@@ -177,7 +177,7 @@ func (sm *EnhancedSessionManager) GetCurrentUser(r *http.Request) *EnhancedUserS
 }
 
 // CleanupSessions removes expired sessions
-func (sm *EnhancedSessionManager) CleanupSessions(maxAge time.Duration) {
+func (sm *SessionManager) CleanupSessions(maxAge time.Duration) {
 	sm.sessionMutex.Lock()
 	defer sm.sessionMutex.Unlock()
 
@@ -200,7 +200,7 @@ func (sm *EnhancedSessionManager) CleanupSessions(maxAge time.Duration) {
 }
 
 // GetSessionStats returns statistics about active sessions
-func (sm *EnhancedSessionManager) GetSessionStats() map[string]interface{} {
+func (sm *SessionManager) GetSessionStats() map[string]interface{} {
 	sm.sessionMutex.RLock()
 	defer sm.sessionMutex.RUnlock()
 
