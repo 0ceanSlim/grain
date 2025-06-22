@@ -4,7 +4,7 @@
   class="fixed inset-0 z-50 flex items-center justify-center hidden bg-black bg-opacity-50"
 >
   <div
-    class="w-full max-w-md p-6 mx-4 bg-gray-800 border border-gray-600 rounded-lg"
+    class="w-full max-w-md p-6 mx-4 bg-gray-800 border border-gray-600 rounded-lg shadow-2xl"
   >
     <!-- Header -->
     <div class="mb-6 text-center">
@@ -15,14 +15,18 @@
     </div>
 
     <!-- Auth Method Selection -->
-    <div id="auth-method-selection" class="space-y-4">
-      <!-- Primary Options -->
+    <div id="auth-method-selection" class="space-y-6">
+      <!-- Primary Options (Most Common) -->
       <div class="space-y-3">
+        <h3 class="text-sm font-medium tracking-wide text-gray-400 uppercase">
+          Most Popular
+        </h3>
+
         <!-- Extension Option -->
         <button
           id="auth-extension"
           type="button"
-          class="w-full p-4 transition-all duration-200 border border-purple-500 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 hover:shadow-lg"
+          class="w-full p-4 transition-all duration-200 border border-purple-500 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 hover:shadow-lg group"
           onclick="selectAuthMethod('extension')"
         >
           <div class="flex items-center justify-between">
@@ -30,10 +34,12 @@
               <div class="text-2xl">🧩</div>
               <div class="text-left">
                 <div class="font-semibold text-white">Browser Extension</div>
-                <div class="text-sm text-purple-200">Alby, nos2x, etc.</div>
+                <div class="text-sm text-purple-200">Alby, nos2x, Flamingo</div>
               </div>
             </div>
-            <div class="text-purple-200">
+            <div
+              class="text-purple-200 transition-transform group-hover:translate-x-1"
+            >
               <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fill-rule="evenodd"
@@ -49,7 +55,7 @@
         <button
           id="auth-amber"
           type="button"
-          class="w-full p-4 transition-all duration-200 border border-orange-500 rounded-lg bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 hover:shadow-lg"
+          class="w-full p-4 transition-all duration-200 border border-orange-500 rounded-lg bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 hover:shadow-lg group"
           onclick="selectAuthMethod('amber')"
         >
           <div class="flex items-center justify-between">
@@ -60,7 +66,9 @@
                 <div class="text-sm text-orange-200">Android remote signer</div>
               </div>
             </div>
-            <div class="text-orange-200">
+            <div
+              class="text-orange-200 transition-transform group-hover:translate-x-1"
+            >
               <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fill-rule="evenodd"
@@ -76,116 +84,87 @@
       <!-- Divider -->
       <div class="flex items-center my-6">
         <div class="flex-1 border-t border-gray-600"></div>
-        <span class="px-3 text-sm text-gray-400">or</span>
+        <button
+          onclick="toggleAdvanced()"
+          class="flex items-center px-3 py-1 space-x-2 text-xs text-gray-400 transition-colors hover:text-white"
+        >
+          <span>More Options</span>
+          <svg
+            id="advanced-arrow"
+            class="w-4 h-4 transition-transform"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path
+              fill-rule="evenodd"
+              d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+              clip-rule="evenodd"
+            ></path>
+          </svg>
+        </button>
         <div class="flex-1 border-t border-gray-600"></div>
       </div>
 
-      <!-- Secondary Options -->
-      <div class="space-y-2">
-        <!-- Read Only Option -->
-        <button
-          id="auth-readonly"
-          type="button"
-          class="w-full p-3 transition-colors duration-200 bg-gray-700 border border-gray-600 rounded-lg hover:bg-gray-600"
-          onclick="selectAuthMethod('readonly')"
-        >
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-              <div class="text-xl">👁️</div>
-              <div class="text-left">
-                <div class="font-medium text-white">Read Only</div>
-                <div class="text-xs text-gray-300">Browse with public key</div>
-              </div>
-            </div>
-            <div class="text-gray-400">
-              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fill-rule="evenodd"
-                  d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                  clip-rule="evenodd"
-                ></path>
-              </svg>
-            </div>
-          </div>
-        </button>
+      <!-- Advanced Options (Hidden by default) -->
+      <div id="advanced-options" class="hidden space-y-4">
+        <h3 class="text-sm font-medium tracking-wide text-gray-400 uppercase">
+          Additional Options
+        </h3>
 
-        <!-- Advanced Option Toggle -->
-        <button
-          id="show-advanced"
-          type="button"
-          class="w-full p-3 transition-colors duration-200 bg-gray-700 border border-gray-600 rounded-lg hover:bg-gray-600"
-          onclick="toggleAdvanced()"
-        >
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-              <div class="text-xl">⚠️</div>
-              <div class="text-left">
-                <div class="font-medium text-white">Advanced Options</div>
-                <div class="text-xs text-gray-300">Less secure methods</div>
-              </div>
+        <!-- Secondary Options Grid -->
+        <div class="grid grid-cols-3 gap-3">
+          <!-- Bunker Option -->
+          <button
+            id="auth-bunker"
+            type="button"
+            class="p-3 transition-all duration-200 bg-blue-700 border border-blue-500 rounded-lg hover:bg-blue-600 hover:shadow-md group"
+            onclick="selectAuthMethod('bunker')"
+          >
+            <div class="text-center">
+              <div class="mb-1 text-xl">🏰</div>
+              <div class="text-xs font-medium text-white">Bunker</div>
+              <div class="text-xs text-blue-200">Remote</div>
             </div>
-            <div class="text-gray-400">
-              <svg
-                id="advanced-arrow"
-                class="w-4 h-4 transition-transform duration-200"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fill-rule="evenodd"
-                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                  clip-rule="evenodd"
-                ></path>
-              </svg>
-            </div>
-          </div>
-        </button>
+          </button>
 
-        <!-- Advanced Options (Hidden by default) -->
-        <div
-          id="advanced-options"
-          class="hidden p-3 mt-2 bg-yellow-900 border border-yellow-600 rounded-lg bg-opacity-20"
-        >
-          <div class="mb-3">
-            <div class="flex items-center mb-2 space-x-2">
-              <div class="text-yellow-500">⚠️</div>
-              <span class="text-sm font-medium text-yellow-400"
-                >Security Warning</span
-              >
+          <!-- Read Only Option -->
+          <button
+            id="auth-readonly"
+            type="button"
+            class="p-3 transition-all duration-200 bg-gray-700 border border-gray-500 rounded-lg hover:bg-gray-600 hover:shadow-md group"
+            onclick="selectAuthMethod('readonly')"
+          >
+            <div class="text-center">
+              <div class="mb-1 text-xl">👀</div>
+              <div class="text-xs font-medium text-white">Read Only</div>
+              <div class="text-xs text-gray-300">View only</div>
             </div>
-            <p class="text-xs text-yellow-300">
-              These methods require entering your private key. Only use on
-              trusted devices and be careful where you paste your key.
-            </p>
-          </div>
+          </button>
 
+          <!-- Private Key Option -->
           <button
             id="auth-privkey"
             type="button"
-            class="w-full p-3 transition-colors duration-200 bg-yellow-800 border border-yellow-600 rounded-lg hover:bg-yellow-700"
+            class="p-3 transition-all duration-200 bg-yellow-700 border border-yellow-500 rounded-lg hover:bg-yellow-600 hover:shadow-md group"
             onclick="selectAuthMethod('privkey')"
           >
-            <div class="flex items-center justify-between">
-              <div class="flex items-center space-x-3">
-                <div class="text-xl">🔑</div>
-                <div class="text-left">
-                  <div class="font-medium text-white">Private Key</div>
-                  <div class="text-xs text-yellow-200">
-                    Encrypted in session
-                  </div>
-                </div>
-              </div>
-              <div class="text-yellow-200">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fill-rule="evenodd"
-                    d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                    clip-rule="evenodd"
-                  ></path>
-                </svg>
-              </div>
+            <div class="text-center">
+              <div class="mb-1 text-xl">🔑</div>
+              <div class="text-xs font-medium text-white">Private Key</div>
+              <div class="text-xs text-yellow-200">Advanced</div>
             </div>
           </button>
+        </div>
+
+        <!-- Security Warning -->
+        <div class="p-3 bg-yellow-900 border border-yellow-600 rounded-lg">
+          <div class="flex items-start space-x-2">
+            <div class="text-yellow-400 mt-0.5">⚠️</div>
+            <div class="text-xs text-yellow-200">
+              Advanced options require technical knowledge. Browser extensions
+              and Amber are recommended for most users.
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -236,7 +215,57 @@
       <div class="mb-4">
         <h3 class="mb-2 text-lg font-semibold text-orange-400">Amber Signer</h3>
         <p class="mb-4 text-sm text-gray-300">
-          Enter your Amber bunker URL to connect to your Android signer.
+          Connect to your Amber app on Android for secure remote signing.
+        </p>
+      </div>
+
+      <div class="p-3 mb-4 bg-orange-900 border border-orange-600 rounded-lg">
+        <div class="text-xs text-orange-200">
+          📱 Make sure Amber app is installed and running on your Android
+          device.
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label
+          for="amber-bunker-url"
+          class="block mb-2 text-sm font-medium text-gray-300"
+        >
+          Bunker URL (from Amber)
+        </label>
+        <input
+          type="text"
+          id="amber-bunker-url"
+          name="amberBunkerUrl"
+          placeholder="bunker://pubkey?relay=wss://..."
+          class="w-full px-3 py-2 text-white placeholder-gray-400 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+        />
+      </div>
+
+      <div class="flex space-x-3">
+        <button
+          type="button"
+          class="flex-1 px-4 py-2 text-white transition-colors bg-orange-600 rounded-lg hover:bg-orange-700"
+          onclick="connectAmber()"
+        >
+          Connect Amber
+        </button>
+        <button
+          type="button"
+          class="px-4 py-2 text-gray-400 transition-colors hover:text-white"
+          onclick="goBack()"
+        >
+          Back
+        </button>
+      </div>
+    </div>
+
+    <!-- Bunker Auth Form -->
+    <div id="bunker-form" class="hidden">
+      <div class="mb-4">
+        <h3 class="mb-2 text-lg font-semibold text-blue-400">Remote Bunker</h3>
+        <p class="mb-4 text-sm text-gray-300">
+          Connect to a remote signing bunker using NIP-46.
         </p>
       </div>
 
@@ -252,17 +281,17 @@
           id="bunker-url"
           name="bunkerUrl"
           placeholder="bunker://pubkey?relay=wss://..."
-          class="w-full px-3 py-2 text-white placeholder-gray-400 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+          class="w-full px-3 py-2 text-white placeholder-gray-400 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       <div class="flex space-x-3">
         <button
           type="button"
-          class="flex-1 px-4 py-2 text-white transition-colors bg-orange-600 rounded-lg hover:bg-orange-700"
-          onclick="connectAmber()"
+          class="flex-1 px-4 py-2 text-white transition-colors bg-blue-600 rounded-lg hover:bg-blue-700"
+          onclick="connectBunker()"
         >
-          Connect Amber
+          Connect Bunker
         </button>
         <button
           type="button"

@@ -13,12 +13,16 @@ function hideAuthModal() {
 }
 
 function resetModal() {
-  // Hide all forms
-  ["extension-form", "amber-form", "readonly-form", "privkey-form"].forEach(
-    (id) => {
-      document.getElementById(id).classList.add("hidden");
-    }
-  );
+  // Hide all forms - UPDATED to include bunker-form
+  [
+    "extension-form",
+    "amber-form",
+    "bunker-form",
+    "readonly-form",
+    "privkey-form",
+  ].forEach((id) => {
+    document.getElementById(id).classList.add("hidden");
+  });
 
   // Show method selection
   document.getElementById("auth-method-selection").classList.remove("hidden");
@@ -28,8 +32,11 @@ function resetModal() {
   document.getElementById("advanced-options").classList.add("hidden");
   document.getElementById("advanced-arrow").classList.remove("rotate-180");
 
-  // Clear forms
+  // Clear forms - UPDATED to handle both bunker URLs
   document.getElementById("bunker-url").value = "";
+  if (document.getElementById("amber-bunker-url")) {
+    document.getElementById("amber-bunker-url").value = "";
+  }
   document.getElementById("readonly-pubkey").value = "";
   document.getElementById("private-key").value = "";
   document.getElementById("session-password").value = "";
@@ -249,6 +256,49 @@ async function getExtensionPublicKey() {
   return await window.nostr.getPublicKey();
 }
 
+function connectBunker() {
+  const bunkerUrl = document.getElementById("bunker-url").value.trim();
+
+  if (!bunkerUrl) {
+    showAuthResult("error", "Please enter a bunker URL");
+    return;
+  }
+
+  if (!bunkerUrl.startsWith("bunker://")) {
+    showAuthResult("error", "Invalid bunker URL format");
+    return;
+  }
+
+  showAuthResult("loading", "Connecting to bunker...");
+
+  // TODO: Implement NIP-46 bunker connection logic
+  setTimeout(() => {
+    showAuthResult("error", "Bunker integration coming soon!");
+  }, 1000);
+}
+
+// Amber handling (placeholder)
+function connectAmber() {
+  const bunkerUrl = document.getElementById("amber-bunker-url").value.trim();
+
+  if (!bunkerUrl) {
+    showAuthResult("error", "Please enter a bunker URL");
+    return;
+  }
+
+  if (!bunkerUrl.startsWith("bunker://")) {
+    showAuthResult("error", "Invalid bunker URL format");
+    return;
+  }
+
+  showAuthResult("loading", "Connecting to Amber...");
+
+  // TODO: Implement NIP-46 Amber connection logic
+  setTimeout(() => {
+    showAuthResult("error", "Amber integration coming soon!");
+  }, 1000);
+}
+
 // Read-only login handling
 function connectReadOnly() {
   const pubkey = document.getElementById("readonly-pubkey").value.trim();
@@ -307,28 +357,6 @@ function connectReadOnly() {
       console.error("Read-only login error:", error);
       showAuthResult("error", "Connection failed");
     });
-}
-
-// Amber handling (placeholder)
-function connectAmber() {
-  const bunkerUrl = document.getElementById("bunker-url").value.trim();
-
-  if (!bunkerUrl) {
-    showAuthResult("error", "Please enter a bunker URL");
-    return;
-  }
-
-  if (!bunkerUrl.startsWith("bunker://")) {
-    showAuthResult("error", "Invalid bunker URL format");
-    return;
-  }
-
-  showAuthResult("loading", "Connecting to Amber...");
-
-  // TODO: Implement NIP-46 Amber connection logic
-  setTimeout(() => {
-    showAuthResult("error", "Amber integration coming soon!");
-  }, 1000);
 }
 
 // Private key handling (placeholder)
