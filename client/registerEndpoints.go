@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/0ceanslim/grain/client/api"
-	"github.com/0ceanslim/grain/client/auth"
 	relay "github.com/0ceanslim/grain/server/api"
 )
 
@@ -25,10 +24,6 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	// relay api endpoints
 	mux.HandleFunc("/api/v1/whitelist/pubkeys", relay.GetAllWhitelistedPubkeys)
 	mux.HandleFunc("/api/v1/blacklist/pubkeys", relay.GetAllBlacklistedPubkeys)
-
-	// auth legacy endpoints
-	mux.HandleFunc("/login", auth.LegacyLoginHandler)
-	mux.HandleFunc("/logout", auth.LegacyLogoutHandler)
 
 	// Core Nostr client function endpoints
 	registerCoreClientEndpoints(mux)

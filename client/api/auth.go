@@ -117,7 +117,6 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Success:     true,
 		Message:     "Login successful",
 		Session:     session,
-		RedirectURL: "/profile",
 	}
 
 	log.Util().Info("User login successful", 

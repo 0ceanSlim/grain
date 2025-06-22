@@ -438,7 +438,7 @@ if (document.readyState === "loading") {
 // Logout function
 function logout() {
   if (confirm("Are you sure you want to logout?")) {
-    fetch("/api/v1/logout", { method: "POST" })
+    fetch("/api/v1/auth/logout", { method: "POST" })
       .then((response) => response.json())
       .then((result) => {
         if (result.success) {

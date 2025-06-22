@@ -114,7 +114,7 @@ function updateNavToLoggedOut() {
 // Global logout function for buttons to use
 window.logoutUser = function () {
   if (confirm("Are you sure you want to logout?")) {
-    fetch("/logout", { method: "POST" }).then((response) => {
+    fetch("/api/v1/auth/logout", { method: "POST" }).then((response) => {
       if (response.ok) {
         console.log("Logout successful, updating navigation");
         // Force update navigation immediately
