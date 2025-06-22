@@ -1,5 +1,6 @@
 // Global state
 let currentAuthMethod = null;
+let amberCallbackReceived = false;
 
 // Main modal functions
 function showAuthModal() {
@@ -13,7 +14,7 @@ function hideAuthModal() {
 }
 
 function resetModal() {
-  // Hide all forms - UPDATED to include bunker-form
+  // Hide all forms
   [
     "extension-form",
     "amber-form",
@@ -32,7 +33,7 @@ function resetModal() {
   document.getElementById("advanced-options").classList.add("hidden");
   document.getElementById("advanced-arrow").classList.remove("rotate-180");
 
-  // Clear forms - UPDATED to handle both bunker URLs
+  // Clear forms
   document.getElementById("bunker-url").value = "";
   if (document.getElementById("amber-bunker-url")) {
     document.getElementById("amber-bunker-url").value = "";
@@ -45,6 +46,7 @@ function resetModal() {
   document.getElementById("auth-result").innerHTML = "";
 
   currentAuthMethod = null;
+  amberCallbackReceived = false;
 }
 
 // Method selection
@@ -69,7 +71,7 @@ function goBack() {
   resetModal();
 }
 
-// Advanced options toggle
+// Advanced options toggle - FIXED
 function toggleAdvanced() {
   const advancedOptions = document.getElementById("advanced-options");
   const arrow = document.getElementById("advanced-arrow");
@@ -83,22 +85,24 @@ function toggleAdvanced() {
   }
 }
 
-// NIP-07 Extension handling
+/**
+ * Extension detection and connection
+ */
 function checkForExtension() {
   const statusEl = document.getElementById("extension-status");
   const connectBtn = document.getElementById("connect-extension");
 
   if (window.nostr) {
     statusEl.innerHTML =
-      '<div class="text-green-200">✅ Extension detected!</div>';
+      '<div class="text-green-200">✅ Nostr extension detected!</div>';
     statusEl.className =
       "p-3 mb-4 bg-green-800 border border-green-600 rounded-lg";
     connectBtn.disabled = false;
 
-    // Log detected extension capabilities
-    console.log("Nostr extension detected:", {
-      hasGetPublicKey: typeof window.nostr.getPublicKey === "function",
-      hasSignEvent: typeof window.nostr.signEvent === "function",
+    // Log extension capabilities
+    console.log("Extension capabilities:", {
+      hasGetPublicKey: !!window.nostr.getPublicKey,
+      hasSignEvent: !!window.nostr.signEvent,
       hasNip04: !!window.nostr.nip04,
       hasNip44: !!window.nostr.nip44,
     });
@@ -112,18 +116,15 @@ function checkForExtension() {
 
 /**
  * Connect using browser extension (NIP-07)
- * Gets public key from extension and creates session with browser extension signing
  */
 async function connectExtension() {
   try {
     showAuthResult("loading", "Requesting access from extension...");
 
-    // Check if extension is still available
     if (!window.nostr) {
       throw new Error("Nostr extension not found");
     }
 
-    // Get public key from extension using NIP-07
     const publicKey = await window.nostr.getPublicKey();
 
     if (!publicKey || publicKey.length !== 64) {
@@ -133,10 +134,9 @@ async function connectExtension() {
     console.log("Extension returned public key:", publicKey);
     showAuthResult("loading", "Creating session with extension signing...");
 
-    // Create session with browser extension signing method
     const sessionRequest = {
       public_key: publicKey,
-      requested_mode: "write", // Extension allows signing
+      requested_mode: "write",
       signing_method: "browser_extension",
     };
 
@@ -168,19 +168,13 @@ async function connectExtension() {
 
     showAuthResult("success", "Connected via browser extension!");
 
-    // Store extension capability for future use
     window.nostrExtensionConnected = true;
 
-    // Close modal and update UI
     setTimeout(() => {
       hideAuthModal();
-
-      // Trigger navigation update
       if (window.updateNavigation) {
         window.updateNavigation();
       }
-
-      // Navigate to profile if redirect URL provided
       if (result.redirect_url) {
         setTimeout(() => {
           htmx.ajax("GET", "/views/profile.html", "#main-content");
@@ -195,67 +189,255 @@ async function connectExtension() {
 }
 
 /**
- * Sign event using browser extension (NIP-07)
- * This function can be called from anywhere in the app when an event needs signing
+ * Amber handling - Implements Nostr Signer protocol
  */
-async function signEventWithExtension(event) {
+function connectAmber() {
+  const bunkerUrl = document.getElementById("amber-bunker-url").value.trim();
+
+  // If no bunker URL provided, try direct Amber connection
+  if (!bunkerUrl) {
+    connectAmberDirect();
+    return;
+  }
+
+  // If bunker URL provided, validate and use bunker connection
+  if (!bunkerUrl.startsWith("bunker://")) {
+    showAuthResult("error", "Invalid bunker URL format");
+    return;
+  }
+
+  connectAmberBunker(bunkerUrl);
+}
+
+/**
+ * Connect to Amber directly using Nostr Signer protocol
+ */
+function connectAmberDirect() {
+  showAuthResult("loading", "Opening Amber app...");
+
+  // Generate callback URL for this session
+  const callbackUrl = `${window.location.origin}/amber-callback`;
+
+  // Set up callback listener before opening Amber
+  setupAmberCallback();
+
+  // Use Amber's get_public_key method with Nostr Signer protocol
+  const amberUrl = `nostrsigner:?compressionType=none&returnType=signature&type=get_public_key&callbackUrl=${encodeURIComponent(
+    callbackUrl
+  )}&appName=${encodeURIComponent("Grain Relay")}`;
+
+  console.log("Opening Amber with URL:", amberUrl);
+
   try {
-    if (!window.nostr) {
-      throw new Error("Nostr extension not available");
+    // Attempt to open Amber
+    window.location.href = amberUrl;
+
+    // Set timeout in case user doesn't complete the flow
+    setTimeout(() => {
+      if (!amberCallbackReceived) {
+        showAuthResult(
+          "error",
+          "Amber connection timed out. Make sure Amber is installed and try again."
+        );
+      }
+    }, 30000);
+  } catch (error) {
+    console.error("Error opening Amber:", error);
+    showAuthResult(
+      "error",
+      "Failed to open Amber app. Please ensure it's installed."
+    );
+  }
+}
+
+/**
+ * Connect to Amber using bunker URL (NIP-46)
+ */
+function connectAmberBunker(bunkerUrl) {
+  showAuthResult("loading", "Connecting to Amber bunker...");
+
+  try {
+    const url = new URL(bunkerUrl);
+    const publicKey = url.hostname;
+    const relay = url.searchParams.get("relay");
+
+    if (!publicKey || publicKey.length !== 64) {
+      throw new Error("Invalid public key in bunker URL");
     }
 
-    if (!window.nostrExtensionConnected) {
-      throw new Error("Extension not connected - please login first");
+    if (!relay) {
+      throw new Error("No relay specified in bunker URL");
     }
 
-    // Validate event structure
-    if (!event || typeof event !== "object") {
-      throw new Error("Invalid event object");
+    console.log("Parsed bunker URL:", { publicKey, relay });
+
+    // Create session with bunker signing method
+    createAmberSession(publicKey, "bunker", { bunkerUrl, relay });
+  } catch (error) {
+    console.error("Error parsing bunker URL:", error);
+    showAuthResult("error", "Invalid bunker URL format");
+  }
+}
+
+/**
+ * Set up callback handler for Amber responses
+ */
+function setupAmberCallback() {
+  // Listen for page visibility changes to detect return from Amber
+  const handleVisibilityChange = () => {
+    if (
+      !document.hidden &&
+      currentAuthMethod === "amber" &&
+      !amberCallbackReceived
+    ) {
+      // Check URL for callback parameters after a short delay
+      setTimeout(checkForAmberCallback, 500);
+    }
+  };
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  // Also check immediately in case we're already on callback page
+  setTimeout(checkForAmberCallback, 1000);
+}
+
+/**
+ * Check current URL for Amber callback parameters
+ */
+function checkForAmberCallback() {
+  const currentUrl = new URL(window.location.href);
+
+  // Check if this is an Amber callback
+  if (
+    currentUrl.pathname === "/amber-callback" ||
+    currentUrl.searchParams.has("event")
+  ) {
+    handleAmberCallback(currentUrl);
+  }
+}
+
+/**
+ * Handle callback from Amber with public key
+ */
+function handleAmberCallback(url) {
+  try {
+    amberCallbackReceived = true;
+
+    const eventParam = url.searchParams.get("event");
+
+    if (!eventParam) {
+      throw new Error("No event data received from Amber");
     }
 
-    // Ensure required fields are present
-    const eventToSign = {
-      kind: event.kind,
-      created_at: event.created_at || Math.floor(Date.now() / 1000),
-      tags: event.tags || [],
-      content: event.content || "",
+    console.log("Received Amber callback:", eventParam);
+
+    // For get_public_key, the event parameter contains the public key
+    let publicKey = eventParam;
+
+    // Handle compressed response (starts with "Signer1")
+    if (eventParam.startsWith("Signer1")) {
+      try {
+        // For compressed responses, we'd need to decompress
+        // For now, treat as error since we specify no compression
+        throw new Error("Received compressed response unexpectedly");
+      } catch (error) {
+        console.warn("Failed to handle compressed Amber response:", error);
+        throw new Error("Unable to process Amber response");
+      }
+    }
+
+    // Validate public key
+    if (!publicKey || !isValidPublicKey(publicKey)) {
+      throw new Error("Invalid public key received from Amber");
+    }
+
+    console.log("Amber returned public key:", publicKey);
+
+    // Create session with Amber signing
+    createAmberSession(publicKey, "amber");
+
+    // Clean up URL
+    window.history.replaceState({}, "", window.location.pathname);
+  } catch (error) {
+    console.error("Error handling Amber callback:", error);
+    showAuthResult("error", `Amber callback error: ${error.message}`);
+  }
+}
+
+/**
+ * Create session with Amber signing method
+ */
+async function createAmberSession(publicKey, signingMethod, metadata = {}) {
+  try {
+    showAuthResult("loading", "Creating session with Amber signing...");
+
+    const sessionRequest = {
+      public_key: publicKey,
+      requested_mode: "write",
+      signing_method: signingMethod,
     };
 
-    console.log("Signing event with extension:", eventToSign);
-
-    // Sign using NIP-07
-    const signedEvent = await window.nostr.signEvent(eventToSign);
-
-    if (!signedEvent || !signedEvent.id || !signedEvent.sig) {
-      throw new Error("Extension returned invalid signed event");
+    // Add metadata if provided
+    if (Object.keys(metadata).length > 0) {
+      sessionRequest.metadata = metadata;
     }
 
-    console.log("Event signed successfully:", signedEvent.id);
-    return signedEvent;
+    const response = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(sessionRequest),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      const errorMsg = errorData?.message || `HTTP ${response.status}`;
+      throw new Error(`Login failed: ${errorMsg}`);
+    }
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.message || "Login failed");
+    }
+
+    console.log("Amber login successful:", {
+      pubkey: result.session?.public_key,
+      mode: result.session?.mode,
+      signing_method: result.session?.capabilities?.signing_method,
+    });
+
+    showAuthResult("success", "Connected via Amber!");
+
+    // Store Amber connection info
+    window.amberConnected = true;
+    window.amberSigningMethod = signingMethod;
+    if (metadata.bunkerUrl) {
+      window.amberBunkerUrl = metadata.bunkerUrl;
+    }
+
+    setTimeout(() => {
+      hideAuthModal();
+      if (window.updateNavigation) {
+        window.updateNavigation();
+      }
+      if (result.redirect_url) {
+        setTimeout(() => {
+          htmx.ajax("GET", "/views/profile.html", "#main-content");
+          window.history.pushState({}, "", "/profile");
+        }, 500);
+      }
+    }, 1000);
   } catch (error) {
-    console.error("Extension signing error:", error);
-    throw error;
+    console.error("Amber session creation error:", error);
+    showAuthResult("error", `Amber login failed: ${error.message}`);
   }
 }
 
 /**
- * Check if browser extension is available and connected
+ * Bunker handling
  */
-function isExtensionAvailable() {
-  return !!(window.nostr && window.nostrExtensionConnected);
-}
-
-/**
- * Get public key from extension (for verification or display)
- */
-async function getExtensionPublicKey() {
-  if (!window.nostr) {
-    throw new Error("Extension not available");
-  }
-
-  return await window.nostr.getPublicKey();
-}
-
 function connectBunker() {
   const bunkerUrl = document.getElementById("bunker-url").value.trim();
 
@@ -277,29 +459,9 @@ function connectBunker() {
   }, 1000);
 }
 
-// Amber handling (placeholder)
-function connectAmber() {
-  const bunkerUrl = document.getElementById("amber-bunker-url").value.trim();
-
-  if (!bunkerUrl) {
-    showAuthResult("error", "Please enter a bunker URL");
-    return;
-  }
-
-  if (!bunkerUrl.startsWith("bunker://")) {
-    showAuthResult("error", "Invalid bunker URL format");
-    return;
-  }
-
-  showAuthResult("loading", "Connecting to Amber...");
-
-  // TODO: Implement NIP-46 Amber connection logic
-  setTimeout(() => {
-    showAuthResult("error", "Amber integration coming soon!");
-  }, 1000);
-}
-
-// Read-only login handling
+/**
+ * Read-only login handling - FIXED API endpoint
+ */
 function connectReadOnly() {
   const pubkey = document.getElementById("readonly-pubkey").value.trim();
 
@@ -308,7 +470,6 @@ function connectReadOnly() {
     return;
   }
 
-  // Validate pubkey format (64 hex chars or npub)
   if (!isValidPublicKey(pubkey)) {
     showAuthResult("error", "Invalid public key format");
     return;
@@ -316,17 +477,15 @@ function connectReadOnly() {
 
   showAuthResult("loading", "Creating read-only session...");
 
-  // Convert npub to hex if needed
-  const hexPubkey = pubkey.startsWith("npub") ? npubToHex(pubkey) : pubkey;
-
-  // Create read-only session
+  // Keep npub as-is, let backend handle conversion
   const sessionRequest = {
-    public_key: hexPubkey,
+    public_key: pubkey,
     requested_mode: "read_only",
     signing_method: "none",
   };
 
-  fetch("/api/v1/login", {
+  // FIXED: Use correct API endpoint
+  fetch("/api/v1/auth/login", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -359,7 +518,9 @@ function connectReadOnly() {
     });
 }
 
-// Private key handling (placeholder)
+/**
+ * Private key handling
+ */
 function connectPrivateKey() {
   const privateKey = document.getElementById("private-key").value.trim();
   const sessionPassword = document.getElementById("session-password").value;
@@ -377,7 +538,9 @@ function connectPrivateKey() {
   }, 1000);
 }
 
-// Utility functions
+/**
+ * Utility functions
+ */
 function isValidPublicKey(pubkey) {
   if (pubkey.startsWith("npub")) {
     return pubkey.length === 63; // npub1 + 58 chars
@@ -386,18 +549,10 @@ function isValidPublicKey(pubkey) {
 }
 
 function npubToHex(npub) {
-  // Simple implementation - in production you'd want to use a proper bech32 library
-  // This is a placeholder that assumes valid input
-  try {
-    // You would implement proper bech32 decoding here
-    // For now, return as-is and let backend handle conversion
-    return npub;
-  } catch (error) {
-    throw new Error("Invalid npub format");
-  }
+  // Let backend handle npub conversion
+  return npub;
 }
 
-// Result display helper
 function showAuthResult(type, message) {
   let className, icon;
 
@@ -421,9 +576,70 @@ function showAuthResult(type, message) {
   }
 }
 
-// Expose functions globally for modal triggering and event signing
+/**
+ * Sign event using browser extension (NIP-07)
+ */
+async function signEventWithExtension(event) {
+  try {
+    if (!window.nostr) {
+      throw new Error("Nostr extension not available");
+    }
+
+    if (!window.nostrExtensionConnected) {
+      throw new Error("Extension not connected - please login first");
+    }
+
+    const eventToSign = {
+      kind: event.kind,
+      created_at: event.created_at || Math.floor(Date.now() / 1000),
+      tags: event.tags || [],
+      content: event.content || "",
+    };
+
+    console.log("Signing event with extension:", eventToSign);
+
+    const signedEvent = await window.nostr.signEvent(eventToSign);
+
+    if (!signedEvent || !signedEvent.id || !signedEvent.sig) {
+      throw new Error("Extension returned invalid signed event");
+    }
+
+    console.log("Event signed successfully:", signedEvent.id);
+    return signedEvent;
+  } catch (error) {
+    console.error("Extension signing error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Check if browser extension is available and connected
+ */
+function isExtensionAvailable() {
+  return !!(window.nostr && window.nostrExtensionConnected);
+}
+
+/**
+ * Check if Amber is available and connected
+ */
+function isAmberAvailable() {
+  return !!window.amberConnected;
+}
+
+/**
+ * Get public key from extension
+ */
+async function getExtensionPublicKey() {
+  if (!window.nostr) {
+    throw new Error("Extension not available");
+  }
+  return await window.nostr.getPublicKey();
+}
+
+// Expose functions globally
 window.showAuthModal = showAuthModal;
 window.hideAuthModal = hideAuthModal;
 window.signEventWithExtension = signEventWithExtension;
 window.isExtensionAvailable = isExtensionAvailable;
+window.isAmberAvailable = isAmberAvailable;
 window.getExtensionPublicKey = getExtensionPublicKey;
