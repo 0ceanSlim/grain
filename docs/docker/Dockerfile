@@ -32,11 +32,7 @@ COPY --from=builder /build/grain ./
 COPY --from=builder /build/www ./www
 
 # Setup default configs for Docker
-RUN cp www/static/examples/config.example.yml config.yml && \
-    cp www/static/examples/whitelist.example.yml whitelist.yml && \
-    cp www/static/examples/blacklist.example.yml blacklist.yml && \
-    cp www/static/examples/relay_metadata.example.json relay_metadata.json && \
-    sed -i 's/localhost:27017/mongo:27017/g' config.yml
+RUN sed -i 's/localhost:27017/mongo:27017/g' config.yml
 
 EXPOSE 8181
 

@@ -74,18 +74,7 @@ func Run() error {
 
 // ensureConfigFiles creates default configuration files if they don't exist
 func ensureConfigFiles() error {
-	configFiles := map[string]string{
-		"config.yml":           "www/static/examples/config.example.yml",
-		"whitelist.yml":        "www/static/examples/whitelist.example.yml",
-		"blacklist.yml":        "www/static/examples/blacklist.example.yml",
-		"relay_metadata.json":  "www/static/examples/relay_metadata.example.json",
-	}
-
-	for target, example := range configFiles {
-		utils.EnsureFileExists(target, example)
-	}
-
-	return nil
+	return config.EnsureAllConfigFiles()
 }
 
 // startConfigWatchers starts file watchers for configuration files
