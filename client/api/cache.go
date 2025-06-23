@@ -74,7 +74,7 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Encode npub for user-friendly display
-	npub, err := utils.EncodeNpub(publicKey)
+	npub, err := utils.EncodePubkey(publicKey)
 	if err != nil {
 		log.Util().Error("Failed to encode npub", "pubkey", publicKey, "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)

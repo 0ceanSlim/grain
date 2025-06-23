@@ -22,8 +22,16 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/auth/logout", api.LogoutHandler)    // Logout via API
 
 	// relay api endpoints
-	mux.HandleFunc("/api/v1/whitelist/pubkeys", relay.GetAllWhitelistedPubkeys)
-	mux.HandleFunc("/api/v1/blacklist/pubkeys", relay.GetAllBlacklistedPubkeys)
+	mux.HandleFunc("/api/v1/relay/whitelist", relay.GetAllWhitelistedPubkeys)
+	mux.HandleFunc("/api/v1/relay/blacklist", relay.GetAllBlacklistedPubkeys)
+
+	// Key conversion endpoints
+	mux.HandleFunc("/api/v1/convert/pubkey", relay.ConvertPubkeyHandler)   // Convert pubkey to npub
+	mux.HandleFunc("/api/v1/convert/npub", relay.ConvertNpubHandler)       // Convert npub to pubkey
+	
+	// Key validation endpoints
+	mux.HandleFunc("/api/v1/validate/pubkey", relay.ValidatePubkeyHandler) // Validate pubkey
+	mux.HandleFunc("/api/v1/validate/npub", relay.ValidateNpubHandler)     // Validate npub
 
 	// Core Nostr client function endpoints
 	registerCoreClientEndpoints(mux)
