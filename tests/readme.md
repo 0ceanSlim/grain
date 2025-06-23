@@ -62,16 +62,16 @@ tests/                     # Run all commands from this directory
 
 ## Available Commands
 
-| Command                          | Description                                  |
-| -------------------------------- | -------------------------------------------- |
-| `make test`                      | Start environment, run tests, prompt cleanup |
-| `make test-start`                | Start test environment only                  |
-| `make test-run`                  | Full automated cycle (start, test, stop)     |
-| `make test-single TEST=TestName` | Run specific test function by name           |
-| `make test-file   TEST=fie.go  ` | Run all tests in a single go file            |
-| `make test-stop`                 | Stop environment and collect logs            |
-| `make test-clean-logs`           | Remove all log files                         |
-| `make help`                      | Show all available commands                  |
+| Command                           | Description                                  |
+| --------------------------------- | -------------------------------------------- |
+| `make test`                       | Start environment, run tests, prompt cleanup |
+| `make test-start`                 | Start test environment only                  |
+| `make test-run`                   | Full automated cycle (start, test, stop)     |
+| `make test-single TEST=TestName`  | Run specific test function by name           |
+| `make test-file   TEST=file.go  ` | Run all tests in a single go file            |
+| `make test-stop`                  | Stop environment and collect logs            |
+| `make test-clean-logs`            | Remove all log files                         |
+| `make help`                       | Show all available commands                  |
 
 **Note on test names**: The `TEST=` parameter takes the actual Go test function name (e.g., `TestRelayBasics`, `TestWebSocketConnection`, `TestEventPublishing`).
 
