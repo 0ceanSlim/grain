@@ -6,8 +6,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/0ceanslim/grain/client/auth"
+	"github.com/0ceanslim/grain/client/connection"
 	"github.com/0ceanslim/grain/client/core"
+	"github.com/0ceanslim/grain/client/session"
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -39,7 +40,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get current session
-	session := auth.SessionMgr.GetCurrentUser(r)
+	session := session.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return
@@ -54,7 +55,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get core client
-	coreClient := auth.GetCoreClient()
+	coreClient := connection.GetCoreClient()
 	if coreClient == nil {
 		log.Util().Error("Core client not available")
 		http.Error(w, "Client not available", http.StatusInternalServerError)
@@ -145,7 +146,7 @@ func GetUserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	pubkey := r.URL.Query().Get("pubkey")
 	if pubkey == "" {
 		// Use current session pubkey if not provided
-		session := auth.SessionMgr.GetCurrentUser(r)
+		session := session.SessionMgr.GetCurrentUser(r)
 		if session == nil {
 			http.Error(w, "Authentication required or pubkey parameter needed", http.StatusUnauthorized)
 			return
@@ -154,7 +155,7 @@ func GetUserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get core client
-	coreClient := auth.GetCoreClient()
+	coreClient := connection.GetCoreClient()
 	if coreClient == nil {
 		http.Error(w, "Client not available", http.StatusInternalServerError)
 		return
@@ -181,7 +182,7 @@ func GetUserRelaysHandler(w http.ResponseWriter, r *http.Request) {
 	pubkey := r.URL.Query().Get("pubkey")
 	if pubkey == "" {
 		// Use current session pubkey if not provided
-		session := auth.SessionMgr.GetCurrentUser(r)
+		session := session.SessionMgr.GetCurrentUser(r)
 		if session == nil {
 			http.Error(w, "Authentication required or pubkey parameter needed", http.StatusUnauthorized)
 			return
@@ -190,7 +191,7 @@ func GetUserRelaysHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get core client
-	coreClient := auth.GetCoreClient()
+	coreClient := connection.GetCoreClient()
 	if coreClient == nil {
 		http.Error(w, "Client not available", http.StatusInternalServerError)
 		return
@@ -222,7 +223,7 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get core client
-	coreClient := auth.GetCoreClient()
+	coreClient := connection.GetCoreClient()
 	if coreClient == nil {
 		http.Error(w, "Client not available", http.StatusInternalServerError)
 		return

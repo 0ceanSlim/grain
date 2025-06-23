@@ -3,8 +3,9 @@ package client
 import (
 	"time"
 
-	"github.com/0ceanslim/grain/client/auth"
 	"github.com/0ceanslim/grain/client/cache"
+	"github.com/0ceanslim/grain/client/connection"
+	"github.com/0ceanslim/grain/client/session"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -18,18 +19,18 @@ func InitializeClient(relays []string) error {
 	}
 
 	// Initialize core client with relays
-	if err := auth.InitializeCoreClient(relays); err != nil {
+	if err := connection.InitializeCoreClient(relays); err != nil {
 		return err
 	}
 
 	// Set app relays for discovery
-	auth.SetAppRelays(relays)
+	connection.SetAppRelays(relays)
 
 	// Start background session cleanup
 	startSessionCleanup()
 
 	// Start cache cleanup
-	startCacheCleanup()
+	cache.StartCacheCleanup()
 
 	log.Util().Info("Client package initialized successfully with  features")
 	return nil
@@ -37,8 +38,8 @@ func InitializeClient(relays []string) error {
 
 // initializeSessionManager sets up the  session manager
 func initializeSessionManager() error {
-	auth.SessionMgr = auth.NewSessionManager()
-	if auth.SessionMgr == nil {
+	session.SessionMgr = session.NewSessionManager()
+	if session.SessionMgr == nil {
 		return &ClientInitError{Message: "failed to create  session manager"}
 	}
 
@@ -55,12 +56,12 @@ func startSessionCleanup() {
 		for {
 			select {
 			case <-ticker.C:
-				if auth.SessionMgr != nil {
+				if session.SessionMgr != nil {
 					// Clean up sessions older than 24 hours of inactivity
-					auth.SessionMgr.CleanupSessions(24 * time.Hour)
+					session.SessionMgr.CleanupSessions(24 * time.Hour)
 					
 					// Log session statistics
-					stats := auth.SessionMgr.GetSessionStats()
+					stats := session.SessionMgr.GetSessionStats()
 					log.Util().Debug("Session cleanup completed", 
 						"total_sessions", stats["total_sessions"],
 						"read_only", stats["read_only"],
@@ -73,36 +74,18 @@ func startSessionCleanup() {
 	log.Util().Debug("Session cleanup routine started")
 }
 
-// startCacheCleanup starts a background goroutine to clean up expired cache entries
-func startCacheCleanup() {
-	go func() {
-		ticker := time.NewTicker(15 * time.Minute) // Clean up every 15 minutes
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				cache.CleanupExpired()
-				log.Util().Debug("Cache cleanup completed")
-			}
-		}
-	}()
-	
-	log.Util().Debug("Cache cleanup routine started")
-}
-
 // ShutdownClient gracefully shuts down the client package
 func ShutdownClient() error {
 	log.Util().Info("Shutting down client package")
 
 	// Close core client connections
-	if err := auth.CloseCoreClient(); err != nil {
+	if err := connection.CloseCoreClient(); err != nil {
 		log.Util().Error("Error closing core client", "error", err)
 		return err
 	}
 
 	// Clear session manager
-	auth.SessionMgr = nil
+	session.SessionMgr = nil
 
 	log.Util().Info("Client package shutdown complete")
 	return nil
@@ -110,18 +93,18 @@ func ShutdownClient() error {
 
 // GetCoreClient returns the core client instance for advanced usage
 func GetCoreClient() interface{} {
-	return auth.GetCoreClient()
+	return connection.GetCoreClient()
 }
 
 // GetSessionStats returns current session statistics
 func GetSessionStats() map[string]interface{} {
-	if auth.SessionMgr == nil {
+	if session.SessionMgr == nil {
 		return map[string]interface{}{
 			"error": "session manager not initialized",
 		}
 	}
 	
-	return auth.SessionMgr.GetSessionStats()
+	return session.SessionMgr.GetSessionStats()
 }
 
 // ClientInitError represents initialization errors

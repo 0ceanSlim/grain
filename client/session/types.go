@@ -1,5 +1,4 @@
-// client/auth/types.go
-package auth
+package session
 
 import (
 	"encoding/json"
@@ -44,7 +43,7 @@ type UserCapabilities struct {
 }
 
 // SessionMetadata holds cached user data for the session
-type SessionMetadata struct {
+type UserMetadata struct {
 	Profile   string `json:"profile"`   // JSON serialized kind 0 event
 	Mailboxes string `json:"mailboxes"` // JSON serialized kind 10002 relay list
 }
@@ -60,7 +59,7 @@ type UserSession struct {
 	Capabilities UserCapabilities       `json:"capabilities"`
 	
 	// Cached user data
-	Metadata SessionMetadata `json:"metadata"`
+	Metadata UserMetadata `json:"metadata"`
 	
 	// Connection info
 	ConnectedRelays []string `json:"connected_relays"`
@@ -102,10 +101,9 @@ type SessionInitRequest struct {
 	PrivateKey    string            `json:"private_key,omitempty"` // Only for encrypted key method
 }
 
-// SessionResponse represents the response after successful login
-type SessionResponse struct {
+// Response represents the response after successful login
+type Response struct {
 	Success      bool                `json:"success"`
 	Message      string              `json:"message"`
 	Session      *UserSession `json:"session,omitempty"`
-	RedirectURL  string              `json:"redirect_url,omitempty"`
 }

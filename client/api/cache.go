@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/0ceanslim/grain/client/auth"
 	"github.com/0ceanslim/grain/client/cache"
 	"github.com/0ceanslim/grain/client/core"
+	"github.com/0ceanslim/grain/client/data"
+	"github.com/0ceanslim/grain/client/session"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -16,7 +17,7 @@ import (
 // Automatically refreshes cache if expired or missing
 func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 	// Get current session using the  session manager
-	session := auth.SessionMgr.GetCurrentUser(r)
+	session := session.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "User not logged in", http.StatusUnauthorized)
 		log.Util().Debug("No active session found for cache request")
@@ -31,7 +32,7 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 		log.Util().Info("Cache miss or expired, attempting refresh", "pubkey", publicKey)
 		
 		// Try to fetch fresh data in the background
-		if err := auth.FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
+		if err := data.FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
 			log.Util().Error("Failed to refresh cache", "pubkey", publicKey, "error", err)
 			
 			// Return error response with refresh suggestion
@@ -144,7 +145,7 @@ func RefreshCacheHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get current session
-	session := auth.SessionMgr.GetCurrentUser(r)
+	session := session.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "User not logged in", http.StatusUnauthorized)
 		return
@@ -157,7 +158,7 @@ func RefreshCacheHandler(w http.ResponseWriter, r *http.Request) {
 	cache.ClearUserData(publicKey)
 
 	// Fetch fresh data
-	if err := auth.FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
+	if err := data.FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
 		log.Util().Error("Manual cache refresh failed", "pubkey", publicKey, "error", err)
 		
 		response := map[string]interface{}{

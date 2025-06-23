@@ -1,4 +1,4 @@
-package auth
+package session
 
 import (
 	"crypto/rand"
@@ -9,6 +9,9 @@ import (
 
 	"github.com/0ceanslim/grain/server/utils/log"
 )
+
+// Global session manager instance
+var SessionMgr *SessionManager
 
 // SessionManager handles comprehensive user authentication and session tracking
 type SessionManager struct {
@@ -52,7 +55,7 @@ func (sm *SessionManager) GetUserSession(token string) *UserSession {
 }
 
 // CreateSession creates a new comprehensive user session
-func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRequest, metadata SessionMetadata) (*UserSession, error) {
+func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRequest, metadata UserMetadata) (*UserSession, error) {
 	token := GenerateRandomToken(32)
 
 	// Determine capabilities based on signing method
@@ -94,7 +97,7 @@ func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRe
 		SameSite: http.SameSiteStrictMode,
 	})
 
-	log.Util().Info("Created  user session", 
+	log.Util().Info("Created user session", 
 		"pubkey", req.PublicKey,
 		"mode", req.RequestedMode,
 		"signing_method", req.SigningMethod,
@@ -125,7 +128,7 @@ func (sm *SessionManager) UpdateSessionCapabilities(token string, capabilities U
 }
 
 // UpdateSessionMetadata updates cached metadata for a session
-func (sm *SessionManager) UpdateSessionMetadata(token string, metadata SessionMetadata) error {
+func (sm *SessionManager) UpdateSessionMetadata(token string, metadata UserMetadata) error {
 	sm.sessionMutex.Lock()
 	defer sm.sessionMutex.Unlock()
 
@@ -225,7 +228,7 @@ func (sm *SessionManager) GetSessionStats() map[string]interface{} {
 	}
 }
 
-// SessionError represents session-related errors
+// Error represents session-related errors
 type SessionError struct {
 	Message string
 }
@@ -243,4 +246,9 @@ func GenerateRandomToken(length int) string {
 		return hex.EncodeToString([]byte(time.Now().String()))
 	}
 	return hex.EncodeToString(b)
+}
+
+// IsSessionManagerInitialized checks if the session manager is properly initialized
+func IsSessionManagerInitialized() bool {
+	return SessionMgr != nil
 }

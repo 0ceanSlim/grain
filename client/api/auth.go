@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/0ceanslim/grain/client/auth"
+	"github.com/0ceanslim/grain/client/data"
+	"github.com/0ceanslim/grain/client/session"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -20,13 +21,13 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	log.Util().Debug("API login handler called")
 
 	// Check if user is already logged in
-	if session := auth.SessionMgr.GetCurrentUser(r); session != nil {
-		log.Util().Info("User already logged in", "pubkey", session.PublicKey)
+	if userSession := session.SessionMgr.GetCurrentUser(r); userSession != nil {
+		log.Util().Info("User already logged in", "pubkey", userSession.PublicKey)
 		
-		response := auth.SessionResponse{
+		response := session.Response{
 			Success: true,
 			Message: "Already logged in",
-			Session: session,
+			Session: userSession,  // Use userSession here too
 		}
 		
 		w.Header().Set("Content-Type", "application/json")
@@ -35,7 +36,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse JSON request body
-	var loginReq auth.SessionInitRequest
+	var loginReq session.SessionInitRequest
 	if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
 		log.Util().Error("Failed to parse login request", "error", err)
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
@@ -51,20 +52,20 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Set defaults if not specified
 	if loginReq.RequestedMode == "" {
-		loginReq.RequestedMode = auth.ReadOnlyMode
-		loginReq.SigningMethod = auth.NoSigning
+		loginReq.RequestedMode = session.ReadOnlyMode
+		loginReq.SigningMethod = session.NoSigning
 	}
 
 	// Validate signing method matches requested mode
-	if loginReq.RequestedMode == auth.WriteMode && loginReq.SigningMethod == auth.NoSigning {
+	if loginReq.RequestedMode == session.WriteMode && loginReq.SigningMethod == session.NoSigning {
 		log.Util().Warn("Write mode requires signing method", "pubkey", loginReq.PublicKey)
 		http.Error(w, "Write mode requires a signing method", http.StatusBadRequest)
 		return
 	}
 
-	if loginReq.RequestedMode == auth.ReadOnlyMode && loginReq.SigningMethod != auth.NoSigning {
+	if loginReq.RequestedMode == session.ReadOnlyMode && loginReq.SigningMethod != session.NoSigning {
 		log.Util().Debug("Overriding signing method for read-only mode", "pubkey", loginReq.PublicKey)
-		loginReq.SigningMethod = auth.NoSigning
+		loginReq.SigningMethod = session.NoSigning
 	}
 
 	log.Util().Info("Processing user login", 
@@ -73,10 +74,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		"signing_method", loginReq.SigningMethod)
 
 	// Validate the session request
-	if err := auth.ValidateSessionRequest(loginReq); err != nil {
+	if err := session.ValidateSessionRequest(loginReq); err != nil {
 		log.Util().Error("Invalid session request", "error", err)
 		
-		response := auth.SessionResponse{
+		response := session.Response{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		}
@@ -90,20 +91,21 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Initialize user data: fetch mailboxes, set app relays, get metadata from outboxes, cache everything
 	log.Util().Debug("Fetching and caching user data", "pubkey", loginReq.PublicKey)
 	
-	if err := auth.FetchAndCacheUserDataWithCoreClient(loginReq.PublicKey); err != nil {
+	if err := data.FetchAndCacheUserDataWithCoreClient(loginReq.PublicKey); err != nil {
 		log.Util().Warn("Failed to fetch user data, proceeding with session creation", 
 			"pubkey", loginReq.PublicKey, "error", err)
 		// Continue with session creation even if fetch fails - user might be new or relays unavailable
 	}
 
 	// Create session with the fetched/cached data and remember how they logged in
-	session, err := auth.CreateUserSession(w, loginReq)
+	userSession, err := session.CreateUserSession(w, loginReq)
 	if err != nil {
 		log.Util().Error("Failed to create session", "error", err)
 		
-		response := auth.SessionResponse{
-			Success: false,
-			Message: "Login failed: " + err.Error(),
+		response := session.Response{
+			Success:     true,
+			Message:     "Login successful",
+			Session:     userSession,  // Use userSession instead of session
 		}
 		
 		w.Header().Set("Content-Type", "application/json")
@@ -113,19 +115,19 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Successful login response
-	response := auth.SessionResponse{
+	response := session.Response{
 		Success:     true,
 		Message:     "Login successful",
-		Session:     session,
+		Session:     userSession,
 	}
 
 	log.Util().Info("User login successful", 
 		"pubkey", loginReq.PublicKey,
-		"mode", session.Mode,
-		"signing_method", session.Capabilities.SigningMethod,
-		"can_sign", session.Capabilities.CanWrite,
-		"cached_profile", session.Metadata.Profile != "",
-		"cached_mailboxes", session.Metadata.Mailboxes != "")
+		"mode", userSession.Mode,
+		"signing_method", userSession.Capabilities.SigningMethod,
+		"can_sign", userSession.Capabilities.CanWrite,
+		"cached_profile", userSession.Metadata.Profile != "",
+		"cached_mailboxes", userSession.Metadata.Mailboxes != "")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
@@ -141,7 +143,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	log.Util().Debug("API logout handler called")
 
 	// Get current user session
-	user := auth.SessionMgr.GetCurrentUser(r)
+	user := session.SessionMgr.GetCurrentUser(r)
 	if user != nil {
 		log.Util().Info("User logging out", 
 			"pubkey", user.PublicKey,
@@ -150,7 +152,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Clear the session
-	auth.SessionMgr.ClearSession(w, r)
+	session.SessionMgr.ClearSession(w, r)
 
 	response := map[string]interface{}{
 		"success": true,

@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/0ceanslim/grain/client/auth"
+	"github.com/0ceanslim/grain/client/connection"
+	"github.com/0ceanslim/grain/client/session"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -34,7 +35,7 @@ func ConnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check authentication
-	session := auth.SessionMgr.GetCurrentUser(r)
+	session := session.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return
@@ -57,7 +58,7 @@ func ConnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get core client
-	coreClient := auth.GetCoreClient()
+	coreClient := connection.GetCoreClient()
 	if coreClient == nil {
 		sendRelayResponse(w, ConnectRelayResponse{
 			Success: false,
@@ -91,7 +92,7 @@ func DisconnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check authentication
-	session := auth.SessionMgr.GetCurrentUser(r)
+	session := session.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return
@@ -114,7 +115,7 @@ func DisconnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get core client
-	coreClient := auth.GetCoreClient()
+	coreClient := connection.GetCoreClient()
 	if coreClient == nil {
 		sendRelayResponse(w, ConnectRelayResponse{
 			Success: false,
@@ -135,14 +136,14 @@ func DisconnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 // GetRelayStatusHandler returns the status of all relay connections
 func GetRelayStatusHandler(w http.ResponseWriter, r *http.Request) {
 	// Check authentication
-	session := auth.SessionMgr.GetCurrentUser(r)
+	session := session.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return
 	}
 
 	// Get core client
-	coreClient := auth.GetCoreClient()
+	coreClient := connection.GetCoreClient()
 	if coreClient == nil {
 		http.Error(w, "Client not available", http.StatusInternalServerError)
 		return

@@ -4,16 +4,16 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/0ceanslim/grain/client/auth"
 	"github.com/0ceanslim/grain/client/cache"
 	"github.com/0ceanslim/grain/client/core"
+	"github.com/0ceanslim/grain/client/session"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // GetSessionHandler returns the current user's  session data as JSON
 func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 	// Get current session
-	session := auth.SessionMgr.GetCurrentUser(r)
+	session := session.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "No active session found", http.StatusUnauthorized)
 		log.Util().Debug("No active session found for request")
