@@ -4,22 +4,54 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!--
-    CDNs are used for ease of development. In a Production enviornment, 
-    build a proper minified custom CSS using the Tailwind CLI tool and serve
-    the latest available minified htmx and custom css directly from your server.
 
-    Build the taiwind styling from the configuration 
-      in the /client/style directory
-    <link href="style/custom.min.css" rel="stylesheet" />
+    <!-- PWA Meta Tags -->
+    <meta name="application-name" content="Grain" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="Grain" />
+    <meta
+      name="description"
+      content="Go Relay Architecture for Implementing Nostr"
+    />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#8b5cf6" />
 
-    <link href="/static/htmx.min.js">
+    <!-- Apple Touch Icons -->
+    <link
+      rel="apple-touch-icon"
+      sizes="152x152"
+      href="/static/icons/icon-152x152.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/static/icons/icon-180x180.png"
+    />
 
-    To download a copy of htmx: https://htmx.org/docs/#download-a-copy
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
 
-    To download a copy of Tailwind: https://tailwindcss.com/docs/installation
+    <!-- Favicon -->
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/static/icons/icon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/static/icons/icon-16x16.png"
+    />
 
-    -->
+    <!-- Load external libraries first -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script
       src="https://unpkg.com/htmx.org@2.0.4"
@@ -28,13 +60,6 @@
     ></script>
     <script src="https://unpkg.com/hyperscript.org@0.9.14"></script>
 
-    <!-- Load our JavaScript modules -->
-    <script src="/static/js/navigation.js"></script>
-    <script src="/static/js/routing.js"></script>
-    <script src="/static/js/profile.js"></script>
-    <script src="/static/js/dropdown.js"></script>
-
-    <link rel="icon" href="favicon.ico" type="image/x-icon" />
     <title>{{.Title}}</title>
     <style>
       .spinner {
@@ -55,11 +80,253 @@
           transform: rotate(360deg);
         }
       }
+
+      /* PWA Install Banner Styles */
+      .pwa-install-banner {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #8b5cf6, #a855f7);
+        color: white;
+        padding: 1rem;
+        transform: translateY(100%);
+        transition: transform 0.3s ease-in-out;
+        z-index: 1000;
+        box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+      }
+
+      .pwa-install-banner.show {
+        transform: translateY(0);
+      }
+
+      .pwa-install-banner button {
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 0.375rem;
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+
+      .pwa-install-banner button:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
     </style>
   </head>
   {{template "header" .}}
   <body class="font-mono text-center text-white bg-gray-800">
     {{template "view" .}}
+
+    <!-- PWA Install Banner -->
+    <div id="pwa-install-banner" class="pwa-install-banner">
+      <div class="flex items-center justify-between max-w-md mx-auto">
+        <div class="flex-1">
+          <h4 class="font-semibold">Install Grain</h4>
+          <p class="text-sm opacity-90">
+            Add to your home screen for quick access
+          </p>
+        </div>
+        <div class="flex ml-4 space-x-2">
+          <button id="pwa-install-btn" class="install-btn">Install</button>
+          <button id="pwa-dismiss-btn" class="dismiss-btn">×</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Load JavaScript in proper order -->
+    <script>
+      // Wait for HTMX to be ready
+      function waitForHTMX() {
+        if (typeof htmx !== "undefined" && htmx.version) {
+          console.log("HTMX ready, version:", htmx.version);
+
+          // Load scripts in proper order - navigation FIRST
+          const navigationScript = document.createElement("script");
+          navigationScript.src = "/static/js/navigation.js";
+          navigationScript.onload = () => {
+            console.log("✅ Navigation.js loaded");
+
+            // Load routing after navigation
+            const routingScript = document.createElement("script");
+            routingScript.src = "/static/js/routing.js";
+            routingScript.onload = () => {
+              console.log("✅ Routing.js loaded");
+
+              // Load other scripts
+              const otherScripts = [
+                "/static/js/profile.js",
+                "/static/js/dropdown.js",
+              ];
+              otherScripts.forEach((src) => {
+                const script = document.createElement("script");
+                script.src = src;
+                script.onload = () => console.log("✅ Loaded:", src);
+                document.head.appendChild(script);
+              });
+            };
+            document.head.appendChild(routingScript);
+          };
+          document.head.appendChild(navigationScript);
+        } else {
+          setTimeout(waitForHTMX, 50);
+        }
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", waitForHTMX);
+      } else {
+        waitForHTMX();
+      }
+    </script>
+
+    <!-- PWA Service Worker and Install Logic -->
+    <script>
+      // Service Worker Registration
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then((registration) => {
+              console.log("[SW] Registered successfully:", registration.scope);
+
+              // Check for updates
+              registration.addEventListener("updatefound", () => {
+                const newWorker = registration.installing;
+                newWorker.addEventListener("statechange", () => {
+                  if (
+                    newWorker.state === "installed" &&
+                    navigator.serviceWorker.controller
+                  ) {
+                    showUpdateAvailable(registration);
+                  }
+                });
+              });
+            })
+            .catch((error) => {
+              console.error("[SW] Registration failed:", error);
+            });
+        });
+      }
+
+      // PWA Install Prompt
+      let deferredPrompt;
+      const installBanner = document.getElementById("pwa-install-banner");
+      const installBtn = document.getElementById("pwa-install-btn");
+      const dismissBtn = document.getElementById("pwa-dismiss-btn");
+
+      // Listen for install prompt
+      window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+
+        if (!localStorage.getItem("pwa-install-dismissed")) {
+          showInstallBanner();
+        }
+      });
+
+      // Show/hide banner functions
+      function showInstallBanner() {
+        if (installBanner) installBanner.classList.add("show");
+      }
+
+      function hideInstallBanner() {
+        if (installBanner) installBanner.classList.remove("show");
+      }
+
+      // Install button click
+      if (installBtn) {
+        installBtn.addEventListener("click", async () => {
+          if (!deferredPrompt) return;
+
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          console.log(`[PWA] User response: ${outcome}`);
+
+          deferredPrompt = null;
+          hideInstallBanner();
+        });
+      }
+
+      // Dismiss button click
+      if (dismissBtn) {
+        dismissBtn.addEventListener("click", () => {
+          hideInstallBanner();
+          localStorage.setItem("pwa-install-dismissed", "true");
+        });
+      }
+
+      // App installed
+      window.addEventListener("appinstalled", () => {
+        console.log("[PWA] App installed successfully");
+        hideInstallBanner();
+        deferredPrompt = null;
+      });
+
+      // Update available notification
+      function showUpdateAvailable(registration) {
+        const updateNotification = document.createElement("div");
+        updateNotification.innerHTML = `
+          <div style="position: fixed; top: 1rem; right: 1rem; background: #3b82f6; color: white; padding: 1rem; border-radius: 0.5rem; z-index: 1001; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+            <div class="flex items-center space-x-3">
+              <span>🚀 New version available!</span>
+              <button onclick="refreshApp()" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 0.25rem 0.75rem; border-radius: 0.25rem; font-size: 0.875rem;">
+                Update
+              </button>
+              <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: white; padding: 0.25rem; font-size: 1.25rem;">
+                ×
+              </button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(updateNotification);
+      }
+
+      // Refresh for updates
+      function refreshApp() {
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.getRegistration().then((registration) => {
+            if (registration && registration.waiting) {
+              registration.waiting.postMessage({ type: "SKIP_WAITING" });
+              window.location.reload();
+            }
+          });
+        }
+      }
+
+      // Offline status handling
+      function updateOnlineStatus() {
+        if (!navigator.onLine) {
+          showOfflineNotification();
+        }
+      }
+
+      function showOfflineNotification() {
+        const offlineNotification = document.createElement("div");
+        offlineNotification.id = "offline-notification";
+        offlineNotification.innerHTML = `
+          <div style="position: fixed; top: 0; left: 0; right: 0; background: #f59e0b; color: white; padding: 0.5rem; text-align: center; z-index: 1002; font-size: 0.875rem;">
+            📡 You're offline. Some features may be limited.
+          </div>
+        `;
+        document.body.appendChild(offlineNotification);
+      }
+
+      function hideOfflineNotification() {
+        const notification = document.getElementById("offline-notification");
+        if (notification) notification.remove();
+      }
+
+      window.addEventListener("online", () => {
+        hideOfflineNotification();
+      });
+
+      window.addEventListener("offline", updateOnlineStatus);
+
+      // Make functions globally available
+      window.refreshApp = refreshApp;
+    </script>
   </body>
   {{template "footer" .}}
 </html>

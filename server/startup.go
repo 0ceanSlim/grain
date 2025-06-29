@@ -262,6 +262,9 @@ func initClient() http.Handler {
 	// Register API endpoints only (no view routes)
 	client.RegisterEndpoints(mux)
 
+	// Register PWA routes
+    client.RegisterPWARoutes(mux)
+
 	return mux // Return the mux as the HTTP handler
 }
 

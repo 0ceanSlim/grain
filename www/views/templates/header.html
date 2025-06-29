@@ -42,8 +42,16 @@
     js window.logoutUser() end
   end
 
-  on load js window.updateNavigation() end
-  on updateNav js window.updateNavigation() end
+  def safeUpdateNavigation()
+    if window.updateNavigation is not null
+      js window.updateNavigation() end
+    else
+      wait 100ms then call safeUpdateNavigation()
+    end
+  end
+
+  on load call safeUpdateNavigation()
+  on updateNav call safeUpdateNavigation()
 "
 ></div>
 {{end}}

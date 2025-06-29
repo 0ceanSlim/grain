@@ -1,15 +1,17 @@
 /**
- * Simple client-side routing for HTMX navigation
+ * Fixed client-side routing for HTMX navigation
  * Handles initial page loads and browser back/forward buttons
- * Updated to use login modal instead of login route
+ * Updated to work when loaded dynamically after DOM is ready
  */
 
-// Handle initial route loading based on current URL path
-document.addEventListener("DOMContentLoaded", function () {
+console.log("[ROUTING] Script loaded, DOM ready state:", document.readyState);
+
+// Function to handle route loading
+function handleRouteLoad() {
   const currentPath = window.location.pathname;
   let targetView = "/views/home.html"; // default
 
-  console.log("Current path:", currentPath);
+  console.log("[ROUTING] Handling route load for path:", currentPath);
 
   // Map URL paths to view files
   switch (currentPath) {
@@ -35,14 +37,14 @@ document.addEventListener("DOMContentLoaded", function () {
               }
             }, 100);
           }
-          console.log("Loading view:", targetView);
+          console.log("[ROUTING] Loading view:", targetView);
           htmx.ajax("GET", targetView, { target: "#main-content" });
         })
         .catch(() => {
           // Error checking session, go to home and show login modal
           targetView = "/views/home.html";
           window.history.pushState({}, "", "/");
-          console.log("Loading view:", targetView);
+          console.log("[ROUTING] Error checking session, loading:", targetView);
           htmx.ajax("GET", targetView, { target: "#main-content" });
 
           // Show login modal after home loads
@@ -61,18 +63,39 @@ document.addEventListener("DOMContentLoaded", function () {
       break;
   }
 
-  console.log("Loading initial view:", targetView, "for path:", currentPath);
+  console.log(
+    "[ROUTING] Loading initial view:",
+    targetView,
+    "for path:",
+    currentPath
+  );
 
-  // Load the appropriate view
-  htmx.ajax("GET", targetView, { target: "#main-content" });
-});
+  // Check if HTMX is available before trying to load
+  if (typeof htmx !== "undefined") {
+    htmx.ajax("GET", targetView, { target: "#main-content" });
+  } else {
+    console.error("[ROUTING] HTMX not available, cannot load view");
+    setTimeout(handleRouteLoad, 100); // Retry in 100ms
+  }
+}
+
+// Execute route loading immediately if DOM is already ready
+// or wait for DOMContentLoaded if it hasn't fired yet
+if (document.readyState === "loading") {
+  console.log("[ROUTING] DOM still loading, waiting for DOMContentLoaded");
+  document.addEventListener("DOMContentLoaded", handleRouteLoad);
+} else {
+  console.log("[ROUTING] DOM already ready, executing route load immediately");
+  // Small delay to ensure HTMX is ready
+  setTimeout(handleRouteLoad, 50);
+}
 
 // Handle browser back/forward buttons
 window.addEventListener("popstate", function (event) {
   const currentPath = window.location.pathname;
   let targetView = "/views/home.html";
 
-  console.log("Popstate - current path:", currentPath);
+  console.log("[ROUTING] Popstate - current path:", currentPath);
 
   switch (currentPath) {
     case "/":
@@ -89,14 +112,14 @@ window.addEventListener("popstate", function (event) {
             targetView = "/views/home.html";
             window.history.replaceState({}, "", "/");
           }
-          console.log("Loading view via popstate:", targetView);
+          console.log("[ROUTING] Loading view via popstate:", targetView);
           htmx.ajax("GET", targetView, { target: "#main-content" });
         })
         .catch(() => {
           // Error checking session, go to home
           targetView = "/views/home.html";
           window.history.replaceState({}, "", "/");
-          console.log("Loading view via popstate:", targetView);
+          console.log("[ROUTING] Loading view via popstate:", targetView);
           htmx.ajax("GET", targetView, { target: "#main-content" });
         });
       return; // Exit early since we're handling this asynchronously
@@ -106,6 +129,8 @@ window.addEventListener("popstate", function (event) {
       break;
   }
 
-  console.log("Loading view via popstate:", targetView);
+  console.log("[ROUTING] Loading view via popstate:", targetView);
   htmx.ajax("GET", targetView, { target: "#main-content" });
 });
+
+console.log("[ROUTING] Event listeners registered");
