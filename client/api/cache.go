@@ -90,9 +90,7 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 		"refreshed":      !found, // Indicate if data was refreshed
 		// Include session information
 		"sessionMode":     session.Mode,
-		"capabilities":    session.Capabilities,
-		"isReadOnly":      session.IsReadOnly(),
-		"canCreateEvents": session.CanCreateEvents(),
+		"signingMethod":   session.SigningMethod,
 	}
 
 	// Include parsed data if available, otherwise raw data
@@ -113,9 +111,9 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 				"userRelays": userRelays,
 				"relayCount": len(userRelays),
 				"read":       mailboxes.Read,
-				"write":      mailboxes.Write,
 				"both":       mailboxes.Both,
 			}
+			// Note: removed the redundant "write": mailboxes.Write that was showing as null
 		}
 	} else {
 		response["mailboxesRaw"] = cachedData.Mailboxes

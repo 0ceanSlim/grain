@@ -30,9 +30,9 @@ func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 				"userRelays": userRelays,
 				"relayCount": len(userRelays),
 				"read":       mailboxes.Read,
-				"write":      mailboxes.Write,
 				"both":       mailboxes.Both,
 			}
+			// Note: removed the redundant "write": mailboxes.Write that was showing as null
 		}
 	}
 
@@ -41,10 +41,8 @@ func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 		"publicKey":        session.PublicKey,
 		"lastActive":       session.LastActive,
 		"mode":            session.Mode,
-		"capabilities":    session.Capabilities,
+		"signingMethod":   session.SigningMethod,
 		"connectedRelays": session.ConnectedRelays,
-		"isReadOnly":      session.IsReadOnly(),
-		"canCreateEvents": session.CanCreateEvents(),
 	}
 
 	// Add relay info if available

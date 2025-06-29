@@ -33,15 +33,6 @@ const (
 	NoSigning SigningMethod = "none"
 )
 
-// UserCapabilities defines what the user can do in the current session
-type UserCapabilities struct {
-	CanWrite       bool          `json:"can_write"`
-	CanEdit        bool          `json:"can_edit"`
-	CanPublish     bool          `json:"can_publish"`
-	SigningMethod  SigningMethod `json:"signing_method"`
-	ShowEditUI     bool          `json:"show_edit_ui"`
-}
-
 // SessionMetadata holds cached user data for the session
 type UserMetadata struct {
 	Profile   string `json:"profile"`   // JSON serialized kind 0 event
@@ -54,9 +45,9 @@ type UserSession struct {
 	PublicKey  string    `json:"public_key"`
 	LastActive time.Time `json:"last_active"`
 	
-	// Interaction mode and capabilities
-	Mode         SessionInteractionMode `json:"mode"`
-	Capabilities UserCapabilities       `json:"capabilities"`
+	// Interaction mode and signing
+	Mode          SessionInteractionMode `json:"mode"`
+	SigningMethod SigningMethod          `json:"signing_method"`
 	
 	// Cached user data
 	Metadata UserMetadata `json:"metadata"`
@@ -75,7 +66,12 @@ func (s *UserSession) IsReadOnly() bool {
 
 // CanCreateEvents returns true if the user can create new events
 func (s *UserSession) CanCreateEvents() bool {
-	return s.Mode == WriteMode && s.Capabilities.CanWrite
+	return s.Mode == WriteMode
+}
+
+// CanSign returns true if the user can sign events
+func (s *UserSession) CanSign() bool {
+	return s.Mode == WriteMode && s.SigningMethod != NoSigning
 }
 
 // GetUserRelays returns the user's relay list as a string slice
@@ -95,15 +91,15 @@ func (s *UserSession) GetUserRelays() []string {
 
 // SessionInitRequest represents data needed to initialize a session
 type SessionInitRequest struct {
-	PublicKey     string            `json:"public_key"`
+	PublicKey     string                 `json:"public_key"`
 	RequestedMode SessionInteractionMode `json:"requested_mode"`
-	SigningMethod SigningMethod     `json:"signing_method,omitempty"`
-	PrivateKey    string            `json:"private_key,omitempty"` // Only for encrypted key method
+	SigningMethod SigningMethod          `json:"signing_method,omitempty"`
+	PrivateKey    string                 `json:"private_key,omitempty"` // Only for encrypted key method
 }
 
 // Response represents the response after successful login
 type Response struct {
-	Success      bool                `json:"success"`
-	Message      string              `json:"message"`
-	Session      *UserSession `json:"session,omitempty"`
+	Success bool         `json:"success"`
+	Message string       `json:"message"`
+	Session *UserSession `json:"session,omitempty"`
 }

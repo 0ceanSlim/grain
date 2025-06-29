@@ -124,8 +124,8 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	log.Util().Info("User login successful", 
 		"pubkey", loginReq.PublicKey,
 		"mode", userSession.Mode,
-		"signing_method", userSession.Capabilities.SigningMethod,
-		"can_sign", userSession.Capabilities.CanWrite,
+		"signing_method", userSession.SigningMethod,
+		"can_create_events", userSession.CanCreateEvents(),
 		"cached_profile", userSession.Metadata.Profile != "",
 		"cached_mailboxes", userSession.Metadata.Mailboxes != "")
 
@@ -148,7 +148,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		log.Util().Info("User logging out", 
 			"pubkey", user.PublicKey,
 			"mode", user.Mode,
-			"signing_method", user.Capabilities.SigningMethod)
+			"signing_method", user.SigningMethod)
 	}
 
 	// Clear the session

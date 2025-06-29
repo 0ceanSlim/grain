@@ -58,21 +58,12 @@ func (sm *SessionManager) GetUserSession(token string) *UserSession {
 func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRequest, metadata UserMetadata) (*UserSession, error) {
 	token := GenerateRandomToken(32)
 
-	// Determine capabilities based on signing method
-	capabilities := UserCapabilities{
-		SigningMethod: req.SigningMethod,
-		CanWrite:      req.RequestedMode == WriteMode,
-		CanEdit:       req.RequestedMode == WriteMode,
-		CanPublish:    req.RequestedMode == WriteMode && req.SigningMethod != NoSigning,
-		ShowEditUI:    req.RequestedMode == WriteMode,
-	}
-
 	session := &UserSession{
-		PublicKey:    req.PublicKey,
-		LastActive:   time.Now(),
-		Mode:         req.RequestedMode,
-		Capabilities: capabilities,
-		Metadata:     metadata,
+		PublicKey:       req.PublicKey,
+		LastActive:      time.Now(),
+		Mode:            req.RequestedMode,
+		SigningMethod:   req.SigningMethod,
+		Metadata:        metadata,
 		ConnectedRelays: []string{}, // Will be populated during login
 	}
 
@@ -104,27 +95,6 @@ func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRe
 		"token", token[:8])
 
 	return session, nil
-}
-
-// UpdateSessionCapabilities updates the capabilities of an existing session
-func (sm *SessionManager) UpdateSessionCapabilities(token string, capabilities UserCapabilities) error {
-	sm.sessionMutex.Lock()
-	defer sm.sessionMutex.Unlock()
-
-	session, exists := sm.sessions[token]
-	if !exists {
-		return &SessionError{Message: "session not found"}
-	}
-
-	session.Capabilities = capabilities
-	session.LastActive = time.Now()
-
-	log.Util().Debug("Updated session capabilities", 
-		"pubkey", session.PublicKey,
-		"can_write", capabilities.CanWrite,
-		"signing_method", capabilities.SigningMethod)
-
-	return nil
 }
 
 // UpdateSessionMetadata updates cached metadata for a session
@@ -217,7 +187,7 @@ func (sm *SessionManager) GetSessionStats() map[string]interface{} {
 		} else {
 			writeMode++
 		}
-		signingMethods[session.Capabilities.SigningMethod]++
+		signingMethods[session.SigningMethod]++
 	}
 
 	return map[string]interface{}{

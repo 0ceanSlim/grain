@@ -152,11 +152,12 @@ function updateProfileFields(profileContent, data) {
 
 function updateSessionInfo(data) {
   updateProfileField("session-mode", data.sessionMode || "unknown");
-  updateProfileField(
-    "signing-method",
-    data.capabilities?.signing_method || "unknown"
-  );
-  updateProfileField("can-create-events", data.canCreateEvents ? "Yes" : "No");
+  updateProfileField("signing-method", data.signingMethod || "unknown");
+
+  // Derive canCreateEvents from sessionMode instead of using separate field
+  const canCreateEvents = data.sessionMode === "write";
+  updateProfileField("can-create-events", canCreateEvents ? "Yes" : "No");
+
   updateProfileField("cache-age", data.cacheAge || "unknown");
 }
 
@@ -206,26 +207,25 @@ function updateRelayInformation(data) {
     const relayData = data.relayInfo || data.mailboxes;
 
     readOnlyRelays = relayData.read || [];
-    writeOnlyRelays = relayData.write || [];
+    // Note: writeOnlyRelays removed since we eliminated the redundant write field
+    // writeOnlyRelays = relayData.write || []; // This was always null/empty
     bothRelays = relayData.both || [];
 
     console.log("Relay data extracted:", {
       readOnly: readOnlyRelays,
-      writeOnly: writeOnlyRelays,
       both: bothRelays,
     });
   }
 
   // Update relay lists
   updateRelayList("read-relays", readOnlyRelays);
-  updateRelayList("write-relays", writeOnlyRelays);
+  updateRelayList("write-relays", []); // Clear write-only relays since we removed that field
   updateRelayList("both-relays", bothRelays);
 
   // Calculate and update relay counts
   const readRelayCount = readOnlyRelays.length + bothRelays.length;
-  const writeRelayCount = writeOnlyRelays.length + bothRelays.length;
-  const totalRelayCount =
-    readOnlyRelays.length + writeOnlyRelays.length + bothRelays.length;
+  const writeRelayCount = bothRelays.length; // Only count 'both' relays for write
+  const totalRelayCount = readOnlyRelays.length + bothRelays.length;
 
   updateProfileField("read-relay-count", readRelayCount.toString());
   updateProfileField("write-relay-count", writeRelayCount.toString());
