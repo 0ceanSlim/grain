@@ -1,166 +1,132 @@
-/**
- * Base authentication utilities
- * Common functions shared across all auth methods
- */
+// Global state
+let currentAuthMethod = null;
+let amberCallbackReceived = false;
 
-/**
- * Display result message to user with appropriate styling
- * @param {string} type - 'success', 'error', or 'loading'
- * @param {string} message - Message to display
- */
-function showResult(type, message) {
-  const colors = {
-    success: "text-green-200 bg-green-800 border-green-600",
-    error: "text-red-200 bg-red-800 border-red-600",
-    loading: "text-blue-200 bg-blue-800 border-blue-600",
-  };
+// Expose functions globally
+window.showAuthModal = showAuthModal;
+window.hideAuthModal = hideAuthModal;
+window.signEventWithExtension = signEventWithExtension;
+window.isExtensionAvailable = isExtensionAvailable;
+window.isAmberAvailable = isAmberAvailable;
+window.getExtensionPublicKey = getExtensionPublicKey;
 
-  const icons = {
-    success: "✅",
-    error: "❌",
-    loading: "⏳",
-  };
-
-  const html = `
-      <div class="${colors[type] || colors.error} border px-4 py-3 rounded">
-        <p>${icons[type] || icons.error} ${message}</p>
-      </div>
-    `;
-
-  ui.setHtml("auth-result", html);
+// Main modal functions
+function showAuthModal() {
+  document.getElementById("auth-modal").classList.remove("hidden");
+  resetModal();
 }
 
-/**
- * Handle successful login response
- * Updates UI and redirects to profile
- * @param {Object} result - Login response from server
- */
-function handleSuccessfulLogin(result) {
-  showResult("success", "Login successful!");
-
-  setTimeout(() => {
-    hideAuthModal();
-    updateNavigation();
-
-    // Navigate to profile
-    if (typeof htmx !== "undefined") {
-      htmx.ajax("GET", "/views/profile.html", "#main-content");
-      window.history.pushState({}, "", "/profile");
-    }
-  }, 1000);
+function hideAuthModal() {
+  document.getElementById("auth-modal").classList.add("hidden");
+  resetModal();
 }
 
-/**
- * Send login request to server
- * @param {Object} loginData - Login data object
- * @returns {Promise<Object>} Server response
- */
-async function sendLoginRequest(loginData) {
-  try {
-    const result = await api.post("/api/v1/auth/login", loginData);
-    return result;
-  } catch (error) {
-    throw new Error(`Login failed: ${error.message}`);
-  }
-}
-
-/**
- * Validate public key format (hex or npub)
- * @param {string} pubkey - Public key to validate
- * @returns {boolean} True if valid
- */
-function validatePubkey(pubkey) {
-  if (!pubkey || typeof pubkey !== "string") {
-    return false;
-  }
-
-  const trimmed = pubkey.trim();
-
-  // Check for npub format
-  if (trimmed.startsWith("npub1")) {
-    return trimmed.length === 63; // npub1 + 58 chars
-  }
-
-  // Check for hex format
-  if (trimmed.length === 64) {
-    return /^[0-9a-fA-F]{64}$/.test(trimmed);
-  }
-
-  return false;
-}
-
-/**
- * Convert npub to hex if needed
- * @param {string} pubkey - Public key in hex or npub format
- * @returns {string} Hex public key
- */
-function normalizePublicKey(pubkey) {
-  if (!pubkey) return "";
-
-  const trimmed = pubkey.trim();
-
-  // If already hex, return as-is
-  if (trimmed.length === 64 && /^[0-9a-fA-F]{64}$/.test(trimmed)) {
-    return trimmed;
-  }
-
-  // If npub, convert to hex (use existing validate utility)
-  if (trimmed.startsWith("npub1")) {
-    // This would use your existing conversion utility
-    // For now, just validate it's the right format
-    if (validate && validate.isValidNpub && validate.isValidNpub(trimmed)) {
-      // Use existing conversion if available
-      if (window.convertNpubToHex) {
-        return window.convertNpubToHex(trimmed);
-      }
-    }
-  }
-
-  return trimmed;
-}
-
-/**
- * Clear authentication form inputs
- * @param {string[]} inputIds - Array of input element IDs to clear
- */
-function clearAuthInputs(inputIds) {
-  inputIds.forEach((id) => {
-    const input = document.getElementById(id);
-    if (input) {
-      input.value = "";
-    }
+function resetModal() {
+  // Hide all forms
+  [
+    "extension-form",
+    "amber-form",
+    "bunker-form",
+    "readonly-form",
+    "privkey-form",
+  ].forEach((id) => {
+    document.getElementById(id).classList.add("hidden");
   });
+
+  // Show method selection
+  document.getElementById("auth-method-selection").classList.remove("hidden");
+  document.getElementById("close-button").classList.remove("hidden");
+
+  // Reset advanced options
+  document.getElementById("advanced-options").classList.add("hidden");
+  document.getElementById("advanced-arrow").classList.remove("rotate-180");
+
+  // Clear forms
+  document.getElementById("bunker-url").value = "";
+  if (document.getElementById("amber-bunker-url")) {
+    document.getElementById("amber-bunker-url").value = "";
+  }
+  document.getElementById("readonly-pubkey").value = "";
+  document.getElementById("private-key").value = "";
+  document.getElementById("session-password").value = "";
+
+  // Clear results
+  document.getElementById("auth-result").innerHTML = "";
+
+  currentAuthMethod = null;
+  amberCallbackReceived = false;
+}
+
+// Method selection
+function selectAuthMethod(method) {
+  currentAuthMethod = method;
+
+  // Hide method selection
+  document.getElementById("auth-method-selection").classList.add("hidden");
+  document.getElementById("close-button").classList.add("hidden");
+
+  // Show appropriate form
+  const formId = method + "-form";
+  document.getElementById(formId).classList.remove("hidden");
+
+  // Special handling for extension
+  if (method === "extension") {
+    checkForExtension();
+  }
+}
+
+function goBack() {
+  resetModal();
+}
+
+// Advanced options toggle - FIXED
+function toggleAdvanced() {
+  const advancedOptions = document.getElementById("advanced-options");
+  const arrow = document.getElementById("advanced-arrow");
+
+  if (advancedOptions.classList.contains("hidden")) {
+    advancedOptions.classList.remove("hidden");
+    arrow.classList.add("rotate-180");
+  } else {
+    advancedOptions.classList.add("hidden");
+    arrow.classList.remove("rotate-180");
+  }
 }
 
 /**
- * Create standardized login data object
- * @param {string} publicKey - User's public key (hex format)
- * @param {string} signingMethod - How events will be signed
- * @param {string} mode - 'read_write' or 'read_only'
- * @param {Object} extras - Additional fields specific to auth method
- * @returns {Object} Standardized login data
+ * Utility functions
  */
-function createLoginData(
-  publicKey,
-  signingMethod,
-  mode = "read_write",
-  extras = {}
-) {
-  return {
-    public_key: publicKey,
-    requested_mode: mode,
-    signing_method: signingMethod,
-    ...extras,
-  };
+function isValidPublicKey(pubkey) {
+  if (pubkey.startsWith("npub")) {
+    return pubkey.length === 63; // npub1 + 58 chars
+  }
+  return /^[0-9a-fA-F]{64}$/.test(pubkey);
 }
 
-// Export functions for use by other auth modules
-window.AuthBase = {
-  showResult,
-  handleSuccessfulLogin,
-  sendLoginRequest,
-  validatePubkey,
-  normalizePublicKey,
-  clearAuthInputs,
-  createLoginData,
-};
+function npubToHex(npub) {
+  // Let backend handle npub conversion
+  return npub;
+}
+
+function showAuthResult(type, message) {
+  let className, icon;
+
+  if (type === "success") {
+    className = "text-green-200 bg-green-800 border-green-600";
+    icon = "✅";
+  } else if (type === "error") {
+    className = "text-red-200 bg-red-800 border-red-600";
+    icon = "❌";
+  } else if (type === "loading") {
+    className = "text-blue-200 bg-blue-800 border-blue-600";
+    icon = "⏳";
+  } else {
+    className = "text-gray-200 bg-gray-800 border-gray-600";
+    icon = "ℹ️";
+  }
+
+  const resultDiv = document.getElementById("auth-result");
+  if (resultDiv) {
+    resultDiv.innerHTML = `<div class="${className} border px-4 py-3 rounded"><p>${icon} ${message}</p></div>`;
+  }
+}

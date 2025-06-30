@@ -1,122 +1,155 @@
 /**
- * Browser Extension Authentication (NIP-07)
- * Handles login via Nostr browser extensions like Alby, nos2x, Flamingo
+ * Extension detection and connection
  */
+function checkForExtension() {
+  const statusEl = document.getElementById("extension-status");
+  const connectBtn = document.getElementById("connect-extension");
+
+  if (window.nostr) {
+    statusEl.innerHTML =
+      '<div class="text-green-200">✅ Nostr extension detected!</div>';
+    statusEl.className =
+      "p-3 mb-4 bg-green-800 border border-green-600 rounded-lg";
+    connectBtn.disabled = false;
+
+    // Log extension capabilities
+    console.log("Extension capabilities:", {
+      hasGetPublicKey: !!window.nostr.getPublicKey,
+      hasSignEvent: !!window.nostr.signEvent,
+      hasNip04: !!window.nostr.nip04,
+      hasNip44: !!window.nostr.nip44,
+    });
+  } else {
+    statusEl.innerHTML =
+      '<div class="text-red-200">❌ No extension found. Please install Alby, nos2x, or another Nostr extension.</div>';
+    statusEl.className = "p-3 mb-4 bg-red-800 border border-red-600 rounded-lg";
+    connectBtn.disabled = true;
+  }
+}
 
 /**
- * Check if Nostr extension is available and update UI
+ * Connect using browser extension (NIP-07)
  */
-function checkExtension() {
-    const statusEl = document.getElementById("extension-status");
-    const connectBtn = document.getElementById("connect-extension");
-  
-    if (!statusEl || !connectBtn) {
-      console.warn("Extension status elements not found");
-      return;
-    }
-  
-    if (window.nostr) {
-      statusEl.innerHTML = '<div class="text-green-200">✅ Extension detected!</div>';
-      statusEl.className = "p-3 mb-4 bg-green-800 border border-green-600 rounded-lg";
-      connectBtn.disabled = false;
-    } else {
-      statusEl.innerHTML = '<div class="text-red-200">❌ No extension found</div>';
-      statusEl.className = "p-3 mb-4 bg-red-800 border border-red-600 rounded-lg";
-      connectBtn.disabled = true;
-    }
-  }
-  
-  /**
-   * Connect via browser extension
-   */
-  async function connectExtension() {
+async function connectExtension() {
+  try {
+    showAuthResult("loading", "Requesting access from extension...");
+
     if (!window.nostr) {
-      AuthBase.showResult("error", "Extension not available");
-      return;
+      throw new Error("Nostr extension not found");
     }
-  
-    AuthBase.showResult("loading", "Connecting...");
-  
-    try {
-      // Get public key from extension
-      const publicKey = await window.nostr.getPublicKey();
-      
-      if (!publicKey) {
-        throw new Error("Failed to get public key from extension");
-      }
-  
-      // Create login data
-      const loginData = AuthBase.createLoginData(
-        publicKey,
-        "browser_extension", 
-        "write"
-      );
-  
-      // Send login request
-      const result = await AuthBase.sendLoginRequest(loginData);
-      
-      // Handle successful login
-      AuthBase.handleSuccessfulLogin(result);
-  
-    } catch (error) {
-      AuthBase.showResult("error", `Failed: ${error.message}`);
+
+    const publicKey = await window.nostr.getPublicKey();
+
+    if (!publicKey || publicKey.length !== 64) {
+      throw new Error("Invalid public key received from extension");
     }
-  }
-  
-  /**
-   * Sign event using browser extension
-   * @param {Object} event - Event object to sign
-   * @returns {Promise<Object>} Signed event
-   */
-  async function signEventWithExtension(event) {
-    if (!window.nostr) {
-      throw new Error("Extension not available");
-    }
-  
-    if (!event) {
-      throw new Error("No event provided for signing");
-    }
-  
-    try {
-      return await window.nostr.signEvent({
-        kind: event.kind,
-        created_at: event.created_at || Math.floor(Date.now() / 1000),
-        tags: event.tags || [],
-        content: event.content || "",
-      });
-    } catch (error) {
-      throw new Error(`Extension signing failed: ${error.message}`);
-    }
-  }
-  
-  /**
-   * Check if extension supports specific NIP-07 methods
-   * @returns {Object} Object with method availability 
-   */
-  function getExtensionCapabilities() {
-    if (!window.nostr) {
-      return {};
-    }
-  
-    return {
-      getPublicKey: typeof window.nostr.getPublicKey === 'function',
-      signEvent: typeof window.nostr.signEvent === 'function', 
-      getRelays: typeof window.nostr.getRelays === 'function',
-      nip04: {
-        encrypt: typeof window.nostr.nip04?.encrypt === 'function',
-        decrypt: typeof window.nostr.nip04?.decrypt === 'function'
-      }
+
+    console.log("Extension returned public key:", publicKey);
+    showAuthResult("loading", "Creating session with extension signing...");
+
+    const sessionRequest = {
+      public_key: publicKey,
+      requested_mode: "write",
+      signing_method: "browser_extension",
     };
+
+    const response = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(sessionRequest),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      const errorMsg = errorData?.message || `HTTP ${response.status}`;
+      throw new Error(`Login failed: ${errorMsg}`);
+    }
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.message || "Login failed");
+    }
+
+    console.log("Extension login successful:", {
+      pubkey: result.session?.public_key,
+      mode: result.session?.mode,
+      signing_method: result.session?.capabilities?.signing_method,
+    });
+
+    showAuthResult("success", "Connected via browser extension!");
+
+    window.nostrExtensionConnected = true;
+
+    setTimeout(() => {
+      hideAuthModal();
+      if (window.updateNavigation) {
+        window.updateNavigation();
+      }
+      if (result.redirect_url) {
+        setTimeout(() => {
+          htmx.ajax("GET", "/views/profile.html", "#main-content");
+          window.history.pushState({}, "", "/profile");
+        }, 500);
+      }
+    }, 1000);
+  } catch (error) {
+    console.error("Extension connection error:", error);
+    showAuthResult("error", `Extension error: ${error.message}`);
   }
-  
-  // Export functions to global scope for HTML onclick handlers
-  window.connectExtension = connectExtension;
-  window.signEventWithExtension = signEventWithExtension;
-  
-  // Export AuthExtension object for programmatic access
-  window.AuthExtension = {
-    checkExtension,
-    connect: connectExtension,
-    signEvent: signEventWithExtension,
-    getCapabilities: getExtensionCapabilities
-  };
+}
+
+/**
+ * Sign event using browser extension (NIP-07)
+ */
+async function signEventWithExtension(event) {
+  try {
+    if (!window.nostr) {
+      throw new Error("Nostr extension not available");
+    }
+
+    if (!window.nostrExtensionConnected) {
+      throw new Error("Extension not connected - please login first");
+    }
+
+    const eventToSign = {
+      kind: event.kind,
+      created_at: event.created_at || Math.floor(Date.now() / 1000),
+      tags: event.tags || [],
+      content: event.content || "",
+    };
+
+    console.log("Signing event with extension:", eventToSign);
+
+    const signedEvent = await window.nostr.signEvent(eventToSign);
+
+    if (!signedEvent || !signedEvent.id || !signedEvent.sig) {
+      throw new Error("Extension returned invalid signed event");
+    }
+
+    console.log("Event signed successfully:", signedEvent.id);
+    return signedEvent;
+  } catch (error) {
+    console.error("Extension signing error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Check if browser extension is available and connected
+ */
+function isExtensionAvailable() {
+  return !!(window.nostr && window.nostrExtensionConnected);
+}
+
+/**
+ * Get public key from extension
+ */
+async function getExtensionPublicKey() {
+  if (!window.nostr) {
+    throw new Error("Extension not available");
+  }
+  return await window.nostr.getPublicKey();
+}

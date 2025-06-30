@@ -1,174 +1,253 @@
 /**
- * Amber Authentication (Android App)
- * Handles login via Amber signer app using intent-based communication
- * TODO: Implement proper Amber protocol integration
+ * Amber handling - Implements Nostr Signer protocol
  */
+function connectAmber() {
+  const bunkerUrl = document.getElementById("amber-bunker-url").value.trim();
 
-/**
- * Connect via Amber app
- * Supports both direct connection and bunker URL
- */
-async function connectAmber() {
-  const bunkerUrlInput = document.getElementById("amber-bunker-url");
-
-  if (!bunkerUrlInput) {
-    AuthBase.showResult("error", "Amber form not found");
+  // If no bunker URL provided, try direct Amber connection
+  if (!bunkerUrl) {
+    connectAmberDirect();
     return;
   }
 
-  const bunkerUrl = bunkerUrlInput.value.trim();
+  // If bunker URL provided, validate and use bunker connection
+  if (!bunkerUrl.startsWith("bunker://")) {
+    showAuthResult("error", "Invalid bunker URL format");
+    return;
+  }
 
-  AuthBase.showResult("loading", "Connecting to Amber...");
+  connectAmberBunker(bunkerUrl);
+}
+
+/**
+ * Connect to Amber directly using Nostr Signer protocol
+ */
+function connectAmberDirect() {
+  showAuthResult("loading", "Opening Amber app...");
+
+  // Generate callback URL for this session
+  const callbackUrl = `${window.location.origin}/amber-callback`;
+
+  // Set up callback listener before opening Amber
+  setupAmberCallback();
+
+  // Use Amber's get_public_key method with Nostr Signer protocol
+  const amberUrl = `nostrsigner:?compressionType=none&returnType=signature&type=get_public_key&callbackUrl=${encodeURIComponent(
+    callbackUrl
+  )}&appName=${encodeURIComponent("Grain Relay")}`;
+
+  console.log("Opening Amber with URL:", amberUrl);
 
   try {
-    if (bunkerUrl) {
-      // Use bunker URL if provided
-      await connectAmberViaBunker(bunkerUrl);
-    } else {
-      // Direct Amber connection
-      await connectAmberDirect();
-    }
+    // Attempt to open Amber
+    window.location.href = amberUrl;
+
+    // Set timeout in case user doesn't complete the flow
+    setTimeout(() => {
+      if (!amberCallbackReceived) {
+        showAuthResult(
+          "error",
+          "Amber connection timed out. Make sure Amber is installed and try again."
+        );
+      }
+    }, 30000);
   } catch (error) {
-    AuthBase.showResult("error", `Amber connection failed: ${error.message}`);
+    console.error("Error opening Amber:", error);
+    showAuthResult(
+      "error",
+      "Failed to open Amber app. Please ensure it's installed."
+    );
   }
 }
 
 /**
- * Connect to Amber using bunker URL
- * @param {string} bunkerUrl - Bunker URL from user input
+ * Connect to Amber using bunker URL (NIP-46)
  */
-async function connectAmberViaBunker(bunkerUrl) {
-  // Validate bunker URL format
-  if (!bunkerUrl.startsWith("bunker://")) {
-    throw new Error("Invalid bunker URL format");
+function connectAmberBunker(bunkerUrl) {
+  showAuthResult("loading", "Connecting to Amber bunker...");
+
+  try {
+    const url = new URL(bunkerUrl);
+    const publicKey = url.hostname;
+    const relay = url.searchParams.get("relay");
+
+    if (!publicKey || publicKey.length !== 64) {
+      throw new Error("Invalid public key in bunker URL");
+    }
+
+    if (!relay) {
+      throw new Error("No relay specified in bunker URL");
+    }
+
+    console.log("Parsed bunker URL:", { publicKey, relay });
+
+    // Create session with bunker signing method
+    createAmberSession(publicKey, "bunker", { bunkerUrl, relay });
+  } catch (error) {
+    console.error("Error parsing bunker URL:", error);
+    showAuthResult("error", "Invalid bunker URL format");
   }
-
-  // TODO: Implement NIP-46 bunker connection
-  // This should:
-  // 1. Parse bunker URL to extract pubkey and relay
-  // 2. Connect to specified relay
-  // 3. Send connection request to bunker
-  // 4. Handle authentication challenge
-  // 5. Create session with "amber" signing method
-
-  throw new Error("Amber bunker connection not yet implemented");
 }
 
 /**
- * Connect to Amber directly (Android intent)
+ * Set up callback handler for Amber responses
  */
-async function connectAmberDirect() {
-  // Check if we're on Android
-  const isAndroid = /Android/i.test(navigator.userAgent);
+function setupAmberCallback() {
+  // Listen for page visibility changes to detect return from Amber
+  const handleVisibilityChange = () => {
+    if (
+      !document.hidden &&
+      currentAuthMethod === "amber" &&
+      !amberCallbackReceived
+    ) {
+      // Check URL for callback parameters after a short delay
+      setTimeout(checkForAmberCallback, 500);
+    }
+  };
 
-  if (!isAndroid) {
-    throw new Error("Direct Amber connection only works on Android devices");
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  // Also check immediately in case we're already on callback page
+  setTimeout(checkForAmberCallback, 1000);
+}
+
+/**
+ * Check current URL for Amber callback parameters
+ */
+function checkForAmberCallback() {
+  const currentUrl = new URL(window.location.href);
+
+  // Check if this is an Amber callback
+  if (
+    currentUrl.pathname === "/amber-callback" ||
+    currentUrl.searchParams.has("event")
+  ) {
+    handleAmberCallback(currentUrl);
   }
-
-  // TODO: Implement direct Amber connection
-  // This should:
-  // 1. Create an Android intent to launch Amber
-  // 2. Request public key from Amber
-  // 3. Handle Amber response via intent callback
-  // 4. Create session with Amber signing method
-
-  throw new Error("Direct Amber connection not yet implemented");
 }
 
 /**
- * Sign event using Amber
- * @param {Object} event - Event to sign
- * @returns {Promise<Object>} Signed event
+ * Handle callback from Amber with public key
  */
-async function signEventWithAmber(event) {
-  // TODO: Implement Amber event signing
-  // This should:
-  // 1. Create signing request
-  // 2. Send to Amber via intent or bunker
-  // 3. Wait for signed response
-  // 4. Return signed event
+function handleAmberCallback(url) {
+  try {
+    amberCallbackReceived = true;
 
-  throw new Error("Amber event signing not yet implemented");
+    const eventParam = url.searchParams.get("event");
+
+    if (!eventParam) {
+      throw new Error("No event data received from Amber");
+    }
+
+    console.log("Received Amber callback:", eventParam);
+
+    // For get_public_key, the event parameter contains the public key
+    let publicKey = eventParam;
+
+    // Handle compressed response (starts with "Signer1")
+    if (eventParam.startsWith("Signer1")) {
+      try {
+        // For compressed responses, we'd need to decompress
+        // For now, treat as error since we specify no compression
+        throw new Error("Received compressed response unexpectedly");
+      } catch (error) {
+        console.warn("Failed to handle compressed Amber response:", error);
+        throw new Error("Unable to process Amber response");
+      }
+    }
+
+    // Validate public key
+    if (!publicKey || !isValidPublicKey(publicKey)) {
+      throw new Error("Invalid public key received from Amber");
+    }
+
+    console.log("Amber returned public key:", publicKey);
+
+    // Create session with Amber signing
+    createAmberSession(publicKey, "amber");
+
+    // Clean up URL
+    window.history.replaceState({}, "", window.location.pathname);
+  } catch (error) {
+    console.error("Error handling Amber callback:", error);
+    showAuthResult("error", `Amber callback error: ${error.message}`);
+  }
 }
 
 /**
- * Check if Amber app is available on device
- * @returns {boolean} True if Amber is available
+ * Create session with Amber signing method
+ */
+async function createAmberSession(publicKey, signingMethod, metadata = {}) {
+  try {
+    showAuthResult("loading", "Creating session with Amber signing...");
+
+    const sessionRequest = {
+      public_key: publicKey,
+      requested_mode: "write",
+      signing_method: signingMethod,
+    };
+
+    // Add metadata if provided
+    if (Object.keys(metadata).length > 0) {
+      sessionRequest.metadata = metadata;
+    }
+
+    const response = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(sessionRequest),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      const errorMsg = errorData?.message || `HTTP ${response.status}`;
+      throw new Error(`Login failed: ${errorMsg}`);
+    }
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.message || "Login failed");
+    }
+
+    console.log("Amber login successful:", {
+      pubkey: result.session?.public_key,
+      mode: result.session?.mode,
+      signing_method: result.session?.capabilities?.signing_method,
+    });
+
+    showAuthResult("success", "Connected via Amber!");
+
+    // Store Amber connection info
+    window.amberConnected = true;
+    window.amberSigningMethod = signingMethod;
+    if (metadata.bunkerUrl) {
+      window.amberBunkerUrl = metadata.bunkerUrl;
+    }
+
+    setTimeout(() => {
+      hideAuthModal();
+      if (window.updateNavigation) {
+        window.updateNavigation();
+      }
+      if (result.redirect_url) {
+        setTimeout(() => {
+          htmx.ajax("GET", "/views/profile.html", "#main-content");
+          window.history.pushState({}, "", "/profile");
+        }, 500);
+      }
+    }, 1000);
+  } catch (error) {
+    console.error("Amber session creation error:", error);
+    showAuthResult("error", `Amber login failed: ${error.message}`);
+  }
+}
+
+/**
+ * Check if Amber is available and connected
  */
 function isAmberAvailable() {
-  // TODO: Implement Amber availability check
-  // This should check if Amber app is installed
-
-  const isAndroid = /Android/i.test(navigator.userAgent);
-  return isAndroid; // Placeholder
+  return !!window.amberConnected;
 }
-
-/**
- * Validate bunker URL format
- * @param {string} url - Bunker URL to validate
- * @returns {boolean} True if valid
- */
-function validateBunkerUrl(url) {
-  if (!url || typeof url !== "string") {
-    return false;
-  }
-
-  // Basic bunker URL validation
-  // Format: bunker://pubkey?relay=wss://relay.url
-  const bunkerRegex = /^bunker:\/\/[0-9a-fA-F]{64}\?relay=wss?:\/\/.+$/;
-  return bunkerRegex.test(url.trim());
-}
-
-/**
- * Setup Amber form event listeners
- */
-function setupAmberForm() {
-  const bunkerUrlInput = document.getElementById("amber-bunker-url");
-
-  if (bunkerUrlInput) {
-    // Validate bunker URL on input
-    bunkerUrlInput.addEventListener("input", () => {
-      const url = bunkerUrlInput.value.trim();
-
-      if (url && !validateBunkerUrl(url)) {
-        bunkerUrlInput.classList.add("border-red-500");
-      } else {
-        bunkerUrlInput.classList.remove("border-red-500");
-      }
-    });
-  }
-
-  // Check Amber availability and update UI only if elements exist
-  const amberForm = document.getElementById("amber-form");
-  if (amberForm && !isAmberAvailable()) {
-    // Only show error when the form is actually displayed
-    console.log("Amber is only available on Android devices");
-  }
-}
-
-// Initialize form when DOM is ready - but don't auto-run
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => {
-    // Only setup if amber form exists
-    if (document.getElementById("amber-form")) {
-      setupAmberForm();
-    }
-  });
-} else {
-  // Only setup if amber form exists
-  if (document.getElementById("amber-form")) {
-    setupAmberForm();
-  }
-}
-
-// Export functions to global scope for HTML onclick handlers
-window.connectAmber = connectAmber;
-
-// Export AuthAmber object for programmatic access
-window.AuthAmber = {
-  connect: connectAmber,
-  signEvent: signEventWithAmber,
-  isAvailable: isAmberAvailable,
-  validateBunkerUrl,
-  setupForm: setupAmberForm,
-};
