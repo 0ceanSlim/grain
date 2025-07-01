@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-07-01T15:40:12.703Z",
+  "checks": {
+    "websocket": {
+      "status": "up",
+      "responseTime": 218,
+      "details": "WebSocket and REQ/EOSE working"
+    },
+    "nip11": {
+      "status": "up",
+      "responseTime": 123,
+      "details": "NIP-11 info valid",
+      "data": {
+        "name": "GRAIN Relay",
+        "description": "Go Relay Architecture for Implementing Nostr",
+        "version": "0.3.33-hotfix",
+        "supported_nips": [
+          1,
+          2,
+          9,
+          11
+        ]
+      }
+    }
+  },
+  "overall": {
+    "status": "up",
+    "responseTime": 171,
+    "uptime": 0
+  }
+}
