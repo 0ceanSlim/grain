@@ -61,13 +61,6 @@ GRAIN includes a basic web interface accessible at `http://your-relay-domain:por
 
 The frontend is currently minimal but functional. Future development will expand this into a reference Nostr client implementation with comprehensive relay metrics and management APIs.
 
-## Requirements
-
-- **Go** if building from source
-  - <img src="https://go.dev/images/favicon-gopher.svg" width="16"/> _[Download Go](https://go.dev/)_
-- **MongoDB** for event storage and indexing
-  - <img src="https://www.mongodb.com//assets/images/global/favicon.ico" width="20"/> _[MongoDB Community Server Install Docs](https://www.mongodb.com/docs/manual/administration/install-community/)_
-
 ## 🌾 Wheat Relay Status
 
 ![Status](https://img.shields.io/badge/Status-unknown-lightgrey)
@@ -81,6 +74,13 @@ My development relay **wheat.happytavern.co** serves as the testing and demo env
 Wheat is a public nostr relay that anyone can write to and read from. Wheat will delete events from non whitelisted users periodically. You can add your npub to the whitelist by paying for a [Happy Tavern NIP05](https://happytavern.co/nostr-verified).
 
 _Status monitoring powered by GitHub Actions with 5-minute check intervals_
+
+## Requirements
+
+- **Go** if building from source
+  - <img src="https://go.dev/images/favicon-gopher.svg" width="16"/> _[Download Go](https://go.dev/)_
+- **MongoDB** for event storage and indexing
+  - <img src="https://www.mongodb.com//assets/images/global/favicon.ico" width="20"/> _[MongoDB Community Server Install Docs](https://www.mongodb.com/docs/manual/administration/install-community/)_
 
 ## Installation
 
