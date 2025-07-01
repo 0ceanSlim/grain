@@ -28,7 +28,7 @@ GRAIN acts as one of these relays - storing events, serving them to clients, and
 
 ### **Event Management**
 
-- Supports all Nostr event categories: regular posts, user profiles, replaceable events, and ephemeral messages
+- Supports all Nostr event categories: regular, replaceable, addressable, ephemeral & deletion events
 - Automatic event deletion handling (kind 5 events) with proper cascade cleanup
 - Intelligent event purging with category-based retention policies
 - MongoDB storage optimized for Nostr's event structure
@@ -39,16 +39,6 @@ GRAIN acts as one of these relays - storing events, serving them to clients, and
 - Per-kind MongoDB collections with automatic indexing
 - Configurable event size limits to prevent abuse
 - Connection pooling and timeout management
-
-## Event Processing
-
-GRAIN handles all Nostr event types according to protocol specifications:
-
-- **Regular events** (kind 1 notes, kind 7 reactions) - stored permanently
-- **Replaceable events** (kind 0 profiles, kind 3 contact lists) - newest version kept
-- **Addressable events** (kind 30000+ with 'd' tags) - replaced by newer versions with same identifier
-- **Ephemeral events** (kind 20000-30000) - processed but not stored
-- **Deletion events** (kind 5) - removes referenced events if authored by same user
 
 ## Web Interface
 
@@ -65,11 +55,10 @@ The frontend is currently minimal but functional. Future development will expand
 
 ![Status](https://img.shields.io/badge/Status-up-brightgreen)
 ![Uptime](https://img.shields.io/badge/Uptime%2024h-100.00%25-brightgreen)
-![Response Time](https://img.shields.io/badge/Response%20Time-161ms-blue)
 
 **Development Relay**: `wss://wheat.happytavern.co`
 
-My development relay **wheat.happytavern.co** serves as the testing and demo environment for Grain. This relay helps me validate new features, test performance optimizations, and provide a stable platform for developers to experiment with grain.
+My development relay **wheat.happytavern.co** serves as the testing and demo environment for Grain. This relay helps me validate new features, test performance optimizations, and provide a platform for developers to experiment with grain. This relay routinely runs unreleased versions of grain and may contain bugs.
 
 Wheat is a public nostr relay that anyone can write to and read from. Wheat will delete events from non whitelisted users periodically. You can add your npub to the whitelist by paying for a [Happy Tavern NIP05](https://happytavern.co/nostr-verified).
 
@@ -123,7 +112,7 @@ GRAIN uses four main configuration files with hot-reload support:
 
 For detailed configuration options and examples, see:
 
-[**Example configurations**](https://github.com/0ceanslim/grain/tree/main/www/static/examples)
+[**Example configurations**](https://github.com/0ceanslim/grain/tree/main/docs/examples)
 
 ### Monitoring and Logs
 
