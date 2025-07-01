@@ -65,7 +65,7 @@ The frontend is currently minimal but functional. Future development will expand
 
 ![Status](https://img.shields.io/badge/Status-up-brightgreen)
 ![Uptime](https://img.shields.io/badge/Uptime%2024h-100.00%25-brightgreen)
-![Response Time](https://img.shields.io/badge/Response%20Time-330ms-blue)
+![Response Time](https://img.shields.io/badge/Response%20Time-480ms-blue)
 
 **Development Relay**: `wss://wheat.happytavern.co`
 
