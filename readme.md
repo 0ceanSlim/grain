@@ -63,9 +63,9 @@ The frontend is currently minimal but functional. Future development will expand
 
 ## 🌾 Wheat Relay Status
 
-![Status](https://img.shields.io/badge/Status-unknown-lightgrey)
-![Uptime](https://img.shields.io/badge/Uptime%2024h-0%25-lightgrey)
-![Response Time](https://img.shields.io/badge/Response%20Time-0ms-lightgrey)
+![Status](https://img.shields.io/badge/Status-up-brightgreen)
+![Uptime](https://img.shields.io/badge/Uptime%2024h-100.00%25-brightgreen)
+![Response Time](https://img.shields.io/badge/Response%20Time-171ms-blue)
 
 **Development Relay**: `wss://wheat.happytavern.co`
 

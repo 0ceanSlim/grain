@@ -1,0 +1,17 @@
+[
+  {
+    "timestamp": "2025-07-01T15:40:12.703Z",
+    "status": "up",
+    "responseTime": 171,
+    "checks": {
+      "websocket": {
+        "status": "up",
+        "responseTime": 218
+      },
+      "nip11": {
+        "status": "up",
+        "responseTime": 123
+      }
+    }
+  }
+]
