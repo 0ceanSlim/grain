@@ -389,11 +389,22 @@ jobs:
 
       - name: Update README badges
         run: |
-          # Create or update status badges in README
-          if [ ! -f "README.md" ]; then
-            echo "README.md not found, skipping badge update"
+          # Find README file (could be README.md, readme.md, or README)
+          README_FILE=""
+          for file in README.md readme.md README; do
+            if [ -f "$file" ]; then
+              README_FILE="$file"
+              break
+            fi
+          done
+
+          if [ -z "$README_FILE" ]; then
+            echo "No README file found, skipping badge update"
+            echo "README_UPDATED=false" >> $GITHUB_ENV
             exit 0
           fi
+
+          echo "Found README file: $README_FILE"
 
           # Read current status
           STATUS=$(cat docs/status/status.json | node -e "
@@ -420,23 +431,46 @@ jobs:
             COLOR="red"
           fi
 
-          # Create status section for README if it doesn't exist
-          if ! grep -q "## 🌾 Relay Status" README.md; then
-            # Find a good place to insert (after the main title/description)
-            sed -i '/^# /a\\n## 🌾 Relay Status\n\n![Status](https://img.shields.io/badge/Status-Unknown-lightgrey)\n![Uptime](https://img.shields.io/badge/Uptime%2024h-0%25-lightgrey)\n![Response Time](https://img.shields.io/badge/Response%20Time-0ms-lightgrey)\n\n[📊 Detailed Status Page](https://0ceanslim.github.io/grain/status/)\n' README.md
+          # Check if status section exists
+          if ! grep -q "## 🌾 Relay Status\|Relay Status" "$README_FILE"; then
+            echo "Status section not found in $README_FILE"
+            echo "Please manually add the status section to your README"
+            echo "README_UPDATED=false" >> $GITHUB_ENV
+            exit 0
           fi
 
-          # Update badges
-          sed -i "s|!\[Status\].*|![Status](https://img.shields.io/badge/Status-${STATUS}-${COLOR})|" README.md
-          sed -i "s|!\[Uptime.*|![Uptime](https://img.shields.io/badge/Uptime%2024h-${UPTIME_24H}%25-${COLOR})|" README.md
-          sed -i "s|!\[Response Time\].*|![Response Time](https://img.shields.io/badge/Response%20Time-${RESPONSE_TIME}ms-blue)|" README.md
+          # Update badges if they exist
+          if grep -q "!\[Status\]" "$README_FILE"; then
+            sed -i "s|!\[Status\].*|![Status](https://img.shields.io/badge/Status-${STATUS}-${COLOR})|" "$README_FILE"
+            echo "Updated Status badge"
+          fi
+
+          if grep -q "!\[Uptime" "$README_FILE"; then
+            sed -i "s|!\[Uptime.*|![Uptime](https://img.shields.io/badge/Uptime%2024h-${UPTIME_24H}%25-${COLOR})|" "$README_FILE"
+            echo "Updated Uptime badge"
+          fi
+
+          if grep -q "!\[Response Time\]" "$README_FILE"; then
+            sed -i "s|!\[Response Time\].*|![Response Time](https://img.shields.io/badge/Response%20Time-${RESPONSE_TIME}ms-blue)|" "$README_FILE"
+            echo "Updated Response Time badge"
+          fi
+
+          echo "README_UPDATED=true" >> $GITHUB_ENV
+          echo "README_FILE=$README_FILE" >> $GITHUB_ENV
 
       - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          git add docs/status/ README.md
+          # Always add the status files
+          git add docs/status/
+          
+          # Only add README if it was updated
+          if [ "${README_UPDATED:-false}" = "true" ] && [ -n "${README_FILE:-}" ]; then
+            git add "$README_FILE"
+            echo "Added $README_FILE to commit"
+          fi
           
           if git diff --staged --quiet; then
             echo "No changes to commit"
