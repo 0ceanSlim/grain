@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌾 Grain Relay Status - wheat.happytavern.co</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+          sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 40px;
+        color: white;
+      }
+
+      .header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      .header p {
+        font-size: 1.2rem;
+        opacity: 0.9;
+      }
+
+      .status-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        margin-bottom: 30px;
+      }
+
+      .status-header {
+        padding: 30px;
+        text-align: center;
+        border-bottom: 1px solid #f0f0f0;
+      }
+
+      .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 15px;
+      }
+
+      .status-dot {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+      }
+
+      .status-up {
+        background: #22c55e;
+      }
+      .status-degraded {
+        background: #f59e0b;
+      }
+      .status-down {
+        background: #ef4444;
+      }
+
+      @keyframes pulse {
+        0% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.7;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        padding: 30px;
+      }
+
+      .metric {
+        text-align: center;
+        padding: 20px;
+        background: #f8fafc;
+        border-radius: 8px;
+      }
+
+      .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 5px;
+      }
+
+      .metric-label {
+        color: #64748b;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .checks-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .check-card {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      }
+
+      .check-header {
+        display: flex;
+        align-items: center;
+        justify-content: between;
+        margin-bottom: 15px;
+      }
+
+      .check-name {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #1e293b;
+      }
+
+      .check-status {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .status-up-text {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .status-degraded-text {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .status-down-text {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
+      .check-details {
+        color: #64748b;
+        font-size: 0.9rem;
+        margin-top: 10px;
+      }
+
+      .response-time {
+        font-weight: 600;
+        color: #3b82f6;
+      }
+
+      .uptime-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        padding: 25px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        margin-bottom: 30px;
+      }
+
+      .uptime-period {
+        text-align: center;
+        padding: 15px;
+        background: #f8fafc;
+        border-radius: 8px;
+      }
+
+      .uptime-percentage {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 5px;
+      }
+
+      .uptime-label {
+        color: #64748b;
+        font-size: 0.9rem;
+      }
+
+      .footer {
+        text-align: center;
+        color: white;
+        margin-top: 40px;
+        opacity: 0.8;
+      }
+
+      .footer a {
+        color: white;
+        text-decoration: none;
+      }
+
+      .footer a:hover {
+        text-decoration: underline;
+      }
+
+      .last-updated {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        color: #64748b;
+        font-size: 0.9rem;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 40px;
+        color: #64748b;
+      }
+
+      .error {
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+
+      @media (max-width: 768px) {
+        .header h1 {
+          font-size: 2rem;
+        }
+
+        .container {
+          padding: 15px;
+        }
+
+        .metrics {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .checks-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🌾 Grain Relay Status</h1>
+        <p>Real-time monitoring for wheat.happytavern.co</p>
+      </div>
+
+      <div id="loading" class="loading">
+        <p>Loading status data...</p>
+      </div>
+
+      <div id="error" class="error" style="display: none"></div>
+
+      <div id="content" style="display: none">
+        <!-- Overall Status Card -->
+        <div class="status-card">
+          <div class="status-header">
+            <div id="overall-status" class="status-indicator">
+              <div class="status-dot"></div>
+              <span>Loading...</span>
+            </div>
+            <p id="status-description">Checking relay status...</p>
+          </div>
+
+          <div class="metrics">
+            <div class="metric">
+              <div id="response-time" class="metric-value">--</div>
+              <div class="metric-label">Response Time</div>
+            </div>
+            <div class="metric">
+              <div id="uptime-24h" class="metric-value">--%</div>
+              <div class="metric-label">24h Uptime</div>
+            </div>
+            <div class="metric">
+              <div id="checks-passing" class="metric-value">-/-</div>
+              <div class="metric-label">Checks Passing</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Individual Checks -->
+        <div id="checks-container" class="checks-grid">
+          <!-- Populated by JavaScript -->
+        </div>
+
+        <!-- Uptime Statistics -->
+        <div class="uptime-grid">
+          <div class="uptime-period">
+            <div id="uptime-24h-detailed" class="uptime-percentage">--%</div>
+            <div class="uptime-label">24 Hours</div>
+          </div>
+          <div class="uptime-period">
+            <div id="uptime-7d" class="uptime-percentage">--%</div>
+            <div class="uptime-label">7 Days</div>
+          </div>
+          <div class="uptime-period">
+            <div id="uptime-30d" class="uptime-percentage">--%</div>
+            <div class="uptime-label">30 Days</div>
+          </div>
+          <div class="uptime-period">
+            <div id="uptime-90d" class="uptime-percentage">--%</div>
+            <div class="uptime-label">90 Days</div>
+          </div>
+        </div>
+
+        <!-- Last Updated -->
+        <div class="last-updated">
+          <p>Last updated: <span id="last-updated-time">--</span></p>
+          <p>Next check in approximately 5 minutes</p>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p>
+          Powered by
+          <a href="https://github.com/0ceanslim/grain" target="_blank">Grain</a>
+          |
+          <a href="https://github.com/0ceanslim/grain" target="_blank"
+            >View on GitHub</a
+          >
+          | Made with 💦 by
+          <a
+            href="https://njump.me/npub1zmc6qyqdfnllhnzzxr5wpepfpnzcf8q6m3jdveflmgruqvd3qa9sjv7f60"
+            target="_blank"
+            >OceanSlim</a
+          >
+        </p>
+      </div>
+    </div>
+
+    <script>
+      class StatusPage {
+        constructor() {
+          this.data = null;
+          this.uptimeData = null;
+          this.init();
+        }
+
+        async init() {
+          try {
+            await this.loadData();
+            this.render();
+            this.startAutoRefresh();
+          } catch (error) {
+            this.showError("Failed to load status data: " + error.message);
+          }
+        }
+
+        async loadData() {
+          // Load current status
+          const statusResponse = await fetch("./status.json");
+          if (!statusResponse.ok) {
+            throw new Error(
+              `HTTP ${statusResponse.status}: ${statusResponse.statusText}`
+            );
+          }
+          this.data = await statusResponse.json();
+
+          // Load uptime statistics
+          try {
+            const uptimeResponse = await fetch("./uptime.json");
+            if (uptimeResponse.ok) {
+              this.uptimeData = await uptimeResponse.json();
+            }
+          } catch (error) {
+            console.warn("Could not load uptime data:", error);
+            // Use fallback data
+            this.uptimeData = {
+              "24h": { percentage: "0.00" },
+              "7d": { percentage: "0.00" },
+              "30d": { percentage: "0.00" },
+              "90d": { percentage: "0.00" },
+            };
+          }
+        }
+
+        render() {
+          document.getElementById("loading").style.display = "none";
+          document.getElementById("content").style.display = "block";
+
+          this.renderOverallStatus();
+          this.renderChecks();
+          this.renderUptimeStats();
+          this.renderLastUpdated();
+        }
+
+        renderOverallStatus() {
+          const { overall } = this.data;
+          const statusElement = document.getElementById("overall-status");
+          const statusDot = statusElement.querySelector(".status-dot");
+          const statusText = statusElement.querySelector("span");
+          const description = document.getElementById("status-description");
+
+          // Update status indicator
+          statusDot.className = `status-dot status-${overall.status}`;
+          statusText.textContent = this.formatStatus(overall.status);
+
+          // Update description
+          const statusMessages = {
+            up: "All systems operational",
+            degraded: "Some systems experiencing issues",
+            down: "Major outage detected",
+          };
+          description.textContent =
+            statusMessages[overall.status] || "Unknown status";
+
+          // Update metrics
+          document.getElementById(
+            "response-time"
+          ).textContent = `${overall.responseTime}ms`;
+
+          const uptimePercentage =
+            this.uptimeData?.["24h"]?.percentage || "0.00";
+          document.getElementById(
+            "uptime-24h"
+          ).textContent = `${uptimePercentage}%`;
+
+          const totalChecks = Object.keys(this.data.checks).length;
+          const passingChecks = Object.values(this.data.checks).filter(
+            (check) => check.status === "up"
+          ).length;
+          document.getElementById(
+            "checks-passing"
+          ).textContent = `${passingChecks}/${totalChecks}`;
+        }
+
+        renderChecks() {
+          const container = document.getElementById("checks-container");
+          container.innerHTML = "";
+
+          Object.entries(this.data.checks).forEach(([checkName, checkData]) => {
+            const checkCard = document.createElement("div");
+            checkCard.className = "check-card";
+
+            const statusClass = `status-${checkData.status}-text`;
+            const statusText = this.formatStatus(checkData.status);
+
+            checkCard.innerHTML = `
+                        <div class="check-header">
+                            <div class="check-name">${this.formatCheckName(
+                              checkName
+                            )}</div>
+                            <div class="check-status ${statusClass}">${statusText}</div>
+                        </div>
+                        <div class="response-time">${
+                          checkData.responseTime
+                        }ms response time</div>
+                        ${
+                          checkData.details
+                            ? `<div class="check-details">${checkData.details}</div>`
+                            : ""
+                        }
+                        ${
+                          checkData.error
+                            ? `<div class="check-details">Error: ${checkData.error}</div>`
+                            : ""
+                        }
+                        ${
+                          checkData.data
+                            ? this.renderCheckData(checkData.data)
+                            : ""
+                        }
+                    `;
+
+            container.appendChild(checkCard);
+          });
+        }
+
+        renderCheckData(data) {
+          if (!data) return "";
+
+          let html = '<div class="check-details">';
+          if (data.name) html += `<strong>Name:</strong> ${data.name}<br>`;
+          if (data.description)
+            html += `<strong>Description:</strong> ${data.description}<br>`;
+          if (data.version)
+            html += `<strong>Version:</strong> ${data.version}<br>`;
+          if (data.supported_nips)
+            html += `<strong>NIPs:</strong> ${data.supported_nips.join(
+              ", "
+            )}<br>`;
+          html += "</div>";
+
+          return html;
+        }
+
+        renderUptimeStats() {
+          if (!this.uptimeData) return;
+
+          Object.entries(this.uptimeData).forEach(([period, data]) => {
+            const element = document.getElementById(`uptime-${period}`);
+            if (element) {
+              element.textContent = `${data.percentage}%`;
+            }
+          });
+
+          // Also update the detailed 24h uptime
+          const detailed24h = document.getElementById("uptime-24h-detailed");
+          if (detailed24h) {
+            detailed24h.textContent = `${this.uptimeData["24h"].percentage}%`;
+          }
+        }
+
+        renderLastUpdated() {
+          const timestamp = new Date(this.data.timestamp);
+          const formatted = timestamp.toLocaleString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            timeZoneName: "short",
+          });
+
+          document.getElementById("last-updated-time").textContent = formatted;
+        }
+
+        formatStatus(status) {
+          const statusMap = {
+            up: "Operational",
+            degraded: "Degraded",
+            down: "Down",
+          };
+          return statusMap[status] || "Unknown";
+        }
+
+        formatCheckName(name) {
+          const nameMap = {
+            websocket: "WebSocket Connection",
+            nip11: "NIP-11 Relay Info",
+            nostr: "Nostr Protocol",
+          };
+          return nameMap[name] || name.charAt(0).toUpperCase() + name.slice(1);
+        }
+
+        showError(message) {
+          document.getElementById("loading").style.display = "none";
+          const errorElement = document.getElementById("error");
+          errorElement.textContent = message;
+          errorElement.style.display = "block";
+        }
+
+        startAutoRefresh() {
+          // Refresh every 30 seconds
+          setInterval(async () => {
+            try {
+              await this.loadData();
+              this.render();
+            } catch (error) {
+              console.error("Auto-refresh failed:", error);
+            }
+          }, 30000);
+        }
+      }
+
+      // Initialize the status page when DOM is loaded
+      document.addEventListener("DOMContentLoaded", () => {
+        new StatusPage();
+      });
+
+      // Add some visual feedback for page interactions
+      document.addEventListener("click", (e) => {
+        if (e.target.tagName === "A") {
+          e.target.style.opacity = "0.7";
+          setTimeout(() => {
+            e.target.style.opacity = "1";
+          }, 150);
+        }
+      });
+    </script>
+  </body>
+</html>
