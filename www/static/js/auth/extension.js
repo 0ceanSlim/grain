@@ -1,6 +1,11 @@
 /**
  * Extension detection and connection
  */
+
+window.signEventWithExtension = signEventWithExtension;
+window.isExtensionAvailable = isExtensionAvailable;
+window.getExtensionPublicKey = getExtensionPublicKey;
+
 function checkForExtension() {
   const statusEl = document.getElementById("extension-status");
   const connectBtn = document.getElementById("connect-extension");

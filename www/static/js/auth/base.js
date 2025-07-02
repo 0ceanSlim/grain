@@ -1,14 +1,9 @@
 // Global state
 let currentAuthMethod = null;
-let amberCallbackReceived = false;
 
 // Expose functions globally
 window.showAuthModal = showAuthModal;
 window.hideAuthModal = hideAuthModal;
-window.signEventWithExtension = signEventWithExtension;
-window.isExtensionAvailable = isExtensionAvailable;
-window.isAmberAvailable = isAmberAvailable;
-window.getExtensionPublicKey = getExtensionPublicKey;
 
 // Main modal functions
 function showAuthModal() {

@@ -20,6 +20,8 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	// Auth API endpoints (preferred)
 	mux.HandleFunc("/api/v1/auth/login", api.LoginHandler)      // Login via API
 	mux.HandleFunc("/api/v1/auth/logout", api.LogoutHandler)    // Logout via API
+	// Amber NIP-55 callback endpoint
+	mux.HandleFunc("/api/v1/auth/amber-callback", api.HandleAmberCallback) // Amber signer callback (NIP-55)
 
 	// relay api endpoints
 	mux.HandleFunc("/api/v1/relay/whitelist", relay.GetAllWhitelistedPubkeys)

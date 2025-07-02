@@ -53,20 +53,17 @@ func startSessionCleanup() {
 		ticker := time.NewTicker(30 * time.Minute) // Clean up every 30 minutes
 		defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				if session.SessionMgr != nil {
-					// Clean up sessions older than 24 hours of inactivity
-					session.SessionMgr.CleanupSessions(24 * time.Hour)
-					
-					// Log session statistics
-					stats := session.SessionMgr.GetSessionStats()
-					log.Util().Debug("Session cleanup completed", 
-						"total_sessions", stats["total_sessions"],
-						"read_only", stats["read_only"],
-						"write_mode", stats["write_mode"])
-				}
+		for range ticker.C {
+			if session.SessionMgr != nil {
+				// Clean up sessions older than 24 hours of inactivity
+				session.SessionMgr.CleanupSessions(24 * time.Hour)
+				
+				// Log session statistics
+				stats := session.SessionMgr.GetSessionStats()
+				log.Util().Debug("Session cleanup completed", 
+					"total_sessions", stats["total_sessions"],
+					"read_only", stats["read_only"],
+					"write_mode", stats["write_mode"])
 			}
 		}
 	}()

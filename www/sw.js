@@ -1,17 +1,16 @@
-const CACHE_NAME = "grain-v2"; // Updated version to force cache refresh
+const CACHE_NAME = "grain-v3"; // Updated version to force cache refresh
 const STATIC_CACHE_URLS = [
   "/",
   "/static/js/navigation.js",
   "/static/js/routing.js",
   "/static/js/profile.js",
   "/static/js/dropdown.js",
-  "/static/js/login.js",
-  // Removed HTML views - these should NOT be cached as they're HTMX partials
+  // Note: Auth scripts are deliberately excluded from caching
 ];
 
 // Install event - cache only truly static resources
 self.addEventListener("install", (event) => {
-  console.log("[SW] Installing service worker v2 - HTMX compatible");
+  console.log("[SW] Installing service worker v3 - Auth-aware");
   event.waitUntil(
     caches
       .open(CACHE_NAME)
@@ -31,7 +30,7 @@ self.addEventListener("install", (event) => {
 
 // Activate event - clean up old caches
 self.addEventListener("activate", (event) => {
-  console.log("[SW] Activating service worker v2");
+  console.log("[SW] Activating service worker v3");
   event.waitUntil(
     caches
       .keys()
@@ -88,6 +87,12 @@ self.addEventListener("fetch", (event) => {
       "[SW] Skipping view template (fresh content needed):",
       url.pathname
     );
+    return;
+  }
+
+  // CRITICAL: Skip auth scripts - never cache these
+  if (url.pathname.startsWith("/static/js/auth/")) {
+    console.log("[SW] Skipping auth script (always fresh):", url.pathname);
     return;
   }
 
@@ -148,9 +153,22 @@ self.addEventListener("fetch", (event) => {
 
 // Helper function to determine if a resource should be cached
 function shouldCache(url) {
-  // Cache static JavaScript files
+  // NEVER cache auth scripts
+  if (url.pathname.startsWith("/static/js/auth/")) {
+    return false;
+  }
+
+  // Cache other static JavaScript files (but be selective)
   if (url.pathname.startsWith("/static/js/")) {
-    return true;
+    // Only cache core navigation/routing scripts
+    const allowedScripts = [
+      "/static/js/navigation.js",
+      "/static/js/routing.js",
+      "/static/js/profile.js",
+      "/static/js/dropdown.js",
+      "/static/js/login.js",
+    ];
+    return allowedScripts.includes(url.pathname);
   }
 
   // Cache static CSS files
@@ -198,33 +216,6 @@ self.addEventListener("sync", (event) => {
 // Sync function for Nostr data
 async function syncNostrData() {
   try {
-    console.log("[SW] Syncing Nostr data...");
-    // Implementation would depend on your specific Nostr sync needs
-  } catch (error) {
-    console.error("[SW] Sync failed:", error);
-  }
-}
-
-// Listen for messages from the client
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    console.log("[SW] Received skip waiting message");
-    self.skipWaiting();
-  }
-});
-
-// Background sync for when connection is restored
-self.addEventListener("sync", (event) => {
-  if (event.tag === "nostr-sync") {
-    console.log("[SW] Background sync: nostr-sync");
-    event.waitUntil(syncNostrData());
-  }
-});
-
-// Sync function for Nostr data
-async function syncNostrData() {
-  try {
-    // Placeholder for syncing Nostr events when back online
     console.log("[SW] Syncing Nostr data...");
     // Implementation would depend on your specific Nostr sync needs
   } catch (error) {
