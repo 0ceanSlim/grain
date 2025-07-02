@@ -6,25 +6,71 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// SerializeEvent serializes an event to JSON bytes (NIP-01 compliant)
-func SerializeEvent(event *nostr.Event) ([]byte, error) {
-	if event == nil {
-		return nil, fmt.Errorf("event cannot be nil")
+// SerializeEvent manually constructs the JSON string for event serialization according to NIP-01
+func SerializeEvent(evt nostr.Event) string {
+	eventData := []interface{}{
+		0,
+		evt.PubKey,
+		evt.CreatedAt,
+		evt.Kind,
+		evt.Tags,
+		evt.Content,
 	}
 	
-	data, err := json.Marshal(event)
+	// Use Go's standard JSON marshaling first
+	jsonBytes, err := json.Marshal(eventData)
 	if err != nil {
-		log.Util().Error("Failed to serialize event", "error", err)
-		return nil, fmt.Errorf("failed to marshal event: %w", err)
+		log.Util().Error("Failed to serialize event", 
+			"event_id", evt.ID,
+			"pubkey", evt.PubKey,
+			"kind", evt.Kind,
+			"error", err)
+		return ""
 	}
 	
-	log.Util().Debug("Event serialized", "event_id", event.ID, "size_bytes", len(data))
-	return data, nil
+	// Convert to NIP-01 compliant format
+	jsonStr := string(jsonBytes)
+	jsonStr = normalizeJSONForNIP01(jsonStr)
+	
+	// Only log at debug level for very important events or when troubleshooting
+	if evt.Kind == 0 || evt.Kind == 3 {
+		log.Util().Debug("Event serialized", 
+			"event_id", evt.ID,
+			"kind", evt.Kind,
+			"size_bytes", len(jsonStr))
+	}
+	
+	return jsonStr
+}
+
+// normalizeJSONForNIP01 converts Go's JSON output to NIP-01 compliant format
+func normalizeJSONForNIP01(jsonStr string) string {
+	// Go's json.Marshal escapes some characters that NIP-01 says should NOT be escaped
+	// We need to unescape Unicode sequences like \u0026 back to their original form
+	
+	// Replace common Unicode escapes that Go adds but NIP-01 doesn't require
+	replacements := map[string]string{
+		"\\u0026": "&",  // Ampersand
+		"\\u003c": "<",  // Less than
+		"\\u003e": ">",  // Greater than
+		"\\u003d": "=",  // Equals sign
+		"\\u002b": "+",  // Plus sign
+		"\\u0027": "'",  // Single quote (apostrophe)
+		"\\u002f": "/",  // Forward slash
+	}
+	
+	result := jsonStr
+	for escaped, unescaped := range replacements {
+		result = strings.ReplaceAll(result, escaped, unescaped)
+	}
+	
+	return result
 }
 
 // DeserializeEvent deserializes JSON bytes to an event
@@ -51,31 +97,16 @@ func ComputeEventID(event *nostr.Event) (string, error) {
 	
 	// NIP-01: Event ID is SHA256 of the serialized event array
 	// [0, pubkey, created_at, kind, tags, content]
-	serialized, err := serializeForID(event)
-	if err != nil {
-		return "", fmt.Errorf("failed to serialize for ID: %w", err)
+	serialized := SerializeEvent(*event) // Dereference pointer to pass value
+	if serialized == "" {
+		return "", fmt.Errorf("failed to serialize event for ID computation")
 	}
 	
-	hash := sha256.Sum256(serialized)
+	hash := sha256.Sum256([]byte(serialized))
 	eventID := hex.EncodeToString(hash[:])
 	
 	log.Util().Debug("Computed event ID", "event_id", eventID, "kind", event.Kind)
 	return eventID, nil
-}
-
-// serializeForID creates the canonical serialization for ID computation
-func serializeForID(event *nostr.Event) ([]byte, error) {
-	// NIP-01 specification: [0, pubkey, created_at, kind, tags, content]
-	arr := []interface{}{
-		0,
-		event.PubKey,
-		event.CreatedAt,
-		event.Kind,
-		event.Tags,
-		event.Content,
-	}
-	
-	return json.Marshal(arr)
 }
 
 // ValidateEventStructure validates the basic structure of an event

@@ -4,8 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 
+	"github.com/0ceanslim/grain/client/core"
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
@@ -14,7 +14,7 @@ import (
 // CheckSignature verifies the event's signature and ID
 func CheckSignature(evt nostr.Event) bool {
 	// Serialize event correctly
-	serializedEvent := utils.SerializeEvent(evt)
+	serializedEvent := core.SerializeEvent(evt)
 	if serializedEvent == "" {
 		log.Validation().Error("Failed to serialize event", 
 			"event_id", evt.ID, 
