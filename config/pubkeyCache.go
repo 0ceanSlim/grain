@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0ceanslim/grain/client/core/tools"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -87,7 +88,7 @@ func (pc *PubkeyCache) RefreshWhitelist() error {
 	// Always decode and add npubs (regardless of enabled state)
 	npubCount := 0
 	for _, npub := range whitelistCfg.PubkeyWhitelist.Npubs {
-		pubkey, err := utils.DecodeNpub(npub)
+		pubkey, err := tools.DecodeNpub(npub)
 		if err != nil {
 			log.Config().Error("Failed to decode npub", "npub", npub, "error", err)
 			continue
@@ -158,7 +159,7 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 	// Always decode and add banned npubs (regardless of enabled state)
 	npubCount := 0
 	for _, npub := range blacklistCfg.PermanentBlacklistNpubs {
-		pubkey, err := utils.DecodeNpub(npub)
+		pubkey, err := tools.DecodeNpub(npub)
 		if err != nil {
 			log.Config().Error("Failed to decode blacklisted npub", "npub", npub, "error", err)
 			continue

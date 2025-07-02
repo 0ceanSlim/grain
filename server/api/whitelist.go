@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/0ceanslim/grain/client/core/tools"
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/utils"
 )
@@ -23,7 +24,7 @@ func GetAllWhitelistedPubkeys(w http.ResponseWriter, r *http.Request) {
 
 	// Convert npubs to pubkeys
 	for _, npub := range cfg.PubkeyWhitelist.Npubs {
-		decodedPubKey, err := utils.DecodeNpub(npub)
+		decodedPubKey, err := tools.DecodeNpub(npub)
 		if err != nil {
 			log.Printf("Error decoding npub %s: %v", npub, err)
 			continue

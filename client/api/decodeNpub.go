@@ -5,34 +5,33 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/client/core/tools"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// ValidateNpubRequest represents the request structure for npub validation
-type ValidateNpubRequest struct {
+// NpubToPubkeyRequest represents the request structure for npub to pubkey conversion
+type NpubToPubkeyRequest struct {
 	Npub string `json:"npub"`
 }
 
-// ValidateNpubResponse represents the response structure for npub validation
-type ValidateNpubResponse struct {
+// NpubToPubkeyResponse represents the response structure for npub to pubkey conversion
+type NpubToPubkeyResponse struct {
 	Success bool   `json:"success"`
 	Npub    string `json:"npub"`
-	Valid   bool   `json:"valid"`
 	Pubkey  string `json:"pubkey,omitempty"`
 	Error   string `json:"error,omitempty"`
 }
 
-// ValidateNpubHandler validates npub format and provides pubkey conversion
-func ValidateNpubHandler(w http.ResponseWriter, r *http.Request) {
+// ConvertNpubHandler converts npub to hex pubkey format
+func ConvertNpubHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req ValidateNpubRequest
+	var req NpubToPubkeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Util().Error("Failed to parse npub validate request", "error", err)
+		log.Util().Error("Failed to parse npub convert request", "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -40,7 +39,7 @@ func ValidateNpubHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate input
 	npub := strings.TrimSpace(req.Npub)
 	if npub == "" {
-		response := ValidateNpubResponse{
+		response := NpubToPubkeyResponse{
 			Success: false,
 			Error:   "Npub parameter is required",
 		}
@@ -50,26 +49,26 @@ func ValidateNpubHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Util().Debug("Validating npub", "npub", npub)
+	log.Util().Debug("Converting npub to pubkey", "npub", npub)
 
-	// Try to convert npub to pubkey to validate
-	pubkey, err := utils.DecodeNpub(npub)
+	// Convert npub to hex pubkey
+	pubkey, err := tools.DecodeNpub(npub)
 
 	// Prepare response
-	response := ValidateNpubResponse{
-		Success: true,
+	response := NpubToPubkeyResponse{
+		Success: err == nil,
 		Npub:    npub,
-		Valid:   err == nil,
 	}
 
 	if err != nil {
-		log.Util().Debug("Npub validation failed", 
+		log.Util().Error("Npub to pubkey conversion failed", 
 			"npub", npub, 
 			"error", err)
 		response.Error = err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 	} else {
 		response.Pubkey = pubkey
-		log.Util().Debug("Npub validation successful", 
+		log.Util().Info("Npub to pubkey conversion successful", 
 			"npub", npub, 
 			"pubkey", pubkey)
 	}

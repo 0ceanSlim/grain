@@ -1,4 +1,3 @@
-// client/api/cache.go
 package api
 
 import (
@@ -9,7 +8,7 @@ import (
 	"github.com/0ceanslim/grain/client/core"
 	"github.com/0ceanslim/grain/client/data"
 	"github.com/0ceanslim/grain/client/session"
-	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/client/core/tools"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -74,7 +73,7 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Encode npub for user-friendly display
-	npub, err := utils.EncodePubkey(publicKey)
+	npub, err := tools.EncodePubkey(publicKey)
 	if err != nil {
 		log.Util().Error("Failed to encode npub", "pubkey", publicKey, "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)

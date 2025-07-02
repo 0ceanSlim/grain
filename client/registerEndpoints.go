@@ -28,12 +28,12 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/relay/blacklist", relay.GetAllBlacklistedPubkeys)
 
 	// Key conversion endpoints
-	mux.HandleFunc("/api/v1/convert/pubkey", relay.ConvertPubkeyHandler)   // Convert pubkey to npub
-	mux.HandleFunc("/api/v1/convert/npub", relay.ConvertNpubHandler)       // Convert npub to pubkey
+	mux.HandleFunc("/api/v1/convert/pubkey", api.ConvertPubkeyHandler)   // Convert pubkey to npub
+	mux.HandleFunc("/api/v1/convert/npub", api.ConvertNpubHandler)       // Convert npub to pubkey
 	
 	// Key validation endpoints
-	mux.HandleFunc("/api/v1/validate/pubkey", relay.ValidatePubkeyHandler) // Validate pubkey
-	mux.HandleFunc("/api/v1/validate/npub", relay.ValidateNpubHandler)     // Validate npub
+	mux.HandleFunc("/api/v1/validate/pubkey", api.ValidatePubkeyHandler) // Validate pubkey
+	mux.HandleFunc("/api/v1/validate/npub", api.ValidateNpubHandler)     // Validate npub
 
 	// Core Nostr client function endpoints
 	registerCoreClientEndpoints(mux)

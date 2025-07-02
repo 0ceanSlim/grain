@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0ceanslim/grain/client/core/tools"
 	cfgType "github.com/0ceanslim/grain/config/types"
-	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 
 	"golang.org/x/net/websocket"
@@ -241,7 +241,7 @@ func isPubKeyPermanentlyBlacklisted(pubKey string, blacklistConfig *cfgType.Blac
 
 	// Check npubs.
 	for _, npub := range blacklistConfig.PermanentBlacklistNpubs {
-		decodedPubKey, err := utils.DecodeNpub(npub)
+		decodedPubKey, err := tools.DecodeNpub(npub)
 		if err != nil {
 			log.Config().Error("Error decoding npub", "npub", npub, "error", err)
 			continue

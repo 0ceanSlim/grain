@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/0ceanslim/grain/config"
-	"github.com/0ceanslim/grain/server/utils"
+	"github.com/0ceanslim/grain/client/core/tools"
 )
 
 // GetAllBlacklistedPubkeys returns a full list of blacklisted pubkeys, including mutelist authors
@@ -21,7 +21,7 @@ func GetAllBlacklistedPubkeys(w http.ResponseWriter, r *http.Request) {
 	// Convert npubs in PermanentBlacklistNpubs to hex pubkeys
 	var permanent []string
 	for _, npub := range blacklistConfig.PermanentBlacklistNpubs {
-		decodedPubKey, err := utils.DecodeNpub(npub)
+		decodedPubKey, err := tools.DecodeNpub(npub)
 		if err != nil {
 			log.Printf("Error decoding npub %s: %v", npub, err)
 			continue
