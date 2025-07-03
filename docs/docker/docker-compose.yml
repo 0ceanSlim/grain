@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   mongo:
     image: mongo:7.0
@@ -11,14 +9,15 @@ services:
     restart: unless-stopped
 
   grain:
-    build: .
+    build: . # Back to building from current directory
     container_name: grain-relay
     ports:
       - "8181:8181"
     depends_on:
       - mongo
-    volumes:
-      - ./logs:/app/logs
+    environment:
+      - GRAIN_ENV=production
+      - MONGO_URI=mongodb://mongo:27017/grain
     restart: unless-stopped
 
 volumes:

@@ -1,7 +1,7 @@
 FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git ca-certificates curl jq unzip
+RUN apk add --no-cache git ca-certificates curl jq
 
 WORKDIR /build
 
@@ -13,17 +13,12 @@ RUN LATEST_RELEASE=$(curl -s https://api.github.com/repos/0ceanslim/grain/releas
 
 # Download go dependencies and build
 RUN go mod download && \
-    CGO_ENABLED=0 GOOS=linux go build -o grain .
-
-# Download www assets from release
-RUN LATEST_RELEASE=$(curl -s https://api.github.com/repos/0ceanslim/grain/releases/latest | jq -r .tag_name) && \
-    curl -L "https://github.com/0ceanslim/grain/releases/download/$LATEST_RELEASE/www.zip" -o www.zip && \
-    unzip www.zip
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o grain .
 
 # Production stage
 FROM alpine:latest
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates wget
 
 WORKDIR /app
 
@@ -31,9 +26,16 @@ WORKDIR /app
 COPY --from=builder /build/grain ./
 COPY --from=builder /build/www ./www
 
-# Setup default configs for Docker
-RUN sed -i 's/localhost:27017/mongo:27017/g' config.yml
+# Create non-root user for security
+RUN addgroup -g 1001 grain && \
+    adduser -D -s /bin/sh -u 1001 -G grain grain && \
+    chown -R grain:grain /app
+
+USER grain
 
 EXPOSE 8181
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8181/ || exit 1
 
 CMD ["./grain"]
