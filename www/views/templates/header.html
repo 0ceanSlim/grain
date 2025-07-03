@@ -13,23 +13,13 @@
   </h1>
 
   <nav class="flex items-center space-x-4">
-    <button
-      class="px-3 py-2 text-gray-300 transition-colors rounded hover:text-white"
-      hx-get="/views/home.html"
-      hx-target="#main-content"
-      hx-push-url="/"
-    >
-      🏠 Home
-    </button>
-
     <div id="profile-nav">{{template "login-button"}}</div>
   </nav>
 </header>
 
 <!-- Hidden templates -->
 <div class="hidden">
-  {{template "login-button"}} {{template "profile-button"}} {{template
-  "logout-button"}} {{template "user-dropdown"}}
+  {{template "login-button"}} {{template "user-dropdown"}}
 </div>
 
 <!-- Login Modal -->

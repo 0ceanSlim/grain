@@ -1,0 +1,242 @@
+<div class="container mx-auto">
+  <div class="max-w-4xl px-4 py-8 mx-auto">
+    <div id="loading" class="text-center">
+      <div
+        class="inline-block w-6 h-6 border-2 border-white rounded-full animate-spin border-t-transparent"
+      ></div>
+      <p class="mt-2 text-gray-400">Loading settings...</p>
+    </div>
+
+    <div id="settings-content" class="hidden">
+      <!-- Settings Header -->
+      <div class="mb-8 text-center">
+        <h1 class="text-3xl font-bold text-white">⚙️ Settings</h1>
+        <p class="mt-2 text-gray-400">
+          Manage your session and relay preferences
+        </p>
+      </div>
+
+      <!-- Relay Management -->
+      <div class="p-6 mb-8 bg-gray-800 rounded-lg">
+        <h2 class="mb-4 text-xl font-semibold text-white">
+          📡 Relay Management
+        </h2>
+
+        <!-- Tab Navigation -->
+        <div class="flex mb-6 border-b border-gray-600">
+          <button
+            id="app-relays-tab"
+            class="px-4 py-2 text-sm font-medium text-blue-400 transition-colors border-b-2 border-blue-500"
+            onclick="switchRelayTab('app-relays')"
+          >
+            App Relays
+          </button>
+          <button
+            id="mailboxes-tab"
+            class="px-4 py-2 text-sm font-medium text-gray-400 transition-colors border-b-2 border-transparent hover:text-white"
+            onclick="switchRelayTab('mailboxes')"
+          >
+            Mailboxes
+          </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div id="app-relays-content" class="relay-tab-content">
+          <div class="flex items-center justify-between mb-4">
+            <p class="text-sm text-gray-400">Your configured App relays</p>
+          </div>
+
+          <!-- App Relays Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-600">
+                  <th class="px-2 py-3 font-medium text-left text-gray-400">
+                    Relay
+                  </th>
+                  <th
+                    class="w-20 px-2 py-3 font-medium text-center text-gray-400"
+                  >
+                    Status
+                  </th>
+                  <th
+                    class="w-20 px-2 py-3 font-medium text-center text-gray-400"
+                  >
+                    Ping
+                  </th>
+                  <th
+                    class="w-16 px-2 py-3 font-medium text-center text-gray-400"
+                  >
+                    Read
+                  </th>
+                  <th
+                    class="w-16 px-2 py-3 font-medium text-center text-gray-400"
+                  >
+                    Write
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="app-relays-table">
+                <tr>
+                  <td colspan="5" class="py-8 text-center text-gray-400">
+                    <div
+                      class="inline-block w-4 h-4 mr-2 border-2 border-white rounded-full animate-spin border-t-transparent"
+                    ></div>
+                    Loading relays...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="mailboxes-content" class="hidden relay-tab-content">
+          <div class="mb-4">
+            <p class="text-sm text-gray-400">
+              Your configured mailbox relays (NIP-65)
+            </p>
+          </div>
+
+          <!-- Mailboxes Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-600">
+                  <th class="px-2 py-3 font-medium text-left text-gray-400">
+                    Mailbox
+                  </th>
+                  <th
+                    class="w-20 px-2 py-3 font-medium text-center text-gray-400"
+                  >
+                    Status
+                  </th>
+                  <th
+                    class="w-20 px-2 py-3 font-medium text-center text-gray-400"
+                  >
+                    Ping
+                  </th>
+                  <th
+                    class="w-16 px-2 py-3 font-medium text-center text-gray-400"
+                  >
+                    Read
+                  </th>
+                  <th
+                    class="w-16 px-2 py-3 font-medium text-center text-gray-400"
+                  >
+                    Write
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="mailboxes-table">
+                <tr>
+                  <td colspan="5" class="py-8 text-center text-gray-400">
+                    <div
+                      class="inline-block w-4 h-4 mr-2 border-2 border-white rounded-full animate-spin border-t-transparent"
+                    ></div>
+                    Loading mailboxes...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Session Information -->
+      <div class="p-6 mb-8 bg-gray-800 rounded-lg">
+        <h2 class="mb-4 text-xl font-semibold text-white">
+          🔐 Session Information
+        </h2>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-400"
+              >Session Mode</label
+            >
+            <span id="session-mode" class="block mt-1 text-white"
+              >Loading...</span
+            >
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-400"
+              >Signing Method</label
+            >
+            <span id="signing-method" class="block mt-1 text-white"
+              >Loading...</span
+            >
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-400"
+              >Can Create Events</label
+            >
+            <span id="can-create-events" class="block mt-1 text-white"
+              >Loading...</span
+            >
+          </div>
+        </div>
+        <div class="mt-4">
+          <label class="block text-sm font-medium text-gray-400"
+            >Cache Age</label
+          >
+          <span id="cache-age" class="block mt-1 text-white">Loading...</span>
+        </div>
+      </div>
+
+      <!-- Debug Information -->
+      <details class="mb-8">
+        <summary class="text-gray-400 cursor-pointer hover:text-white">
+          🔍 Debug Information
+        </summary>
+        <div class="p-4 mt-3 bg-gray-800 rounded-lg">
+          <pre
+            id="debug-data"
+            class="overflow-auto text-xs text-gray-300 max-h-64"
+          ></pre>
+        </div>
+      </details>
+
+      <div id="error-content" class="hidden text-center">
+        <div
+          class="px-6 py-4 text-red-200 bg-red-800 border border-red-600 rounded-lg"
+        >
+          <h2 class="mb-2 text-xl font-bold">❌ Settings Error</h2>
+          <p id="error-message">Failed to load settings data</p>
+          <button
+            class="px-4 py-2 mt-4 font-bold text-white transition-colors bg-red-600 rounded hover:bg-red-700"
+            hx-get="/views/home.html"
+            hx-target="#main-content"
+          >
+            🏠 Return Home
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/settings.js"></script>
+  <script>
+    // Safe initialization that waits for both DOM and script to be ready
+    function safeInitializeSettings() {
+      // Check if the settings.js file has loaded and the function exists
+      if (
+        typeof loadSettingsData === "function" &&
+        document.getElementById("loading") &&
+        document.getElementById("settings-content")
+      ) {
+        console.log("Initializing settings...");
+        loadSettingsData();
+      } else {
+        console.log("Waiting for settings.js to load...");
+        // Wait a bit more for script to load
+        setTimeout(safeInitializeSettings, 100);
+      }
+    }
+
+    // Initialize settings when page loads via any navigation method
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", safeInitializeSettings);
+    } else {
+      // Give the script tag time to load
+      setTimeout(safeInitializeSettings, 10);
+    }
+  </script>
+</div>

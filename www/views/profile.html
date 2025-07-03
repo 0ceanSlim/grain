@@ -1,231 +1,121 @@
-<div class="flex flex-col items-center p-8">
-  <div class="w-full max-w-5xl">
+<div class="container mx-auto">
+  <div class="max-w-4xl px-4 py-8 mx-auto">
     <div id="loading" class="text-center">
-      <div class="mx-auto mb-4 spinner"></div>
-      <p class="text-gray-400">Loading profile...</p>
+      <div
+        class="inline-block w-6 h-6 border-2 border-white rounded-full animate-spin border-t-transparent"
+      ></div>
+      <p class="mt-2 text-gray-400">Loading profile...</p>
     </div>
 
     <div id="profile-content" class="hidden">
-      <!-- Banner (if available) -->
-      <div id="profile-banner-container" class="hidden mb-6">
-        <div class="relative h-48 overflow-hidden bg-gray-700 rounded-lg">
+      <!-- Profile Header with Banner -->
+      <div
+        id="profile-banner-container"
+        class="relative hidden mb-8 overflow-hidden bg-gray-800 rounded-lg"
+      >
+        <img
+          id="profile-banner"
+          class="object-cover w-full h-48"
+          alt="Profile Banner"
+        />
+        <div class="absolute inset-0 bg-black bg-opacity-40"></div>
+      </div>
+
+      <!-- Profile Main Content -->
+      <div class="mb-8 text-center">
+        <!-- Profile Picture -->
+        <div class="relative inline-block mb-4">
+          <div
+            id="profile-picture-fallback"
+            class="flex items-center justify-center w-32 h-32 mx-auto text-4xl bg-gray-600 rounded-full"
+          >
+            👤
+          </div>
           <img
-            id="profile-banner"
-            class="object-cover w-full h-full"
-            alt="Profile banner"
+            id="profile-picture"
+            class="hidden w-32 h-32 mx-auto border-4 border-gray-700 rounded-full"
+            alt="Profile Picture"
           />
         </div>
-      </div>
 
-      <!-- Profile Header -->
-      <div class="p-6 mb-6 bg-gray-700 rounded-lg">
-        <div class="flex items-start space-x-4">
-          <div class="relative">
-            <img
-              id="profile-picture"
-              class="object-cover w-20 h-20 bg-gray-600 rounded-full"
-              alt="Profile picture"
-              style="display: none"
-            />
-            <div
-              id="profile-picture-fallback"
-              class="flex items-center justify-center w-20 h-20 text-2xl bg-gray-600 rounded-full"
-            >
-              👤
-            </div>
-          </div>
-          <div class="flex-1">
-            <h1 id="profile-name" class="mb-2 text-2xl font-bold text-white">
-              Loading...
-            </h1>
-            <p
-              id="profile-display-name"
-              class="hidden mb-2 text-lg text-purple-300"
-            >
-              <!-- Display name if different from name -->
-            </p>
-            <p id="profile-about" class="mb-3 text-gray-300">Loading bio...</p>
+        <!-- Basic Profile Info -->
+        <h1 id="profile-name" class="mb-2 text-3xl font-bold text-white">
+          Loading...
+        </h1>
 
-            <!-- Contact/Verification Info -->
-            <div class="space-y-1 text-sm">
-              <div id="profile-nip05-container" class="hidden">
-                <span class="text-gray-400">Verified:</span>
-                <span
-                  id="profile-nip05"
-                  class="font-mono text-green-400"
-                ></span>
-                <span class="text-green-400">✓</span>
-              </div>
+        <div
+          id="profile-display-name"
+          class="hidden mb-2 text-xl text-gray-300"
+        ></div>
 
-              <div id="profile-website-container" class="hidden">
-                <span class="text-gray-400">Website:</span>
-                <a
-                  id="profile-website"
-                  class="text-blue-400 underline hover:text-blue-300"
-                  target="_blank"
-                ></a>
-              </div>
+        <p id="profile-about" class="max-w-2xl mx-auto mb-6 text-gray-400">
+          Loading...
+        </p>
 
-              <div id="profile-lightning-container" class="hidden">
-                <span class="text-gray-400">⚡ Lightning:</span>
-                <span
-                  id="profile-lightning"
-                  class="font-mono text-yellow-400"
-                ></span>
-              </div>
-            </div>
-
-            <!-- Public Key Info -->
-            <div class="pt-3 mt-3 border-t border-gray-600">
-              <p class="mb-1 text-xs text-gray-400">Public Key:</p>
-              <p
-                class="font-mono text-xs text-gray-300 break-all"
-                id="profile-pubkey"
-              >
-                Loading public key...
-              </p>
-              <p class="mt-1 text-xs text-gray-400">npub:</p>
-              <p
-                class="font-mono text-xs text-gray-300 break-all"
-                id="profile-npub"
-              >
-                Loading npub...
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Profile Stats -->
-      <div class="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
-        <div class="p-4 text-center bg-gray-700 rounded-lg">
-          <h3 class="mb-2 text-lg font-semibold text-purple-400">
-            Total Relays
-          </h3>
-          <p id="relay-count" class="text-2xl font-bold">-</p>
-          <p class="text-sm text-gray-400">Configured</p>
-        </div>
-
-        <div class="p-4 text-center bg-gray-700 rounded-lg">
-          <h3 class="mb-2 text-lg font-semibold text-purple-400">
-            Read Relays
-          </h3>
-          <p id="read-relay-count" class="text-2xl font-bold">-</p>
-          <p class="text-sm text-gray-400">For receiving</p>
-        </div>
-
-        <div class="p-4 text-center bg-gray-700 rounded-lg">
-          <h3 class="mb-2 text-lg font-semibold text-purple-400">
-            Write Relays
-          </h3>
-          <p id="write-relay-count" class="text-2xl font-bold">-</p>
-          <p class="text-sm text-gray-400">For publishing</p>
-        </div>
-      </div>
-
-      <!-- Session Info -->
-      <div class="p-4 mb-6 bg-gray-700 rounded-lg">
-        <h3 class="mb-3 text-lg font-semibold text-purple-400">Session Info</h3>
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <span class="text-gray-400">Mode:</span>
-            <span id="session-mode" class="ml-2 font-semibold text-white"
-              >-</span
-            >
-          </div>
-          <div>
-            <span class="text-gray-400">Signing Method:</span>
-            <span id="signing-method" class="ml-2 font-semibold text-white"
-              >-</span
-            >
-          </div>
-          <div>
-            <span class="text-gray-400">Can Create Events:</span>
-            <span id="can-create-events" class="ml-2 font-semibold text-white"
-              >-</span
-            >
-          </div>
-          <div>
-            <span class="text-gray-400">Cache Updated:</span>
-            <span id="cache-age" class="ml-2 font-mono text-sm text-white"
-              >-</span
-            >
-          </div>
-        </div>
-      </div>
-
-      <!-- Relay Lists -->
-      <div class="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-3">
-        <div class="p-4 bg-gray-700 rounded-lg">
-          <h3 class="mb-3 text-lg font-semibold text-purple-400">
-            📥 Read Only Relays
-          </h3>
-          <div id="read-relays" class="space-y-2 text-sm">
-            <p class="text-gray-400">Loading...</p>
-          </div>
-        </div>
-
-        <div class="p-4 bg-gray-700 rounded-lg">
-          <h3 class="mb-3 text-lg font-semibold text-purple-400">
-            📤 Write Only Relays
-          </h3>
-          <div id="write-relays" class="space-y-2 text-sm">
-            <p class="text-gray-400">Loading...</p>
-          </div>
-        </div>
-
-        <div class="p-4 bg-gray-700 rounded-lg">
-          <h3 class="mb-3 text-lg font-semibold text-purple-400">
-            📬 Read & Write Relays
-          </h3>
-          <div id="both-relays" class="space-y-2 text-sm">
-            <p class="text-gray-400">Loading...</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Raw Data (Debug) -->
-      <details class="mb-6">
-        <summary class="text-gray-400 cursor-pointer hover:text-white">
-          🔍 Debug Info
-        </summary>
-        <div class="p-4 mt-3 bg-gray-800 rounded-lg">
-          <pre
-            id="debug-data"
-            class="overflow-auto text-xs text-gray-300 max-h-64"
-          ></pre>
-        </div>
-      </details>
-
-      <!-- Actions -->
-      <div class="space-x-4 text-center">
-        <button
-          class="px-4 py-2 font-bold text-white transition-colors bg-purple-600 rounded hover:bg-purple-700"
-          onclick="refreshProfile()"
+        <!-- Profile Details Grid -->
+        <div
+          class="grid max-w-4xl grid-cols-1 gap-6 mx-auto md:grid-cols-2 lg:grid-cols-3"
         >
-          🔄 Refresh Profile
-        </button>
+          <!-- NIP-05 Verification -->
+          <div
+            id="profile-nip05-container"
+            class="hidden p-4 bg-gray-800 rounded-lg"
+          >
+            <h3 class="mb-1 text-sm font-medium text-gray-400">
+              ✅ NIP-05 Verified
+            </h3>
+            <span id="profile-nip05" class="text-white break-all"
+              >Not verified</span
+            >
+          </div>
 
-        <button
-          class="px-4 py-2 font-bold text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
-          onclick="copyPublicKey()"
-        >
-          📋 Copy Public Key
-        </button>
+          <!-- Website -->
+          <div
+            id="profile-website-container"
+            class="hidden p-4 bg-gray-800 rounded-lg"
+          >
+            <h3 class="mb-1 text-sm font-medium text-gray-400">🌐 Website</h3>
+            <a
+              id="profile-website"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-blue-400 break-all hover:text-blue-300"
+            >
+              No website
+            </a>
+          </div>
 
-        <button
-          class="px-4 py-2 font-bold text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
-          onclick="copyNpub()"
-        >
-          📋 Copy npub
-        </button>
+          <!-- Lightning Address -->
+          <div
+            id="profile-lightning-container"
+            class="hidden p-4 bg-gray-800 rounded-lg"
+          >
+            <h3 class="mb-1 text-sm font-medium text-gray-400">⚡ Lightning</h3>
+            <span id="profile-lightning" class="text-yellow-400 break-all"
+              >No lightning address</span
+            >
+          </div>
+        </div>
 
-        <button
-          class="px-4 py-2 font-bold text-white transition-colors bg-red-600 rounded hover:bg-red-700"
-          onclick="logout()"
-        >
-          🚪 Logout
-        </button>
+        <!-- Profile Actions -->
+        <div class="flex flex-wrap justify-center gap-4 mt-8">
+          <button
+            class="px-6 py-3 font-bold text-white transition-colors bg-purple-600 rounded hover:bg-purple-700"
+            onclick="refreshProfile()"
+          >
+            🔄 Refresh Profile
+          </button>
+
+          <button
+            class="px-6 py-3 font-bold text-white transition-colors bg-blue-600 rounded hover:bg-blue-700"
+            hx-get="/views/settings.html"
+            hx-target="#main-content"
+            hx-push-url="/settings"
+          >
+            ⚙️ View Settings
+          </button>
+        </div>
       </div>
     </div>
 
@@ -248,3 +138,29 @@
 </div>
 
 <script src="/static/js/profile.js"></script>
+<script>
+  // Safe initialization that waits for both DOM and script to be ready
+  function safeInitializeProfile() {
+    // Check if the profile.js file has loaded and the function exists
+    if (
+      typeof loadProfileData === "function" &&
+      document.getElementById("loading") &&
+      document.getElementById("profile-content")
+    ) {
+      console.log("Initializing profile...");
+      loadProfileData();
+    } else {
+      console.log("Waiting for profile.js to load...");
+      // Wait a bit more for script to load
+      setTimeout(safeInitializeProfile, 100);
+    }
+  }
+
+  // Initialize profile when page loads via any navigation method
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", safeInitializeProfile);
+  } else {
+    // Give the script tag time to load
+    setTimeout(safeInitializeProfile, 10);
+  }
+</script>

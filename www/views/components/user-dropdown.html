@@ -6,8 +6,8 @@
     onclick="toggleUserDropdown()"
     type="button"
   >
-    <span>👤</span>
-    <span class="hidden sm:inline">Profile</span>
+    <span>🗃️</span>
+    <span class="hidden sm:inline">Menu</span>
     <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
       <path
         fill-rule="evenodd"
@@ -25,13 +25,35 @@
     <div class="py-1">
       <button
         class="flex w-full px-4 py-2 text-sm text-left text-gray-300 transition-colors hover:bg-gray-600 hover:text-white"
+        hx-get="/views/home.html"
+        hx-target="#main-content"
+        hx-push-url="/"
+        onclick="closeUserDropdown()"
+      >
+        <span class="mr-2">🏠</span>
+        Home
+      </button>
+
+      <button
+        class="flex w-full px-4 py-2 text-sm text-left text-gray-300 transition-colors hover:bg-gray-600 hover:text-white"
         hx-get="/views/profile.html"
         hx-target="#main-content"
         hx-push-url="/profile"
         onclick="closeUserDropdown()"
       >
         <span class="mr-2">👤</span>
-        View Profile
+        Profile
+      </button>
+
+      <button
+        class="flex w-full px-4 py-2 text-sm text-left text-gray-300 transition-colors hover:bg-gray-600 hover:text-white"
+        hx-get="/views/settings.html"
+        hx-target="#main-content"
+        hx-push-url="/settings"
+        onclick="closeUserDropdown()"
+      >
+        <span class="mr-2">⚙️</span>
+        Settings
       </button>
 
       <hr class="border-gray-600" />

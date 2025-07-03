@@ -1,16 +1,17 @@
-const CACHE_NAME = "grain-v3"; // Updated version to force cache refresh
+const CACHE_NAME = "grain-v4"; // Updated version to force cache refresh
 const STATIC_CACHE_URLS = [
   "/",
   "/static/js/navigation.js",
   "/static/js/routing.js",
   "/static/js/profile.js",
+  "/static/js/settings.js",
   "/static/js/dropdown.js",
   // Note: Auth scripts are deliberately excluded from caching
 ];
 
 // Install event - cache only truly static resources
 self.addEventListener("install", (event) => {
-  console.log("[SW] Installing service worker v3 - Auth-aware");
+  console.log("[SW] Installing service worker v4 - Auth-aware");
   event.waitUntil(
     caches
       .open(CACHE_NAME)
@@ -165,8 +166,8 @@ function shouldCache(url) {
       "/static/js/navigation.js",
       "/static/js/routing.js",
       "/static/js/profile.js",
+      "/static/js/settings.js",
       "/static/js/dropdown.js",
-      "/static/js/login.js",
     ];
     return allowedScripts.includes(url.pathname);
   }

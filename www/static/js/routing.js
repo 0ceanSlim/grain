@@ -44,50 +44,48 @@ function handleRouteLoad() {
           // Error checking session, go to home and show login modal
           targetView = "/views/home.html";
           window.history.pushState({}, "", "/");
-          console.log("[ROUTING] Error checking session, loading:", targetView);
+          console.log("[ROUTING] Loading view:", targetView);
           htmx.ajax("GET", targetView, { target: "#main-content" });
+        });
+      return; // Exit early since we're handling this asynchronously
+    case "/settings":
+      // Check if user has session before loading settings
+      fetch("/api/v1/session")
+        .then((response) => {
+          if (response.ok) {
+            targetView = "/views/settings.html";
+          } else {
+            // No session, redirect to home and show login modal
+            targetView = "/views/home.html";
+            window.history.pushState({}, "", "/");
 
-          // Show login modal after home loads
-          setTimeout(() => {
-            const loginModal = document.getElementById("login-modal");
-            if (loginModal) {
-              loginModal.classList.remove("hidden");
-            }
-          }, 100);
+            // Show login modal after home loads
+            setTimeout(() => {
+              const loginModal = document.getElementById("login-modal");
+              if (loginModal) {
+                loginModal.classList.remove("hidden");
+              }
+            }, 100);
+          }
+          console.log("[ROUTING] Loading view:", targetView);
+          htmx.ajax("GET", targetView, { target: "#main-content" });
+        })
+        .catch(() => {
+          // Error checking session, go to home and show login modal
+          targetView = "/views/home.html";
+          window.history.pushState({}, "", "/");
+          console.log("[ROUTING] Loading view:", targetView);
+          htmx.ajax("GET", targetView, { target: "#main-content" });
         });
       return; // Exit early since we're handling this asynchronously
     default:
-      // For any other path, default to home
       targetView = "/views/home.html";
-      window.history.pushState({}, "", "/");
+      window.history.replaceState({}, "", "/");
       break;
   }
 
-  console.log(
-    "[ROUTING] Loading initial view:",
-    targetView,
-    "for path:",
-    currentPath
-  );
-
-  // Check if HTMX is available before trying to load
-  if (typeof htmx !== "undefined") {
-    htmx.ajax("GET", targetView, { target: "#main-content" });
-  } else {
-    console.error("[ROUTING] HTMX not available, cannot load view");
-    setTimeout(handleRouteLoad, 100); // Retry in 100ms
-  }
-}
-
-// Execute route loading immediately if DOM is already ready
-// or wait for DOMContentLoaded if it hasn't fired yet
-if (document.readyState === "loading") {
-  console.log("[ROUTING] DOM still loading, waiting for DOMContentLoaded");
-  document.addEventListener("DOMContentLoaded", handleRouteLoad);
-} else {
-  console.log("[ROUTING] DOM already ready, executing route load immediately");
-  // Small delay to ensure HTMX is ready
-  setTimeout(handleRouteLoad, 50);
+  console.log("[ROUTING] Loading view:", targetView);
+  htmx.ajax("GET", targetView, { target: "#main-content" });
 }
 
 // Handle browser back/forward buttons
@@ -123,6 +121,28 @@ window.addEventListener("popstate", function (event) {
           htmx.ajax("GET", targetView, { target: "#main-content" });
         });
       return; // Exit early since we're handling this asynchronously
+    case "/settings":
+      // Check if user has valid session for settings route
+      fetch("/api/v1/session")
+        .then((response) => {
+          if (response.ok) {
+            targetView = "/views/settings.html";
+          } else {
+            // No session, redirect to home
+            targetView = "/views/home.html";
+            window.history.replaceState({}, "", "/");
+          }
+          console.log("[ROUTING] Loading view via popstate:", targetView);
+          htmx.ajax("GET", targetView, { target: "#main-content" });
+        })
+        .catch(() => {
+          // Error checking session, go to home
+          targetView = "/views/home.html";
+          window.history.replaceState({}, "", "/");
+          console.log("[ROUTING] Loading view via popstate:", targetView);
+          htmx.ajax("GET", targetView, { target: "#main-content" });
+        });
+      return; // Exit early since we're handling this asynchronously
     default:
       targetView = "/views/home.html";
       window.history.replaceState({}, "", "/");
@@ -134,3 +154,15 @@ window.addEventListener("popstate", function (event) {
 });
 
 console.log("[ROUTING] Event listeners registered");
+
+// Safe initialization when DOM is ready
+function initializeRouting() {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", handleRouteLoad);
+  } else {
+    handleRouteLoad();
+  }
+}
+
+// Initialize routing
+initializeRouting();

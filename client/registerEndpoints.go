@@ -50,6 +50,8 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/validate/pubkey", api.ValidatePubkeyHandler) // Validate pubkey
 	mux.HandleFunc("/api/v1/validate/npub", api.ValidateNpubHandler)     // Validate npub
 
+	mux.HandleFunc("/api/v1/relay/ping", api.RelayPingHandler)
+
 	// Core Nostr client function endpoints
 	registerCoreClientEndpoints(mux)
 }
