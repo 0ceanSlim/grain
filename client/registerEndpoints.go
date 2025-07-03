@@ -27,6 +27,9 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/relay/whitelist", relay.GetAllWhitelistedPubkeys)
 	mux.HandleFunc("/api/v1/relay/blacklist", relay.GetAllBlacklistedPubkeys)
 
+	// Key generation endpoint
+	mux.HandleFunc("/api/v1/generate/keypair", api.GenerateKeypairHandler) // Generate random key pair
+
 	// Key conversion endpoints
 	mux.HandleFunc("/api/v1/convert/pubkey", api.ConvertPubkeyHandler)   // Convert pubkey to npub
 	mux.HandleFunc("/api/v1/convert/npub", api.ConvertNpubHandler)       // Convert npub to pubkey
