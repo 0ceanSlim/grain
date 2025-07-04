@@ -471,11 +471,6 @@ jobs:
 
           echo "Generated badge endpoint files"
 
-      - name: Copy status page HTML
-        run: |
-          # Copy the status page HTML from the repo to the output directory
-          cp docs/status/index.html docs/status/index.html
-
       - name: Setup GitHub Pages
         if: github.ref == 'refs/heads/main'
         uses: actions/configure-pages@v4
