@@ -1,17 +1,15 @@
-# GRAIN Configuration Guide WIP
+# GRAIN Configuration Guide
 
 Comprehensive documentation for configuring your GRAIN relay server.
 
 ## Table of Contents
 
-- [GRAIN Configuration Guide WIP](#grain-configuration-guide-wip)
+- [GRAIN Configuration Guide](#grain-configuration-guide)
   - [Table of Contents](#table-of-contents)
   - [Overview](#overview)
-    - [Configuration Philosophy](#configuration-philosophy)
     - [File Hierarchy](#file-hierarchy)
   - [Configuration Files](#configuration-files)
     - [File Creation](#file-creation)
-    - [Hot Reload Support](#hot-reload-support)
   - [Server Configuration (`config.yml`)](#server-configuration-configyml)
     - [Logging Configuration](#logging-configuration)
       - [Log Levels](#log-levels)
@@ -61,13 +59,6 @@ Comprehensive documentation for configuring your GRAIN relay server.
       - [Mute List Process](#mute-list-process)
       - [Mute List Benefits](#mute-list-benefits)
   - [Relay Metadata (`relay_metadata.json`)](#relay-metadata-relay_metadatajson)
-    - [NIP-11 Compliance](#nip-11-compliance)
-    - [Public Information](#public-information)
-      - [Field Descriptions](#field-descriptions)
-  - [Hot Configuration Reload](#hot-configuration-reload)
-    - [Supported Changes](#supported-changes)
-    - [Non-Hot-Reload Changes](#non-hot-reload-changes)
-    - [Reload Process](#reload-process)
   - [Configuration Validation](#configuration-validation)
     - [Validation Rules](#validation-rules)
     - [Error Handling](#error-handling)
@@ -88,23 +79,16 @@ Comprehensive documentation for configuring your GRAIN relay server.
 
 ## Overview
 
-GRAIN uses a multi-file configuration system that supports hot-reload for most settings. This allows you to adjust relay behavior without restarting the server, making it ideal for production deployments.
-
-### Configuration Philosophy
-
-- **Hot-reload first** - Most settings can be changed without restart
-- **Layered security** - Multiple filtering mechanisms work together
-- **Performance focused** - Settings optimized for high-throughput scenarios
-- **NIP compliance** - Full support for relevant Nostr protocol standards
+GRAIN uses a multi-file configuration system that supports hot-reload. This allows you to adjust relay behavior without restarting the server, making it ideal for production deployments.
 
 ### File Hierarchy
 
 ```
 grain/
 ├── config.yml              # Main server configuration
-├── whitelist.yml            # User and content allowlists
-├── blacklist.yml            # User and content blocklists
-└── relay_metadata.json      # Public relay information (NIP-11)
+├── whitelist.yml           # User and content allowlists
+├── blacklist.yml           # User and content blocklists
+└── relay_metadata.json     # Public relay information (NIP-11)
 ```
 
 ---
@@ -115,19 +99,12 @@ grain/
 
 GRAIN automatically creates default configuration files on first run:
 
-- **config.yml** - Created from `www/static/examples/config.example.yml`
-- **whitelist.yml** - Created from `www/static/examples/whitelist.example.yml`
-- **blacklist.yml** - Created from `www/static/examples/blacklist.example.yml`
-- **relay_metadata.json** - Created from `www/static/examples/relay_metadata.example.json`
+- **config.yml** - Created from `docs/examples/config.example.yml`
+- **whitelist.yml** - Created from `docs/examples/whitelist.example.yml`
+- **blacklist.yml** - Created from `docs/examples/blacklist.example.yml`
+- **relay_metadata.json** - Created from `docs/examples/relay_metadata.example.json`
 
-### Hot Reload Support
-
-| File                  | Hot Reload | Restart Required |
-| --------------------- | ---------- | ---------------- |
-| `config.yml`          | ✅ Full    | ❌               |
-| `whitelist.yml`       | ✅ Full    | ❌               |
-| `blacklist.yml`       | ✅ Full    | ❌               |
-| `relay_metadata.json` | ✅ Full    | ❌               |
+These are created from the example configs in the docs which are embedded into the binary now, so if the configs don't exist and grain tries to run it will create the example configs that are missing using the embedded example configs from the docs directory.
 
 ---
 
@@ -147,10 +124,12 @@ logging:
   structure: false # true = JSON logs, false = pretty logs
   check_interval_min: 10 # Log size check frequency
   backup_count: 2 # Number of backup files to keep
-  suppress_components: # Component log suppression
+  suppress_components: # Component log suppression (INFO/DEBUG only)
     - "util" # Utility operations
-    - "conn-manager" # Connection management
-    - "client" # Client connections
+    - "mongo-query" # Database query operations
+    - "mongo-store" # Event storage operations
+    - "relay-client" # Relay client connections
+    - "close-handler" # Subscription close operations
 ```
 
 #### Log Levels
@@ -182,16 +161,43 @@ logging:
 
 Available components for `suppress_components`:
 
-| Component       | Purpose               | Recommended for Suppression |
-| --------------- | --------------------- | --------------------------- |
-| `main`          | Application lifecycle | ❌ Keep for operations      |
-| `mongo`         | Database operations   | ❌ Keep for debugging       |
-| `mongo-query`   | Query operations      | ✅ Can be verbose           |
-| `mongo-store`   | Storage operations    | ✅ High frequency           |
-| `event-handler` | Event processing      | ❌ Keep for monitoring      |
-| `client`        | Client connections    | ✅ Very verbose             |
-| `util`          | Utility functions     | ✅ Low importance           |
-| `conn-manager`  | Connection management | ✅ Routine operations       |
+| Component             | Purpose                       | Recommended for Suppression |
+| --------------------- | ----------------------------- | --------------------------- |
+| **Core Components**   |                               |                             |
+| `startup`             | Startup operations            | ❌ Keep for debugging       |
+| `config`              | Configuration loading         | ❌ Keep for hot-reload info |
+| `util`                | Utility functions             | ✅ Low importance           |
+| `log`                 | Logging system operations     | ✅ Meta-logging noise       |
+| **Database**          |                               |                             |
+| `mongo`               | MongoDB connection            | ❌ Keep for debugging       |
+| `mongo-query`         | Query operations              | ✅ Can be very verbose      |
+| `mongo-store`         | Storage operations            | ✅ High frequency           |
+| `mongo-purge`         | Event purging                 | ❌ Keep for maintenance     |
+| **Event Processing**  |                               |                             |
+| `event-handler`       | Event processing coordination | ❌ Keep for monitoring      |
+| `event-validation`    | Event signature validation    | ❌ Keep for security        |
+| `event-store`         | Event storage operations      | ✅ High frequency           |
+| **Message Handlers**  |                               |                             |
+| `req-handler`         | REQ subscription handling     | ❌ Keep for monitoring      |
+| `auth-handler`        | AUTH message handling         | ❌ Keep for security        |
+| `close-handler`       | CLOSE subscription handling   | ✅ Routine operations       |
+| **Relay Operations**  |                               |                             |
+| `relay-client`        | Relay client connections      | ✅ Very verbose             |
+| `relay-connection`    | Relay connection management   | ✅ Can be verbose           |
+| `relay-api`           | Relay API operations          | ❌ Keep for API monitoring  |
+| **Client Components** |                               |                             |
+| `client-main`         | Client main operations        | ✅ Can be verbose           |
+| `client-api`          | Client API operations         | ✅ Can be verbose           |
+| `client-core`         | Client core functionality     | ✅ Can be verbose           |
+| `client-tools`        | Client utility tools          | ✅ Low importance           |
+| `client-data`         | Client data operations        | ✅ Can be verbose           |
+| `client-connection`   | Client connection management  | ✅ Can be verbose           |
+| `client-session`      | Client session management     | ✅ Can be verbose           |
+| `client-cache`        | Client caching operations     | ✅ Can be verbose           |
+| **Other Components**  |                               |                             |
+| `user-sync`           | User synchronization          | ❌ Keep for sync monitoring |
+
+**Note**: Suppression only affects INFO and DEBUG log levels. WARN and ERROR messages are always shown regardless of suppression settings.
 
 ### MongoDB Configuration
 
@@ -525,6 +531,8 @@ rate_limit:
       burst: 12 # Burst allowance
 ```
 
+> **Note**:this can be used to effectively blacklist by event kind by setting the rate limit to 0
+
 ### Size Limiting
 
 Control event sizes to prevent abuse and manage memory usage.
@@ -626,7 +634,7 @@ kinds: [] # Empty = allow all kinds
 
 ### Domain Whitelist
 
-Allow users who have verified their domain via NIP-05.
+Allow users who have verified at a domain via NIP-05.
 
 ```yaml
 domain_whitelist:
@@ -676,8 +684,8 @@ temp_ban_duration: 3600 # Temp ban duration (seconds)
 
 #### Ban Escalation System
 
-1. **First offense** - Temporary ban (duration: `temp_ban_duration`)
-2. **Subsequent offenses** - Longer temporary bans
+1. **On offense** - Temporary ban (duration: `temp_ban_duration`)
+2. **Subsequent offenses** - Temporary ban count incremented +
 3. **Max violations** - Permanent ban after `max_temp_bans` violations
 
 #### Word Filtering Strategy
@@ -732,110 +740,15 @@ mutelist_cache_refresh_minutes: 30 # Refresh frequency
 
 ## Relay Metadata (`relay_metadata.json`)
 
-Public information about your relay for NIP-11 compliance.
+GRAIN provides a NIP-11 compliant template constructed from default example configuration values by default.
 
-### NIP-11 Compliance
-
-Required fields for Nostr relay discovery and information.
-
-```json
-{
-  "name": "🌾 My GRAIN Relay",
-  "description": "A community-focused Nostr relay powered by GRAIN",
-  "pubkey": "your_relay_operator_pubkey_here",
-  "contact": "admin@example.com",
-  "supported_nips": [1, 2, 9, 11, 40, 42],
-  "software": "https://github.com/0ceanslim/grain",
-  "version": "0.4.0"
-}
-```
-
-### Public Information
-
-Extended relay information for better discoverability.
-
-```json
-{
-  "name": "🌾 Community Relay",
-  "description": "A Nostr relay focused on quality content and community discussion",
-  "banner": "https://example.com/relay-banner.jpg",
-  "icon": "https://example.com/relay-icon.png",
-  "pubkey": "fa984bd7dbb282f07e16e7ae87b26a2a7b9b90b7246a44771f0cf5ae58018f52",
-  "contact": "mailto:admin@example.com",
-  "supported_nips": [1, 2, 9, 11, 40, 42, 50, 65],
-  "software": "https://github.com/0ceanslim/grain",
-  "version": "0.4.0",
-  "limitation": {
-    "max_message_length": 16384,
-    "max_subscriptions": 20,
-    "max_limit": 5000,
-    "max_event_tags": 100,
-    "max_content_length": 8196,
-    "auth_required": false,
-    "payment_required": false,
-    "restricted_writes": false
-  },
-  "relay_countries": ["US"],
-  "language_tags": ["en"],
-  "tags": ["general", "community"],
-  "posting_policy": "https://example.com/posting-policy.html"
-}
-```
-
-#### Field Descriptions
-
-**Required Fields**
-
-- `name` - Human-readable relay name
-- `description` - Detailed relay description
-- `pubkey` - Relay operator's public key
-- `supported_nips` - Array of supported NIP numbers
-
-**Optional Fields**
-
-- `banner` - Wide banner image URL
-- `icon` - Square icon image URL
-- `contact` - Contact information (email, website)
-- `limitation` - Technical limitations and policies
-- `posting_policy` - URL to detailed posting guidelines
-
----
-
-## Hot Configuration Reload
-
-GRAIN supports changing most configuration settings without restarting the server.
-
-### Supported Changes
-
-| Configuration       | Hot Reload | Effect                                |
-| ------------------- | ---------- | ------------------------------------- |
-| Logging settings    | ✅         | Immediate log level/format change     |
-| Rate limits         | ✅         | New limits applied to new connections |
-| Blacklist/Whitelist | ✅         | Cache refreshed immediately           |
-| Event purging       | ✅         | Schedule updated                      |
-| Relay metadata      | ✅         | NIP-11 responses updated              |
-
-### Non-Hot-Reload Changes
-
-Some settings require a restart:
-
-- **Database connection** - MongoDB URI changes
-- **Server port** - Network binding changes
-- **Resource limits** - System-level constraints
-
-### Reload Process
-
-1. **File Detection** - GRAIN watches configuration files
-2. **Validation** - New configuration is validated
-3. **Application** - Valid changes are applied immediately
-4. **Rollback** - Invalid changes are rejected, previous config retained
-5. **Logging** - Configuration changes are logged
+For detailed NIP-11 configuration options and field specifications, refer to [NIP-11 documentation](https://github.com/nostr-protocol/nips/blob/master/11.md) and adjust the configuration to your relay's specific requirements.
 
 ---
 
 ## Configuration Validation
 
-GRAIN validates all configuration changes before applying them.
+Validate all configuration changes before applying them.
 
 ### Validation Rules
 
@@ -1033,7 +946,7 @@ Common configuration issues and solutions.
 **Problem**: Legitimate clients being rate limited
 
 ```
-[WARN] [client] WebSocket rate limit exceeded client_id=c1234
+[WARN] [relay-client] WebSocket rate limit exceeded client_id=c1234
 ```
 
 **Solutions**:
@@ -1056,4 +969,6 @@ Common configuration issues and solutions.
 1. Validate YAML syntax with online validator
 2. Check for proper indentation and structure
 3. Verify numeric values are in valid ranges
-4. Review
+4. Review error logs for specific validation failures
+
+[def]: #grain-configuration-guide

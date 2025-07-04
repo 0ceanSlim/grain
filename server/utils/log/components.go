@@ -30,3 +30,34 @@ func ClientConnection() *slog.Logger{ return GetLogger("client-connection") }
 func ClientSession() *slog.Logger	{ return GetLogger("client-session") }
 func ClientCache() *slog.Logger		{ return GetLogger("client-cache") }
 
+// GetAllComponents returns a slice of all component names used by the logger functions
+func GetAllComponents() []string {
+	return []string{
+		"startup",           // Startup()
+		"mongo",             // Mongo()
+		"relay-client",      // RelayClient()
+		"relay-connection",  // RelayConnection()
+		"relay-api",         // RelayAPI()
+		"log",               // Log()
+		"config",            // Config()
+		"util",              // Util()
+		"event-validation",  // Validation()
+		"user-sync",         // UserSync()
+		"mongo-query",       // MongoQuery()
+		"mongo-store",       // MongoStore()
+		"mongo-purge",       // MongoPurge()
+		"event-store",       // EventStore()
+		"event-handler",     // Event()
+		"req-handler",       // Req()
+		"auth-handler",      // Auth()
+		"close-handler",     // Close()
+		"client-main",       // ClientMain()
+		"client-api",        // ClientAPI()
+		"client-core",       // ClientCore()
+		"client-tools",      // ClientTools()
+		"client-data",       // ClientData()
+		"client-connection", // ClientConnection()
+		"client-session",    // ClientSession()
+		"client-cache",      // ClientCache()
+	}
+}

@@ -3,22 +3,22 @@ name: Grain Relay Uptime Monitor
 on:
   schedule:
     # Every 5 minutes during business hours (UTC)
-    - cron: '*/5 8-20 * * *'
+    - cron: "*/5 8-20 * * *"
     # Every 15 minutes during off-hours
-    - cron: '*/15 21-23,0-7 * * *'
+    - cron: "*/15 21-23,0-7 * * *"
   workflow_dispatch: # Allow manual runs
   push:
     paths:
-      - '.github/workflows/uptime.yml'
+      - ".github/workflows/uptime.yml"
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       pages: write
       id-token: write
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,8 +29,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          
+          node-version: "20"
+
       - name: Install dependencies
         run: |
           npm init -y
@@ -229,12 +229,16 @@ jobs:
               // Ensure directories exist
               const statusDir = path.join('docs', 'status');
               const historyDir = path.join(statusDir, 'history');
+              const apiDir = path.join(statusDir, 'api');
               
               if (!fs.existsSync(statusDir)) {
                 fs.mkdirSync(statusDir, { recursive: true });
               }
               if (!fs.existsSync(historyDir)) {
                 fs.mkdirSync(historyDir, { recursive: true });
+              }
+              if (!fs.existsSync(apiDir)) {
+                fs.mkdirSync(apiDir, { recursive: true });
               }
 
               // Save current status
@@ -372,7 +376,7 @@ jobs:
           }
 
           const stats = calculateUptime();
-          
+
           // Save uptime stats
           fs.writeFileSync(
             path.join('docs', 'status', 'uptime.json'),
@@ -387,97 +391,90 @@ jobs:
 
           node calculate-uptime.js
 
-      - name: Update README badges
+      - name: Generate badge endpoints
         run: |
-          # Find README file (could be README.md, readme.md, or README)
-          README_FILE=""
-          for file in README.md readme.md README; do
-            if [ -f "$file" ]; then
-              README_FILE="$file"
-              break
-            fi
-          done
+          # Create API directory
+          mkdir -p docs/status/api
 
-          if [ -z "$README_FILE" ]; then
-            echo "No README file found, skipping badge update"
-            echo "README_UPDATED=false" >> $GITHUB_ENV
-            exit 0
-          fi
-
-          echo "Found README file: $README_FILE"
-
-          # Read current status
+          # Generate status badge JSON
           STATUS=$(cat docs/status/status.json | node -e "
             const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
             console.log(data.overall.status);
           ")
 
-          RESPONSE_TIME=$(cat docs/status/status.json | node -e "
+          COLOR=$(cat docs/status/status.json | node -e "
             const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
-            console.log(data.overall.responseTime);
+            const status = data.overall.status;
+            if (status === 'up') console.log('brightgreen');
+            else if (status === 'degraded') console.log('yellow');
+            else console.log('red');
           ")
 
+          cat > docs/status/api/status-badge.json << EOF
+          {
+            "schemaVersion": 1,
+            "label": "Status",
+            "message": "$STATUS",
+            "color": "$COLOR"
+          }
+          EOF
+
+          # Generate 24h uptime badge JSON
           UPTIME_24H=$(cat docs/status/uptime.json | node -e "
             const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
-            console.log(data['24h'].percentage);
+            console.log(data['24h']?.percentage || '0.00');
           ")
 
-          # Determine badge color
-          if [ "$STATUS" = "up" ]; then
-            COLOR="brightgreen"
-          elif [ "$STATUS" = "degraded" ]; then
-            COLOR="yellow"
-          else
-            COLOR="red"
-          fi
+          UPTIME_24H_COLOR=$(cat docs/status/uptime.json | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+            const uptime = parseFloat(data['24h']?.percentage || 0);
+            if (uptime >= 99.5) console.log('brightgreen');
+            else if (uptime >= 95) console.log('green');
+            else if (uptime >= 90) console.log('yellow');
+            else if (uptime >= 80) console.log('orange');
+            else console.log('red');
+          ")
 
-          # Check if status section exists
-          if ! grep -q "## 🌾 Relay Status\|Relay Status" "$README_FILE"; then
-            echo "Status section not found in $README_FILE"
-            echo "Please manually add the status section to your README"
-            echo "README_UPDATED=false" >> $GITHUB_ENV
-            exit 0
-          fi
+          cat > docs/status/api/24h-uptime-badge.json << EOF
+          {
+            "schemaVersion": 1,
+            "label": "Uptime 24h",
+            "message": "${UPTIME_24H}%",
+            "color": "$UPTIME_24H_COLOR"
+          }
+          EOF
 
-          # Update badges if they exist
-          if grep -q "!\[Status\]" "$README_FILE"; then
-            sed -i "s|!\[Status\].*|![Status](https://img.shields.io/badge/Status-${STATUS}-${COLOR})|" "$README_FILE"
-            echo "Updated Status badge"
-          fi
+          # Generate 90d uptime badge JSON
+          UPTIME_90D=$(cat docs/status/uptime.json | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+            console.log(data['90d']?.percentage || '0.00');
+          ")
 
-          if grep -q "!\[Uptime" "$README_FILE"; then
-            sed -i "s|!\[Uptime.*|![Uptime](https://img.shields.io/badge/Uptime%2024h-${UPTIME_24H}%25-${COLOR})|" "$README_FILE"
-            echo "Updated Uptime badge"
-          fi
+          UPTIME_90D_COLOR=$(cat docs/status/uptime.json | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+            const uptime = parseFloat(data['90d']?.percentage || 0);
+            if (uptime >= 99.5) console.log('brightgreen');
+            else if (uptime >= 95) console.log('green');
+            else if (uptime >= 90) console.log('yellow');
+            else if (uptime >= 80) console.log('orange');
+            else console.log('red');
+          ")
 
-          if grep -q "!\[Response Time\]" "$README_FILE"; then
-            sed -i "s|!\[Response Time\].*|![Response Time](https://img.shields.io/badge/Response%20Time-${RESPONSE_TIME}ms-blue)|" "$README_FILE"
-            echo "Updated Response Time badge"
-          fi
+          cat > docs/status/api/90d-uptime-badge.json << EOF
+          {
+            "schemaVersion": 1,
+            "label": "Uptime 90d",
+            "message": "${UPTIME_90D}%",
+            "color": "$UPTIME_90D_COLOR"
+          }
+          EOF
 
-          echo "README_UPDATED=true" >> $GITHUB_ENV
-          echo "README_FILE=$README_FILE" >> $GITHUB_ENV
+          echo "Generated badge endpoint files"
 
-      - name: Commit and push changes
+      - name: Copy status page HTML
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          
-          # Always add the status files
-          git add docs/status/
-          
-          # Only add README if it was updated
-          if [ "${README_UPDATED:-false}" = "true" ] && [ -n "${README_FILE:-}" ]; then
-            git add "$README_FILE"
-            echo "Added $README_FILE to commit"
-          fi
-          
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "🤖 Update relay status [$(date)]"
-            git push
-          fi
+          # Copy the status page HTML from the repo to the output directory
+          cp docs/status/index.html docs/status/index.html
 
       - name: Setup GitHub Pages
         if: github.ref == 'refs/heads/main'

@@ -111,12 +111,8 @@ func InitializeLoggers(cfg *cfgType.ServerConfig) {
     //fmt.Printf("Logger initialized: writing to %s\n", logFilePath)
 
     // Now create all the component loggers
-    // Pre-creating all loggers you'll need in the application
-    components := []string{
-        "main", "mongo", "mongo-query", "mongo-store", "mongo-purge", "mongo-event",
-        "event-handler", "req-handler", "auth-handler", "close-handler",
-        "client", "config", "util", "event-validation", "conn-manager", "user-sync",
-    }
+	// Pre-creating all loggers you'll need in the application
+	components := GetAllComponents()
 
     // Create a map of loggers before acquiring the lock
     tempLoggers := make(map[string]*slog.Logger, len(components))

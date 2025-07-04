@@ -53,10 +53,13 @@ The frontend is currently minimal but functional. Future development will expand
 
 ## 🌾 Wheat Relay Status
 
-![Status](https://img.shields.io/badge/Status-up-brightgreen)
-![Uptime](https://img.shields.io/badge/Uptime%2024h-100.00%25-brightgreen)
+[![Status](https://img.shields.io/endpoint?url=https://0ceanslim.github.io/grain/api/status-badge.json)](https://0ceanslim.github.io/grain/)
+[![Uptime 24h](https://img.shields.io/endpoint?url=https://0ceanslim.github.io/grain/api/24h-uptime-badge.json)](https://0ceanslim.github.io/grain/)
+[![Uptime 90d](https://img.shields.io/endpoint?url=https://0ceanslim.github.io/grain/api/90d-uptime-badge.json)](https://0ceanslim.github.io/grain/)
 
 **Development Relay**: `wss://wheat.happytavern.co`
+
+[📊 **View Detailed Status & Historical Data**](https://0ceanslim.github.io/grain/)
 
 My development relay **wheat.happytavern.co** serves as the testing and demo environment for Grain. This relay helps me validate new features, test performance optimizations, and provide a platform for developers to experiment with grain. This relay routinely runs unreleased versions of grain and may contain bugs.
 
@@ -64,42 +67,42 @@ Wheat is a public nostr relay that anyone can write to and read from. Wheat will
 
 _Status monitoring powered by GitHub Actions with 5-minute check intervals_
 
-## Requirements
-
-- **Go** if building from source
-  - <img src="https://go.dev/images/favicon-gopher.svg" width="16"/> _[Download Go](https://go.dev/)_
-- **MongoDB** for event storage and indexing
-  - <img src="https://www.mongodb.com//assets/images/global/favicon.ico" width="20"/> _[MongoDB Community Server Install Docs](https://www.mongodb.com/docs/manual/administration/install-community/)_
-
 ## Installation
 
-### Using Pre-built Binaries (Recommended)
+### Quick Start (Recommended)
 
-1. **Download the latest release** for your system from the releases page
+1. **Download the latest release** for your system from the [releases page](https://github.com/0ceanslim/grain/releases)
 2. **Extract the archive** and ensure both the binary and `www` folder are in the same directory:
 
-   grain/  
-   ├── grain (or grain.exe on Windows)  
+   ```
+   grain/
+   ├── grain (or grain.exe on Windows)
    └── www/
+   ```
 
-**Start MongoDB** - GRAIN requires a running MongoDB instance (default: `localhost:27017`)
+3. **Install MongoDB** for your system:
 
-**Run GRAIN** - `./grain` (Linux) or `grain.exe` (Windows)
+   - <img src="https://www.mongodb.com//assets/images/global/favicon.ico" width="20"/> _[MongoDB Community Server Install Guide](https://www.mongodb.com/docs/manual/administration/install-community/)_
+
+4. **Run GRAIN** - `./grain` (Linux) or `grain.exe` (Windows)
 
 GRAIN will automatically create default configuration files on first run and start serving on port `:8181`.
 
-Edit config files and GRAIN automatically restarts with new settings
+### Alternative Installation Methods
 
-### Building from Source
+**Docker Installation**
 
-If pre-built binaries aren't available for your architecture you can clone this repo and build the binary from source:
+- <img src="https://www.docker.com/app/uploads/2024/02/cropped-docker-logo-favicon-32x32.png" width="20"/> _[Docker Setup Guide](docs/docker/readme.md)_ (includes MongoDB)
 
-```bash
-git clone https://github.com/0ceanslim/grain.git
-cd grain
-go build -o grain .
-./grain
-```
+**Build from Source**
+
+- **Requirements**: <img src="https://go.dev/images/favicon-gopher.svg" width="16"/> _[Go 1.21+](https://go.dev/)_ + MongoDB
+
+**Complete Installation Guide**
+
+- _[Full Installation Documentation](docs/installation.md)_ - includes system service setup for Linux (systemd) and Windows (NSSM)
+
+> **Note**: Docker installations include MongoDB automatically. For other methods, you'll need to install MongoDB separately.
 
 ## Configuration
 
@@ -110,110 +113,9 @@ GRAIN uses four main configuration files with hot-reload support:
 - `blacklist.yml` - Banned content and escalation policies
 - `relay_metadata.json` - Public relay information (NIP-11)
 
-For detailed configuration options and examples, see:
+Configuration files are automatically created from embedded examples on first run. Changes to any configuration file are detected and applied automatically without requiring a restart.
 
-[**Example configurations**](https://github.com/0ceanslim/grain/tree/main/docs/examples)
-
-### Monitoring and Logs
-
-GRAIN provides detailed operational visibility:
-
-```yaml
-logging:
-  level: "info" # Log levels: "debug", "info", "warn", "error"
-  file: "debug" # Log file name
-  max_log_size_mb: 10 # Maximum log file size in MB before trimming
-  structure: false # true = structured JSON logs, false = pretty logs
-  check_interval_min: 10 # Check every 10 minutes
-  backup_count: 2 # Keep 2 backup files (.bak1, .bak2)
-  suppress_components: # Components to suppress INFO/DEBUG logs from (WARN/ERROR still shown)
-    - "util" # Utility functions (file ops, IP detection, metadata loading)
-    - "conn-manager" # Connection management (memory stats, connection counts)
-    - "client" # Client connection details (connects/disconnects, timeouts)
-    - "mongo-query" # Database query operations (can be very verbose)
-    - "event-store" # Event storage operations (insert/update confirmations)
-    - "close-handler" # Subscription close operations (routine cleanup)
-
-# Available components for suppression:
-# - "main"             # Main application lifecycle (startup, shutdown, restarts)
-# - "mongo"            # MongoDB connection and database operations
-# - "mongo-store"      # High-level event storage coordination
-# - "mongo-purge"      # Event purging and cleanup operations
-# - "event-handler"    # Event processing and validation coordination
-# - "req-handler"      # Subscription request handling
-# - "auth-handler"     # Authentication processing (NIP-42)
-# - "config"           # Configuration loading and caching
-# - "event-validation" # Event signature and content validation
-# - "user-sync"        # User synchronization operations
-# - "log"              # Logging system internal operations
-
-# Note: Suppression only affects INFO and DEBUG levels.
-# WARN and ERROR messages are always shown regardless of suppression.
-```
-
-Built-in metrics include:
-
-- Active WebSocket connections and memory usage
-- Event processing rates and error counts
-- Database query performance
-- Cache hit rates for whitelist/blacklist operations
-
-### Authentication
-
-Optional user authentication via NIP-42:
-
-```yaml
-auth:
-  enabled: false
-  relay_url: "wss://your-relay.com"
-```
-
-When enabled, clients must authenticate before publishing events or accessing restricted content.
-
-### Automatic Event Purging
-
-Keep your database clean with configurable retention:
-
-```yaml
-event_purge:
-  enabled: true
-  keep_interval_hours: 720 # 30 days
-  purge_interval_minutes: 60 # check hourly
-  exclude_whitelisted: true # never purge whitelisted users
-  purge_by_category:
-    regular: true # purge old posts and reactions
-    ephemeral: true # purge ephemeral events (shouldn't be stored anyway)
-    replaceable: false # keep user profiles and contact lists
-```
-
-### User Synchronization (Experimental)
-
-⚠️ **Work in Progress**: User sync is an experimental feature that may contain bugs and is subject to change.
-
-GRAIN can attempt to automatically sync new users' event history from their preferred relays:
-
-```yaml
-UserSync: # EXPERIMENTAL FEATURE, (structured logging not implemented yet)
-  user_sync: false # disabled by default
-  disable_at_startup: true
-  initial_sync_relays: [
-      "wss://purplepag.es",
-      "wss://nos.lol",
-      "wss://relay.damus.io",
-    ] # These relays are used to initially fetch user Outboxes.
-  kinds: [1, 0, 7] # sync posts, profiles, reactions. If kinds is left empty, no kind is applied to the filter and any event is retrieved
-  limit: 100 # If limit is left empty, no limit will be applied to the filter
-  exclude_non_whitelisted: true # if set to true, only pubkeys on the whitelist will be synced.
-  interval: 360 # in minutes
-```
-
-When enabled and a new user posts to your relay, GRAIN attempts to:
-
-1. Query configured relays for the user's relay metadata (kind 10002)
-2. Fetch their recent events from their preferred "outbox" relays
-3. Store missing events locally
-
-**Known limitations**: This feature is experimental and may cause performance issues or sync failures. Use with caution in production environments.
+**📖 For detailed configuration options and examples, see [Configuration Documentation](docs/configuration.md)**
 
 ## License
 
@@ -226,7 +128,12 @@ I welcome contributions, bug reports, and feature requests via GitHub.
 **Repository**: <https://github.com/0ceanslim/grain>  
 **Issues**: <https://github.com/0ceanslim/grain/issues>
 
----
+### Development Resources
+
+- **🔧 Development Guide** - _[Development Documentation](docs/development/)_
+- **🧪 Testing Guide** - _[Testing Documentation](tests/readme.md)_
+
+## These guides cover setting up your development environment, code standards, testing procedures, and contribution workflows.
 
 made with 💦 by [OceanSlim](https://njump.me/npub1zmc6qyqdfnllhnzzxr5wpepfpnzcf8q6m3jdveflmgruqvd3qa9sjv7f60)
 

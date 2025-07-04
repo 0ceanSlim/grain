@@ -11,16 +11,27 @@ logging:
   backup_count: 2 # Keep 2 backup files (.bak1, .bak2)
   suppress_components: # Suppress INFO/DEBUG logs (WARN/ERROR still shown)
     - "util"
+    - "log"
     - "mongo-query"
     - "mongo-store"
+    - "event-store"
     - "relay-client"
+    - "relay-connection"
     - "close-handler"
+    - "client-main"
+    - "client-api"
+    - "client-core"
+    - "client-tools"
+    - "client-data"
+    - "client-connection"
+    - "client-session"
+    - "client-cache"
 
 # See docs/configuration.md for full component list
 
 mongodb:
-  uri: mongodb://localhost:27017/
-  database: grain
+  uri: mongodb://localhost:27017/ # MongoDB connection string
+  database: grain # Name your database
 
 server:
   port: :8181
