@@ -1,22 +1,29 @@
+# GRAIN Whitelist Configuration Example
+# Enable these sections to restrict relay access to specific users/content
+
 pubkey_whitelist:
-  enabled: false
-  pubkeys:
-    - pubkey1
-    - pubkey2
-  npubs:
-    - npub18ls2km9aklhzw9yzqgjfu0anhz2z83hkeknw7sl22ptu8kfs3rjq54am44
-    - npub2
-  cache_refresh_minutes: 60 # Refresh cache every hour
+  enabled: false # Enable to allow only whitelisted pubkeys
+  pubkeys: # Hex format public keys
+    - "0000000000000000000000000000000000000000000000000000000000000000"
+    - "1111111111111111111111111111111111111111111111111111111111111111"
+  npubs: # Bech32 format public keys (alternative to hex)
+    - "npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+    - "npub1zyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+  cache_refresh_minutes: 60 # Refresh whitelist cache every hour
 
 kind_whitelist:
-  enabled: false
-  kinds:
-    - "1"
-    - "2"
+  enabled: false # Enable to allow only specific event kinds
+  kinds: # Allowed event kinds (numbers as strings)
+    - "0" # User metadata
+    - "1" # Text notes
+    - "3" # Contact lists
+    - "7" # Reactions
 
 domain_whitelist:
-  enabled: false
-  domains:
-    - "example.com"
-    - "anotherdomain.com"
+  enabled: false # Enable to verify users from specific domains (NIP-05)
+  domains: # Allowed domains for verification
+    - "nostr.com"
+    - "iris.to"
+    - "damus.io"
+    - "primal.net"
   cache_refresh_minutes: 120 # Refresh domain cache every 2 hours

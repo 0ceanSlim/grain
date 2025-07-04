@@ -1,3 +1,7 @@
+# GRAIN Relay Configuration Example
+# This file provides sensible defaults for most relay deployments
+# See docs/configuration.md for detailed explanations
+
 logging:
   level: "info" # Log levels: "debug", "info", "warn", "error"
   file: "debug" # Log file name
@@ -5,29 +9,14 @@ logging:
   structure: false # true = structured JSON logs, false = pretty logs
   check_interval_min: 10 # Check every 10 minutes
   backup_count: 2 # Keep 2 backup files (.bak1, .bak2)
-  suppress_components: # Components to suppress INFO/DEBUG logs from (WARN/ERROR still shown)
-    - "util" # Utility functions (file ops, IP detection, metadata loading)
-    - "conn-manager" # Connection management (memory stats, connection counts)
-    - "client" # Client connection details (connects/disconnects, timeouts)
-    - "mongo-query" # Database query operations (can be very verbose)
-    - "event-store" # Event storage operations (insert/update confirmations)
-    - "close-handler" # Subscription close operations (routine cleanup)
+  suppress_components: # Suppress INFO/DEBUG logs (WARN/ERROR still shown)
+    - "util"
+    - "mongo-query"
+    - "mongo-store"
+    - "relay-client"
+    - "close-handler"
 
-# Available components for suppression:
-# - "main"             # Main application lifecycle (startup, shutdown, restarts)
-# - "mongo"            # MongoDB connection and database operations
-# - "mongo-store"      # High-level event storage coordination
-# - "mongo-purge"      # Event purging and cleanup operations
-# - "event-handler"    # Event processing and validation coordination
-# - "req-handler"      # Subscription request handling
-# - "auth-handler"     # Authentication processing (NIP-42)
-# - "config"           # Configuration loading and caching
-# - "event-validation" # Event signature and content validation
-# - "user-sync"        # User synchronization operations
-# - "log"              # Logging system internal operations
-
-# Note: Suppression only affects INFO and DEBUG levels.
-# WARN and ERROR messages are always shown regardless of suppression.
+# See docs/configuration.md for full component list
 
 mongodb:
   uri: mongodb://localhost:27017/
@@ -49,19 +38,6 @@ resource_limits:
 auth:
   enabled: false # Enable or disable AUTH handling
   relay_url: "wss://relay.example.com/" # Specify the relay URL
-
-UserSync: # EXPERIMENTAL FEATURE, (structured logging not implemented yet)
-  user_sync: false
-  disable_at_startup: true
-  initial_sync_relays: [
-      "wss://purplepag.es",
-      "wss://nos.lol",
-      "wss://relay.damus.io",
-    ] # These relays are used to initially fetch user Outboxes.
-  kinds: [] # If kinds is left empty, no kind is applied to the filter and any event is retrieved
-  limit: 100 # If limit is left empty, no limit will be applied to the filter
-  exclude_non_whitelisted: true # if set to true, only pubkeys on the whitelist will be synced.
-  interval: 360 # in minutes
 
 backup_relay:
   enabled: false # Set to true to enable sending events to the backup relay
@@ -133,3 +109,15 @@ rate_limit:
     - kind: 1
       limit: 5
       burst: 12
+
+user_sync: # EXPERIMENTAL FEATURE, (structured logging not implemented yet)
+  user_sync: false
+  disable_at_startup: true
+  initial_sync_relays:
+    - "wss://purplepag.es"
+    - "wss://nos.lol"
+    - "wss://relay.damus.io"
+  kinds: [] # If kinds is left empty, no kind is applied to the filter and any event is retrieved
+  limit: 100 # If limit is left empty, no limit will be applied to the filter
+  exclude_non_whitelisted: true # if set to true, only pubkeys on the whitelist will be synced.
+  interval: 360 # in minutes

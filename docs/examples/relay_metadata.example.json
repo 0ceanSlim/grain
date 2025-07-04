@@ -1,9 +1,28 @@
 {
-  "name": "🌾 relay",
+  "name": "🌾 GRAIN Relay",
   "description": "Go Relay Architecture for Implementing Nostr",
-  "pubkey": "your_pubkey_here",
-  "contact": "your_contact_here",
-  "supported_nips": [1, 2, 9, 11],
+  "banner": "https://example.com/banner.jpg",
+  "icon": "https://example.com/icon.png",
+  "pubkey": "fa984bd7dbb282f07e16e7ae87b26a2a7b9b90b7246a44771f0cf5ae58018f52",
+  "contact": "mailto:admin@relay.com",
+  "supported_nips": [1, 7, 9, 11, 19, 42, 55, 65],
   "software": "https://github.com/0ceanslim/grain",
-  "version": "0.4.0"
+  "version": "0.4.0",
+  "privacy_policy": "https://relay.com/privacy",
+  "terms_of_service": "https://relay.com/terms",
+  "limitation": {
+    "max_message_length": 524288,
+    "max_content_length": 8196,
+    "max_subscriptions": 10,
+    "max_limit": 500,
+    "auth_required": false,
+    "payment_required": false,
+    "restricted_writes": false,
+    "created_at_lower_limit": 1577836800,
+    "created_at_upper_limit": null
+  },
+  "relay_countries": ["US"],
+  "language_tags": ["en", "en-US"],
+  "tags": ["open-access", "community"],
+  "posting_policy": "https://relay.com/posting-policy"
 }
