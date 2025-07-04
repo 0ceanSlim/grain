@@ -33,7 +33,7 @@ func ValidatePubkeyHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req ValidatePubkeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Util().Error("Failed to parse pubkey validate request", "error", err)
+		log.ClientAPI().Error("Failed to parse pubkey validate request", "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -51,7 +51,7 @@ func ValidatePubkeyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Util().Debug("Validating pubkey", "pubkey", pubkey)
+	log.ClientAPI().Debug("Validating pubkey", "pubkey", pubkey)
 
 	// Try to convert pubkey to npub to validate
 	npub, err := tools.EncodePubkey(pubkey)
@@ -64,13 +64,13 @@ func ValidatePubkeyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.Util().Debug("Pubkey validation failed", 
+		log.ClientAPI().Debug("Pubkey validation failed", 
 			"pubkey", pubkey, 
 			"error", err)
 		response.Error = err.Error()
 	} else {
 		response.Npub = npub
-		log.Util().Debug("Pubkey validation successful", 
+		log.ClientAPI().Debug("Pubkey validation successful", 
 			"pubkey", pubkey, 
 			"npub", npub)
 	}

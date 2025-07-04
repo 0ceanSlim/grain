@@ -6,9 +6,9 @@ import (
 
 	"github.com/0ceanslim/grain/client/cache"
 	"github.com/0ceanslim/grain/client/core"
+	"github.com/0ceanslim/grain/client/core/tools"
 	"github.com/0ceanslim/grain/client/data"
 	"github.com/0ceanslim/grain/client/session"
-	"github.com/0ceanslim/grain/client/core/tools"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -19,7 +19,7 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 	session := session.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "User not logged in", http.StatusUnauthorized)
-		log.Util().Debug("No active session found for cache request")
+		log.ClientAPI().Debug("No active session found for cache request")
 		return
 	}
 
@@ -28,11 +28,11 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 	
 	// If cache is missing or expired, try to refresh it
 	if !found {
-		log.Util().Info("Cache miss or expired, attempting refresh", "pubkey", publicKey)
+		log.ClientAPI().Info("Cache miss or expired, attempting refresh", "pubkey", publicKey)
 		
 		// Try to fetch fresh data in the background
 		if err := data.FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
-			log.Util().Error("Failed to refresh cache", "pubkey", publicKey, "error", err)
+			log.ClientAPI().Error("Failed to refresh cache", "pubkey", publicKey, "error", err)
 			
 			// Return error response with refresh suggestion
 			response := map[string]interface{}{
@@ -52,30 +52,30 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 		// Try to get cached data again after refresh
 		cachedData, found = cache.GetUserData(publicKey)
 		if !found {
-			log.Util().Error("Cache still empty after refresh", "pubkey", publicKey)
+			log.ClientAPI().Error("Cache still empty after refresh", "pubkey", publicKey)
 			http.Error(w, "Failed to load user data", http.StatusInternalServerError)
 			return
 		}
 		
-		log.Util().Info("Cache refreshed successfully", "pubkey", publicKey)
+		log.ClientAPI().Info("Cache refreshed successfully", "pubkey", publicKey)
 	}
 
 	// Parse metadata to extract useful fields
 	var parsedMetadata map[string]interface{}
 	if err := json.Unmarshal([]byte(cachedData.Metadata), &parsedMetadata); err != nil {
-		log.Util().Warn("Failed to parse cached metadata", "pubkey", publicKey, "error", err)
+		log.ClientAPI().Warn("Failed to parse cached metadata", "pubkey", publicKey, "error", err)
 	}
 
 	// Parse mailboxes for better response structure
 	var parsedMailboxes map[string]interface{}
 	if err := json.Unmarshal([]byte(cachedData.Mailboxes), &parsedMailboxes); err != nil {
-		log.Util().Warn("Failed to parse cached mailboxes", "pubkey", publicKey, "error", err)
+		log.ClientAPI().Warn("Failed to parse cached mailboxes", "pubkey", publicKey, "error", err)
 	}
 
 	// Encode npub for user-friendly display
 	npub, err := tools.EncodePubkey(publicKey)
 	if err != nil {
-		log.Util().Error("Failed to encode npub", "pubkey", publicKey, "error", err)
+		log.ClientAPI().Error("Failed to encode npub", "pubkey", publicKey, "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -118,7 +118,7 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 		response["mailboxesRaw"] = cachedData.Mailboxes
 	}
 
-	log.Util().Debug("Returning cached data with session info", 
+	log.ClientAPI().Debug("Returning cached data with session info", 
 		"pubkey", publicKey,
 		"mode", session.Mode,
 		"cache_age", cachedData.Timestamp.Format("15:04:05"))
@@ -126,12 +126,12 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Util().Error("Failed to encode cached data", "pubkey", publicKey, "error", err)
+		log.ClientAPI().Error("Failed to encode cached data", "pubkey", publicKey, "error", err)
 		http.Error(w, "Failed to retrieve cached data", http.StatusInternalServerError)
 		return
 	}
 
-	log.Util().Info("Cached data with session info retrieved successfully", "pubkey", publicKey)
+	log.ClientAPI().Info("Cached data with session info retrieved successfully", "pubkey", publicKey)
 }
 
 // RefreshCacheHandler manually refreshes cache for the current user
@@ -149,14 +149,14 @@ func RefreshCacheHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	publicKey := session.PublicKey
-	log.Util().Info("Manual cache refresh requested", "pubkey", publicKey)
+	log.ClientAPI().Info("Manual cache refresh requested", "pubkey", publicKey)
 
 	// Clear existing cache first
 	cache.ClearUserData(publicKey)
 
 	// Fetch fresh data
 	if err := data.FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
-		log.Util().Error("Manual cache refresh failed", "pubkey", publicKey, "error", err)
+		log.ClientAPI().Error("Manual cache refresh failed", "pubkey", publicKey, "error", err)
 		
 		response := map[string]interface{}{
 			"success": false,
@@ -175,7 +175,7 @@ func RefreshCacheHandler(w http.ResponseWriter, r *http.Request) {
 		"pubkey":  publicKey,
 	}
 
-	log.Util().Info("Manual cache refresh successful", "pubkey", publicKey)
+	log.ClientAPI().Info("Manual cache refresh successful", "pubkey", publicKey)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)

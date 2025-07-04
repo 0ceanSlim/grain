@@ -72,12 +72,12 @@ func manifestHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache for 24 hours
 
 	if err := json.NewEncoder(w).Encode(manifest); err != nil {
-		log.Client().Error("Failed to encode PWA manifest", "error", err)
+		log.ClientMain().Error("Failed to encode PWA manifest", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	log.Client().Debug("Served PWA manifest", "client_ip", r.RemoteAddr)
+	log.ClientMain().Debug("Served PWA manifest", "client_ip", r.RemoteAddr)
 }
 
 // serviceWorkerHandler serves the service worker JavaScript file
@@ -90,7 +90,7 @@ func serviceWorkerHandler(w http.ResponseWriter, r *http.Request) {
 
 	http.ServeFile(w, r, swPath)
 	
-	log.Client().Debug("Served service worker", "client_ip", r.RemoteAddr)
+	log.ClientMain().Debug("Served service worker", "client_ip", r.RemoteAddr)
 }
 
 // RegisterPWARoutes registers PWA-related routes
@@ -98,5 +98,5 @@ func RegisterPWARoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/manifest.json", manifestHandler)
 	mux.HandleFunc("/sw.js", serviceWorkerHandler)
 	
-	log.Client().Info("PWA routes registered", "routes", []string{"/manifest.json", "/sw.js"})
+	log.ClientMain().Info("PWA routes registered", "routes", []string{"/manifest.json", "/sw.js"})
 }

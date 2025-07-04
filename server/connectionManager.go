@@ -53,7 +53,7 @@ func (cm *ConnectionManager) isMemoryThresholdExceeded() bool {
 	memoryUsed := float64(memStats.Alloc) / float64(memStats.Sys)
 	
 	if memoryUsed > cm.memoryThreshold {
-		log.ConnMgr().Warn("Memory threshold exceeded", 
+		log.RelayConnection().Warn("Memory threshold exceeded", 
 			"memory_used_pct", memoryUsed*100,
 			"threshold_pct", cm.memoryThreshold*100,
 			"connections", len(cm.connections))
@@ -77,7 +77,7 @@ func (cm *ConnectionManager) dropOldestConnection() {
 	}
 	
 	if oldestClient != nil {
-		log.ConnMgr().Info("Dropping oldest connection due to memory pressure", 
+		log.RelayConnection().Info("Dropping oldest connection due to memory pressure", 
 			"client_id", oldestClient.id,
 			"connected_since", oldestTime.Format(time.RFC3339),
 			"age_seconds", time.Since(oldestTime).Seconds(),

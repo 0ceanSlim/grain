@@ -15,12 +15,12 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Util().Debug("API logout handler called")
+	log.ClientAPI().Debug("API logout handler called")
 
 	// Get current user session
 	user := session.SessionMgr.GetCurrentUser(r)
 	if user != nil {
-		log.Util().Info("User logging out", 
+		log.ClientAPI().Info("User logging out", 
 			"pubkey", user.PublicKey,
 			"mode", user.Mode,
 			"signing_method", user.SigningMethod)
@@ -34,7 +34,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		"message": "Logout successful",
 	}
 
-	log.Util().Info("API logout successful")
+	log.ClientAPI().Info("API logout successful")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)

@@ -11,7 +11,7 @@ import (
 
 // InitializeClient sets up the client package with  session management
 func InitializeClient(relays []string) error {
-	log.Util().Info("Initializing client package with  session management", "relay_count", len(relays))
+	log.ClientMain().Info("Initializing client package with  session management", "relay_count", len(relays))
 
 	// Initialize  session manager
 	if err := initializeSessionManager(); err != nil {
@@ -32,7 +32,7 @@ func InitializeClient(relays []string) error {
 	// Start cache cleanup
 	cache.StartCacheCleanup()
 
-	log.Util().Info("Client package initialized successfully with  features")
+	log.ClientMain().Info("Client package initialized successfully with  features")
 	return nil
 }
 
@@ -43,7 +43,7 @@ func initializeSessionManager() error {
 		return &ClientInitError{Message: "failed to create  session manager"}
 	}
 
-	log.Util().Debug(" session manager initialized")
+	log.ClientMain().Debug(" session manager initialized")
 	return nil
 }
 
@@ -60,7 +60,7 @@ func startSessionCleanup() {
 				
 				// Log session statistics
 				stats := session.SessionMgr.GetSessionStats()
-				log.Util().Debug("Session cleanup completed", 
+				log.ClientMain().Debug("Session cleanup completed", 
 					"total_sessions", stats["total_sessions"],
 					"read_only", stats["read_only"],
 					"write_mode", stats["write_mode"])
@@ -68,23 +68,23 @@ func startSessionCleanup() {
 		}
 	}()
 	
-	log.Util().Debug("Session cleanup routine started")
+	log.ClientMain().Debug("Session cleanup routine started")
 }
 
 // ShutdownClient gracefully shuts down the client package
 func ShutdownClient() error {
-	log.Util().Info("Shutting down client package")
+	log.ClientMain().Info("Shutting down client package")
 
 	// Close core client connections
 	if err := connection.CloseCoreClient(); err != nil {
-		log.Util().Error("Error closing core client", "error", err)
+		log.ClientMain().Error("Error closing core client", "error", err)
 		return err
 	}
 
 	// Clear session manager
 	session.SessionMgr = nil
 
-	log.Util().Info("Client package shutdown complete")
+	log.ClientMain().Info("Client package shutdown complete")
 	return nil
 }
 

@@ -12,14 +12,11 @@ func StartCacheCleanup() {
 		ticker := time.NewTicker(15 * time.Minute) // Clean up every 15 minutes
 		defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				CleanupExpired()
-				log.Util().Debug("Cache cleanup completed")
-			}
+		for range ticker.C {
+			CleanupExpired()
+			log.ClientCache().Debug("Cache cleanup completed")
 		}
 	}()
 	
-	log.Util().Debug("Cache cleanup routine started")
+	log.ClientCache().Debug("Cache cleanup routine started")
 }

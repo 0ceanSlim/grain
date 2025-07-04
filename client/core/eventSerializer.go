@@ -26,7 +26,7 @@ func SerializeEvent(evt nostr.Event) string {
 	// Use Go's standard JSON marshaling first
 	jsonBytes, err := json.Marshal(eventData)
 	if err != nil {
-		log.Util().Error("Failed to serialize event", 
+		log.ClientCore().Error("Failed to serialize event", 
 			"event_id", evt.ID,
 			"pubkey", evt.PubKey,
 			"kind", evt.Kind,
@@ -40,7 +40,7 @@ func SerializeEvent(evt nostr.Event) string {
 	
 	// Only log at debug level for very important events or when troubleshooting
 	if evt.Kind == 0 || evt.Kind == 3 {
-		log.Util().Debug("Event serialized", 
+		log.ClientCore().Debug("Event serialized", 
 			"event_id", evt.ID,
 			"kind", evt.Kind,
 			"size_bytes", len(jsonStr))
@@ -81,11 +81,11 @@ func DeserializeEvent(data []byte) (*nostr.Event, error) {
 	
 	var event nostr.Event
 	if err := json.Unmarshal(data, &event); err != nil {
-		log.Util().Error("Failed to deserialize event", "error", err)
+		log.ClientCore().Error("Failed to deserialize event", "error", err)
 		return nil, fmt.Errorf("failed to unmarshal event: %w", err)
 	}
 	
-	log.Util().Debug("Event deserialized", "event_id", event.ID, "kind", event.Kind)
+	log.ClientCore().Debug("Event deserialized", "event_id", event.ID, "kind", event.Kind)
 	return &event, nil
 }
 
@@ -105,7 +105,7 @@ func ComputeEventID(event *nostr.Event) (string, error) {
 	hash := sha256.Sum256([]byte(serialized))
 	eventID := hex.EncodeToString(hash[:])
 	
-	log.Util().Debug("Computed event ID", "event_id", eventID, "kind", event.Kind)
+	log.ClientCore().Debug("Computed event ID", "event_id", eventID, "kind", event.Kind)
 	return eventID, nil
 }
 
@@ -166,7 +166,7 @@ func ValidateEventStructure(event *nostr.Event) error {
 		}
 	}
 	
-	log.Util().Debug("Event structure validated", "event_id", event.ID, "kind", event.Kind)
+	log.ClientCore().Debug("Event structure validated", "event_id", event.ID, "kind", event.Kind)
 	return nil
 }
 
@@ -205,7 +205,7 @@ func SerializeEventArray(events []*nostr.Event) ([]byte, error) {
 		return nil, fmt.Errorf("failed to serialize event array: %w", err)
 	}
 	
-	log.Util().Debug("Event array serialized", "event_count", len(events), "size_bytes", len(data))
+	log.ClientCore().Debug("Event array serialized", "event_count", len(events), "size_bytes", len(data))
 	return data, nil
 }
 
@@ -220,7 +220,7 @@ func CreateNostrMessage(messageType string, args ...interface{}) ([]byte, error)
 		return nil, fmt.Errorf("failed to create Nostr message: %w", err)
 	}
 	
-	log.Util().Debug("Nostr message created", "type", messageType, "size_bytes", len(data))
+	log.ClientCore().Debug("Nostr message created", "type", messageType, "size_bytes", len(data))
 	return data, nil
 }
 
@@ -243,6 +243,6 @@ func ParseNostrMessage(data []byte) (messageType string, args []interface{}, err
 	
 	args = message[1:]
 	
-	log.Util().Debug("Nostr message parsed", "type", messageType, "arg_count", len(args))
+	log.ClientCore().Debug("Nostr message parsed", "type", messageType, "arg_count", len(args))
 	return messageType, args, nil
 }

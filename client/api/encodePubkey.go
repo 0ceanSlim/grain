@@ -31,7 +31,7 @@ func ConvertPubkeyHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req PubkeyToNpubRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Util().Error("Failed to parse pubkey convert request", "error", err)
+		log.ClientAPI().Error("Failed to parse pubkey convert request", "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -49,7 +49,7 @@ func ConvertPubkeyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Util().Debug("Converting pubkey to npub", "pubkey", pubkey)
+	log.ClientAPI().Debug("Converting pubkey to npub", "pubkey", pubkey)
 
 	// Convert hex pubkey to npub
 	npub, err := tools.EncodePubkey(pubkey)
@@ -61,14 +61,14 @@ func ConvertPubkeyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.Util().Error("Pubkey to npub conversion failed", 
+		log.ClientAPI().Error("Pubkey to npub conversion failed", 
 			"pubkey", pubkey, 
 			"error", err)
 		response.Error = err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 	} else {
 		response.Npub = npub
-		log.Util().Info("Pubkey to npub conversion successful", 
+		log.ClientAPI().Info("Pubkey to npub conversion successful", 
 			"pubkey", pubkey, 
 			"npub", npub)
 	}

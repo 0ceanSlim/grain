@@ -22,7 +22,7 @@ func GenerateKeypairHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Util().Debug("Key pair generation requested")
+	log.ClientAPI().Debug("Key pair generation requested")
 
 	// Generate new key pair
 	keyPair, err := tools.GenerateKeyPair()
@@ -33,19 +33,19 @@ func GenerateKeypairHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.Util().Error("Key pair generation failed", "error", err)
+		log.ClientAPI().Error("Key pair generation failed", "error", err)
 		response.Error = err.Error()
 		w.WriteHeader(http.StatusInternalServerError)
 	} else {
 		response.KeyPair = keyPair
-		log.Util().Info("Key pair generation successful", 
+		log.ClientAPI().Info("Key pair generation successful", 
 			"pubkey", keyPair.PublicKey, 
 			"npub", keyPair.Npub)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Util().Error("Failed to encode key generation response", "error", err)
+		log.ClientAPI().Error("Failed to encode key generation response", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }

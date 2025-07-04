@@ -20,7 +20,7 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSess
 		return nil, &SessionError{Message: "core client not initialized"}
 	}
 
-	log.Util().Info("Creating user session", 
+	log.ClientSession().Info("Creating user session", 
 		"pubkey", req.PublicKey,
 		"mode", req.RequestedMode,
 		"signing_method", req.SigningMethod)
@@ -37,7 +37,7 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSess
 	if metadata != nil {
 		metadataBytes, err := json.Marshal(metadata)
 		if err != nil {
-			log.Util().Warn("Failed to marshal metadata", "pubkey", req.PublicKey, "error", err)
+			log.ClientSession().Warn("Failed to marshal metadata", "pubkey", req.PublicKey, "error", err)
 		} else {
 			sessionMetadata.Profile = string(metadataBytes)
 		}
@@ -46,7 +46,7 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSess
 	if mailboxes != nil {
 		mailboxBytes, err := json.Marshal(mailboxes)
 		if err != nil {
-			log.Util().Warn("Failed to marshal mailboxes", "pubkey", req.PublicKey, "error", err)
+			log.ClientSession().Warn("Failed to marshal mailboxes", "pubkey", req.PublicKey, "error", err)
 		} else {
 			sessionMetadata.Mailboxes = string(mailboxBytes)
 		}
@@ -65,7 +65,7 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSess
 		session.ConnectedRelays = connection.GetAppRelays()
 	}
 
-	log.Util().Info("User session created successfully", 
+	log.ClientSession().Info("User session created successfully", 
 		"pubkey", req.PublicKey,
 		"mode", session.Mode,
 		"relay_count", len(session.ConnectedRelays))

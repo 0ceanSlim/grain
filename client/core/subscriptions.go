@@ -44,7 +44,7 @@ func (s *Subscription) Start() error {
 		return &ClientError{Message: "subscription already active"}
 	}
 	
-	log.Util().Debug("Starting subscription", "sub_id", s.ID, "relay_count", len(s.Relays))
+	log.ClientCore().Debug("Starting subscription", "sub_id", s.ID, "relay_count", len(s.Relays))
 	
 	// Register with relay pool for message routing
 	s.client.relayPool.RegisterSubscription(s.ID, s)
@@ -60,7 +60,7 @@ func (s *Subscription) Start() error {
 	
 	for _, relayURL := range s.Relays {
 		if err := s.client.relayPool.SendMessage(relayURL, reqMessage); err != nil {
-			log.Util().Warn("Failed to send subscription to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
+			log.ClientCore().Warn("Failed to send subscription to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
 			lastErr = err
 			continue
 		}
@@ -86,7 +86,7 @@ func (s *Subscription) Start() error {
 	// Start message processor
 	go s.processMessages()
 	
-	log.Util().Info("Subscription started", "sub_id", s.ID, "sent_to", sent, "total_relays", len(s.Relays))
+	log.ClientCore().Info("Subscription started", "sub_id", s.ID, "sent_to", sent, "total_relays", len(s.Relays))
 	return nil
 }
 
@@ -99,7 +99,7 @@ func (s *Subscription) Close() error {
 		return nil
 	}
 	
-	log.Util().Debug("Closing subscription", "sub_id", s.ID)
+	log.ClientCore().Debug("Closing subscription", "sub_id", s.ID)
 	
 	// Unregister from relay pool
 	s.client.relayPool.UnregisterSubscription(s.ID)
@@ -109,7 +109,7 @@ func (s *Subscription) Close() error {
 	
 	for _, relayURL := range s.Relays {
 		if err := s.client.relayPool.SendMessage(relayURL, closeMessage); err != nil {
-			log.Util().Warn("Failed to send close to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
+			log.ClientCore().Warn("Failed to send close to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
 		}
 		
 		// Remove subscription from relay
@@ -125,7 +125,7 @@ func (s *Subscription) Close() error {
 	close(s.Events)
 	close(s.Errors)
 	
-	log.Util().Debug("Subscription closed", "sub_id", s.ID)
+	log.ClientCore().Debug("Subscription closed", "sub_id", s.ID)
 	return nil
 }
 
@@ -165,7 +165,7 @@ func (s *Subscription) AddRelay(url string) error {
 		}
 	}
 	
-	log.Util().Debug("Relay added to subscription", "sub_id", s.ID, "relay", url)
+	log.ClientCore().Debug("Relay added to subscription", "sub_id", s.ID, "relay", url)
 	return nil
 }
 
@@ -192,7 +192,7 @@ func (s *Subscription) RemoveRelay(url string) error {
 	if s.active {
 		closeMessage := []interface{}{"CLOSE", s.ID}
 		if err := s.client.relayPool.SendMessage(url, closeMessage); err != nil {
-			log.Util().Warn("Failed to send close to removed relay", "relay", url, "sub_id", s.ID, "error", err)
+			log.ClientCore().Warn("Failed to send close to removed relay", "relay", url, "sub_id", s.ID, "error", err)
 		}
 		
 		// Remove subscription from relay
@@ -203,7 +203,7 @@ func (s *Subscription) RemoveRelay(url string) error {
 		}
 	}
 	
-	log.Util().Debug("Relay removed from subscription", "sub_id", s.ID, "relay", url)
+	log.ClientCore().Debug("Relay removed from subscription", "sub_id", s.ID, "relay", url)
 	return nil
 }
 
@@ -218,11 +218,11 @@ func (s *Subscription) processMessages() {
 	for {
 		select {
 		case <-s.Done:
-			log.Util().Debug("Message processor stopped", "sub_id", s.ID)
+			log.ClientCore().Debug("Message processor stopped", "sub_id", s.ID)
 			return
 		case <-ticker.C:
 			// Periodic heartbeat - could be used for subscription health checks
-			log.Util().Debug("Subscription heartbeat", "sub_id", s.ID)
+			log.ClientCore().Debug("Subscription heartbeat", "sub_id", s.ID)
 		}
 	}
 }

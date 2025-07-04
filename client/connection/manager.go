@@ -20,11 +20,11 @@ func InitializeCoreClient(relays []string) error {
 	
 	// Connect to default relays with retry
 	if err := coreClient.ConnectToRelaysWithRetry(relays, 3); err != nil {
-		log.Util().Error("Failed to connect to relays after retries", "error", err)
+		log.ClientConnection().Error("Failed to connect to relays after retries", "error", err)
 		return err
 	}
 	
-	log.Util().Info("Core client initialized", "relay_count", len(relays))
+	log.ClientConnection().Info("Core client initialized", "relay_count", len(relays))
 	return nil
 }
 
@@ -36,7 +36,7 @@ func GetCoreClient() *core.Client {
 // CloseCoreClient closes the core client connections
 func CloseCoreClient() error {
 	if coreClient != nil {
-		log.Util().Info("Closing core client connections")
+		log.ClientConnection().Info("Closing core client connections")
 		coreClient = nil
 	}
 	return nil
@@ -45,7 +45,7 @@ func CloseCoreClient() error {
 // SetAppRelays sets the application relays for initial discovery
 func SetAppRelays(relays []string) {
 	appRelays = relays
-	log.Util().Debug("App relays set", "relay_count", len(relays))
+	log.ClientConnection().Debug("App relays set", "relay_count", len(relays))
 }
 
 // GetAppRelays returns the configured application relays

@@ -14,7 +14,7 @@ func EnsureRelayConnections() error {
 	
 	// Check current connections
 	connectedRelays := coreClient.GetConnectedRelays()
-	log.Util().Debug("Current relay connections", "connected_count", len(connectedRelays))
+	log.ClientConnection().Debug("Current relay connections", "connected_count", len(connectedRelays))
 	
 	// If we have some connections, we're good
 	if len(connectedRelays) > 0 {
@@ -22,10 +22,10 @@ func EnsureRelayConnections() error {
 	}
 	
 	// No connections, try to reconnect
-	log.Util().Warn("No relay connections found, attempting to reconnect")
+	log.ClientConnection().Warn("No relay connections found, attempting to reconnect")
 	
 	if err := coreClient.ConnectToRelaysWithRetry(appRelays, 3); err != nil {
-		log.Util().Error("Failed to reconnect to relays", "error", err)
+		log.ClientConnection().Error("Failed to reconnect to relays", "error", err)
 		return err
 	}
 	
@@ -35,7 +35,7 @@ func EnsureRelayConnections() error {
 		return fmt.Errorf("still no relay connections after reconnection attempt")
 	}
 	
-	log.Util().Info("Successfully reconnected to relays", "connected_count", len(connectedRelays))
+	log.ClientConnection().Info("Successfully reconnected to relays", "connected_count", len(connectedRelays))
 	return nil
 }
 
@@ -60,7 +60,7 @@ func GetCoreClientStatus() map[string]interface{} {
 
 // ReinitializeCoreClient reinitializes the core client (for recovery)
 func ReinitializeCoreClient() error {
-	log.Util().Warn("Reinitializing core client")
+	log.ClientConnection().Warn("Reinitializing core client")
 	
 	// Close existing client if any
 	if coreClient != nil {

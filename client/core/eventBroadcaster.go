@@ -36,7 +36,7 @@ func BroadcastEvent(event *nostr.Event, relays []string, pool *RelayPool) []Broa
 		}}
 	}
 	
-	log.Util().Info("Broadcasting event", "event_id", event.ID, "relay_count", len(relays))
+	log.ClientCore().Info("Broadcasting event", "event_id", event.ID, "relay_count", len(relays))
 	
 	// Create EVENT message
 	eventMessage := []interface{}{"EVENT", event}
@@ -70,7 +70,7 @@ func BroadcastEvent(event *nostr.Event, relays []string, pool *RelayPool) []Broa
 		}
 	}
 	
-	log.Util().Info("Broadcast completed", 
+	log.ClientCore().Info("Broadcast completed", 
 		"event_id", event.ID,
 		"successful", successful,
 		"failed", failed,
@@ -83,7 +83,7 @@ func BroadcastEvent(event *nostr.Event, relays []string, pool *RelayPool) []Broa
 func broadcastToSingleRelay(relayURL string, message []interface{}, pool *RelayPool) BroadcastResult {
 	err := pool.SendMessage(relayURL, message)
 	if err != nil {
-		log.Util().Warn("Failed to broadcast to relay", "relay", relayURL, "error", err)
+		log.ClientCore().Warn("Failed to broadcast to relay", "relay", relayURL, "error", err)
 		return BroadcastResult{
 			Success: false,
 			Error:   err,
@@ -91,7 +91,7 @@ func broadcastToSingleRelay(relayURL string, message []interface{}, pool *RelayP
 		}
 	}
 	
-	log.Util().Debug("Event broadcast successful", "relay", relayURL)
+	log.ClientCore().Debug("Event broadcast successful", "relay", relayURL)
 	return BroadcastResult{
 		Success: true,
 		Message: "broadcast successful",
@@ -108,12 +108,12 @@ func BroadcastToUserRelays(event *nostr.Event, pubkey string, client *Client) []
 		}}
 	}
 	
-	log.Util().Debug("Getting user relays for broadcast", "pubkey", pubkey)
+	log.ClientCore().Debug("Getting user relays for broadcast", "pubkey", pubkey)
 	
 	// Get user's relay list
 	mailboxes, err := client.GetUserRelays(pubkey)
 	if err != nil {
-		log.Util().Warn("Failed to get user relays, using default relays", "pubkey", pubkey, "error", err)
+		log.ClientCore().Warn("Failed to get user relays, using default relays", "pubkey", pubkey, "error", err)
 		return BroadcastEvent(event, client.config.DefaultRelays, client.relayPool)
 	}
 	
@@ -126,11 +126,11 @@ func BroadcastToUserRelays(event *nostr.Event, pubkey string, client *Client) []
 	
 	if len(relays) == 0 {
 		// Fall back to default relays if user has no relay preferences
-		log.Util().Warn("User has no relay preferences, using default relays", "pubkey", pubkey)
+		log.ClientCore().Warn("User has no relay preferences, using default relays", "pubkey", pubkey)
 		relays = client.config.DefaultRelays
 	}
 	
-	log.Util().Info("Broadcasting to user relays", "pubkey", pubkey, "relay_count", len(relays))
+	log.ClientCore().Info("Broadcasting to user relays", "pubkey", pubkey, "relay_count", len(relays))
 	return BroadcastEvent(event, relays, client.relayPool)
 }
 
@@ -143,7 +143,7 @@ func BroadcastWithRetry(event *nostr.Event, relays []string, pool *RelayPool, ma
 	var results []BroadcastResult
 	failedRelays := make([]string, 0)
 	
-	log.Util().Info("Broadcasting with retry", "event_id", event.ID, "max_retries", maxRetries)
+	log.ClientCore().Info("Broadcasting with retry", "event_id", event.ID, "max_retries", maxRetries)
 	
 	// Initial broadcast attempt
 	results = BroadcastEvent(event, relays, pool)
@@ -157,7 +157,7 @@ func BroadcastWithRetry(event *nostr.Event, relays []string, pool *RelayPool, ma
 	
 	// Retry failed relays
 	for attempt := 2; attempt <= maxRetries && len(failedRelays) > 0; attempt++ {
-		log.Util().Debug("Retry attempt", "attempt", attempt, "failed_relay_count", len(failedRelays))
+		log.ClientCore().Debug("Retry attempt", "attempt", attempt, "failed_relay_count", len(failedRelays))
 		
 		// Wait before retry
 		time.Sleep(time.Duration(attempt) * time.Second)
@@ -192,7 +192,7 @@ func BroadcastWithRetry(event *nostr.Event, relays []string, pool *RelayPool, ma
 		}
 	}
 	
-	log.Util().Info("Broadcast with retry completed", 
+	log.ClientCore().Info("Broadcast with retry completed", 
 		"event_id", event.ID,
 		"successful", successful,
 		"total", len(relays),
@@ -245,7 +245,7 @@ func PublishEvent(client *Client, signer *EventSigner, eventBuilder *EventBuilde
 		}
 	}
 	
-	log.Util().Info("Publishing event", "event_id", event.ID, "kind", event.Kind, "relay_count", len(relays))
+	log.ClientCore().Info("Publishing event", "event_id", event.ID, "kind", event.Kind, "relay_count", len(relays))
 	
 	// Broadcast the event
 	results := BroadcastEvent(event, relays, client.relayPool)
@@ -297,7 +297,7 @@ func PublishEventWithRetry(client *Client, signer *EventSigner, eventBuilder *Ev
 		}
 	}
 	
-	log.Util().Info("Publishing event with retry", "event_id", event.ID, "kind", event.Kind, "relay_count", len(relays))
+	log.ClientCore().Info("Publishing event with retry", "event_id", event.ID, "kind", event.Kind, "relay_count", len(relays))
 	
 	// Broadcast the event with retry
 	results := BroadcastWithRetry(event, relays, client.relayPool, maxRetries)

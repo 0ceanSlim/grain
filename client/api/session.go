@@ -16,7 +16,7 @@ func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 	session := session.SessionMgr.GetCurrentUser(r)
 	if session == nil {
 		http.Error(w, "No active session found", http.StatusUnauthorized)
-		log.Util().Debug("No active session found for request")
+		log.ClientAPI().Debug("No active session found for request")
 		return
 	}
 
@@ -50,16 +50,16 @@ func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 		sessionData["relays"] = relayInfo
 	}
 
-	log.Util().Debug("Returning  session data", 
+	log.ClientAPI().Debug("Returning  session data", 
 		"pubkey", session.PublicKey,
 		"mode", session.Mode)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(sessionData); err != nil {
-		log.Util().Error("Failed to encode session data", "error", err)
+		log.ClientAPI().Error("Failed to encode session data", "error", err)
 		http.Error(w, "Failed to retrieve session data", http.StatusInternalServerError)
 		return
 	}
 
-	log.Util().Info(" session data retrieved successfully", "pubkey", session.PublicKey)
+	log.ClientAPI().Info(" session data retrieved successfully", "pubkey", session.PublicKey)
 }

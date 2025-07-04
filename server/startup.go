@@ -41,7 +41,7 @@ func Run() error {
 	startConfigWatchers(restartChan)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
-	log.Main().Info("GRAIN relay server starting")
+	log.Startup().Info("GRAIN relay server starting")
 
 	// Main server lifecycle loop
 	for {
@@ -56,7 +56,7 @@ func Run() error {
 		// Wait for restart or shutdown signal
 		select {
 		case <-restartChan:
-			log.Main().Info("Restarting server due to configuration change")
+			log.Startup().Info("Restarting server due to configuration change")
 			close(shutdownChan) // Signal server instance to shutdown
 			time.Sleep(3 * time.Second) // Brief pause before restart
 			
@@ -64,7 +64,7 @@ func Run() error {
 			resetConfigurations()
 			continue
 		case <-signalChan:
-			log.Main().Info("Shutting down server gracefully")
+			log.Startup().Info("Shutting down server gracefully")
 			close(shutdownChan) // Signal server instance to shutdown
 			time.Sleep(1 * time.Second) // Allow cleanup time
 			return nil
@@ -96,14 +96,14 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 	// Load all configuration files
 	cfg, err := loadAllConfigs()
 	if err != nil {
-		log.Main().Error("Failed to load configurations", "error", err)
+		log.Startup().Error("Failed to load configurations", "error", err)
 		return
 	}
 
 	// Initialize database connection
 	dbClient, err := mongo.InitDB(cfg)
 	if err != nil {
-		log.Main().Error("Failed to initialize database", "error", err, "uri", cfg.MongoDB.URI)
+		log.Startup().Error("Failed to initialize database", "error", err, "uri", cfg.MongoDB.URI)
 		return
 	}
 	defer func() {
@@ -114,14 +114,14 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 
 	// Initialize all subsystems
 	if err := initializeSubsystems(cfg); err != nil {
-		log.Main().Error("Failed to initialize subsystems", "error", err)
+		log.Startup().Error("Failed to initialize subsystems", "error", err)
 		return
 	}
 
 	// Setup HTTP server
 	httpServer := setupHTTPServer(cfg)
 	defer func() {
-		log.Main().Debug("Closing HTTP server")
+		log.Startup().Debug("Closing HTTP server")
 		httpServer.Close()
 	}()
 
@@ -131,12 +131,12 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 	// Wait for shutdown, restart, or signal
 	select {
 	case <-shutdownChan:
-		log.Main().Debug("Server instance received shutdown signal")
+		log.Startup().Debug("Server instance received shutdown signal")
 	case <-restartChan:
-		log.Main().Debug("Server instance received restart signal") 
+		log.Startup().Debug("Server instance received restart signal") 
 		// Don't reset configs here - let main loop handle it
 	case <-signalChan:
-		log.Main().Debug("Server instance received OS signal")
+		log.Startup().Debug("Server instance received OS signal")
 	}
 }
 
@@ -148,11 +148,11 @@ func loadAllConfigs() (*cfgType.ServerConfig, error) {
 	}
 
 	if _, err := config.LoadWhitelistConfig("whitelist.yml"); err != nil {
-		log.Main().Error("Failed to load whitelist config", "error", err, "file", "whitelist.yml")
+		log.Startup().Error("Failed to load whitelist config", "error", err, "file", "whitelist.yml")
 	}
 
 	if _, err := config.LoadBlacklistConfig("blacklist.yml"); err != nil {
-		log.Main().Error("Failed to load blacklist config", "error", err, "file", "blacklist.yml")
+		log.Startup().Error("Failed to load blacklist config", "error", err, "file", "blacklist.yml")
 	}
 
 	return cfg, nil
@@ -160,7 +160,7 @@ func loadAllConfigs() (*cfgType.ServerConfig, error) {
 
 // initializeSubsystems sets up all server subsystems
 func initializeSubsystems(cfg *cfgType.ServerConfig) error {
-	log.Main().Debug("Initializing server subsystems")
+	log.Startup().Debug("Initializing server subsystems")
 
 	// Re-initialize logger with current configuration
 	log.InitializeLoggers(cfg)
@@ -177,7 +177,7 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 
 	// Load relay metadata
 	if err := utils.LoadRelayMetadataJSON(); err != nil {
-		log.Main().Error("Failed to load relay metadata", "error", err, "file", "relay_metadata.json")
+		log.Startup().Error("Failed to load relay metadata", "error", err, "file", "relay_metadata.json")
 	}
 
 	// Initialize pubkey cache system
@@ -193,11 +193,11 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 	}
 	
 	if err := client.InitializeClient(appRelays); err != nil {
-		log.Main().Error("Failed to initialize client package", "error", err)
+		log.Startup().Error("Failed to initialize client package", "error", err)
 		return fmt.Errorf("client initialization failed: %w", err)
 	}
 
-	log.Main().Info("Server subsystems initialized successfully")
+	log.Startup().Info("Server subsystems initialized successfully")
 	return nil
 }
 
@@ -215,14 +215,14 @@ func setupHTTPServer(cfg *cfgType.ServerConfig) *http.Server {
 
 	go func() {
 		fmt.Printf("Server is running on http://localhost%s\n", cfg.Server.Port)
-		log.Main().Info("HTTP server started", 
+		log.Startup().Info("HTTP server started", 
 			"address", cfg.Server.Port,
 			"read_timeout", cfg.Server.ReadTimeout,
 			"write_timeout", cfg.Server.WriteTimeout,
 			"idle_timeout", cfg.Server.IdleTimeout)
 			
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Main().Error("HTTP server error", "error", err)
+			log.Startup().Error("HTTP server error", "error", err)
 		}
 	}()
 
@@ -231,7 +231,7 @@ func setupHTTPServer(cfg *cfgType.ServerConfig) *http.Server {
 
 // startBackgroundServices starts all background services
 func startBackgroundServices(cfg *cfgType.ServerConfig) {
-	log.Main().Debug("Starting background services")
+	log.Startup().Debug("Starting background services")
 
 	// Start client statistics monitoring
 	go InitStatsMonitoring()
@@ -242,7 +242,7 @@ func startBackgroundServices(cfg *cfgType.ServerConfig) {
 	// Start periodic user sync service
 	go userSync.StartPeriodicUserSync(cfg)
 
-	log.Main().Info("Background services started")
+	log.Startup().Info("Background services started")
 }
 
 // resetConfigurations resets all configuration state for restart

@@ -18,11 +18,11 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Util().Debug("API login handler called")
+	log.ClientAPI().Debug("API login handler called")
 
 	// Check if user is already logged in
 	if userSession := session.SessionMgr.GetCurrentUser(r); userSession != nil {
-		log.Util().Info("User already logged in", "pubkey", userSession.PublicKey)
+		log.ClientAPI().Info("User already logged in", "pubkey", userSession.PublicKey)
 		
 		response := session.Response{
 			Success: true,
@@ -38,14 +38,14 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse JSON request body
 	var loginReq session.SessionInitRequest
 	if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
-		log.Util().Error("Failed to parse login request", "error", err)
+		log.ClientAPI().Error("Failed to parse login request", "error", err)
 		http.Error(w, "Invalid request format", http.StatusBadRequest)
 		return
 	}
 
 	// Validate required fields
 	if loginReq.PublicKey == "" {
-		log.Util().Warn("Missing publicKey in login request")
+		log.ClientAPI().Warn("Missing publicKey in login request")
 		http.Error(w, "Missing publicKey", http.StatusBadRequest)
 		return
 	}
@@ -58,24 +58,24 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Validate signing method matches requested mode
 	if loginReq.RequestedMode == session.WriteMode && loginReq.SigningMethod == session.NoSigning {
-		log.Util().Warn("Write mode requires signing method", "pubkey", loginReq.PublicKey)
+		log.ClientAPI().Warn("Write mode requires signing method", "pubkey", loginReq.PublicKey)
 		http.Error(w, "Write mode requires a signing method", http.StatusBadRequest)
 		return
 	}
 
 	if loginReq.RequestedMode == session.ReadOnlyMode && loginReq.SigningMethod != session.NoSigning {
-		log.Util().Debug("Overriding signing method for read-only mode", "pubkey", loginReq.PublicKey)
+		log.ClientAPI().Debug("Overriding signing method for read-only mode", "pubkey", loginReq.PublicKey)
 		loginReq.SigningMethod = session.NoSigning
 	}
 
-	log.Util().Info("Processing user login", 
+	log.ClientAPI().Info("Processing user login", 
 		"pubkey", loginReq.PublicKey,
 		"mode", loginReq.RequestedMode,
 		"signing_method", loginReq.SigningMethod)
 
 	// Validate the session request
 	if err := session.ValidateSessionRequest(loginReq); err != nil {
-		log.Util().Error("Invalid session request", "error", err)
+		log.ClientAPI().Error("Invalid session request", "error", err)
 		
 		response := session.Response{
 			Success: false,
@@ -89,10 +89,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Initialize user data: fetch mailboxes, set app relays, get metadata from outboxes, cache everything
-	log.Util().Debug("Fetching and caching user data", "pubkey", loginReq.PublicKey)
+	log.ClientAPI().Debug("Fetching and caching user data", "pubkey", loginReq.PublicKey)
 	
 	if err := data.FetchAndCacheUserDataWithCoreClient(loginReq.PublicKey); err != nil {
-		log.Util().Warn("Failed to fetch user data, proceeding with session creation", 
+		log.ClientAPI().Warn("Failed to fetch user data, proceeding with session creation", 
 			"pubkey", loginReq.PublicKey, "error", err)
 		// Continue with session creation even if fetch fails - user might be new or relays unavailable
 	}
@@ -100,7 +100,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Create session with the fetched/cached data and remember how they logged in
 	userSession, err := session.CreateUserSession(w, loginReq)
 	if err != nil {
-		log.Util().Error("Failed to create session", "error", err)
+		log.ClientAPI().Error("Failed to create session", "error", err)
 		
 		response := session.Response{
 			Success:     true,
@@ -121,7 +121,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Session:     userSession,
 	}
 
-	log.Util().Info("User login successful", 
+	log.ClientAPI().Info("User login successful", 
 		"pubkey", loginReq.PublicKey,
 		"mode", userSession.Mode,
 		"signing_method", userSession.SigningMethod,

@@ -44,7 +44,7 @@ func ConnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse request
 	var req ConnectRelayRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Util().Error("Failed to parse connect relay request", "error", err)
+		log.ClientAPI().Error("Failed to parse connect relay request", "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -69,7 +69,7 @@ func ConnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Connect to relay
 	if err := coreClient.ConnectToRelays([]string{req.RelayURL}); err != nil {
-		log.Util().Error("Failed to connect to relay", "relay", req.RelayURL, "error", err)
+		log.ClientAPI().Error("Failed to connect to relay", "relay", req.RelayURL, "error", err)
 		sendRelayResponse(w, ConnectRelayResponse{
 			Success: false,
 			Error:   err.Error(),
@@ -77,7 +77,7 @@ func ConnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Util().Info("Successfully connected to relay", "relay", req.RelayURL)
+	log.ClientAPI().Info("Successfully connected to relay", "relay", req.RelayURL)
 	sendRelayResponse(w, ConnectRelayResponse{
 		Success: true,
 		Message: "Connected to relay successfully",
@@ -101,7 +101,7 @@ func DisconnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse request
 	var req ConnectRelayRequest // Reusing the same struct since it has the same fields
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Util().Error("Failed to parse disconnect relay request", "error", err)
+		log.ClientAPI().Error("Failed to parse disconnect relay request", "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -126,7 +126,7 @@ func DisconnectRelayHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Note: We'll need to add a method to disconnect from specific relays in the core client
 	// For now, we'll return a placeholder response
-	log.Util().Info("Disconnect relay requested", "relay", req.RelayURL)
+	log.ClientAPI().Info("Disconnect relay requested", "relay", req.RelayURL)
 	sendRelayResponse(w, ConnectRelayResponse{
 		Success: true,
 		Message: "Relay disconnect requested (feature in development)",
@@ -158,7 +158,7 @@ func GetRelayStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Util().Error("Failed to encode relay status response", "error", err)
+		log.ClientAPI().Error("Failed to encode relay status response", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
@@ -168,7 +168,7 @@ func sendRelayResponse(w http.ResponseWriter, response ConnectRelayResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Util().Error("Failed to encode relay response", "error", err)
+		log.ClientAPI().Error("Failed to encode relay response", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }

@@ -26,14 +26,14 @@ type RateLimitConfigResponse struct {
 
 // GetRateLimitConfig handles the request to return rate limiting configuration
 func GetRateLimitConfig(w http.ResponseWriter, r *http.Request) {
-	log.Util().Debug("Rate limit config API endpoint accessed",
+	log.RelayAPI().Debug("Rate limit config API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),
 		"user_agent", r.UserAgent())
 
 	// Get the current server configuration
 	cfg := config.GetConfig()
 	if cfg == nil {
-		log.Util().Error("Server configuration not loaded",
+		log.RelayAPI().Error("Server configuration not loaded",
 			"client_ip", utils.GetClientIP(r))
 		http.Error(w, "Server configuration not available", http.StatusInternalServerError)
 		return
@@ -61,13 +61,13 @@ func GetRateLimitConfig(w http.ResponseWriter, r *http.Request) {
 
 	// Encode and send response
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Util().Error("Failed to encode rate limit config response",
+		log.RelayAPI().Error("Failed to encode rate limit config response",
 			"client_ip", utils.GetClientIP(r),
 			"error", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
 
-	log.Util().Info("Rate limit config served successfully",
+	log.RelayAPI().Info("Rate limit config served successfully",
 		"client_ip", utils.GetClientIP(r))
 }

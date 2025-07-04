@@ -15,7 +15,7 @@ import (
 func RelayPingHandler(w http.ResponseWriter, r *http.Request) {
 	// Only allow GET requests
 	if r.Method != http.MethodGet {
-		log.Util().Warn("Invalid HTTP method for relay ping", 
+		log.ClientAPI().Warn("Invalid HTTP method for relay ping", 
 			"method", r.Method, 
 			"client_ip", r.RemoteAddr)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -25,7 +25,7 @@ func RelayPingHandler(w http.ResponseWriter, r *http.Request) {
 	// Get relay URL from query parameters
 	relayURL := r.URL.Query().Get("url")
 	if relayURL == "" {
-		log.Util().Warn("Missing relay URL parameter", 
+		log.ClientAPI().Warn("Missing relay URL parameter", 
 			"client_ip", r.RemoteAddr)
 		http.Error(w, "Missing relay URL parameter", http.StatusBadRequest)
 		return
@@ -33,14 +33,14 @@ func RelayPingHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Validate URL format
 	if !strings.HasPrefix(relayURL, "ws://") && !strings.HasPrefix(relayURL, "wss://") {
-		log.Util().Warn("Invalid relay URL format", 
+		log.ClientAPI().Warn("Invalid relay URL format", 
 			"url", relayURL, 
 			"client_ip", r.RemoteAddr)
 		http.Error(w, "Invalid relay URL format", http.StatusBadRequest)
 		return
 	}
 
-	log.Util().Debug("Starting relay ping", 
+	log.ClientAPI().Debug("Starting relay ping", 
 		"relay_url", relayURL, 
 		"client_ip", r.RemoteAddr)
 
@@ -53,7 +53,7 @@ func RelayPingHandler(w http.ResponseWriter, r *http.Request) {
 	_, err := url.Parse(relayURL)
 	if err != nil {
 		errorMsg = "invalid URL format"
-		log.Util().Debug("Failed to parse relay URL", 
+		log.ClientAPI().Debug("Failed to parse relay URL", 
 			"relay_url", relayURL, 
 			"error", err)
 	} else {
@@ -75,7 +75,7 @@ func RelayPingHandler(w http.ResponseWriter, r *http.Request) {
 		case err := <-done:
 			if err != nil {
 				errorMsg = err.Error()
-				log.Util().Debug("Relay ping failed", 
+				log.ClientAPI().Debug("Relay ping failed", 
 					"relay_url", relayURL, 
 					"error", err,
 					"duration_ms", time.Since(startTime).Milliseconds())
@@ -84,13 +84,13 @@ func RelayPingHandler(w http.ResponseWriter, r *http.Request) {
 				if conn != nil {
 					conn.Close() // Close immediately after successful connection
 				}
-				log.Util().Debug("Relay ping successful", 
+				log.ClientAPI().Debug("Relay ping successful", 
 					"relay_url", relayURL, 
 					"duration_ms", time.Since(startTime).Milliseconds())
 			}
 		case <-time.After(5 * time.Second):
 			errorMsg = "connection timeout"
-			log.Util().Debug("Relay ping timeout", 
+			log.ClientAPI().Debug("Relay ping timeout", 
 				"relay_url", relayURL, 
 				"timeout_seconds", 5,
 				"duration_ms", time.Since(startTime).Milliseconds())
@@ -115,7 +115,7 @@ func RelayPingHandler(w http.ResponseWriter, r *http.Request) {
 	
 	// Return response
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Util().Error("Failed to encode ping response", 
+		log.ClientAPI().Error("Failed to encode ping response", 
 			"error", err, 
 			"relay_url", relayURL,
 			"client_ip", r.RemoteAddr)
@@ -123,7 +123,7 @@ func RelayPingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Util().Info("Relay ping completed", 
+	log.ClientAPI().Info("Relay ping completed", 
 		"relay_url", relayURL, 
 		"success", success, 
 		"response_time_ms", responseTime,

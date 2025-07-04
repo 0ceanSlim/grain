@@ -30,7 +30,7 @@ func HandleAmberCallback(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters
 	eventParam := r.URL.Query().Get("event")
 	if eventParam == "" {
-		log.Util().Error("amber callback missing event parameter")
+		log.ClientAPI().Error("amber callback missing event parameter")
 		renderAmberError(w, "Missing event data from Amber")
 		return
 	}
@@ -38,14 +38,14 @@ func HandleAmberCallback(w http.ResponseWriter, r *http.Request) {
 	// Extract public key from event parameter
 	publicKey, err := extractPublicKeyFromAmber(eventParam)
 	if err != nil {
-		log.Util().Error("failed to extract public key from amber response",
+		log.ClientAPI().Error("failed to extract public key from amber response",
 			"event", eventParam,
 			"error", err)
 		renderAmberError(w, "Invalid response from Amber: "+err.Error())
 		return
 	}
 
-	log.Util().Info("amber callback processed successfully",
+	log.ClientAPI().Info("amber callback processed successfully",
 		"public_key", publicKey[:16]+"...")
 
 	// Create session
@@ -57,14 +57,14 @@ func HandleAmberCallback(w http.ResponseWriter, r *http.Request) {
 
 	_, err = session.CreateUserSession(w, sessionRequest)
 	if err != nil {
-		log.Util().Error("failed to create amber session",
+		log.ClientAPI().Error("failed to create amber session",
 			"public_key", publicKey[:16]+"...",
 			"error", err)
 		renderAmberError(w, "Failed to create session")
 		return
 	}
 
-	log.Util().Info("amber session created successfully",
+	log.ClientAPI().Info("amber session created successfully",
 		"public_key", publicKey[:16]+"...")
 
 	// Set session cookie (already handled by CreateUserSession)

@@ -49,7 +49,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse request
 	var req PublishEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Util().Error("Failed to parse publish request", "error", err)
+		log.ClientAPI().Error("Failed to parse publish request", "error", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -57,7 +57,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 	// Get core client
 	coreClient := connection.GetCoreClient()
 	if coreClient == nil {
-		log.Util().Error("Core client not available")
+		log.ClientAPI().Error("Core client not available")
 		http.Error(w, "Client not available", http.StatusInternalServerError)
 		return
 	}
@@ -70,7 +70,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 		// Use provided private key
 		signer, err = core.NewEventSigner(req.PrivateKey)
 		if err != nil {
-			log.Util().Error("Invalid private key", "error", err)
+			log.ClientAPI().Error("Invalid private key", "error", err)
 			sendEventResponse(w, PublishEventResponse{
 				Success: false,
 				Error:   "Invalid private key",
@@ -99,7 +99,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 	// Build, sign, and publish
 	event, results, err := core.PublishEvent(coreClient, signer, eventBuilder, req.Relays)
 	if err != nil {
-		log.Util().Error("Failed to publish event", "error", err)
+		log.ClientAPI().Error("Failed to publish event", "error", err)
 		sendEventResponse(w, PublishEventResponse{
 			Success: false,
 			Error:   err.Error(),
@@ -121,7 +121,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 		response.Error = "Failed to publish to any relays"
 	}
 
-	log.Util().Info("Event published", 
+	log.ClientAPI().Info("Event published", 
 		"event_id", event.ID,
 		"kind", event.Kind,
 		"successful_relays", summary.Successful,
@@ -135,7 +135,7 @@ func sendEventResponse(w http.ResponseWriter, response PublishEventResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Util().Error("Failed to encode response", "error", err)
+		log.ClientAPI().Error("Failed to encode response", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
@@ -164,14 +164,14 @@ func GetUserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	// Fetch profile
 	profile, err := coreClient.GetUserProfile(pubkey, nil)
 	if err != nil {
-		log.Util().Error("Failed to fetch user profile", "pubkey", pubkey, "error", err)
+		log.ClientAPI().Error("Failed to fetch user profile", "pubkey", pubkey, "error", err)
 		http.Error(w, "Profile not found", http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(profile); err != nil {
-		log.Util().Error("Failed to encode profile response", "error", err)
+		log.ClientAPI().Error("Failed to encode profile response", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
@@ -200,14 +200,14 @@ func GetUserRelaysHandler(w http.ResponseWriter, r *http.Request) {
 	// Fetch relays
 	relays, err := coreClient.GetUserRelays(pubkey)
 	if err != nil {
-		log.Util().Error("Failed to fetch user relays", "pubkey", pubkey, "error", err)
+		log.ClientAPI().Error("Failed to fetch user relays", "pubkey", pubkey, "error", err)
 		http.Error(w, "Relays not found", http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(relays); err != nil {
-		log.Util().Error("Failed to encode relays response", "error", err)
+		log.ClientAPI().Error("Failed to encode relays response", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
@@ -217,7 +217,7 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters into filters
 	filters, err := parseFiltersFromQuery(r)
 	if err != nil {
-		log.Util().Error("Failed to parse query filters", "error", err)
+		log.ClientAPI().Error("Failed to parse query filters", "error", err)
 		http.Error(w, "Invalid query parameters", http.StatusBadRequest)
 		return
 	}
@@ -232,7 +232,7 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 	// Create subscription to fetch events
 	sub, err := coreClient.Subscribe(filters, nil)
 	if err != nil {
-		log.Util().Error("Failed to create subscription", "error", err)
+		log.ClientAPI().Error("Failed to create subscription", "error", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)
 		return
 	}
@@ -250,7 +250,7 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 			// Subscription completed (EOSE received)
 			goto sendResponse
 		case <-timeout:
-			log.Util().Debug("Query timeout reached", "event_count", len(events))
+			log.ClientAPI().Debug("Query timeout reached", "event_count", len(events))
 			goto sendResponse
 		}
 	}
@@ -261,7 +261,7 @@ sendResponse:
 		"events": events,
 		"count":  len(events),
 	}); err != nil {
-		log.Util().Error("Failed to encode query response", "error", err)
+		log.ClientAPI().Error("Failed to encode query response", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }

@@ -19,14 +19,14 @@ type EventTimeConstraintsConfigResponse struct {
 
 // GetEventTimeConstraintsConfig handles the request to return event time constraints configuration
 func GetEventTimeConstraintsConfig(w http.ResponseWriter, r *http.Request) {
-	log.Util().Debug("Event time constraints config API endpoint accessed",
+	log.RelayAPI().Debug("Event time constraints config API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),
 		"user_agent", r.UserAgent())
 
 	// Get the current server configuration
 	cfg := config.GetConfig()
 	if cfg == nil {
-		log.Util().Error("Server configuration not loaded",
+		log.RelayAPI().Error("Server configuration not loaded",
 			"client_ip", utils.GetClientIP(r))
 		http.Error(w, "Server configuration not available", http.StatusInternalServerError)
 		return
@@ -48,13 +48,13 @@ func GetEventTimeConstraintsConfig(w http.ResponseWriter, r *http.Request) {
 
 	// Encode and send response
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Util().Error("Failed to encode event time constraints config response",
+		log.RelayAPI().Error("Failed to encode event time constraints config response",
 			"client_ip", utils.GetClientIP(r),
 			"error", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
 
-	log.Util().Info("Event time constraints config served successfully",
+	log.RelayAPI().Info("Event time constraints config served successfully",
 		"client_ip", utils.GetClientIP(r))
 }

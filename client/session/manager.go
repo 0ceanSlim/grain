@@ -88,7 +88,7 @@ func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRe
 		SameSite: http.SameSiteStrictMode,
 	})
 
-	log.Util().Info("Created user session", 
+	log.ClientSession().Info("Created user session", 
 		"pubkey", req.PublicKey,
 		"mode", req.RequestedMode,
 		"signing_method", req.SigningMethod,
@@ -110,7 +110,7 @@ func (sm *SessionManager) UpdateSessionMetadata(token string, metadata UserMetad
 	session.Metadata = metadata
 	session.LastActive = time.Now()
 
-	log.Util().Debug("Updated session metadata", "pubkey", session.PublicKey)
+	log.ClientSession().Debug("Updated session metadata", "pubkey", session.PublicKey)
 	return nil
 }
 
@@ -120,7 +120,7 @@ func (sm *SessionManager) ClearSession(w http.ResponseWriter, r *http.Request) {
 	if token != "" {
 		sm.sessionMutex.Lock()
 		if session, exists := sm.sessions[token]; exists {
-			log.Util().Info("Clearing session", 
+			log.ClientSession().Info("Clearing session", 
 				"pubkey", session.PublicKey,
 				"mode", session.Mode)
 		}
@@ -161,14 +161,14 @@ func (sm *SessionManager) CleanupSessions(maxAge time.Duration) {
 		if now.Sub(session.LastActive) > maxAge {
 			delete(sm.sessions, token)
 			cleanedCount++
-			log.Util().Debug("Cleaned up expired session", 
+			log.ClientSession().Debug("Cleaned up expired session", 
 				"pubkey", session.PublicKey,
 				"mode", session.Mode)
 		}
 	}
 
 	if cleanedCount > 0 {
-		log.Util().Info("Session cleanup completed", "cleaned_sessions", cleanedCount)
+		log.ClientSession().Info("Session cleanup completed", "cleaned_sessions", cleanedCount)
 	}
 }
 

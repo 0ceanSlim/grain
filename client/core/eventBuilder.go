@@ -37,7 +37,7 @@ func (eb *EventBuilder) Tag(name string, values ...string) *EventBuilder {
 	copy(tag[1:], values)
 	eb.tags = append(eb.tags, tag)
 	
-	log.Util().Debug("Added tag to event", "tag_name", name, "values", values)
+	log.ClientCore().Debug("Added tag to event", "tag_name", name, "values", values)
 	return eb
 }
 
@@ -49,7 +49,7 @@ func (eb *EventBuilder) PTag(pubkey string, relayHint ...string) *EventBuilder {
 	}
 	eb.tags = append(eb.tags, tag)
 	
-	log.Util().Debug("Added p tag to event", "pubkey", pubkey)
+	log.ClientCore().Debug("Added p tag to event", "pubkey", pubkey)
 	return eb
 }
 
@@ -69,7 +69,7 @@ func (eb *EventBuilder) ETag(eventID string, relayHint, marker string) *EventBui
 	
 	eb.tags = append(eb.tags, tag)
 	
-	log.Util().Debug("Added e tag to event", "event_id", eventID, "marker", marker)
+	log.ClientCore().Debug("Added e tag to event", "event_id", eventID, "marker", marker)
 	return eb
 }
 
@@ -81,7 +81,7 @@ func (eb *EventBuilder) RTag(relayURL string, marker string) *EventBuilder {
 	}
 	eb.tags = append(eb.tags, tag)
 	
-	log.Util().Debug("Added r tag to event", "relay", relayURL, "marker", marker)
+	log.ClientCore().Debug("Added r tag to event", "relay", relayURL, "marker", marker)
 	return eb
 }
 
@@ -89,7 +89,7 @@ func (eb *EventBuilder) RTag(relayURL string, marker string) *EventBuilder {
 func (eb *EventBuilder) DTag(identifier string) *EventBuilder {
 	eb.tags = append(eb.tags, []string{"d", identifier})
 	
-	log.Util().Debug("Added d tag to event", "identifier", identifier)
+	log.ClientCore().Debug("Added d tag to event", "identifier", identifier)
 	return eb
 }
 
@@ -104,7 +104,7 @@ func (eb *EventBuilder) ATag(kind int, pubkey string, dTag string, relayHint ...
 	
 	eb.tags = append(eb.tags, tag)
 	
-	log.Util().Debug("Added a tag to event", "coordinate", coordinate)
+	log.ClientCore().Debug("Added a tag to event", "coordinate", coordinate)
 	return eb
 }
 
@@ -112,7 +112,7 @@ func (eb *EventBuilder) ATag(kind int, pubkey string, dTag string, relayHint ...
 func (eb *EventBuilder) TTag(hashtag string) *EventBuilder {
 	eb.tags = append(eb.tags, []string{"t", hashtag})
 	
-	log.Util().Debug("Added t tag to event", "hashtag", hashtag)
+	log.ClientCore().Debug("Added t tag to event", "hashtag", hashtag)
 	return eb
 }
 
@@ -137,7 +137,7 @@ func (eb *EventBuilder) Build() *nostr.Event {
 		event.CreatedAt = time.Now().Unix()
 	}
 	
-	log.Util().Debug("Built event", 
+	log.ClientCore().Debug("Built event", 
 		"kind", event.Kind,
 		"content_length", len(event.Content),
 		"tag_count", len(event.Tags),

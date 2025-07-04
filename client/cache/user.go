@@ -32,7 +32,7 @@ func CacheUserDataFromObjects(publicKey string, metadata *nostr.Event, mailboxes
 		if metadataBytes, err := json.Marshal(metadata); err == nil {
 			metadataStr = string(metadataBytes)
 		} else {
-			log.Util().Warn("Failed to marshal metadata for cache", "pubkey", publicKey, "error", err)
+			log.ClientCache().Warn("Failed to marshal metadata for cache", "pubkey", publicKey, "error", err)
 		}
 	}
 	
@@ -40,13 +40,13 @@ func CacheUserDataFromObjects(publicKey string, metadata *nostr.Event, mailboxes
 		if mailboxBytes, err := json.Marshal(mailboxes); err == nil {
 			mailboxesStr = string(mailboxBytes)
 		} else {
-			log.Util().Warn("Failed to marshal mailboxes for cache", "pubkey", publicKey, "error", err)
+			log.ClientCache().Warn("Failed to marshal mailboxes for cache", "pubkey", publicKey, "error", err)
 		}
 	}
 	
 	if metadataStr != "" || mailboxesStr != "" {
 		SetUserData(publicKey, metadataStr, mailboxesStr)
-		log.Util().Debug("Cached user data from objects", "pubkey", publicKey)
+		log.ClientCache().Debug("Cached user data from objects", "pubkey", publicKey)
 	}
 }
 
@@ -64,7 +64,7 @@ func GetParsedUserData(publicKey string) (*nostr.Event, *core.Mailboxes, bool) {
 	if cachedData.Metadata != "" {
 		var metadataEvent nostr.Event
 		if err := json.Unmarshal([]byte(cachedData.Metadata), &metadataEvent); err != nil {
-			log.Util().Warn("Failed to parse cached metadata", "pubkey", publicKey, "error", err)
+			log.ClientCache().Warn("Failed to parse cached metadata", "pubkey", publicKey, "error", err)
 		} else {
 			metadata = &metadataEvent
 		}
@@ -74,7 +74,7 @@ func GetParsedUserData(publicKey string) (*nostr.Event, *core.Mailboxes, bool) {
 	if cachedData.Mailboxes != "" && cachedData.Mailboxes != "{}" {
 		var mailboxesData core.Mailboxes
 		if err := json.Unmarshal([]byte(cachedData.Mailboxes), &mailboxesData); err != nil {
-			log.Util().Warn("Failed to parse cached mailboxes", "pubkey", publicKey, "error", err)
+			log.ClientCache().Warn("Failed to parse cached mailboxes", "pubkey", publicKey, "error", err)
 		} else {
 			mailboxes = &mailboxesData
 		}
