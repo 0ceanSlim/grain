@@ -1,5 +1,11 @@
 # GRAIN 🌾
 
+[![Go Version](https://img.shields.io/github/go-mod/go-version/0ceanslim/grain)](https://golang.org/)
+[![GitHub release](https://img.shields.io/github/v/release/0ceanslim/grain)](https://github.com/0ceanslim/grain/releases)
+[![Go Reference](https://pkg.go.dev/badge/github.com/0ceanslim/grain.svg)](https://pkg.go.dev/github.com/0ceanslim/grain)
+[![GitHub downloads](https://img.shields.io/github/downloads/0ceanslim/grain/total)](https://github.com/0ceanslim/grain/releases)
+[![GitHub stars](https://img.shields.io/github/stars/0ceanslim/grain?style=social)](https://github.com/0ceanslim/grain/stargazers)
+
 ## Go Relay Architecture for Implementing Nostr
 
 GRAIN is a nostr relay designed for operators who need fine-grained control over their relay's behavior.

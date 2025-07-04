@@ -16,7 +16,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 go build -o grain .
+RUN CGO_ENABLED=0 go build -buildvcs=false -o grain .
 
 # Copy example configs and modify for Docker
 RUN sed -i 's/localhost:27017/mongo:27017/g' config.yml && \

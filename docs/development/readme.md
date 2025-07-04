@@ -6,8 +6,9 @@ Developer documentation for building, testing, and releasing GRAIN.
 
 ### Prerequisites
 
-- **Go 1.21+** - [Download Go](https://go.dev/)
-- **MongoDB** - [Install MongoDB Community](https://www.mongodb.com/docs/manual/administration/install-community/)
+- **Docker** - [Install Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- **Go 1.21+** (optional) - [Download Go](https://go.dev/) - Only needed for local development
+- **MongoDB** (optional) - [Install MongoDB Community](https://www.mongodb.com/docs/manual/administration/install-community/) - Only needed for local development
 - **Air** (optional) - Live reload during development
   ```bash
   go install github.com/cosmtrek/air@latest
@@ -20,54 +21,73 @@ Developer documentation for building, testing, and releasing GRAIN.
    ```bash
    git clone https://github.com/0ceanslim/grain.git
    cd grain
+   ```
+
+2. **For local development** (optional):
+
+   ```bash
+   # Download dependencies
    go mod download
-   ```
 
-2. **Start MongoDB**
+   # Start MongoDB
+   # Ubuntu/Debian: sudo systemctl start mongod
+   # macOS: brew services start mongodb-community
+   # Windows: net start MongoDB
 
-   ```bash
-   # Ubuntu/Debian
-   sudo systemctl start mongod
-
-   # macOS with Homebrew
-   brew services start mongodb-community
-
-   # Windows
-   net start MongoDB
-   ```
-
-3. **Run GRAIN**
-
-   ```bash
-   # Standard run
+   # Run GRAIN locally
    go run .
 
    # Or with live reload
    air
    ```
 
-## Live Development with Air
+## Building Releases
 
-Air provides automatic recompilation and restart when source files change.
+### Docker-based Build System
 
-### Usage
+GRAIN uses Docker containers for consistent, platform-independent builds. Only Docker is required.
 
 ```bash
-# Start development server with live reload
-air
+# Navigate to development directory
+cd docs/development
 
-# Air will watch for changes and automatically:
-# - Rebuild the binary
-# - Restart the server
-# - Preserve configuration hot-reload
+# Build release for all platforms
+make release
 ```
 
-### Air Benefits
+This will:
 
-- **Instant feedback** - Changes reflected immediately
-- **Configuration preservation** - Hot-reload still works
-- **Error handling** - Compilation errors shown in terminal
-- **Process management** - Clean shutdown and restart
+- **Run tests first** - Build stops if tests fail
+- **Cross-compile** for Linux, macOS, Windows (x64 and ARM)
+- **Bundle www assets** with each binary
+- **Create archives** (.tar.gz for Unix, .zip for Windows)
+- **Generate checksums** for verification
+- **Output to** `build/dist/` directory
+
+### Available Commands
+
+```bash
+make help      # Show all available commands
+make test      # Run tests only
+make release   # Run tests, then build all platforms
+make clean     # Clean build artifacts
+```
+
+### Build Artifacts
+
+After `make release`, you'll find in `build/dist/`:
+
+- `grain-linux-amd64.tar.gz` - Linux 64-bit
+- `grain-linux-arm64.tar.gz` - Linux ARM (Raspberry Pi, etc.)
+- `grain-darwin-amd64.tar.gz` - macOS Intel
+- `grain-darwin-arm64.tar.gz` - macOS Apple Silicon
+- `grain-windows-amd64.zip` - Windows 64-bit
+- `checksums.txt` - SHA256 verification hashes
+
+Each archive contains:
+
+- Binary executable (`grain` or `grain.exe`)
+- Complete `www/` directory with web assets
 
 ## Testing
 
@@ -97,41 +117,24 @@ See the [Testing Documentation](../tests/README.md) for:
 - **Automated cleanup** - No test artifacts left behind
 - **Comprehensive logging** - Full test output and application logs
 
-## Building Releases
+## Release Process
 
-### Release Target
+The new automated build system simplifies releases:
 
-Use the Makefile for standardized builds:
+1. **Build everything**: `make release`
+2. **Test binaries**: Extract and test key platforms from `build/dist/`
+3. **Create GitHub release**: Manually create release on GitHub
+4. **Upload artifacts**: Drag and drop all files from `build/dist/`
+5. **Write release notes**: Document changes and features manually
+6. **Publish**: When ready
 
-```bash
-# Create release packages
-make release
-```
+### Benefits of Docker Build System
 
-### Release Process
-
-```bash
-# 1. Version the release
-make version VERSION=v1.2.3
-
-# 2. Build all files for release
-make release
-
-# 3. Generate checksums
-make checksums
-
-# 4. Create GitHub release
-make release-github
-```
-
-### Build Artifacts
-
-Builds produce:
-
-- **Binary executables** for Linux, Windows, macOS
-- **Archive packages** (.tar.gz, .zip)
-- **SHA256 checksums** for verification
-- **Release metadata** with version info
+✅ **Platform Independent** - Works on Windows, macOS, Linux  
+✅ **Consistent Environment** - Same Go version, same tools everywhere  
+✅ **No Local Dependencies** - Only Docker required  
+✅ **Reproducible Builds** - Same container = same results  
+✅ **Easy CI/CD** - Same process for local and automated builds
 
 ## Code Standards
 
@@ -139,7 +142,6 @@ Builds produce:
 
 - **Standard library first** - Avoid unnecessary dependencies
 - **Structured logging** - Use log levels and key-value pairs
-- **Minimal database calls** - Prefer Nostr REQ over database queries when possible
 - **Clear documentation** - Descriptive but not verbose
 - **Error handling** - Proper error wrapping and context
 
@@ -156,39 +158,6 @@ log.Event().Info("Event processed successfully",
 log.Printf("Event %s processed", evt.ID)
 ```
 
-### Database Best Practices
-
-- **Nostr-first approach** - Use REQ/EVENT messages when possible
-- **Efficient queries** - Leverage MongoDB indexing
-- **Minimal writes** - Batch operations where appropriate
-- **Proper validation** - Check data integrity before database operations
-
-## Configuration Management
-
-### Hot Reload
-
-GRAIN supports configuration hot-reload:
-
-- **File watching** - Automatic detection of config changes
-- **Graceful restart** - Seamless configuration updates
-- **Validation** - Invalid configs rejected with clear errors
-
-### Configuration Files
-
-- `config.yml` - Server, database, and rate limiting
-- `whitelist.yml` - User and content filtering
-- `blacklist.yml` - Ban policies and escalation
-- `relay_metadata.json` - Public relay information (NIP-11)
-
-## Performance Considerations
-
-### Memory Management
-
-- **Connection limits** - Prevent memory exhaustion
-- **Cache strategies** - Efficient pubkey and content caching
-- **Garbage collection** - Minimize allocation pressure
-- **Resource monitoring** - Track memory and CPU usage
-
 ## Debugging
 
 ### Development Tools
@@ -197,13 +166,14 @@ GRAIN supports configuration hot-reload:
 # View live logs with pretty printing
 tail -f debug.log
 
-# Monitor MongoDB operations
+# Monitor MongoDB operations (if running locally)
 mongosh --eval "db.setLogLevel(2)"
 ```
 
 ### Common Issues
 
-- **MongoDB connection** - Check URI and database accessibility
+- **Docker not running** - Ensure Docker Desktop is started
+- **MongoDB connection** - Check URI and database accessibility (local dev)
 - **WebSocket errors** - Verify client compatibility and message format
 - **Configuration syntax** - YAML parsing errors and validation
 - **Rate limiting** - Client requests exceeding configured limits
@@ -215,8 +185,9 @@ mongosh --eval "db.setLogLevel(2)"
 1. **Fork and branch** from `main`
 2. **Make changes** with tests
 3. **Run test suite** `cd tests && make test`
-4. **Submit pull request** with clear description
-5. **Address feedback** and iterate
+4. **Build and test** `cd docs/development && make release`
+5. **Submit pull request** with clear description
+6. **Address feedback** and iterate
 
 ### Code Review
 
@@ -225,11 +196,13 @@ mongosh --eval "db.setLogLevel(2)"
 - **Security** - Are there any security implications?
 - **Documentation** - Is the code well-documented?
 - **Tests** - Are there appropriate tests?
+- **Build** - Does `make release` complete successfully?
 
 ## Resources
 
 - **Nostr Protocol** - [NIPs Repository](https://github.com/nostr-protocol/nips)
 - **MongoDB Docs** - [MongoDB Manual](https://www.mongodb.com/docs/manual/)
 - **Go Documentation** - [Go Language Docs](https://golang.org/doc/)
+- **Docker Documentation** - [Docker Docs](https://docs.docker.com/)
 - **GRAIN Repository** - [GitHub](https://github.com/0ceanslim/grain)
 - **Issue Tracker** - [GitHub Issues](https://github.com/0ceanslim/grain/issues)

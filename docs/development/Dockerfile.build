@@ -1,0 +1,28 @@
+# Build environment for GRAIN releases
+FROM golang:1.23-alpine
+
+# Install build dependencies
+RUN apk add --no-cache \
+    git \
+    zip \
+    tar \
+    gzip \
+    curl \
+    bash \
+    ca-certificates
+
+# Set environment variables for cross-compilation
+ENV CGO_ENABLED=0
+
+# Set working directory
+WORKDIR /app
+
+# Copy build script first
+COPY docs/development/build-in-docker.sh /usr/local/bin/build-script
+RUN chmod +x /usr/local/bin/build-script
+
+# Copy the entire project (excluding items in .dockerignore)
+COPY . .
+
+# Entry point is the build script
+ENTRYPOINT ["/usr/local/bin/build-script"]
