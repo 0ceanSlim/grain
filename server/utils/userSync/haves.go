@@ -3,81 +3,148 @@ package userSync
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"io"
 	"time"
 
 	cfgType "github.com/0ceanslim/grain/config/types"
 	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils/log"
 
-	"github.com/gorilla/websocket"
+	"golang.org/x/net/websocket"
 )
 
-// fetchLocalRelayEvents queries the local relay for events by the user.
+// fetchHaves queries the local relay for events by the user.
 func fetchHaves(pubKey, localRelayURL string, syncConfig cfgType.UserSyncConfig) ([]nostr.Event, error) {
-	log.Printf("Connecting to local relay: %s", localRelayURL)
+	log.UserSync().Debug("Connecting to local relay for haves", 
+		"relay_url", localRelayURL, 
+		"pubkey", pubKey)
 
-	conn, _, err := websocket.DefaultDialer.Dial(localRelayURL, nil)
+	conn, err := websocket.Dial(localRelayURL, "", "http://localhost/")
 	if err != nil {
+		log.UserSync().Error("Failed to connect to local relay", 
+			"error", err, 
+			"relay_url", localRelayURL)
 		return nil, fmt.Errorf("failed to connect to local relay: %w", err)
 	}
 	defer conn.Close()
 
 	filter := generateUserSyncFilter(pubKey, syncConfig)
 	subRequest := []interface{}{"REQ", "sub_local", filter}
-	requestJSON, _ := json.Marshal(subRequest)
+	requestJSON, err := json.Marshal(subRequest)
+	if err != nil {
+		log.UserSync().Error("Failed to marshal subscription request", "error", err)
+		return nil, fmt.Errorf("failed to marshal subscription request: %w", err)
+	}
 
-	if err := conn.WriteMessage(websocket.TextMessage, requestJSON); err != nil {
+	err = websocket.Message.Send(conn, string(requestJSON))
+	if err != nil {
+		log.UserSync().Error("Failed to send subscription request", "error", err)
 		return nil, fmt.Errorf("failed to send subscription request: %w", err)
 	}
 
 	var localEvents []nostr.Event
 	eoseReceived := false
-	for !eoseReceived {
-		conn.SetReadDeadline(time.Now().Add(WebSocketTimeout))
-		_, message, err := conn.ReadMessage()
-		if err != nil {
-			log.Printf("[ERROR] Reading from local relay: %v", err)
-			break
-		}
-
-		var response []interface{}
-		_ = json.Unmarshal(message, &response)
-
-		if len(response) > 0 {
-			switch response[0] {
-			case "EVENT":
-				var event nostr.Event
-
-				eventMap, ok := response[2].(map[string]interface{})
-				if !ok {
-					log.Printf("[ERROR] Unexpected event format in haves: %+v", response[2])
-					continue
+	
+	// Set up channels for message handling
+	msgChan := make(chan string)
+	errChan := make(chan error)
+	
+	// Goroutine for reading WebSocket messages
+	go func() {
+		defer close(msgChan)
+		defer close(errChan)
+		for {
+			var message string
+			err := websocket.Message.Receive(conn, &message)
+			if err != nil {
+				if err == io.EOF {
+					log.UserSync().Debug("Local relay connection closed")
+					return
 				}
-
-				eventJSON, err := json.Marshal(eventMap)
-				if err != nil {
-					log.Printf("[ERROR] Failed to marshal event in haves: %v", err)
-					continue
-				}
-
-				err = json.Unmarshal(eventJSON, &event)
-				if err != nil {
-					log.Printf("[ERROR] Failed to parse event in haves: %v", err)
-					continue
-				}
-
-				log.Printf("[HAVES] Received event ID: %s", event.ID)
-				localEvents = append(localEvents, event)
-
-			case "EOSE":
-				log.Printf("[HAVES] Received EOSE from local relay")
-				eoseReceived = true
+				errChan <- err
+				return
 			}
+			msgChan <- message
+		}
+	}()
+
+	for !eoseReceived {
+		select {
+		case message, ok := <-msgChan:
+			if !ok {
+				log.UserSync().Debug("Message channel closed")
+				eoseReceived = true
+				break
+			}
+
+			var response []interface{}
+			if err := json.Unmarshal([]byte(message), &response); err != nil {
+				log.UserSync().Error("Failed to unmarshal response", 
+					"error", err, 
+					"raw_message", message)
+				continue
+			}
+
+			if len(response) > 0 {
+				switch response[0] {
+				case "EVENT":
+					var event nostr.Event
+
+					eventMap, ok := response[2].(map[string]interface{})
+					if !ok {
+						log.UserSync().Error("Unexpected event format in haves", 
+							"event_data", response[2],
+							"data_type", fmt.Sprintf("%T", response[2]))
+						continue
+					}
+
+					eventJSON, err := json.Marshal(eventMap)
+					if err != nil {
+						log.UserSync().Error("Failed to marshal event in haves", "error", err)
+						continue
+					}
+
+					err = json.Unmarshal(eventJSON, &event)
+					if err != nil {
+						log.UserSync().Error("Failed to parse event in haves", "error", err)
+						continue
+					}
+
+					log.UserSync().Debug("Received local event", 
+						"event_id", event.ID,
+						"kind", event.Kind,
+						"created_at", event.CreatedAt)
+					localEvents = append(localEvents, event)
+
+				case "EOSE":
+					log.UserSync().Debug("EOSE received from local relay")
+					eoseReceived = true
+				}
+			}
+
+		case <-time.After(WebSocketTimeout):
+			log.UserSync().Warn("Timeout waiting for local relay response", 
+				"timeout_seconds", int(WebSocketTimeout.Seconds()))
+			eoseReceived = true
+
+		case err, ok := <-errChan:
+			if !ok {
+				log.UserSync().Debug("Error channel closed")
+				eoseReceived = true
+				break
+			}
+			log.UserSync().Error("Error reading from local relay", "error", err)
+			eoseReceived = true
 		}
 	}
 
-	log.Printf("[HAVES] Total events received: %d", len(localEvents))
+	log.UserSync().Info("Finished fetching local events", 
+		"pubkey", pubKey,
+		"total_events", len(localEvents))
 
-	_ = conn.WriteMessage(websocket.TextMessage, []byte(`["CLOSE", "sub_local"]`))
+	// Send close message
+	closeMsg := `["CLOSE", "sub_local"]`
+	_ = websocket.Message.Send(conn, closeMsg)
+	
 	return localEvents, nil
 }

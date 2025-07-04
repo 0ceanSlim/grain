@@ -6,7 +6,6 @@ toolchain go1.23.4
 
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
-	github.com/gorilla/websocket v1.5.3
 	go.mongodb.org/mongo-driver v1.16.0
 	golang.org/x/net v0.27.0
 )

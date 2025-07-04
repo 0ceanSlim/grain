@@ -2,21 +2,30 @@ package userSync
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
+	"io"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"golang.org/x/net/websocket"
 
 	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // CheckIfUserExistsOnRelay checks if a user exists on the relay by their pubkey.
 func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, error) {
 	for _, url := range relays {
+		log.UserSync().Debug("Checking user existence on relay", 
+			"pubkey", pubKey, 
+			"relay_url", url,
+			"skip_event_id", eventID)
+
 		// Connect to the relay's WebSocket
-		conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+		conn, err := websocket.Dial(url, "", "http://localhost/")
 		if err != nil {
-			log.Printf("Failed to connect to relay WebSocket: %v\n", err)
+			log.UserSync().Error("Failed to connect to relay WebSocket", 
+				"error", err, 
+				"relay_url", url)
 			return false, err
 		}
 		defer conn.Close()
@@ -31,24 +40,34 @@ func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, er
 
 		requestJSON, err := json.Marshal(subRequest)
 		if err != nil {
-			log.Printf("Failed to marshal subscription request: %v\n", err)
+			log.UserSync().Error("Failed to marshal subscription request", "error", err)
 			return false, err
 		}
 
-		if err := conn.WriteMessage(websocket.TextMessage, requestJSON); err != nil {
-			log.Printf("Failed to send subscription request: %v\n", err)
+		err = websocket.Message.Send(conn, string(requestJSON))
+		if err != nil {
+			log.UserSync().Error("Failed to send subscription request", 
+				"error", err, 
+				"relay_url", url)
 			return false, err
 		}
 
-		msgChan := make(chan []byte)
+		msgChan := make(chan string)
 		errChan := make(chan error)
 		eventCount := 0
 		isNewUser := true
 
 		go func() {
+			defer close(msgChan)
+			defer close(errChan)
 			for {
-				_, message, err := conn.ReadMessage()
+				var message string
+				err := websocket.Message.Receive(conn, &message)
 				if err != nil {
+					if err == io.EOF {
+						log.UserSync().Debug("WebSocket connection closed", "relay_url", url)
+						return
+					}
 					errChan <- err
 					return
 				}
@@ -58,10 +77,17 @@ func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, er
 
 		for {
 			select {
-			case message := <-msgChan:
+			case message, ok := <-msgChan:
+				if !ok {
+					log.UserSync().Debug("Message channel closed", "relay_url", url)
+					return isNewUser, nil
+				}
+
 				var response []interface{}
-				if err := json.Unmarshal(message, &response); err != nil {
-					log.Printf("Failed to unmarshal response: %v\n", err)
+				if err := json.Unmarshal([]byte(message), &response); err != nil {
+					log.UserSync().Error("Failed to unmarshal response", 
+						"error", err, 
+						"raw_message", message)
 					continue
 				}
 
@@ -69,40 +95,63 @@ func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, er
 					// Parse the event
 					eventData, ok := response[2].(map[string]interface{})
 					if !ok {
-						log.Printf("Unexpected event data type: %T\n", response[2])
+						log.UserSync().Error("Unexpected event data type", 
+							"data_type", fmt.Sprintf("%T", response[2]),
+							"raw_response", response[2])
 						continue
 					}
 
 					// Extract the event
 					eventBytes, err := json.Marshal(eventData)
 					if err != nil {
-						log.Printf("Failed to marshal event data: %v\n", err)
+						log.UserSync().Error("Failed to marshal event data", "error", err)
 						continue
 					}
 
 					var event nostr.Event
 					if err := json.Unmarshal(eventBytes, &event); err != nil {
-						log.Printf("Failed to unmarshal event: %v\n", err)
+						log.UserSync().Error("Failed to unmarshal event", "error", err)
 						continue
 					}
 
 					// Skip the current event being processed
 					if event.ID == eventID {
+						log.UserSync().Debug("Skipping current event", "event_id", eventID)
 						continue
 					}
 
 					eventCount++
 					isNewUser = false
+					log.UserSync().Debug("Found existing event for user", 
+						"pubkey", pubKey, 
+						"event_id", event.ID,
+						"event_count", eventCount)
 				}
 
 				if len(response) > 0 && response[0] == "EOSE" {
+					log.UserSync().Debug("EOSE received", 
+						"relay_url", url,
+						"pubkey", pubKey,
+						"is_new_user", isNewUser,
+						"total_events_found", eventCount)
 					return isNewUser, nil
 				}
+
 			case <-time.After(WebSocketTimeout):
-				log.Printf("WebSocket timeout while checking user existence for pubkey: %s\n", pubKey)
+				log.UserSync().Warn("WebSocket timeout while checking user existence", 
+					"pubkey", pubKey,
+					"relay_url", url,
+					"timeout_seconds", int(WebSocketTimeout.Seconds()))
 				return isNewUser, nil
-			case err := <-errChan:
-				log.Printf("Error reading from WebSocket: %v\n", err)
+
+			case err, ok := <-errChan:
+				if !ok {
+					log.UserSync().Debug("Error channel closed", "relay_url", url)
+					return isNewUser, nil
+				}
+				log.UserSync().Error("Error reading from WebSocket", 
+					"error", err, 
+					"relay_url", url)
 				return false, err
 			}
 		}
