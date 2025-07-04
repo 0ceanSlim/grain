@@ -18,7 +18,7 @@ func storeUserOutboxes(event nostr.Event, serverCfg *cfgType.ServerConfig) error
 	// Construct the WebSocket URL for the local relay
 	localRelayURL := fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port)
 
-	log.UserSync().Debug("Storing outbox event to local relay", 
+	log.UserSync().Debug("Storing outbox event to local relay",
 		"event_id", event.ID,
 		"relay_url", localRelayURL,
 		"event_kind", event.Kind)
@@ -26,8 +26,8 @@ func storeUserOutboxes(event nostr.Event, serverCfg *cfgType.ServerConfig) error
 	// Connect to the local relay WebSocket
 	conn, err := websocket.Dial(localRelayURL, "", "http://localhost/")
 	if err != nil {
-		log.UserSync().Error("Failed to connect to local relay WebSocket", 
-			"error", err, 
+		log.UserSync().Error("Failed to connect to local relay WebSocket",
+			"error", err,
 			"relay_url", localRelayURL)
 		return fmt.Errorf("failed to connect to local relay WebSocket: %w", err)
 	}
@@ -36,13 +36,13 @@ func storeUserOutboxes(event nostr.Event, serverCfg *cfgType.ServerConfig) error
 	defer func() {
 		// Give a brief moment for any pending operations
 		time.Sleep(100 * time.Millisecond)
-		
+
 		if err := conn.Close(); err != nil {
-			log.UserSync().Debug("Error closing WebSocket connection", 
+			log.UserSync().Debug("Error closing WebSocket connection",
 				"error", err,
 				"relay_url", localRelayURL)
 		} else {
-			log.UserSync().Debug("WebSocket connection closed gracefully", 
+			log.UserSync().Debug("WebSocket connection closed gracefully",
 				"relay_url", localRelayURL)
 		}
 	}()
@@ -53,7 +53,7 @@ func storeUserOutboxes(event nostr.Event, serverCfg *cfgType.ServerConfig) error
 	// Marshal the message to JSON
 	messageJSON, err := json.Marshal(eventMessage)
 	if err != nil {
-		log.UserSync().Error("Failed to marshal WebSocket message", 
+		log.UserSync().Error("Failed to marshal WebSocket message",
 			"error", err,
 			"event_id", event.ID)
 		return fmt.Errorf("failed to marshal WebSocket message: %w", err)
@@ -62,7 +62,7 @@ func storeUserOutboxes(event nostr.Event, serverCfg *cfgType.ServerConfig) error
 	// Send the event to the local relay
 	err = websocket.Message.Send(conn, string(messageJSON))
 	if err != nil {
-		log.UserSync().Error("Failed to send event to local relay WebSocket", 
+		log.UserSync().Error("Failed to send event to local relay WebSocket",
 			"error", err,
 			"event_id", event.ID,
 			"relay_url", localRelayURL)
@@ -88,14 +88,14 @@ func storeUserOutboxes(event nostr.Event, serverCfg *cfgType.ServerConfig) error
 		// Parse the response to check if event was accepted
 		var responseArray []interface{}
 		if err := json.Unmarshal([]byte(response), &responseArray); err != nil {
-			log.UserSync().Warn("Failed to parse relay response", 
+			log.UserSync().Warn("Failed to parse relay response",
 				"error", err,
 				"raw_response", response,
 				"event_id", event.ID)
 		} else if len(responseArray) >= 3 {
 			if accepted, ok := responseArray[2].(bool); ok {
 				if accepted {
-					log.UserSync().Info("Event successfully stored to local relay", 
+					log.UserSync().Info("Event successfully stored to local relay",
 						"event_id", event.ID,
 						"relay_url", localRelayURL)
 				} else {
@@ -106,13 +106,13 @@ func storeUserOutboxes(event nostr.Event, serverCfg *cfgType.ServerConfig) error
 							reason = reasonStr
 						}
 					}
-					log.UserSync().Warn("Event rejected by local relay", 
+					log.UserSync().Warn("Event rejected by local relay",
 						"event_id", event.ID,
 						"reason", reason,
 						"relay_url", localRelayURL)
 				}
 			} else {
-				log.UserSync().Warn("Unexpected response format from local relay", 
+				log.UserSync().Warn("Unexpected response format from local relay",
 					"event_id", event.ID,
 					"response", response)
 			}
@@ -120,16 +120,16 @@ func storeUserOutboxes(event nostr.Event, serverCfg *cfgType.ServerConfig) error
 
 	case err := <-errorChan:
 		if err == io.EOF {
-			log.UserSync().Debug("Local relay connection closed during response wait", 
+			log.UserSync().Debug("Local relay connection closed during response wait",
 				"event_id", event.ID)
 		} else {
-			log.UserSync().Error("Error receiving response from local relay", 
+			log.UserSync().Error("Error receiving response from local relay",
 				"error", err,
 				"event_id", event.ID)
 		}
 
 	case <-time.After(5 * time.Second):
-		log.UserSync().Warn("Timeout waiting for local relay response", 
+		log.UserSync().Warn("Timeout waiting for local relay response",
 			"event_id", event.ID,
 			"relay_url", localRelayURL,
 			"timeout_seconds", 5)

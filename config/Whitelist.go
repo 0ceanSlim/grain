@@ -35,12 +35,12 @@ func CheckWhitelistCached(evt nostr.Event) (bool, string) {
 // IsPubKeyWhitelistedCached for purging operations - always uses cache regardless of enabled state
 func IsPubKeyWhitelistedCached(pubKey string, skipEnabledCheck bool) bool {
 	pubkeyCache := GetPubkeyCache()
-	
+
 	if skipEnabledCheck {
 		// For purging operations - use cache regardless of enabled state
 		return pubkeyCache.IsWhitelisted(pubKey)
 	}
-	
+
 	// For validation operations - respect enabled state
 	return pubkeyCache.IsWhitelistedForValidation(pubKey)
 }

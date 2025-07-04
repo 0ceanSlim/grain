@@ -25,8 +25,8 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 
 	subID, ok := message[1].(string)
 	if !ok || len(subID) == 0 || len(subID) > 64 {
-		log.Req().Error("Invalid subscription ID format or length", 
-			"sub_id", subID, 
+		log.Req().Error("Invalid subscription ID format or length",
+			"sub_id", subID,
 			"length", len(subID))
 		response.SendClosed(client, "", "invalid: subscription ID must be between 1 and 64 characters long")
 		return
@@ -36,7 +36,7 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 	rateLimiter := config.GetRateLimiter()
 	if rateLimiter != nil {
 		if allowed, msg := rateLimiter.AllowReq(); !allowed {
-			log.Req().Warn("REQ rate limit exceeded", 
+			log.Req().Warn("REQ rate limit exceeded",
 				"sub_id", subID,
 				"reason", msg)
 			response.SendClosed(client, subID, "rate-limited: "+msg)
@@ -49,8 +49,8 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 	for i, filter := range message[2:] {
 		filterData, ok := filter.(map[string]interface{})
 		if !ok {
-			log.Req().Error("Invalid filter format", 
-				"sub_id", subID, 
+			log.Req().Error("Invalid filter format",
+				"sub_id", subID,
 				"filter_index", i)
 			response.SendClosed(client, subID, "invalid: invalid filter format")
 			return
@@ -71,14 +71,14 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 	// Check if this is a duplicate subscription (same filters)
 	if existingFilters, exists := subscriptions[subID]; exists {
 		if areFiltersIdentical(existingFilters, filters) {
-			log.Req().Debug("Duplicate subscription detected, ignoring", 
+			log.Req().Debug("Duplicate subscription detected, ignoring",
 				"sub_id", subID,
 				"filter_count", len(filters))
 			// Still send EOSE for duplicate subscriptions to satisfy client expectations
 			client.SendMessage([]interface{}{"EOSE", subID})
 			return
 		} else {
-			log.Req().Info("Subscription updated with new filters", 
+			log.Req().Info("Subscription updated with new filters",
 				"sub_id", subID,
 				"old_filter_count", len(existingFilters),
 				"new_filter_count", len(filters))
@@ -96,26 +96,26 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		}
 		if oldestSubID != "" {
 			delete(subscriptions, oldestSubID)
-			log.Req().Info("Dropped oldest subscription", 
-				"old_sub_id", oldestSubID, 
+			log.Req().Info("Dropped oldest subscription",
+				"old_sub_id", oldestSubID,
 				"current_count", len(subscriptions))
 		}
 	}
 
 	// Add/update subscription - THIS IS CRUCIAL: subscription stays active after EOSE
 	subscriptions[subID] = filters
-	log.Req().Info("Subscription created/updated", 
-		"sub_id", subID, 
-		"filter_count", len(filters), 
+	log.Req().Info("Subscription created/updated",
+		"sub_id", subID,
+		"filter_count", len(filters),
 		"total_subscriptions", len(subscriptions))
 
 	// Query database for historical events
 	dbName := config.GetConfig().MongoDB.Database
 	queriedEvents, err := mongo.QueryEvents(filters, mongo.GetClient(), dbName)
 	if err != nil {
-		log.Req().Error("Error querying events", 
-			"sub_id", subID, 
-			"database", dbName, 
+		log.Req().Error("Error querying events",
+			"sub_id", subID,
+			"database", dbName,
 			"error", err)
 		response.SendClosed(client, subID, "error: could not query events")
 		return
@@ -129,8 +129,8 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 	// Send EOSE message to indicate end of stored events
 	client.SendMessage([]interface{}{"EOSE", subID})
 
-	log.Req().Info("Subscription established", 
-		"sub_id", subID, 
+	log.Req().Info("Subscription established",
+		"sub_id", subID,
 		"historical_events_sent", len(queriedEvents),
 		"status", "active")
 
@@ -151,7 +151,7 @@ func areFiltersIdentical(filters1, filters2 []nostr.Filter) bool {
 	// Simple approach: serialize both and compare hashes
 	hash1 := hashFilters(filters1)
 	hash2 := hashFilters(filters2)
-	
+
 	return hash1 == hash2
 }
 
@@ -162,7 +162,7 @@ func hashFilters(filters []nostr.Filter) string {
 	if err != nil {
 		return "" // If serialization fails, treat as different
 	}
-	
+
 	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
 }

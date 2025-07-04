@@ -31,7 +31,7 @@ var cache = &UserCache{
 func SetUserData(publicKey string, metadata, mailboxes string) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
-	
+
 	cache.data[publicKey] = CachedUserData{
 		Metadata:  metadata,
 		Mailboxes: mailboxes,
@@ -48,7 +48,7 @@ func GetUserData(publicKey string) (CachedUserData, bool) {
 	if !exists || time.Since(data.Timestamp) > cache.expiry {
 		return CachedUserData{}, false
 	}
-	
+
 	return data, true
 }
 
@@ -62,12 +62,12 @@ func GetUserDataWithAge(publicKey string) (CachedUserData, time.Duration, bool) 
 	if !exists {
 		return CachedUserData{}, 0, false
 	}
-	
+
 	age := time.Since(data.Timestamp)
 	if age > cache.expiry {
 		return CachedUserData{}, age, false
 	}
-	
+
 	return data, age, true
 }
 
@@ -80,7 +80,7 @@ func IsExpiringSoon(publicKey string, within time.Duration) bool {
 	if !exists {
 		return true // No data means it needs refresh
 	}
-	
+
 	age := time.Since(data.Timestamp)
 	return (cache.expiry - age) <= within
 }
@@ -89,7 +89,7 @@ func IsExpiringSoon(publicKey string, within time.Duration) bool {
 func ClearUserData(publicKey string) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
-	
+
 	delete(cache.data, publicKey)
 }
 

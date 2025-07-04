@@ -38,8 +38,8 @@ func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Create comprehensive session response
 	sessionData := map[string]interface{}{
-		"publicKey":        session.PublicKey,
-		"lastActive":       session.LastActive,
+		"publicKey":       session.PublicKey,
+		"lastActive":      session.LastActive,
 		"mode":            session.Mode,
 		"signingMethod":   session.SigningMethod,
 		"connectedRelays": session.ConnectedRelays,
@@ -50,7 +50,7 @@ func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 		sessionData["relays"] = relayInfo
 	}
 
-	log.ClientAPI().Debug("Returning  session data", 
+	log.ClientAPI().Debug("Returning  session data",
 		"pubkey", session.PublicKey,
 		"mode", session.Mode)
 

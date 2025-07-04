@@ -22,7 +22,7 @@ func fetchNeeds(pubKey string, relays []string, syncConfig cfgType.UserSyncConfi
 
 	filter := generateUserSyncFilter(pubKey, syncConfig)
 
-	log.UserSync().Info("Starting concurrent fetch from outbox relays", 
+	log.UserSync().Info("Starting concurrent fetch from outbox relays",
 		"pubkey", pubKey,
 		"relay_count", len(relays))
 
@@ -31,14 +31,14 @@ func fetchNeeds(pubKey string, relays []string, syncConfig cfgType.UserSyncConfi
 		go func(relay string) {
 			defer wg.Done()
 
-			log.UserSync().Debug("Connecting to outbox relay", 
-				"relay_url", relay, 
+			log.UserSync().Debug("Connecting to outbox relay",
+				"relay_url", relay,
 				"pubkey", pubKey)
 
 			conn, err := websocket.Dial(relay, "", "http://localhost/")
 			if err != nil {
-				log.UserSync().Error("Failed to connect to outbox relay", 
-					"error", err, 
+				log.UserSync().Error("Failed to connect to outbox relay",
+					"error", err,
 					"relay_url", relay)
 				return
 			}
@@ -47,16 +47,16 @@ func fetchNeeds(pubKey string, relays []string, syncConfig cfgType.UserSyncConfi
 			subRequest := []interface{}{"REQ", "sub_outbox", filter}
 			requestJSON, err := json.Marshal(subRequest)
 			if err != nil {
-				log.UserSync().Error("Failed to marshal subscription request", 
-					"error", err, 
+				log.UserSync().Error("Failed to marshal subscription request",
+					"error", err,
 					"relay_url", relay)
 				return
 			}
 
 			err = websocket.Message.Send(conn, string(requestJSON))
 			if err != nil {
-				log.UserSync().Error("Failed to send subscription request", 
-					"error", err, 
+				log.UserSync().Error("Failed to send subscription request",
+					"error", err,
 					"relay_url", relay)
 				return
 			}
@@ -64,7 +64,7 @@ func fetchNeeds(pubKey string, relays []string, syncConfig cfgType.UserSyncConfi
 			// Set up channels for message handling
 			msgChan := make(chan string)
 			errChan := make(chan error)
-			
+
 			// Goroutine for reading WebSocket messages
 			go func() {
 				defer close(msgChan)
@@ -98,8 +98,8 @@ func fetchNeeds(pubKey string, relays []string, syncConfig cfgType.UserSyncConfi
 
 					var response []interface{}
 					if err := json.Unmarshal([]byte(message), &response); err != nil {
-						log.UserSync().Error("Failed to unmarshal response", 
-							"error", err, 
+						log.UserSync().Error("Failed to unmarshal response",
+							"error", err,
 							"relay_url", relay,
 							"raw_message", message)
 						continue
@@ -112,7 +112,7 @@ func fetchNeeds(pubKey string, relays []string, syncConfig cfgType.UserSyncConfi
 
 							eventMapData, ok := response[2].(map[string]interface{})
 							if !ok {
-								log.UserSync().Error("Unexpected event format in needs", 
+								log.UserSync().Error("Unexpected event format in needs",
 									"relay_url", relay,
 									"event_data", response[2],
 									"data_type", fmt.Sprintf("%T", response[2]))
@@ -121,21 +121,21 @@ func fetchNeeds(pubKey string, relays []string, syncConfig cfgType.UserSyncConfi
 
 							eventJSON, err := json.Marshal(eventMapData)
 							if err != nil {
-								log.UserSync().Error("Failed to marshal event in needs", 
-									"error", err, 
+								log.UserSync().Error("Failed to marshal event in needs",
+									"error", err,
 									"relay_url", relay)
 								continue
 							}
 
 							err = json.Unmarshal(eventJSON, &event)
 							if err != nil {
-								log.UserSync().Error("Failed to parse event in needs", 
-									"error", err, 
+								log.UserSync().Error("Failed to parse event in needs",
+									"error", err,
 									"relay_url", relay)
 								continue
 							}
 
-							log.UserSync().Debug("Received outbox event", 
+							log.UserSync().Debug("Received outbox event",
 								"relay_url", relay,
 								"event_id", event.ID,
 								"kind", event.Kind,
@@ -147,7 +147,7 @@ func fetchNeeds(pubKey string, relays []string, syncConfig cfgType.UserSyncConfi
 							mu.Unlock()
 
 						case "EOSE":
-							log.UserSync().Debug("EOSE received from outbox relay", 
+							log.UserSync().Debug("EOSE received from outbox relay",
 								"relay_url", relay,
 								"events_received", eventCount)
 							eoseReceived = true
@@ -155,7 +155,7 @@ func fetchNeeds(pubKey string, relays []string, syncConfig cfgType.UserSyncConfi
 					}
 
 				case <-time.After(WebSocketTimeout):
-					log.UserSync().Warn("Timeout waiting for outbox relay response", 
+					log.UserSync().Warn("Timeout waiting for outbox relay response",
 						"relay_url", relay,
 						"timeout_seconds", int(WebSocketTimeout.Seconds()),
 						"events_received", eventCount)
@@ -167,8 +167,8 @@ func fetchNeeds(pubKey string, relays []string, syncConfig cfgType.UserSyncConfi
 						eoseReceived = true
 						break
 					}
-					log.UserSync().Error("Error reading from outbox relay", 
-						"error", err, 
+					log.UserSync().Error("Error reading from outbox relay",
+						"error", err,
 						"relay_url", relay)
 					eoseReceived = true
 				}
@@ -188,7 +188,7 @@ func fetchNeeds(pubKey string, relays []string, syncConfig cfgType.UserSyncConfi
 		allEvents = append(allEvents, evt)
 	}
 
-	log.UserSync().Info("Finished fetching needs from all outbox relays", 
+	log.UserSync().Info("Finished fetching needs from all outbox relays",
 		"pubkey", pubKey,
 		"total_unique_events", len(allEvents),
 		"relays_queried", len(relays))

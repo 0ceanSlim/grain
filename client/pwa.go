@@ -10,19 +10,19 @@ import (
 
 // PWAManifest represents the web app manifest structure
 type PWAManifest struct {
-	Name            string                 `json:"name"`
-	ShortName       string                 `json:"short_name"`
-	Description     string                 `json:"description"`
-	StartURL        string                 `json:"start_url"`
-	Display         string                 `json:"display"`
-	BackgroundColor string                 `json:"background_color"`
-	ThemeColor      string                 `json:"theme_color"`
-	Orientation     string                 `json:"orientation"`
-	Scope           string                 `json:"scope"`
-	Lang            string                 `json:"lang"`
-	Categories      []string               `json:"categories"`
-	Screenshots     []PWAScreenshot        `json:"screenshots,omitempty"`
-	Icons           []PWAIcon              `json:"icons"`
+	Name            string          `json:"name"`
+	ShortName       string          `json:"short_name"`
+	Description     string          `json:"description"`
+	StartURL        string          `json:"start_url"`
+	Display         string          `json:"display"`
+	BackgroundColor string          `json:"background_color"`
+	ThemeColor      string          `json:"theme_color"`
+	Orientation     string          `json:"orientation"`
+	Scope           string          `json:"scope"`
+	Lang            string          `json:"lang"`
+	Categories      []string        `json:"categories"`
+	Screenshots     []PWAScreenshot `json:"screenshots,omitempty"`
+	Icons           []PWAIcon       `json:"icons"`
 }
 
 // PWAIcon represents an icon in the manifest
@@ -83,13 +83,13 @@ func manifestHandler(w http.ResponseWriter, r *http.Request) {
 // serviceWorkerHandler serves the service worker JavaScript file
 func serviceWorkerHandler(w http.ResponseWriter, r *http.Request) {
 	swPath := filepath.Join("www", "sw.js")
-	
+
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate") // SW should not be cached
-	w.Header().Set("Service-Worker-Allowed", "/") // Allow SW to control entire origin
+	w.Header().Set("Service-Worker-Allowed", "/")                          // Allow SW to control entire origin
 
 	http.ServeFile(w, r, swPath)
-	
+
 	log.ClientMain().Debug("Served service worker", "client_ip", r.RemoteAddr)
 }
 
@@ -97,6 +97,6 @@ func serviceWorkerHandler(w http.ResponseWriter, r *http.Request) {
 func RegisterPWARoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/manifest.json", manifestHandler)
 	mux.HandleFunc("/sw.js", serviceWorkerHandler)
-	
+
 	log.ClientMain().Info("PWA routes registered", "routes", []string{"/manifest.json", "/sw.js"})
 }

@@ -10,25 +10,25 @@ import (
 )
 
 // Additional global variable to track last trim time
-var trimMutex        sync.Mutex
+var trimMutex sync.Mutex
 
 // StartPeriodicLogTrimmer starts a goroutine that periodically checks and manages log size
 func StartPeriodicLogTrimmer(logFilePath string, maxSizeMB int, checkIntervalMinutes int, backupCount int) {
 	go func() {
 		ticker := time.NewTicker(time.Duration(checkIntervalMinutes) * time.Minute)
 		defer ticker.Stop()
-		
+
 		for range ticker.C {
 			err := manageLogFileSize(logFilePath, maxSizeMB, backupCount)
 			if err != nil {
-				Log().Error("Failed to manage log file size", 
+				Log().Error("Failed to manage log file size",
 					"file", logFilePath,
 					"error", err)
 			}
 		}
 	}()
-	
-	Log().Info("Started periodic log manager", 
+
+	Log().Info("Started periodic log manager",
 		"check_interval_minutes", checkIntervalMinutes,
 		"max_size_mb", maxSizeMB,
 		"backup_count", backupCount)
@@ -68,63 +68,63 @@ func rotateLogFiles(logFilePath string, backupCount int) error {
 	for i := backupCount - 1; i > 0; i-- {
 		oldPath := fmt.Sprintf("%s.bak%d", logFilePath, i-1)
 		newPath := fmt.Sprintf("%s.bak%d", logFilePath, i)
-		
+
 		// Check if the source file exists before trying to rename it
 		if _, err := os.Stat(oldPath); os.IsNotExist(err) {
 			continue // Skip if source doesn't exist
 		}
-		
+
 		// Remove the destination file if it exists
 		_ = os.Remove(newPath)
-		
+
 		// Rename the source to destination
 		if err := os.Rename(oldPath, newPath); err != nil {
-			Log().Error("Failed to rotate log file", 
-				"from", oldPath, 
-				"to", newPath, 
+			Log().Error("Failed to rotate log file",
+				"from", oldPath,
+				"to", newPath,
 				"error", err)
 			// Continue even if one rotation fails
 		} else {
-			Log().Debug("Rotated log file", 
-				"from", oldPath, 
+			Log().Debug("Rotated log file",
+				"from", oldPath,
 				"to", newPath)
 		}
 	}
-	
+
 	// Move the current log to .bak1
 	backupPath := fmt.Sprintf("%s.bak1", logFilePath)
-	
+
 	// Try to read the current log
 	content, err := os.ReadFile(logFilePath)
 	if err != nil {
-		Log().Error("Failed to read current log file", 
-			"file", logFilePath, 
+		Log().Error("Failed to read current log file",
+			"file", logFilePath,
 			"error", err)
 		return err
 	}
-	
+
 	// Write it to backup
 	if err := os.WriteFile(backupPath, content, 0644); err != nil {
-		Log().Error("Failed to create backup log file", 
-			"file", backupPath, 
+		Log().Error("Failed to create backup log file",
+			"file", backupPath,
 			"error", err)
 		return err
 	}
-	
+
 	// Truncate current log file
 	file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		Log().Error("Failed to truncate log file", 
-			"file", logFilePath, 
+		Log().Error("Failed to truncate log file",
+			"file", logFilePath,
 			"error", err)
 		return err
 	}
 	defer file.Close()
-	
-	Log().Info("Successfully rotated log files", 
-		"main_log", logFilePath, 
+
+	Log().Info("Successfully rotated log files",
+		"main_log", logFilePath,
 		"backup_count", backupCount)
-	
+
 	return nil
 }
 
@@ -135,7 +135,7 @@ func checkLogSize(filePath string, maxSizeMB int) (bool, int64) {
 		Log().Error("Error checking log file size", "file", filePath, "error", err)
 		return false, 0
 	}
-	
+
 	maxSizeBytes := int64(maxSizeMB * 1024 * 1024)
 	return fileInfo.Size() > maxSizeBytes, fileInfo.Size()
 }
@@ -154,21 +154,21 @@ func trimLogFile(filePath string, maxSizeMB int) error {
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return err
 	}
 
 	// Calculate target size (20% of max) - use float for the multiplication
 	targetSize := int64(float64(maxSizeMB) * 0.2 * 1024.0 * 1024.0)
-	
+
 	// Calculate current size
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
 		return err
 	}
 	currentSize := fileInfo.Size()
-	
+
 	// Calculate how many lines to keep based on target size
 	// Estimate average line size
 	var avgLineSize int64 = 1 // Default to 1 to avoid division by zero
@@ -178,14 +178,14 @@ func trimLogFile(filePath string, maxSizeMB int) error {
 			avgLineSize = 1 // Avoid division by zero
 		}
 	}
-	
+
 	// Calculate how many lines to keep
 	linesToKeep := int(targetSize / avgLineSize)
 	if linesToKeep >= len(lines) {
 		// If we'd keep all lines anyway, just return
 		return nil
 	}
-	
+
 	// Keep the most recent lines
 	remainingLines := lines[len(lines)-linesToKeep:]
 

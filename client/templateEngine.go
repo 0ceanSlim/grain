@@ -7,8 +7,8 @@ import (
 )
 
 type PageData struct {
-	Title      string
-	Theme      string
+	Title string
+	Theme string
 }
 
 // Define the base directories for views and templates

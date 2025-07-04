@@ -16,14 +16,14 @@ func fetchUserOutboxes(pubKey string, relays []string) []nostr.Event {
 	var events []nostr.Event
 
 	for _, relay := range relays {
-		log.UserSync().Debug("Connecting to relay for outbox events", 
-			"relay_url", relay, 
+		log.UserSync().Debug("Connecting to relay for outbox events",
+			"relay_url", relay,
 			"pubkey", pubKey)
 
 		conn, err := websocket.Dial(relay, "", "http://localhost/")
 		if err != nil {
-			log.UserSync().Error("Failed to connect to relay", 
-				"error", err, 
+			log.UserSync().Error("Failed to connect to relay",
+				"error", err,
 				"relay_url", relay)
 			continue
 		}
@@ -42,16 +42,16 @@ func fetchUserOutboxes(pubKey string, relays []string) []nostr.Event {
 
 		requestJSON, err := json.Marshal(subRequest)
 		if err != nil {
-			log.UserSync().Error("Failed to marshal subscription request", 
-				"error", err, 
+			log.UserSync().Error("Failed to marshal subscription request",
+				"error", err,
 				"relay_url", relay)
 			continue
 		}
 
 		err = websocket.Message.Send(conn, string(requestJSON))
 		if err != nil {
-			log.UserSync().Error("Failed to send subscription request", 
-				"error", err, 
+			log.UserSync().Error("Failed to send subscription request",
+				"error", err,
 				"relay_url", relay)
 			continue
 		}
@@ -90,8 +90,8 @@ func fetchUserOutboxes(pubKey string, relays []string) []nostr.Event {
 
 				var response []interface{}
 				if err := json.Unmarshal([]byte(msg), &response); err != nil {
-					log.UserSync().Error("Failed to unmarshal response", 
-						"error", err, 
+					log.UserSync().Error("Failed to unmarshal response",
+						"error", err,
 						"relay_url", relay,
 						"raw_message", msg)
 					continue
@@ -104,21 +104,21 @@ func fetchUserOutboxes(pubKey string, relays []string) []nostr.Event {
 						var event nostr.Event
 						eventData, err := json.Marshal(response[2])
 						if err != nil {
-							log.UserSync().Error("Failed to marshal event data", 
-								"error", err, 
+							log.UserSync().Error("Failed to marshal event data",
+								"error", err,
 								"relay_url", relay)
 							continue
 						}
-						
+
 						if err := json.Unmarshal(eventData, &event); err != nil {
-							log.UserSync().Error("Failed to parse event", 
-								"error", err, 
+							log.UserSync().Error("Failed to parse event",
+								"error", err,
 								"relay_url", relay)
 							continue
 						}
-						
-						log.UserSync().Debug("Received Kind 10002 event", 
-							"event_id", event.ID, 
+
+						log.UserSync().Debug("Received Kind 10002 event",
+							"event_id", event.ID,
 							"relay_url", relay,
 							"created_at", event.CreatedAt)
 						events = append(events, event)
@@ -137,13 +137,13 @@ func fetchUserOutboxes(pubKey string, relays []string) []nostr.Event {
 					log.UserSync().Debug("Error channel closed", "relay_url", relay)
 					break outer
 				}
-				log.UserSync().Error("Error reading from relay", 
-					"error", err, 
+				log.UserSync().Error("Error reading from relay",
+					"error", err,
 					"relay_url", relay)
 				break outer
 
 			case <-time.After(WebSocketTimeout):
-				log.UserSync().Warn("Timeout waiting for response from relay", 
+				log.UserSync().Warn("Timeout waiting for response from relay",
 					"relay_url", relay,
 					"timeout_seconds", int(WebSocketTimeout.Seconds()))
 				break outer
@@ -151,8 +151,8 @@ func fetchUserOutboxes(pubKey string, relays []string) []nostr.Event {
 		}
 	}
 
-	log.UserSync().Info("Finished fetching outbox events", 
-		"pubkey", pubKey, 
+	log.UserSync().Info("Finished fetching outbox events",
+		"pubkey", pubKey,
 		"total_events", len(events),
 		"relays_queried", len(relays))
 

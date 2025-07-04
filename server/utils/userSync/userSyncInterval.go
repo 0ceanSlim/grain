@@ -44,14 +44,14 @@ func StartPeriodicUserSync(cfg *cfgType.ServerConfig) {
 // runUserSync runs user sync for all relevant authors
 func runUserSync(cfg *cfgType.ServerConfig) {
 	log.UserSync().Info("Starting periodic user sync run")
-	
+
 	authors := mongo.GetAllAuthorsFromRelay(cfg)
 	log.UserSync().Debug("Retrieved authors from relay", "total_authors", len(authors))
 
 	// Filter authors if required using cache (ignores enabled state for sync operations)
 	if cfg.UserSync.ExcludeNonWhitelisted {
 		authors = filterWhitelistedAuthorsCached(authors)
-		log.UserSync().Info("Filtered authors for sync", 
+		log.UserSync().Info("Filtered authors for sync",
 			"exclude_non_whitelisted", true,
 			"filtered_authors", len(authors))
 	}
@@ -59,15 +59,15 @@ func runUserSync(cfg *cfgType.ServerConfig) {
 	successCount := 0
 	for _, author := range authors {
 		log.UserSync().Debug("Starting user sync for author", "pubkey", author)
-		
+
 		triggerUserSync(author, &cfg.UserSync, cfg)
 		successCount++
-		
+
 		// Small delay between each author's sync to reduce load
 		time.Sleep(2 * time.Second)
 	}
-	
-	log.UserSync().Info("Periodic user sync run completed", 
+
+	log.UserSync().Info("Periodic user sync run completed",
 		"total_authors", len(authors),
 		"synced_authors", successCount)
 }
@@ -76,17 +76,17 @@ func runUserSync(cfg *cfgType.ServerConfig) {
 func filterWhitelistedAuthorsCached(authors []string) []string {
 	pubkeyCache := config.GetPubkeyCache()
 	filtered := make([]string, 0, len(authors))
-	
+
 	for _, author := range authors {
 		// Use IsWhitelisted (not IsWhitelistedForValidation) to ignore enabled state
 		if pubkeyCache.IsWhitelisted(author) {
 			filtered = append(filtered, author)
 		}
 	}
-	
-	log.UserSync().Debug("Filtered authors using cache", 
+
+	log.UserSync().Debug("Filtered authors using cache",
 		"total_authors", len(authors),
 		"whitelisted_authors", len(filtered))
-	
+
 	return filtered
 }

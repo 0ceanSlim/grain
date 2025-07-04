@@ -9,7 +9,7 @@ import (
 
 // Result represents the outcome of a validation check
 type Result struct {
-	Valid bool
+	Valid   bool
 	Message string
 }
 
@@ -17,7 +17,7 @@ type Result struct {
 func CheckBlacklistAndWhitelistCached(evt noatr.Event) Result {
 	// Check blacklist using cache (but still check content for word-based bans)
 	if blacklisted, msg := config.CheckBlacklistCached(evt.PubKey, evt.Content); blacklisted {
-		log.Validation().Info("Event rejected by cached blacklist", 
+		log.Validation().Info("Event rejected by cached blacklist",
 			"event_id", evt.ID,
 			"pubkey", evt.PubKey)
 		return Result{Valid: false, Message: msg}
@@ -25,7 +25,7 @@ func CheckBlacklistAndWhitelistCached(evt noatr.Event) Result {
 
 	// Check whitelist using cache
 	if isWhitelisted, msg := config.CheckWhitelistCached(evt); !isWhitelisted {
-		log.Validation().Info("Event rejected by cached whitelist", 
+		log.Validation().Info("Event rejected by cached whitelist",
 			"event_id", evt.ID,
 			"pubkey", evt.PubKey)
 		return Result{Valid: false, Message: msg}
@@ -41,7 +41,7 @@ func CheckRateAndSizeLimits(evt noatr.Event, eventSize int) Result {
 	category := utils.DetermineEventCategory(evt.Kind)
 
 	if allowed, msg := rateLimiter.AllowEvent(evt.Kind, category); !allowed {
-		log.Validation().Info("Event rejected by rate limiter", 
+		log.Validation().Info("Event rejected by rate limiter",
 			"event_id", evt.ID,
 			"kind", evt.Kind,
 			"category", category)
@@ -49,7 +49,7 @@ func CheckRateAndSizeLimits(evt noatr.Event, eventSize int) Result {
 	}
 
 	if allowed, msg := sizeLimiter.AllowSize(evt.Kind, eventSize); !allowed {
-		log.Validation().Info("Event rejected by size limiter", 
+		log.Validation().Info("Event rejected by size limiter",
 			"event_id", evt.ID,
 			"kind", evt.Kind,
 			"size", eventSize)

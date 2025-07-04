@@ -17,6 +17,6 @@ func StartCacheCleanup() {
 			log.ClientCache().Debug("Cache cleanup completed")
 		}
 	}()
-	
+
 	log.ClientCache().Debug("Cache cleanup routine started")
 }

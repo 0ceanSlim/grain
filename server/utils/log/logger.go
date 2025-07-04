@@ -13,19 +13,18 @@ import (
 
 // LoggerRegistry maintains a map of all loggers by component name
 type LoggerRegistry struct {
-	main      *slog.Logger
-	loggers   map[string]*slog.Logger
-	handler   slog.Handler
+	main                 *slog.Logger
+	loggers              map[string]*slog.Logger
+	handler              slog.Handler
 	suppressedComponents map[string]bool
-	mu        sync.RWMutex
+	mu                   sync.RWMutex
 }
 
 // Global registry instance
 var Registry = &LoggerRegistry{
-	loggers: make(map[string]*slog.Logger),
+	loggers:              make(map[string]*slog.Logger),
 	suppressedComponents: make(map[string]bool),
 }
-
 
 // Get returns a logger for the specified component
 func (r *LoggerRegistry) Get(component string) *slog.Logger {
@@ -46,8 +45,6 @@ func (r *LoggerRegistry) Get(component string) *slog.Logger {
 	// If not found, create one on-demand (shouldn't happen with proper initialization)
 	return r.main.With("component", component)
 }
-
-
 
 // The GetLogger function now simply delegates to the registry
 func GetLogger(component string) *slog.Logger {
@@ -86,7 +83,7 @@ func InitializeLoggers(cfg *cfgType.ServerConfig) {
 		}
 	}
 
-    // Choose between structured JSON logs and pretty logs
+	// Choose between structured JSON logs and pretty logs
 	var handler slog.Handler
 	if cfg.Logging.Structure {
 		// Pass backup count to JSONLogWriter
@@ -98,44 +95,44 @@ func InitializeLoggers(cfg *cfgType.ServerConfig) {
 			os.Exit(1)
 		}
 		handler = &PrettyLogWriter{
-			output: logFile,
-			level:  logLevel,
+			output:               logFile,
+			level:                logLevel,
 			suppressedComponents: suppressedComponents,
 		}
 	}
 
-    // Create main logger
-    mainLogger := slog.New(handler)
+	// Create main logger
+	mainLogger := slog.New(handler)
 
-    // Print a console message just for initialization confirmation. Supressed Line in produciton. 
-    //fmt.Printf("Logger initialized: writing to %s\n", logFilePath)
+	// Print a console message just for initialization confirmation. Supressed Line in produciton.
+	//fmt.Printf("Logger initialized: writing to %s\n", logFilePath)
 
-    // Now create all the component loggers
+	// Now create all the component loggers
 	// Pre-creating all loggers you'll need in the application
 	components := GetAllComponents()
 
-    // Create a map of loggers before acquiring the lock
-    tempLoggers := make(map[string]*slog.Logger, len(components))
-    for _, component := range components {
-        tempLoggers[component] = mainLogger.With("component", component)
-    }
+	// Create a map of loggers before acquiring the lock
+	tempLoggers := make(map[string]*slog.Logger, len(components))
+	for _, component := range components {
+		tempLoggers[component] = mainLogger.With("component", component)
+	}
 
-    // Lock the registry, update it, and unlock immediately
-    Registry.mu.Lock()
-    Registry.handler = handler
-    Registry.main = mainLogger
-    Registry.loggers = tempLoggers
+	// Lock the registry, update it, and unlock immediately
+	Registry.mu.Lock()
+	Registry.handler = handler
+	Registry.main = mainLogger
+	Registry.loggers = tempLoggers
 	Registry.suppressedComponents = suppressedComponents
-    Registry.mu.Unlock()
+	Registry.mu.Unlock()
 
-    // Now that we've released the lock, we can safely log
-    GetLogger("main").Info("Logger system initialized",
-        "level", cfg.Logging.Level,
-        "file", logFilePath,
-        "structured", cfg.Logging.Structure,
-        "components", len(components))
-		    
-    // Start periodic log management
+	// Now that we've released the lock, we can safely log
+	GetLogger("main").Info("Logger system initialized",
+		"level", cfg.Logging.Level,
+		"file", logFilePath,
+		"structured", cfg.Logging.Structure,
+		"components", len(components))
+
+	// Start periodic log management
 	checkInterval := 10 // Default to 10 minutes if not configured
 	if cfg.Logging.CheckIntervalMin > 0 {
 		checkInterval = cfg.Logging.CheckIntervalMin

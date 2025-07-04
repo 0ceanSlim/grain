@@ -88,7 +88,7 @@ func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRe
 		SameSite: http.SameSiteStrictMode,
 	})
 
-	log.ClientSession().Info("Created user session", 
+	log.ClientSession().Info("Created user session",
 		"pubkey", req.PublicKey,
 		"mode", req.RequestedMode,
 		"signing_method", req.SigningMethod,
@@ -120,7 +120,7 @@ func (sm *SessionManager) ClearSession(w http.ResponseWriter, r *http.Request) {
 	if token != "" {
 		sm.sessionMutex.Lock()
 		if session, exists := sm.sessions[token]; exists {
-			log.ClientSession().Info("Clearing session", 
+			log.ClientSession().Info("Clearing session",
 				"pubkey", session.PublicKey,
 				"mode", session.Mode)
 		}
@@ -156,12 +156,12 @@ func (sm *SessionManager) CleanupSessions(maxAge time.Duration) {
 
 	now := time.Now()
 	cleanedCount := 0
-	
+
 	for token, session := range sm.sessions {
 		if now.Sub(session.LastActive) > maxAge {
 			delete(sm.sessions, token)
 			cleanedCount++
-			log.ClientSession().Debug("Cleaned up expired session", 
+			log.ClientSession().Debug("Cleaned up expired session",
 				"pubkey", session.PublicKey,
 				"mode", session.Mode)
 		}
@@ -191,10 +191,10 @@ func (sm *SessionManager) GetSessionStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_sessions":   len(sm.sessions),
-		"read_only":        readOnly,
-		"write_mode":       writeMode,
-		"signing_methods":  signingMethods,
+		"total_sessions":  len(sm.sessions),
+		"read_only":       readOnly,
+		"write_mode":      writeMode,
+		"signing_methods": signingMethods,
 	}
 }
 

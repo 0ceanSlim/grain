@@ -23,13 +23,13 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Check if user is already logged in
 	if userSession := session.SessionMgr.GetCurrentUser(r); userSession != nil {
 		log.ClientAPI().Info("User already logged in", "pubkey", userSession.PublicKey)
-		
+
 		response := session.Response{
 			Success: true,
 			Message: "Already logged in",
-			Session: userSession,  // Use userSession here too
+			Session: userSession, // Use userSession here too
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 		return
@@ -68,7 +68,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		loginReq.SigningMethod = session.NoSigning
 	}
 
-	log.ClientAPI().Info("Processing user login", 
+	log.ClientAPI().Info("Processing user login",
 		"pubkey", loginReq.PublicKey,
 		"mode", loginReq.RequestedMode,
 		"signing_method", loginReq.SigningMethod)
@@ -76,12 +76,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate the session request
 	if err := session.ValidateSessionRequest(loginReq); err != nil {
 		log.ClientAPI().Error("Invalid session request", "error", err)
-		
+
 		response := session.Response{
 			Success: false,
 			Message: "Invalid request: " + err.Error(),
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
@@ -90,9 +90,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Initialize user data: fetch mailboxes, set app relays, get metadata from outboxes, cache everything
 	log.ClientAPI().Debug("Fetching and caching user data", "pubkey", loginReq.PublicKey)
-	
+
 	if err := data.FetchAndCacheUserDataWithCoreClient(loginReq.PublicKey); err != nil {
-		log.ClientAPI().Warn("Failed to fetch user data, proceeding with session creation", 
+		log.ClientAPI().Warn("Failed to fetch user data, proceeding with session creation",
 			"pubkey", loginReq.PublicKey, "error", err)
 		// Continue with session creation even if fetch fails - user might be new or relays unavailable
 	}
@@ -101,13 +101,13 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	userSession, err := session.CreateUserSession(w, loginReq)
 	if err != nil {
 		log.ClientAPI().Error("Failed to create session", "error", err)
-		
+
 		response := session.Response{
-			Success:     true,
-			Message:     "Login successful",
-			Session:     userSession,  // Use userSession instead of session
+			Success: true,
+			Message: "Login successful",
+			Session: userSession, // Use userSession instead of session
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
@@ -116,12 +116,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Successful login response
 	response := session.Response{
-		Success:     true,
-		Message:     "Login successful",
-		Session:     userSession,
+		Success: true,
+		Message: "Login successful",
+		Session: userSession,
 	}
 
-	log.ClientAPI().Info("User login successful", 
+	log.ClientAPI().Info("User login successful",
 		"pubkey", loginReq.PublicKey,
 		"mode", userSession.Mode,
 		"signing_method", userSession.SigningMethod,
@@ -132,4 +132,3 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
-

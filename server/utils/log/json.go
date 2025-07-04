@@ -13,13 +13,13 @@ import (
 
 // JSONLogWriter writes logs in a pretty-printed JSON array format
 type JSONLogWriter struct {
-	filePath    string
-	level       slog.Level
-	attrs       []slog.Attr
-	mu          sync.Mutex // Mutex to protect file access
-	maxSizeMB   int        // Maximum file size in MB
-	backupCount int        // Number of backup files to keep
-	lastCheck   time.Time  // Last time we checked the file size
+	filePath             string
+	level                slog.Level
+	attrs                []slog.Attr
+	mu                   sync.Mutex // Mutex to protect file access
+	maxSizeMB            int        // Maximum file size in MB
+	backupCount          int        // Number of backup files to keep
+	lastCheck            time.Time  // Last time we checked the file size
 	suppressedComponents map[string]bool
 }
 
@@ -29,11 +29,11 @@ func NewJSONLogWriter(filePath string, level slog.Level, maxSizeMB int, backupCo
 	ensureValidJSONFile(filePath)
 
 	return &JSONLogWriter{
-		filePath:    filePath,
-		level:       level,
-		maxSizeMB:   maxSizeMB,
-		backupCount: backupCount,
-		lastCheck:   time.Now(),
+		filePath:             filePath,
+		level:                level,
+		maxSizeMB:            maxSizeMB,
+		backupCount:          backupCount,
+		lastCheck:            time.Now(),
 		suppressedComponents: suppressedComponents,
 	}
 }
@@ -192,24 +192,24 @@ func (j *JSONLogWriter) checkAndManageJSONLogFile() {
 	// Handle based on backup configuration
 	if j.backupCount > 1 {
 		// Rotate JSON log files
-		Log().Info("JSON log file size exceeded limit, rotating...", 
+		Log().Info("JSON log file size exceeded limit, rotating...",
 			"file", j.filePath,
 			"current_size_mb", float64(sizeBytes)/(1024*1024),
 			"max_size_mb", j.maxSizeMB,
 			"backup_count", j.backupCount)
-		
+
 		// Perform rotation for JSON files
 		rotateLogFiles(j.filePath, j.backupCount)
-		
+
 		// Create a new empty JSON file
 		ensureValidJSONFile(j.filePath)
 	} else {
 		// Trim JSON log file
-		Log().Info("JSON log file size exceeded limit, trimming...", 
+		Log().Info("JSON log file size exceeded limit, trimming...",
 			"file", j.filePath,
 			"current_size_mb", float64(sizeBytes)/(1024*1024),
 			"max_size_mb", j.maxSizeMB)
-		
+
 		// For JSON files, we need special handling to keep the JSON structure valid
 		trimJSONLogFile(j.filePath)
 	}
@@ -230,15 +230,15 @@ func trimJSONLogFile(filePath string) error {
 	}
 
 	// Calculate target size (20% of max)
-	targetSizeRatio := 0.2 
-	
+	targetSizeRatio := 0.2
+
 	// Calculate how many logs to keep - prevent integer truncation
 	logsToKeep := int(float64(len(logs)) * targetSizeRatio)
 	if logsToKeep >= len(logs) || logsToKeep <= 0 {
 		// Nothing to trim or would trim everything
 		return nil
 	}
-	
+
 	// Keep only the newer logs (the last logsToKeep entries)
 	trimmedLogs := logs[len(logs)-logsToKeep:]
 
@@ -254,11 +254,11 @@ func trimJSONLogFile(filePath string) error {
 		return err
 	}
 
-	Log().Info("JSON log file trimmed successfully", 
+	Log().Info("JSON log file trimmed successfully",
 		"file", filePath,
 		"original_entries", len(logs),
 		"remaining_entries", logsToKeep)
-	
+
 	return nil
 }
 
@@ -269,12 +269,12 @@ func (j *JSONLogWriter) Enabled(ctx context.Context, level slog.Level) bool {
 
 func (j *JSONLogWriter) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &JSONLogWriter{
-		filePath:    j.filePath,
-		level:       j.level,
-		attrs:       append(j.attrs, attrs...),
-		maxSizeMB:   j.maxSizeMB,
-		backupCount: j.backupCount,
-		lastCheck:   j.lastCheck,
+		filePath:             j.filePath,
+		level:                j.level,
+		attrs:                append(j.attrs, attrs...),
+		maxSizeMB:            j.maxSizeMB,
+		backupCount:          j.backupCount,
+		lastCheck:            j.lastCheck,
 		suppressedComponents: j.suppressedComponents,
 	}
 }

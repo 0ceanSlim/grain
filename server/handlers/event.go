@@ -71,22 +71,21 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	// Blacklist/Whitelist check - uses validation methods that respect enabled state
 	result := validation.CheckBlacklistAndWhitelistCached(evt)
 	if !result.Valid {
-		log.Event().Info("Event rejected by cached blacklist/whitelist", 
-			"event_id", evt.ID, 
-			"pubkey", evt.PubKey, 
+		log.Event().Info("Event rejected by cached blacklist/whitelist",
+			"event_id", evt.ID,
+			"pubkey", evt.PubKey,
 			"reason", result.Message)
 		response.SendOK(client, evt.ID, false, result.Message)
 		return
 	}
 
-
 	// Rate and size limit checks
 	result = validation.CheckRateAndSizeLimits(evt, eventSize)
 	if !result.Valid {
-		log.Event().Info("Event rejected by rate/size limits", 
-			"event_id", evt.ID, 
-			"kind", evt.Kind, 
-			"size", eventSize, 
+		log.Event().Info("Event rejected by rate/size limits",
+			"event_id", evt.ID,
+			"kind", evt.Kind,
+			"size", eventSize,
 			"reason", result.Message)
 		response.SendOK(client, evt.ID, false, result.Message)
 		return
@@ -95,13 +94,13 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	// Duplicate event check
 	isDuplicate, err := mongo.CheckDuplicateEvent(context.TODO(), evt)
 	if err != nil {
-		log.Event().Error("Error checking for duplicate event", 
-			"event_id", evt.ID, 
+		log.Event().Error("Error checking for duplicate event",
+			"event_id", evt.ID,
 			"error", err)
 		response.SendOK(client, evt.ID, false, "error: internal server error during duplicate check")
 		return
 	}
-	
+
 	if isDuplicate {
 		log.Event().Info("Duplicate event detected", "event_id", evt.ID)
 		response.SendOK(client, evt.ID, false, "blocked: the database already contains this event")
@@ -113,9 +112,9 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 
 	// Store event in MongoDB
 	mongo.StoreMongoEvent(context.TODO(), evt, client)
-	log.Event().Info("Event stored successfully", 
-		"event_id", evt.ID, 
-		"kind", evt.Kind, 
+	log.Event().Info("Event stored successfully",
+		"event_id", evt.ID,
+		"kind", evt.Kind,
 		"pubkey", evt.PubKey)
 
 	// Send to backup relay
@@ -123,20 +122,20 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 		go func() {
 			err := utils.SendToBackupRelay(cfg.BackupRelay.URL, evt)
 			if err != nil {
-				log.Event().Error("Failed to send event to backup relay", 
-					"event_id", evt.ID, 
-					"relay_url", cfg.BackupRelay.URL, 
+				log.Event().Error("Failed to send event to backup relay",
+					"event_id", evt.ID,
+					"relay_url", cfg.BackupRelay.URL,
 					"error", err)
 			} else {
-				log.Event().Info("Event sent to backup relay", 
-					"event_id", evt.ID, 
+				log.Event().Info("Event sent to backup relay",
+					"event_id", evt.ID,
 					"relay_url", cfg.BackupRelay.URL)
 			}
 		}()
 	}
 
-	log.Event().Info("Event processing completed", 
-		"event_id", evt.ID, 
-		"kind", evt.Kind, 
+	log.Event().Info("Event processing completed",
+		"event_id", evt.ID,
+		"kind", evt.Kind,
 		"pubkey", evt.PubKey)
 }

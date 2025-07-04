@@ -61,19 +61,18 @@ func ConvertPubkeyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.ClientAPI().Error("Pubkey to npub conversion failed", 
-			"pubkey", pubkey, 
+		log.ClientAPI().Error("Pubkey to npub conversion failed",
+			"pubkey", pubkey,
 			"error", err)
 		response.Error = err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 	} else {
 		response.Npub = npub
-		log.ClientAPI().Info("Pubkey to npub conversion successful", 
-			"pubkey", pubkey, 
+		log.ClientAPI().Info("Pubkey to npub conversion successful",
+			"pubkey", pubkey,
 			"npub", npub)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
-

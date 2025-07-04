@@ -63,14 +63,14 @@ func ValidateNpubHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.ClientAPI().Debug("Npub validation failed", 
-			"npub", npub, 
+		log.ClientAPI().Debug("Npub validation failed",
+			"npub", npub,
 			"error", err)
 		response.Error = err.Error()
 	} else {
 		response.Pubkey = pubkey
-		log.ClientAPI().Debug("Npub validation successful", 
-			"npub", npub, 
+		log.ClientAPI().Debug("Npub validation successful",
+			"npub", npub,
 			"pubkey", pubkey)
 	}
 

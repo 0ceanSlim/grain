@@ -39,8 +39,8 @@ func triggerUserSync(pubKey string, userSyncCfg *cfgType.UserSyncConfig, serverC
 	})
 	latestOutboxEvent := userOutboxEvents[0]
 
-	log.UserSync().Info("Selected latest Kind 10002 event", 
-		"event_id", latestOutboxEvent.ID, 
+	log.UserSync().Info("Selected latest Kind 10002 event",
+		"event_id", latestOutboxEvent.ID,
 		"created_at", latestOutboxEvent.CreatedAt)
 
 	// Store the latest outbox event in the local relay
@@ -73,15 +73,15 @@ func triggerUserSync(pubKey string, userSyncCfg *cfgType.UserSyncConfig, serverC
 
 	needs := fetchNeeds(pubKey, userOutboxes, *userSyncCfg)
 
-	log.UserSync().Debug("Events before sorting", 
-		"haves_count", len(haves), 
+	log.UserSync().Debug("Events before sorting",
+		"haves_count", len(haves),
 		"needs_count", len(needs))
 
 	sort.Slice(haves, func(i, j int) bool { return haves[i].ID < haves[j].ID })
 	sort.Slice(needs, func(i, j int) bool { return needs[i].ID < needs[j].ID })
 
-	log.UserSync().Debug("Events after sorting", 
-		"haves_count", len(haves), 
+	log.UserSync().Debug("Events after sorting",
+		"haves_count", len(haves),
 		"needs_count", len(needs))
 
 	// Identify missing events
@@ -111,9 +111,9 @@ func findMissingEvents(haves, needs []nostr.Event) []nostr.Event {
 		missing = append(missing, evt)
 	}
 
-	log.UserSync().Debug("Missing events analysis", 
-		"missing_count", len(missing), 
-		"needs_count", len(needs), 
+	log.UserSync().Debug("Missing events analysis",
+		"missing_count", len(missing),
+		"needs_count", len(needs),
 		"haves_count", len(haves))
 	return missing
 }
@@ -138,7 +138,7 @@ func batchAndSendEvents(events []nostr.Event, serverCfg *cfgType.ServerConfig) {
 		}
 	}
 
-	log.UserSync().Info("Processing events in batches", 
+	log.UserSync().Info("Processing events in batches",
 		"batch_size", batchSize,
 		"non_kind5_events", len(nonKind5Events),
 		"kind5_events", len(kind5Events))
@@ -162,8 +162,8 @@ func processBatches(events []nostr.Event, batchSize int, serverCfg *cfgType.Serv
 	localRelayURL := fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port)
 	conn, err := websocket.Dial(localRelayURL, "", "http://localhost/")
 	if err != nil {
-		log.UserSync().Error("Failed to connect to relay WebSocket", 
-			"error", err, 
+		log.UserSync().Error("Failed to connect to relay WebSocket",
+			"error", err,
 			"relay_url", localRelayURL)
 		return
 	}
@@ -171,8 +171,8 @@ func processBatches(events []nostr.Event, batchSize int, serverCfg *cfgType.Serv
 
 	var mu sync.Mutex
 
-	log.UserSync().Info("Starting batch processing", 
-		"batch_type", label, 
+	log.UserSync().Info("Starting batch processing",
+		"batch_type", label,
 		"total_events", totalEvents,
 		"batch_size", batchSize)
 
@@ -189,7 +189,7 @@ func processBatches(events []nostr.Event, batchSize int, serverCfg *cfgType.Serv
 		totalFailure += failureCount
 		failedEventsLog = append(failedEventsLog, failures...)
 
-		log.UserSync().Debug("Batch progress", 
+		log.UserSync().Debug("Batch progress",
 			"batch_type", label,
 			"processed", i+len(batch),
 			"total", totalEvents,
@@ -199,9 +199,9 @@ func processBatches(events []nostr.Event, batchSize int, serverCfg *cfgType.Serv
 		time.Sleep(time.Second) // Rate limit delay
 	}
 
-	log.UserSync().Info("Batch processing complete", 
+	log.UserSync().Info("Batch processing complete",
 		"batch_type", label,
-		"total_success", totalSuccess, 
+		"total_success", totalSuccess,
 		"total_failure", totalFailure)
 
 	if totalFailure > 0 {
@@ -258,8 +258,8 @@ func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mute
 		// Parse response
 		var response []interface{}
 		if err := json.Unmarshal([]byte(responseStr), &response); err != nil || len(response) < 3 {
-			log.UserSync().Error("Invalid response format", 
-				"raw_response", responseStr, 
+			log.UserSync().Error("Invalid response format",
+				"raw_response", responseStr,
 				"event_id", event.ID,
 				"parse_error", err)
 			failureCount++
@@ -284,8 +284,8 @@ func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mute
 						reason = reasonStr
 					}
 				}
-				log.UserSync().Warn("Event rejected by relay", 
-					"event_id", event.ID, 
+				log.UserSync().Warn("Event rejected by relay",
+					"event_id", event.ID,
 					"reason", reason)
 				failedEventsLog = append(failedEventsLog, map[string]interface{}{
 					"response": response,
@@ -294,7 +294,7 @@ func sendEventsToRelay(conn *websocket.Conn, events []nostr.Event, mu *sync.Mute
 			}
 		} else {
 			failureCount++
-			log.UserSync().Error("Unexpected response format from relay", 
+			log.UserSync().Error("Unexpected response format from relay",
 				"event_id", event.ID,
 				"response", response)
 			failedEventsLog = append(failedEventsLog, map[string]interface{}{
@@ -337,7 +337,7 @@ func writeFailuresToFile(failedEventsLog []map[string]interface{}) {
 		log.UserSync().Error("Failed to get debug log file stats", "error", err)
 		return
 	}
-	
+
 	if fileInfo.Size() > maxSize {
 		err = os.Truncate(filePath, maxSize/2) // Remove oldest half
 		if err != nil {

@@ -17,7 +17,7 @@ func CheckDuplicateEvent(ctx context.Context, evt nostr.Event) (bool, error) {
 	collection := GetCollection(evt.Kind)
 	filter := bson.M{"id": evt.ID}
 
-	log.Mongo().Debug("Checking for duplicate event", 
+	log.Mongo().Debug("Checking for duplicate event",
 		"event_id", evt.ID,
 		"kind", evt.Kind,
 		"collection", fmt.Sprintf("event-kind%d", evt.Kind))
@@ -29,14 +29,14 @@ func CheckDuplicateEvent(ctx context.Context, evt nostr.Event) (bool, error) {
 			log.Mongo().Debug("No duplicate found", "event_id", evt.ID)
 			return false, nil // No duplicate found
 		}
-		
-		log.Mongo().Error("Error checking for duplicate event", 
+
+		log.Mongo().Error("Error checking for duplicate event",
 			"event_id", evt.ID,
 			"error", err)
 		return false, fmt.Errorf("error checking for duplicate event: %v", err)
 	}
-	
-	log.Mongo().Info("Duplicate event found", 
+
+	log.Mongo().Info("Duplicate event found",
 		"event_id", evt.ID,
 		"kind", evt.Kind,
 		"pubkey", evt.PubKey)

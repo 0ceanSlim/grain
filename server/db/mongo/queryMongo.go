@@ -34,7 +34,7 @@ func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName stri
 		if len(filter.Kinds) > 0 {
 			filterBson["kind"] = bson.M{"$in": filter.Kinds}
 		}
-		
+
 		// Tag filtering implementation
 		if filter.Tags != nil {
 			for key, values := range filter.Tags {
@@ -44,7 +44,7 @@ func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName stri
 					if tagKey[0] == '#' {
 						tagKey = tagKey[1:]
 					}
-					
+
 					filterBson["tags"] = bson.M{
 						"$elemMatch": bson.M{
 							"0": tagKey,
@@ -78,7 +78,7 @@ func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName stri
 				break
 			}
 		}
-		
+
 		if hasActualFilters {
 			query["$or"] = combinedFilters
 		}
@@ -104,26 +104,26 @@ func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName stri
 			// Use the smaller of explicit limit and implicit limit
 			if *lowestExplicitLimit < implicitLimit {
 				effectiveLimit = int64(*lowestExplicitLimit)
-				log.MongoQuery().Debug("Using explicit limit (under implicit cap)", 
+				log.MongoQuery().Debug("Using explicit limit (under implicit cap)",
 					"explicit_limit", *lowestExplicitLimit,
 					"implicit_cap", implicitLimit)
 			} else {
 				effectiveLimit = int64(implicitLimit)
-				log.MongoQuery().Debug("Capping explicit limit to implicit maximum", 
+				log.MongoQuery().Debug("Capping explicit limit to implicit maximum",
 					"requested_limit", *lowestExplicitLimit,
 					"applied_limit", implicitLimit)
 			}
 		} else {
 			// No explicit limit, use implicit limit
 			effectiveLimit = int64(implicitLimit)
-			log.MongoQuery().Debug("Using implicit limit (no explicit limit provided)", 
+			log.MongoQuery().Debug("Using implicit limit (no explicit limit provided)",
 				"limit", implicitLimit)
 		}
 	} else {
 		// No implicit limit configured
 		if lowestExplicitLimit != nil {
 			effectiveLimit = int64(*lowestExplicitLimit)
-			log.MongoQuery().Debug("Using explicit limit (no implicit cap configured)", 
+			log.MongoQuery().Debug("Using explicit limit (no implicit cap configured)",
 				"limit", *lowestExplicitLimit)
 		} else {
 			// No limits at all - use a sensible default
@@ -136,7 +136,7 @@ func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName stri
 	var collections []string
 	hasKindFilters := false
 	kindsMap := make(map[int]bool)
-	
+
 	for _, filter := range filters {
 		if len(filter.Kinds) > 0 {
 			hasKindFilters = true
@@ -145,7 +145,7 @@ func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName stri
 			}
 		}
 	}
-	
+
 	if !hasKindFilters {
 		// No kinds specified - get all event collections for cross-collection query
 		allCollections, err := client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
@@ -153,13 +153,13 @@ func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName stri
 			log.MongoQuery().Error("Failed to list collections", "error", err)
 			return nil, fmt.Errorf("error listing collections: %v", err)
 		}
-		
+
 		for _, name := range allCollections {
 			if len(name) > 10 && name[:10] == "event-kind" {
 				collections = append(collections, name)
 			}
 		}
-		
+
 		// For no-kind queries, use MongoDB aggregation for efficiency
 		return queryAcrossAllCollections(client, databaseName, collections, query, effectiveLimit)
 	} else {
@@ -168,15 +168,15 @@ func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName stri
 			collectionName := fmt.Sprintf("event-kind%d", kind)
 			collections = append(collections, collectionName)
 		}
-		
+
 		return querySpecificKinds(client, databaseName, collections, query, effectiveLimit)
 	}
 }
 
 // queryAcrossAllCollections efficiently queries the most recent events across all collections
 func queryAcrossAllCollections(client *mongo.Client, databaseName string, collections []string, query bson.M, limit int64) ([]nostr.Event, error) {
-	log.MongoQuery().Debug("Starting unified cross-collection query with $unionWith", 
-		"collection_count", len(collections), 
+	log.MongoQuery().Debug("Starting unified cross-collection query with $unionWith",
+		"collection_count", len(collections),
 		"limit", limit)
 
 	if len(collections) == 0 {
@@ -207,12 +207,12 @@ func queryAcrossAllCollections(client *mongo.Client, databaseName string, collec
 	}
 
 	// Sort by created_at (most recent first) and apply limit
-	pipeline = append(pipeline, 
+	pipeline = append(pipeline,
 		bson.M{"$sort": bson.M{"created_at": -1, "id": 1}},
 		bson.M{"$limit": limit},
 	)
 
-	log.MongoQuery().Debug("Executing unified aggregation", 
+	log.MongoQuery().Debug("Executing unified aggregation",
 		"pipeline_stages", len(pipeline),
 		"collections_to_union", len(collections),
 		"base_collection", collections[0])
@@ -221,7 +221,7 @@ func queryAcrossAllCollections(client *mongo.Client, databaseName string, collec
 	collection := client.Database(databaseName).Collection(collections[0])
 	cursor, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		log.MongoQuery().Error("Unified aggregation failed", 
+		log.MongoQuery().Error("Unified aggregation failed",
 			"error", err,
 			"collections", len(collections))
 		return nil, fmt.Errorf("unified cross-collection query failed: %v", err)
@@ -235,7 +235,7 @@ func queryAcrossAllCollections(client *mongo.Client, databaseName string, collec
 	}
 
 	duration := time.Since(start)
-	log.MongoQuery().Info("Unified cross-collection query completed", 
+	log.MongoQuery().Info("Unified cross-collection query completed",
 		"duration_ms", duration.Milliseconds(),
 		"collections_unified", len(collections),
 		"results", len(events),
@@ -246,32 +246,32 @@ func queryAcrossAllCollections(client *mongo.Client, databaseName string, collec
 
 // querySpecificKinds queries specific kind collections with limit per kind
 func querySpecificKinds(client *mongo.Client, databaseName string, collections []string, query bson.M, limit int64) ([]nostr.Event, error) {
-	log.MongoQuery().Debug("Querying specific kinds", 
-		"collection_count", len(collections), 
+	log.MongoQuery().Debug("Querying specific kinds",
+		"collection_count", len(collections),
 		"limit_per_kind", limit)
 
 	var allResults []nostr.Event
-	
+
 	for _, collectionName := range collections {
 		collection := client.Database(databaseName).Collection(collectionName)
-		
+
 		// Create fresh options for each collection
 		opts := options.Find().SetSort(bson.D{
 			{Key: "created_at", Value: -1},
 			{Key: "id", Value: 1},
 		})
-		
+
 		// Apply limit per kind if specified
 		if limit > 0 {
 			opts.SetLimit(limit)
 		}
-		
+
 		cursor, err := collection.Find(context.TODO(), query, opts)
 		if err != nil {
 			log.MongoQuery().Error("Error querying collection", "collection", collectionName, "error", err)
 			continue
 		}
-		
+
 		var collectionEvents []nostr.Event
 		if err := cursor.All(context.TODO(), &collectionEvents); err != nil {
 			log.MongoQuery().Error("Error decoding events", "collection", collectionName, "error", err)
@@ -279,14 +279,14 @@ func querySpecificKinds(client *mongo.Client, databaseName string, collections [
 			continue
 		}
 		cursor.Close(context.TODO())
-		
+
 		allResults = append(allResults, collectionEvents...)
-		
+
 		// Extract kind from collection name for logging
 		kindStr := strings.TrimPrefix(collectionName, "event-kind")
 		kind, _ := strconv.Atoi(kindStr)
-		
-		log.MongoQuery().Debug("Kind collection query complete", 
+
+		log.MongoQuery().Debug("Kind collection query complete",
 			"collection", collectionName,
 			"kind", kind,
 			"events_found", len(collectionEvents),
@@ -301,7 +301,7 @@ func querySpecificKinds(client *mongo.Client, databaseName string, collections [
 		return allResults[i].ID < allResults[j].ID
 	})
 
-	log.MongoQuery().Info("Specific kinds query completed", 
+	log.MongoQuery().Info("Specific kinds query completed",
 		"kinds_queried", len(collections),
 		"total_events", len(allResults),
 		"limit_per_kind", limit)

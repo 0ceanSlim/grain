@@ -29,10 +29,10 @@ type Client struct {
 	messageBuffer strings.Builder
 
 	// Timeout configuration
-	readTimeout     time.Duration // Per-message read timeout
-	writeTimeout    time.Duration // Per-message write timeout
-	idleTimeout     time.Duration // Connection idle timeout
-	lastActivity    time.Time     // Last message activity
+	readTimeout  time.Duration // Per-message read timeout
+	writeTimeout time.Duration // Per-message write timeout
+	idleTimeout  time.Duration // Connection idle timeout
+	lastActivity time.Time     // Last message activity
 
 	// Context for cancellation
 	ctx    context.Context
@@ -42,14 +42,14 @@ type Client struct {
 	writeMu sync.Mutex
 
 	// Debugging Information
-	id 			string
+	id          string
 	ip          string
 	userAgent   string
 	origin      string
 	connectedAt time.Time
 
 	// Message monitoring
-	messagesSent    int64
+	messagesSent int64
 	mu           sync.RWMutex // Protects lastActivity
 }
 
@@ -59,9 +59,9 @@ var (
 	mu                 sync.Mutex
 	clients            = make(map[*websocket.Conn]*Client)
 	clientsMu          sync.Mutex
-	
+
 	// Global stats
-	totalMessagesSent    int64
+	totalMessagesSent int64
 )
 
 // PrintStats periodically logs messaging and connection statistics
@@ -71,14 +71,14 @@ func PrintStats() {
 
 	for range ticker.C {
 		sent := atomic.LoadInt64(&totalMessagesSent)
-		
+
 		// Reset counters
 		atomic.StoreInt64(&totalMessagesSent, 0)
-		
+
 		// Get memory statistics from connection manager
 		memStats := connManager.GetMemoryStats()
-		
-		log.RelayClient().Info("Connection and message statistics", 
+
+		log.RelayClient().Info("Connection and message statistics",
 			"messages_sent", sent,
 			"active_connections", currentConnections,
 			"memory_used_pct", memStats["memory_used_percent"],
@@ -88,7 +88,7 @@ func PrintStats() {
 
 func ClientHandler(ws *websocket.Conn) {
 	cfg := config.GetConfig()
-	
+
 	// Create context for this client connection
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -103,16 +103,16 @@ func ClientHandler(ws *websocket.Conn) {
 		subscriptions: make(map[string][]nostr.Filter),
 		rateLimiter:   config.GetRateLimiter(),
 		messageBuffer: strings.Builder{},
-		
+
 		// Configure timeouts from config
 		readTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
 		writeTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
 		idleTimeout:  time.Duration(cfg.Server.IdleTimeout) * time.Second,
 		lastActivity: time.Now(),
-		
+
 		ctx:    ctx,
 		cancel: cancel,
-		
+
 		id:          fmt.Sprintf("c%d", time.Now().UnixNano()),
 		ip:          ip,
 		userAgent:   userAgent,
@@ -128,9 +128,9 @@ func ClientHandler(ws *websocket.Conn) {
 	// Register with connection manager
 	connManager.RegisterConnection(client)
 
-	log.RelayClient().Info("New connection established", 
+	log.RelayClient().Info("New connection established",
 		"client_id", client.id,
-		"ip", ip, 
+		"ip", ip,
 		"user_agent", userAgent,
 		"read_timeout_sec", cfg.Server.ReadTimeout,
 		"write_timeout_sec", cfg.Server.WriteTimeout,
@@ -167,11 +167,11 @@ func (c *Client) monitorIdleTimeout() {
 			c.mu.RUnlock()
 
 			if idle > c.idleTimeout {
-				log.RelayClient().Info("Closing idle connection", 
+				log.RelayClient().Info("Closing idle connection",
 					"client_id", c.id,
 					"idle_duration_sec", int(idle.Seconds()),
 					"idle_timeout_sec", int(c.idleTimeout.Seconds()))
-				
+
 				// Send notice before closing (best effort, no timeout)
 				c.sendNoticeNoTimeout("Connection closed due to inactivity")
 				c.CloseClient()
@@ -204,12 +204,12 @@ func (c *Client) SendMessage(msg interface{}) {
 
 	jsonMsg, err := json.Marshal(msg)
 	if err != nil {
-		log.RelayClient().Error("Failed to marshal message", 
+		log.RelayClient().Error("Failed to marshal message",
 			"client_id", c.id,
 			"error", err)
 		return
 	}
-	
+
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 
@@ -226,7 +226,7 @@ func (c *Client) SendMessage(msg interface{}) {
 		if err := c.ws.SetWriteDeadline(deadline); err != nil {
 			// Don't log error if connection is already closed
 			if !isConnectionClosed(err) {
-				log.RelayClient().Error("Failed to set write deadline", 
+				log.RelayClient().Error("Failed to set write deadline",
 					"client_id", c.id,
 					"timeout_sec", int(c.writeTimeout.Seconds()),
 					"error", err)
@@ -236,19 +236,19 @@ func (c *Client) SendMessage(msg interface{}) {
 			return
 		}
 	}
-	
+
 	// Send message to WebSocket
 	err = websocket.Message.Send(c.ws, string(jsonMsg))
-	
+
 	// Clear write deadline to prevent it from affecting future operations
 	if c.writeTimeout > 0 {
 		c.ws.SetWriteDeadline(time.Time{}) // Clear deadline
 	}
-	
+
 	if err != nil {
 		// Mark as disconnected before logging/cleanup
 		c.markDisconnected()
-		
+
 		// Only log if it's not a connection closed error
 		if !isConnectionClosed(err) {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
@@ -265,7 +265,7 @@ func (c *Client) SendMessage(msg interface{}) {
 		c.CloseClient()
 		return
 	}
-	
+
 	// Update activity and statistics
 	c.updateActivity()
 	atomic.AddInt64(&c.messagesSent, 1)
@@ -294,9 +294,9 @@ func isConnectionClosed(err error) bool {
 	}
 	errStr := err.Error()
 	return strings.Contains(errStr, "broken pipe") ||
-		   strings.Contains(errStr, "connection reset") ||
-		   strings.Contains(errStr, "use of closed network connection") ||
-		   strings.Contains(errStr, "connection refused")
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "use of closed network connection") ||
+		strings.Contains(errStr, "connection refused")
 }
 
 // sendNoticeNoTimeout sends a notice without timeout (for cleanup scenarios)
@@ -306,10 +306,10 @@ func (c *Client) sendNoticeNoTimeout(message string) {
 	if err != nil {
 		return // Best effort
 	}
-	
+
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
-	
+
 	// No timeout for cleanup messages
 	websocket.Message.Send(c.ws, string(jsonMsg))
 }
@@ -338,7 +338,7 @@ func (c *Client) GetSubscriptions() map[string][]nostr.Filter {
 func (c *Client) CloseClient() {
 	// Cancel context first to stop all goroutines
 	c.cancel()
-	
+
 	// Remove from client tracking
 	clientsMu.Lock()
 	_, exists := clients[c.ws]
@@ -366,7 +366,7 @@ func (c *Client) CloseClient() {
 		c.ws.Close()
 	}
 
-	log.RelayClient().Debug("Client connection closed and cleaned up", 
+	log.RelayClient().Debug("Client connection closed and cleaned up",
 		"client_id", c.id,
 		"remaining_connections", currentConnections)
 }
@@ -377,7 +377,7 @@ func clientReader(client *Client) {
 	defer func() {
 		// Mark as disconnected first
 		client.markDisconnected()
-		
+
 		// Clean up tracking when function exits
 		clientsMu.Lock()
 		delete(clients, ws)
@@ -388,11 +388,11 @@ func clientReader(client *Client) {
 
 		// Unregister from connection manager
 		connManager.RemoveConnection(client)
-		
+
 		// Close the connection if not already closed
 		ws.Close()
-		
-		log.RelayClient().Debug("Client reader exited and connection cleaned up", 
+
+		log.RelayClient().Debug("Client reader exited and connection cleaned up",
 			"client_id", client.id,
 			"remaining_connections", currentConnections)
 	}()
@@ -401,7 +401,7 @@ func clientReader(client *Client) {
 		// Check if context is cancelled
 		select {
 		case <-client.ctx.Done():
-			log.RelayClient().Debug("Client reader stopping due to context cancellation", 
+			log.RelayClient().Debug("Client reader stopping due to context cancellation",
 				"client_id", client.id)
 			return
 		default:
@@ -412,7 +412,7 @@ func clientReader(client *Client) {
 			deadline := time.Now().Add(client.readTimeout)
 			if err := ws.SetReadDeadline(deadline); err != nil {
 				if !isConnectionClosed(err) {
-					log.RelayClient().Error("Failed to set read deadline", 
+					log.RelayClient().Error("Failed to set read deadline",
 						"client_id", client.id,
 						"timeout_sec", int(client.readTimeout.Seconds()),
 						"error", err)
@@ -423,12 +423,12 @@ func clientReader(client *Client) {
 
 		var chunk string
 		err := websocket.Message.Receive(ws, &chunk)
-		
+
 		// Clear read deadline after operation
 		if client.readTimeout > 0 {
 			ws.SetReadDeadline(time.Time{}) // Clear deadline
 		}
-		
+
 		if err != nil {
 			handleReadError(err, client)
 			return
@@ -437,16 +437,16 @@ func clientReader(client *Client) {
 		rateLimiter := config.GetRateLimiter()
 		if rateLimiter != nil {
 			if allowed, msg := rateLimiter.AllowWs(); !allowed {
-				log.RelayClient().Warn("WebSocket rate limit exceeded", 
+				log.RelayClient().Warn("WebSocket rate limit exceeded",
 					"client_id", client.id,
 					"reason", msg)
-				
+
 				// Send notice and close connection due to rate limiting
 				client.sendNoticeNoTimeout("rate-limited: " + msg)
 				return
 			}
 		}
-		
+
 		// Update activity on successful message receive
 		client.updateActivity()
 
@@ -460,15 +460,15 @@ func clientReader(client *Client) {
 			if maxEventSize <= 0 {
 				maxEventSize = 1024 * 1024 // Default to 1MB if not configured
 			}
-			
+
 			if client.messageBuffer.Len() > maxEventSize {
-				log.RelayClient().Warn("Message buffer exceeds max event size, closing connection", 
+				log.RelayClient().Warn("Message buffer exceeds max event size, closing connection",
 					"client_id", client.id,
 					"buffer_size", client.messageBuffer.Len(),
 					"max_event_size", maxEventSize)
 				return
 			}
-			log.RelayClient().Debug("Waiting for full JSON message", 
+			log.RelayClient().Debug("Waiting for full JSON message",
 				"client_id", client.id,
 				"buffer_size", len(fullMessage),
 				"max_allowed", maxEventSize)
@@ -480,22 +480,22 @@ func clientReader(client *Client) {
 		var message []interface{}
 		err = json.Unmarshal([]byte(fullMessage), &message)
 		if err != nil {
-			log.RelayClient().Error("JSON parse error", 
-				"error", err, 
+			log.RelayClient().Error("JSON parse error",
+				"error", err,
 				"client_id", client.id,
 				"message_length", len(fullMessage))
 			continue
 		}
 
 		if len(message) == 0 {
-			log.RelayClient().Warn("Empty message received", 
+			log.RelayClient().Warn("Empty message received",
 				"client_id", client.id)
 			continue
 		}
 
 		messageType, ok := message[0].(string)
 		if !ok {
-			log.RelayClient().Warn("Invalid message type", 
+			log.RelayClient().Warn("Invalid message type",
 				"client_id", client.id,
 				"message_type", fmt.Sprintf("%T", message[0]))
 			continue
@@ -504,7 +504,7 @@ func clientReader(client *Client) {
 		// Process message based on type
 		switch messageType {
 		case "REQ":
-			log.RelayClient().Debug("Processing REQ message", 
+			log.RelayClient().Debug("Processing REQ message",
 				"client_id", client.id,
 				"message_parts", len(message))
 			handlers.HandleReq(client, message)
@@ -515,27 +515,27 @@ func clientReader(client *Client) {
 					subID = id
 				}
 			}
-			log.RelayClient().Debug("Processing CLOSE message", 
+			log.RelayClient().Debug("Processing CLOSE message",
 				"client_id", client.id,
 				"sub_id", subID)
 			handlers.HandleClose(client, message)
 		case "AUTH":
 			if config.GetConfig().Auth.Enabled {
-				log.RelayClient().Debug("Processing AUTH message", 
+				log.RelayClient().Debug("Processing AUTH message",
 					"client_id", client.id)
 				handlers.HandleAuth(client, message)
 			} else {
-				log.RelayClient().Warn("Received AUTH message, but AUTH is disabled", 
+				log.RelayClient().Warn("Received AUTH message, but AUTH is disabled",
 					"client_id", client.id)
 			}
 		case "EVENT":
-			log.RelayClient().Debug("Processing EVENT message", 
+			log.RelayClient().Debug("Processing EVENT message",
 				"client_id", client.id,
 				"message_parts", len(message))
 			handlers.HandleEvent(client, message)
 		default:
-			log.RelayClient().Warn("Unknown message type", 
-				"type", messageType, 
+			log.RelayClient().Warn("Unknown message type",
+				"type", messageType,
 				"client_id", client.id,
 				"message_preview", func() string {
 					if len(fullMessage) > 200 {
@@ -550,21 +550,21 @@ func clientReader(client *Client) {
 // handleReadError handles errors that occur during reading from the WebSocket connection
 func handleReadError(err error, client *Client) {
 	clientID := client.id
-	
+
 	// Determine error type and log appropriately
 	if errors.Is(err, io.EOF) {
-		log.RelayClient().Info("Client disconnected normally", 
+		log.RelayClient().Info("Client disconnected normally",
 			"client_id", clientID)
 	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-		log.RelayClient().Info("Client read timeout", 
+		log.RelayClient().Info("Client read timeout",
 			"client_id", clientID,
 			"timeout_sec", int(client.readTimeout.Seconds()))
 	} else if isConnectionClosed(err) {
-		log.RelayClient().Debug("Connection closed during read", 
+		log.RelayClient().Debug("Connection closed during read",
 			"client_id", clientID)
 	} else {
-		log.RelayClient().Error("WebSocket read error", 
-			"error", err, 
+		log.RelayClient().Error("WebSocket read error",
+			"error", err,
 			"client_id", clientID,
 			"error_type", fmt.Sprintf("%T", err))
 	}

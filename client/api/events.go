@@ -15,21 +15,21 @@ import (
 
 // PublishEventRequest represents the request structure for publishing events
 type PublishEventRequest struct {
-	Kind       int         `json:"kind"`
-	Content    string      `json:"content"`
-	Tags       [][]string  `json:"tags,omitempty"`
-	PrivateKey string      `json:"privateKey,omitempty"`
-	Relays     []string    `json:"relays,omitempty"`
+	Kind       int        `json:"kind"`
+	Content    string     `json:"content"`
+	Tags       [][]string `json:"tags,omitempty"`
+	PrivateKey string     `json:"privateKey,omitempty"`
+	Relays     []string   `json:"relays,omitempty"`
 }
 
 // PublishEventResponse represents the response structure for publishing events
 type PublishEventResponse struct {
-	Success    bool                     `json:"success"`
-	EventID    string                   `json:"eventId,omitempty"`
-	Event      *nostr.Event            `json:"event,omitempty"`
-	Results    []core.BroadcastResult  `json:"results"`
-	Summary    core.BroadcastSummary   `json:"summary"`
-	Error      string                  `json:"error,omitempty"`
+	Success bool                   `json:"success"`
+	EventID string                 `json:"eventId,omitempty"`
+	Event   *nostr.Event           `json:"event,omitempty"`
+	Results []core.BroadcastResult `json:"results"`
+	Summary core.BroadcastSummary  `json:"summary"`
+	Error   string                 `json:"error,omitempty"`
 }
 
 // PublishEventHandler handles event publishing requests
@@ -65,7 +65,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 	// Create event signer
 	var signer *core.EventSigner
 	var err error
-	
+
 	if req.PrivateKey != "" {
 		// Use provided private key
 		signer, err = core.NewEventSigner(req.PrivateKey)
@@ -88,7 +88,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Build event
 	eventBuilder := core.NewEventBuilder(req.Kind).Content(req.Content)
-	
+
 	// Add tags if provided
 	for _, tag := range req.Tags {
 		if len(tag) > 0 {
@@ -121,7 +121,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 		response.Error = "Failed to publish to any relays"
 	}
 
-	log.ClientAPI().Info("Event published", 
+	log.ClientAPI().Info("Event published",
 		"event_id", event.ID,
 		"kind", event.Kind,
 		"successful_relays", summary.Successful,
@@ -133,7 +133,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 // sendEventResponse sends a JSON response
 func sendEventResponse(w http.ResponseWriter, response PublishEventResponse) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.ClientAPI().Error("Failed to encode response", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -269,14 +269,14 @@ sendResponse:
 // parseFiltersFromQuery converts HTTP query parameters to Nostr filters
 func parseFiltersFromQuery(r *http.Request) ([]nostr.Filter, error) {
 	query := r.URL.Query()
-	
+
 	filter := nostr.Filter{}
-	
+
 	// Parse authors
 	if authors := query["authors"]; len(authors) > 0 {
 		filter.Authors = authors
 	}
-	
+
 	// Parse kinds
 	if kindStrs := query["kinds"]; len(kindStrs) > 0 {
 		kinds := make([]int, 0, len(kindStrs))
@@ -289,18 +289,18 @@ func parseFiltersFromQuery(r *http.Request) ([]nostr.Filter, error) {
 			filter.Kinds = kinds
 		}
 	}
-	
+
 	// Parse limit
 	if limitStr := query.Get("limit"); limitStr != "" {
 		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
 			filter.Limit = &limit
 		}
 	}
-	
+
 	// Parse IDs
 	if ids := query["ids"]; len(ids) > 0 {
 		filter.IDs = ids
 	}
-	
+
 	return []nostr.Filter{filter}, nil
 }

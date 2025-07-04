@@ -65,23 +65,23 @@ func ResetBlacklistConfig() {
 // applyEnvironmentOverrides applies environment variable overrides to the config
 func applyEnvironmentOverrides(config *cfgType.ServerConfig) {
 	log.Config().Debug("Checking for environment variable overrides")
-	
+
 	// MongoDB URI override
 	if mongoURI := os.Getenv("MONGO_URI"); mongoURI != "" {
-		log.Config().Info("Overriding MongoDB URI from environment variable", 
-			"original", config.MongoDB.URI, 
+		log.Config().Info("Overriding MongoDB URI from environment variable",
+			"original", config.MongoDB.URI,
 			"override", mongoURI)
 		config.MongoDB.URI = mongoURI
 	}
-	
-	// Server port override  
+
+	// Server port override
 	if serverPort := os.Getenv("SERVER_PORT"); serverPort != "" {
 		log.Config().Info("Overriding server port from environment variable",
 			"original", config.Server.Port,
 			"override", serverPort)
 		config.Server.Port = ":" + serverPort
 	}
-	
+
 	// Log level override
 	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {
 		log.Config().Info("Overriding log level from environment variable",
@@ -89,7 +89,7 @@ func applyEnvironmentOverrides(config *cfgType.ServerConfig) {
 			"override", logLevel)
 		config.Logging.Level = logLevel
 	}
-	
+
 	// Environment type override
 	if grainEnv := os.Getenv("GRAIN_ENV"); grainEnv != "" {
 		log.Config().Info("Environment set via GRAIN_ENV", "environment", grainEnv)

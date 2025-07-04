@@ -53,13 +53,13 @@ func (fb *FilterBuilder) Tag(name string, values ...string) *FilterBuilder {
 	if fb.filter.Tags == nil {
 		fb.filter.Tags = make(map[string][]string)
 	}
-	
+
 	// Ensure tag name has # prefix for consistency
 	tagKey := name
 	if len(tagKey) > 0 && tagKey[0] != '#' {
 		tagKey = "#" + tagKey
 	}
-	
+
 	fb.filter.Tags[tagKey] = append(fb.filter.Tags[tagKey], values...)
 	return fb
 }
@@ -91,11 +91,11 @@ func NotesFilter(authors []string, limit int) nostr.Filter {
 	builder := NewFilterBuilder().
 		Kinds(1).
 		Limit(limit)
-	
+
 	for _, author := range authors {
 		builder.Authors(author)
 	}
-	
+
 	return builder.Build()
 }
 
@@ -130,18 +130,18 @@ func TimeRangeFilter(since, until time.Time, kinds []int) nostr.Filter {
 	builder := NewFilterBuilder().
 		Since(since).
 		Until(until)
-	
+
 	if len(kinds) > 0 {
 		builder.Kinds(kinds...)
 	}
-	
+
 	return builder.Build()
 }
 
 // RecentNotesFilter creates a filter for recent notes
 func RecentNotesFilter(limit int, maxAge time.Duration) nostr.Filter {
 	since := time.Now().Add(-maxAge)
-	
+
 	return NewFilterBuilder().
 		Kinds(1).
 		Since(since).

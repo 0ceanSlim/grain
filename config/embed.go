@@ -34,14 +34,14 @@ func ensureConfigFile(targetPath string) error {
 			return err
 		}
 
-		log.Config().Info("Config file does not exist, creating from embedded example", 
-			"target_path", targetPath, 
+		log.Config().Info("Config file does not exist, creating from embedded example",
+			"target_path", targetPath,
 			"example_path", examplePath)
 
 		if err := extractEmbeddedFile(examplePath, targetPath); err != nil {
-			log.Config().Error("Failed to extract embedded example file", 
-				"example_path", examplePath, 
-				"target_path", targetPath, 
+			log.Config().Error("Failed to extract embedded example file",
+				"example_path", examplePath,
+				"target_path", targetPath,
 				"error", err)
 			return err
 		}
@@ -79,11 +79,11 @@ func extractEmbeddedFile(embeddedPath, targetPath string) error {
 		return err
 	}
 
-	log.Config().Info("Embedded file extracted successfully", 
-		"source", embeddedPath, 
-		"destination", targetPath, 
+	log.Config().Info("Embedded file extracted successfully",
+		"source", embeddedPath,
+		"destination", targetPath,
 		"bytes", len(data))
-	
+
 	return nil
 }
 

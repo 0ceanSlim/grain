@@ -19,7 +19,7 @@ type NostrJSON struct {
 // This function is called by the pubkey cache system and doesn't maintain its own cache
 func FetchPubkeysFromDomains(domains []string) ([]string, error) {
 	log.Util().Info("Fetching pubkeys from domains", "domain_count", len(domains))
-	
+
 	if len(domains) == 0 {
 		log.Util().Debug("No domains provided for pubkey fetching")
 		return []string{}, nil
@@ -33,8 +33,8 @@ func FetchPubkeysFromDomains(domains []string) ([]string, error) {
 	for _, domain := range domains {
 		domainPubkeys, err := fetchDomainPubkeys(domain)
 		if err != nil {
-			log.Util().Warn("Failed to fetch pubkeys from domain", 
-				"domain", domain, 
+			log.Util().Warn("Failed to fetch pubkeys from domain",
+				"domain", domain,
 				"error", err)
 			errorCount++
 			continue
@@ -42,13 +42,13 @@ func FetchPubkeysFromDomains(domains []string) ([]string, error) {
 
 		allPubkeys = append(allPubkeys, domainPubkeys...)
 		successCount++
-		
-		log.Util().Info("Successfully fetched pubkeys from domain", 
-			"domain", domain, 
+
+		log.Util().Info("Successfully fetched pubkeys from domain",
+			"domain", domain,
 			"pubkey_count", len(domainPubkeys))
 	}
 
-	log.Util().Info("Domain pubkey fetch completed", 
+	log.Util().Info("Domain pubkey fetch completed",
 		"total_domains", len(domains),
 		"successful_domains", successCount,
 		"failed_domains", errorCount,
@@ -60,9 +60,9 @@ func FetchPubkeysFromDomains(domains []string) ([]string, error) {
 // fetchDomainPubkeys fetches pubkeys from a single domain's .well-known/nostr.json
 func fetchDomainPubkeys(domain string) ([]string, error) {
 	url := fmt.Sprintf("https://%s/.well-known/nostr.json", domain)
-	
-	log.Util().Debug("Fetching nostr.json", 
-		"domain", domain, 
+
+	log.Util().Debug("Fetching nostr.json",
+		"domain", domain,
 		"url", url)
 
 	// Create HTTP client with timeout
@@ -99,15 +99,15 @@ func fetchDomainPubkeys(domain string) ([]string, error) {
 	for name, pubkey := range nostrData.Names {
 		if pubkey != "" {
 			pubkeys = append(pubkeys, pubkey)
-			log.Util().Debug("Found pubkey in domain", 
-				"domain", domain, 
-				"name", name, 
+			log.Util().Debug("Found pubkey in domain",
+				"domain", domain,
+				"name", name,
 				"pubkey", pubkey)
 		}
 	}
 
 	if len(pubkeys) == 0 {
-		log.Util().Warn("No valid pubkeys found in domain", 
+		log.Util().Warn("No valid pubkeys found in domain",
 			"domain", domain,
 			"names_count", len(nostrData.Names))
 	}

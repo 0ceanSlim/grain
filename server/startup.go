@@ -37,7 +37,7 @@ func Run() error {
 	// Setup configuration file watchers and signal handlers
 	restartChan := make(chan struct{}, 1) // Buffered channel to prevent blocking
 	signalChan := make(chan os.Signal, 1)
-	
+
 	startConfigWatchers(restartChan)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -47,7 +47,7 @@ func Run() error {
 	for {
 		// Create shutdown channel for this instance
 		shutdownChan := make(chan struct{})
-		
+
 		// Start server instance in goroutine
 		go func() {
 			runServerInstance(shutdownChan, restartChan, signalChan)
@@ -57,15 +57,15 @@ func Run() error {
 		select {
 		case <-restartChan:
 			log.Startup().Info("Restarting server due to configuration change")
-			close(shutdownChan) // Signal server instance to shutdown
+			close(shutdownChan)         // Signal server instance to shutdown
 			time.Sleep(3 * time.Second) // Brief pause before restart
-			
+
 			// Reset configurations to allow fresh loading
 			resetConfigurations()
 			continue
 		case <-signalChan:
 			log.Startup().Info("Shutting down server gracefully")
-			close(shutdownChan) // Signal server instance to shutdown
+			close(shutdownChan)         // Signal server instance to shutdown
 			time.Sleep(1 * time.Second) // Allow cleanup time
 			return nil
 		}
@@ -81,7 +81,7 @@ func ensureConfigFiles() error {
 func startConfigWatchers(restartChan chan<- struct{}) {
 	watchFiles := []string{
 		"config.yml",
-		"whitelist.yml", 
+		"whitelist.yml",
 		"blacklist.yml",
 		"relay_metadata.json",
 	}
@@ -133,7 +133,7 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 	case <-shutdownChan:
 		log.Startup().Debug("Server instance received shutdown signal")
 	case <-restartChan:
-		log.Startup().Debug("Server instance received restart signal") 
+		log.Startup().Debug("Server instance received restart signal")
 		// Don't reset configs here - let main loop handle it
 	case <-signalChan:
 		log.Startup().Debug("Server instance received OS signal")
@@ -164,14 +164,14 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 
 	// Re-initialize logger with current configuration
 	log.InitializeLoggers(cfg)
-	
+
 	// Set resource limits
 	config.SetResourceLimit(&cfg.ResourceLimits)
-	
+
 	// Configure rate and size limiting
 	config.SetRateLimit(cfg)
 	config.SetSizeLimit(cfg)
-	
+
 	// Clear any temporary bans from previous instance
 	config.ClearTemporaryBans()
 
@@ -184,14 +184,14 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 	config.InitializePubkeyCache()
 
 	// TODO: make these configurable. Change the dfdefault config for the client
-	// package to the same defaults I put in the example config. 
+	// package to the same defaults I put in the example config.
 	// Initialize client package (includes session manager and core client)
 	appRelays := []string{
 		"wss://relay.damus.io",
-		"wss://nos.lol", 
+		"wss://nos.lol",
 		"wss://relay.nostr.band",
 	}
-	
+
 	if err := client.InitializeClient(appRelays); err != nil {
 		log.Startup().Error("Failed to initialize client package", "error", err)
 		return fmt.Errorf("client initialization failed: %w", err)
@@ -204,7 +204,7 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 // setupHTTPServer creates and starts the HTTP server
 func setupHTTPServer(cfg *cfgType.ServerConfig) *http.Server {
 	mux := initClient()
-	
+
 	server := &http.Server{
 		Addr:         cfg.Server.Port,
 		Handler:      mux,
@@ -215,12 +215,12 @@ func setupHTTPServer(cfg *cfgType.ServerConfig) *http.Server {
 
 	go func() {
 		fmt.Printf("Server is running on http://localhost%s\n", cfg.Server.Port)
-		log.Startup().Info("HTTP server started", 
+		log.Startup().Info("HTTP server started",
 			"address", cfg.Server.Port,
 			"read_timeout", cfg.Server.ReadTimeout,
 			"write_timeout", cfg.Server.WriteTimeout,
 			"idle_timeout", cfg.Server.IdleTimeout)
-			
+
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Startup().Error("HTTP server error", "error", err)
 		}
@@ -255,7 +255,7 @@ func resetConfigurations() {
 // initClient initializes the HTTP application routes and middleware
 func initClient() http.Handler {
 	mux := http.NewServeMux()
-	
+
 	// Main route handles WebSocket upgrades, NIP-11 relay info, and web interface
 	mux.HandleFunc("/", initRoot)
 
@@ -263,7 +263,7 @@ func initClient() http.Handler {
 	client.RegisterEndpoints(mux)
 
 	// Register PWA routes
-    client.RegisterPWARoutes(mux)
+	client.RegisterPWARoutes(mux)
 
 	return mux // Return the mux as the HTTP handler
 }

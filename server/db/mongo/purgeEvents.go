@@ -22,7 +22,7 @@ func PurgeOldEventsOptimized(cfg *cfgType.EventPurgeConfig) {
 		return
 	}
 
-	log.MongoPurge().Info("Starting optimized event purge", 
+	log.MongoPurge().Info("Starting optimized event purge",
 		"keep_hours", cfg.KeepIntervalHours,
 		"exclude_whitelisted", cfg.ExcludeWhitelisted,
 		"purge_by_kind_enabled", cfg.PurgeByKindEnabled)
@@ -34,7 +34,7 @@ func PurgeOldEventsOptimized(cfg *cfgType.EventPurgeConfig) {
 	cutoff := currentTime - int64(cfg.KeepIntervalHours*3600)
 	cutoffTime := time.Unix(cutoff, 0)
 
-	log.MongoPurge().Debug("Purge cutoff calculated", 
+	log.MongoPurge().Debug("Purge cutoff calculated",
 		"current_time", time.Unix(currentTime, 0).Format(time.RFC3339),
 		"cutoff_time", cutoffTime.Format(time.RFC3339),
 		"cutoff_unix", cutoff)
@@ -45,11 +45,11 @@ func PurgeOldEventsOptimized(cfg *cfgType.EventPurgeConfig) {
 	if cfg.ExcludeWhitelisted {
 		pubkeyCache := config.GetPubkeyCache()
 		whitelistedPubkeys = pubkeyCache.GetWhitelistedPubkeys()
-		
-		log.MongoPurge().Info("Using cached whitelist for purge exclusion", 
+
+		log.MongoPurge().Info("Using cached whitelist for purge exclusion",
 			"whitelisted_count", len(whitelistedPubkeys),
 			"exclude_whitelisted", cfg.ExcludeWhitelisted)
-		
+
 		if len(whitelistedPubkeys) == 0 {
 			log.MongoPurge().Warn("No whitelisted pubkeys found in cache, purge will include all pubkeys")
 		}
@@ -70,7 +70,7 @@ func PurgeOldEventsOptimized(cfg *cfgType.EventPurgeConfig) {
 		collectionsToPurge = getAllEventCollections(client)
 	}
 
-	log.MongoPurge().Info("Identified collections for purging", 
+	log.MongoPurge().Info("Identified collections for purging",
 		"collection_count", len(collectionsToPurge),
 		"category_purging", cfg.PurgeByCategory)
 
@@ -78,18 +78,18 @@ func PurgeOldEventsOptimized(cfg *cfgType.EventPurgeConfig) {
 	for _, collectionName := range collectionsToPurge {
 		purged := purgeCollectionOptimized(client, dbName, collectionName, cutoff, cfg, whitelistedPubkeys)
 		totalPurged += purged
-		
+
 		if purged > 0 {
-			log.MongoPurge().Info("Collection purge completed", 
+			log.MongoPurge().Info("Collection purge completed",
 				"collection", collectionName,
 				"purged", purged)
 		} else {
-			log.MongoPurge().Debug("No documents purged from collection", 
+			log.MongoPurge().Debug("No documents purged from collection",
 				"collection", collectionName)
 		}
 	}
 
-	log.MongoPurge().Info("Optimized purging completed", 
+	log.MongoPurge().Info("Optimized purging completed",
 		"total_purged", totalPurged,
 		"collections_processed", len(collectionsToPurge))
 }
@@ -97,18 +97,18 @@ func PurgeOldEventsOptimized(cfg *cfgType.EventPurgeConfig) {
 // purgeCollectionOptimized performs bulk deletion on a single collection
 func purgeCollectionOptimized(client *mongo.Client, dbName, collectionName string, cutoff int64, cfg *cfgType.EventPurgeConfig, whitelistedPubkeys []string) int {
 	collection := client.Database(dbName).Collection(collectionName)
-	
+
 	// Build base filter for old events
 	filter := bson.M{"created_at": bson.M{"$lt": cutoff}}
-	
+
 	// Add whitelist exclusion if configured
 	if cfg.ExcludeWhitelisted && len(whitelistedPubkeys) > 0 {
 		filter["pubkey"] = bson.M{"$nin": whitelistedPubkeys}
-		log.MongoPurge().Debug("Added whitelist exclusion to filter", 
+		log.MongoPurge().Debug("Added whitelist exclusion to filter",
 			"collection", collectionName,
 			"excluded_pubkeys", len(whitelistedPubkeys))
 	}
-	
+
 	// Add category filtering if needed
 	if len(cfg.PurgeByCategory) > 0 {
 		// Extract kind from collection name
@@ -118,59 +118,59 @@ func purgeCollectionOptimized(client *mongo.Client, dbName, collectionName strin
 			kind := 0
 			if _, err := fmt.Sscanf(kindStr, "%d", &kind); err == nil {
 				category := utils.DetermineEventCategory(kind)
-				
+
 				// Check if this category should be purged
 				if purge, exists := cfg.PurgeByCategory[category]; !exists || !purge {
-					log.MongoPurge().Debug("Skipping collection due to category exclusion", 
+					log.MongoPurge().Debug("Skipping collection due to category exclusion",
 						"collection", collectionName,
-						"kind", kind, 
+						"kind", kind,
 						"category", category)
 					return 0
 				}
 			}
 		}
 	}
-	
+
 	// Count documents that will be deleted (for logging)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	
+
 	count, err := collection.CountDocuments(ctx, filter)
 	if err != nil {
-		log.MongoPurge().Error("Error counting documents for purge", 
-			"collection", collectionName, 
-			"error", err)
-		return 0
-	}
-	
-	if count == 0 {
-		log.MongoPurge().Debug("No documents to purge in collection", 
-			"collection", collectionName)
-		return 0
-	}
-	
-	log.MongoPurge().Info("Starting bulk delete operation", 
-		"collection", collectionName,
-		"documents_to_delete", count)
-	
-	// Perform bulk deletion
-	start := time.Now()
-	result, err := collection.DeleteMany(ctx, filter)
-	duration := time.Since(start)
-	
-	if err != nil {
-		log.MongoPurge().Error("Bulk delete operation failed", 
+		log.MongoPurge().Error("Error counting documents for purge",
 			"collection", collectionName,
 			"error", err)
 		return 0
 	}
-	
-	log.MongoPurge().Info("Bulk delete operation completed", 
+
+	if count == 0 {
+		log.MongoPurge().Debug("No documents to purge in collection",
+			"collection", collectionName)
+		return 0
+	}
+
+	log.MongoPurge().Info("Starting bulk delete operation",
+		"collection", collectionName,
+		"documents_to_delete", count)
+
+	// Perform bulk deletion
+	start := time.Now()
+	result, err := collection.DeleteMany(ctx, filter)
+	duration := time.Since(start)
+
+	if err != nil {
+		log.MongoPurge().Error("Bulk delete operation failed",
+			"collection", collectionName,
+			"error", err)
+		return 0
+	}
+
+	log.MongoPurge().Info("Bulk delete operation completed",
 		"collection", collectionName,
 		"deleted_count", result.DeletedCount,
 		"expected_count", count,
 		"duration_ms", duration.Milliseconds())
-	
+
 	return int(result.DeletedCount)
 }
 
@@ -182,7 +182,7 @@ func ScheduleEventPurgingOptimized(cfg *cfgType.ServerConfig) {
 	}
 
 	purgeInterval := time.Duration(cfg.EventPurge.PurgeIntervalMinutes) * time.Minute
-	log.MongoPurge().Info("Starting scheduled optimized event purging", 
+	log.MongoPurge().Info("Starting scheduled optimized event purging",
 		"interval_minutes", cfg.EventPurge.PurgeIntervalMinutes,
 		"keep_hours", cfg.EventPurge.KeepIntervalHours,
 		"disable_initial_purge", cfg.EventPurge.DisableAtStartup)
@@ -221,11 +221,10 @@ func getAllEventCollections(client *mongo.Client) []string {
 			collections = append(collections, name)
 		}
 	}
-	
-	log.MongoPurge().Debug("Found event collections", 
-		"count", len(collections), 
+
+	log.MongoPurge().Debug("Found event collections",
+		"count", len(collections),
 		"collections", collections)
-		
+
 	return collections
 }
-

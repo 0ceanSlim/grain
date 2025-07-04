@@ -75,11 +75,11 @@ func (mr *MessageRouter) RouteMessage(subID string, messageType string, data int
 	mr.mu.RLock()
 	sub, exists := mr.subscriptions[subID]
 	mr.mu.RUnlock()
-	
+
 	if !exists {
 		return
 	}
-	
+
 	switch messageType {
 	case "EVENT":
 		if eventData, ok := data.(map[string]interface{}); ok {
@@ -115,15 +115,15 @@ func NewRelayPool(config *Config) *RelayPool {
 func (rp *RelayPool) Connect(url string) error {
 	rp.mu.Lock()
 	defer rp.mu.Unlock()
-	
+
 	// Check if already connected
 	if conn, exists := rp.connections[url]; exists && conn.Status == StatusConnected {
 		log.ClientCore().Debug("Already connected to relay", "relay", url)
 		return nil
 	}
-	
+
 	log.ClientCore().Debug("Connecting to relay", "relay", url)
-	
+
 	// Create relay connection
 	relayConn := &RelayConnection{
 		URL:           url,
@@ -133,10 +133,10 @@ func (rp *RelayPool) Connect(url string) error {
 		done:          make(chan struct{}),
 		messageRouter: rp.messageRouter,
 	}
-	
+
 	// Attempt WebSocket connection with timeout
 	origin := "http://localhost/"
-	
+
 	// Create a custom dialer with timeout
 	config, err := websocket.NewConfig(url, origin)
 	if err != nil {
@@ -144,30 +144,30 @@ func (rp *RelayPool) Connect(url string) error {
 		log.ClientCore().Error("Failed to create WebSocket config", "relay", url, "error", err)
 		return fmt.Errorf("failed to create config for relay %s: %w", url, err)
 	}
-	
+
 	// Set connection timeout
 	config.Dialer = &net.Dialer{
 		Timeout: rp.config.ConnectionTimeout,
 	}
-	
+
 	conn, err := websocket.DialConfig(config)
 	if err != nil {
 		relayConn.Status = StatusError
 		log.ClientCore().Error("Failed to connect to relay", "relay", url, "error", err)
 		return fmt.Errorf("failed to connect to relay %s: %w", url, err)
 	}
-	
+
 	relayConn.Conn = conn
 	relayConn.Status = StatusConnected
 	relayConn.LastPing = time.Now()
-	
+
 	// Store connection
 	rp.connections[url] = relayConn
-	
+
 	// Start connection handlers
 	go relayConn.writeHandler()
 	go relayConn.readHandler()
-	
+
 	log.ClientCore().Info("Connected to relay", "relay", url)
 	return nil
 }
@@ -177,16 +177,16 @@ func (rp *RelayPool) SendMessage(url string, message interface{}) error {
 	rp.mu.RLock()
 	conn, exists := rp.connections[url]
 	rp.mu.RUnlock()
-	
+
 	if !exists || conn.Status != StatusConnected {
 		return fmt.Errorf("not connected to relay %s", url)
 	}
-	
+
 	data, err := json.Marshal(message)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
-	
+
 	select {
 	case conn.writeChan <- data:
 		log.ClientCore().Debug("Message queued for relay", "relay", url)
@@ -202,22 +202,22 @@ func (rp *RelayPool) BroadcastMessage(message interface{}, urls []string) error 
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
-	
+
 	log.ClientCore().Debug("Broadcasting message", "relay_count", len(urls))
-	
+
 	var lastErr error
 	sent := 0
-	
+
 	for _, url := range urls {
 		rp.mu.RLock()
 		conn, exists := rp.connections[url]
 		rp.mu.RUnlock()
-		
+
 		if !exists || conn.Status != StatusConnected {
 			lastErr = fmt.Errorf("not connected to relay %s", url)
 			continue
 		}
-		
+
 		select {
 		case conn.writeChan <- data:
 			sent++
@@ -225,11 +225,11 @@ func (rp *RelayPool) BroadcastMessage(message interface{}, urls []string) error 
 			lastErr = fmt.Errorf("timeout sending to relay %s", url)
 		}
 	}
-	
+
 	if sent == 0 && lastErr != nil {
 		return lastErr
 	}
-	
+
 	log.ClientCore().Debug("Message broadcast complete", "sent", sent, "total", len(urls))
 	return nil
 }
@@ -238,12 +238,12 @@ func (rp *RelayPool) BroadcastMessage(message interface{}, urls []string) error 
 func (rp *RelayPool) GetConnection(url string) (*RelayConnection, error) {
 	rp.mu.RLock()
 	defer rp.mu.RUnlock()
-	
+
 	conn, exists := rp.connections[url]
 	if !exists {
 		return nil, fmt.Errorf("no connection to relay %s", url)
 	}
-	
+
 	return conn, nil
 }
 
@@ -251,14 +251,14 @@ func (rp *RelayPool) GetConnection(url string) (*RelayConnection, error) {
 func (rp *RelayPool) GetConnectedRelays() []string {
 	rp.mu.RLock()
 	defer rp.mu.RUnlock()
-	
+
 	var connected []string
 	for url, conn := range rp.connections {
 		if conn.Status == StatusConnected {
 			connected = append(connected, url)
 		}
 	}
-	
+
 	return connected
 }
 
@@ -266,12 +266,12 @@ func (rp *RelayPool) GetConnectedRelays() []string {
 func (rp *RelayPool) CloseConnection(url string) error {
 	rp.mu.Lock()
 	defer rp.mu.Unlock()
-	
+
 	conn, exists := rp.connections[url]
 	if !exists {
 		return fmt.Errorf("no connection to relay %s", url)
 	}
-	
+
 	return conn.close()
 }
 
@@ -289,15 +289,15 @@ func (rp *RelayPool) UnregisterSubscription(subID string) {
 func (rp *RelayPool) Close() error {
 	rp.mu.Lock()
 	defer rp.mu.Unlock()
-	
+
 	log.ClientCore().Info("Closing relay pool", "connection_count", len(rp.connections))
-	
+
 	for url, conn := range rp.connections {
 		if err := conn.close(); err != nil {
 			log.ClientCore().Error("Error closing relay connection", "relay", url, "error", err)
 		}
 	}
-	
+
 	rp.connections = make(map[string]*RelayConnection)
 	return nil
 }
@@ -309,7 +309,7 @@ func (rc *RelayConnection) writeHandler() {
 			rc.Conn.Close()
 		}
 	}()
-	
+
 	for {
 		select {
 		case data := <-rc.writeChan:
@@ -319,7 +319,7 @@ func (rc *RelayConnection) writeHandler() {
 				return
 			}
 			log.ClientCore().Debug("Message sent to relay", "relay", rc.URL)
-			
+
 		case <-rc.done:
 			log.ClientCore().Debug("Write handler stopped", "relay", rc.URL)
 			return
@@ -336,7 +336,7 @@ func (rc *RelayConnection) readHandler() {
 		rc.Status = StatusDisconnected
 		log.ClientCore().Debug("Read handler terminated", "relay", rc.URL)
 	}()
-	
+
 	for {
 		select {
 		case <-rc.done:
@@ -345,7 +345,7 @@ func (rc *RelayConnection) readHandler() {
 		default:
 			// Set a longer read timeout to avoid frequent timeouts
 			rc.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-			
+
 			var message string
 			if err := websocket.Message.Receive(rc.Conn, &message); err != nil {
 				// Don't log timeout errors as errors - they're normal for keep-alive
@@ -353,12 +353,12 @@ func (rc *RelayConnection) readHandler() {
 					log.ClientCore().Debug("Read timeout from relay (normal keep-alive)", "relay", rc.URL)
 					continue // Continue loop, don't terminate connection
 				}
-				
+
 				log.ClientCore().Warn("Failed to read message from relay", "relay", rc.URL, "error", err)
 				rc.Status = StatusError
 				return
 			}
-			
+
 			// Process the received message
 			if err := rc.processMessage(message); err != nil {
 				log.ClientCore().Warn("Failed to process message from relay", "relay", rc.URL, "error", err)
@@ -371,22 +371,22 @@ func (rc *RelayConnection) readHandler() {
 func (rc *RelayConnection) close() error {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	
+
 	if rc.Status == StatusDisconnected {
 		return nil
 	}
-	
+
 	log.ClientCore().Debug("Closing relay connection", "relay", rc.URL)
-	
+
 	close(rc.done)
-	
+
 	if rc.Conn != nil {
 		if err := rc.Conn.Close(); err != nil {
 			log.ClientCore().Error("Error closing WebSocket connection", "relay", rc.URL, "error", err)
 			return err
 		}
 	}
-	
+
 	rc.Status = StatusDisconnected
 	log.ClientCore().Debug("Relay connection closed", "relay", rc.URL)
 	return nil
@@ -395,22 +395,22 @@ func (rc *RelayConnection) close() error {
 // processMessage handles incoming messages from the relay
 func (rc *RelayConnection) processMessage(message string) error {
 	log.ClientCore().Debug("Processing message from relay", "relay", rc.URL, "message_length", len(message))
-	
+
 	// Parse the message as JSON array
 	var messageArray []interface{}
 	if err := json.Unmarshal([]byte(message), &messageArray); err != nil {
 		return fmt.Errorf("invalid message format: %w", err)
 	}
-	
+
 	if len(messageArray) == 0 {
 		return fmt.Errorf("empty message")
 	}
-	
+
 	messageType, ok := messageArray[0].(string)
 	if !ok {
 		return fmt.Errorf("invalid message type")
 	}
-	
+
 	switch messageType {
 	case "EVENT":
 		if len(messageArray) >= 3 {
@@ -418,12 +418,12 @@ func (rc *RelayConnection) processMessage(message string) error {
 			if !ok {
 				return fmt.Errorf("invalid subscription ID in EVENT")
 			}
-			
+
 			eventData, ok := messageArray[2].(map[string]interface{})
 			if !ok {
 				return fmt.Errorf("invalid event data in EVENT")
 			}
-			
+
 			log.ClientCore().Debug("Received EVENT message", "relay", rc.URL, "sub_id", subID)
 			rc.messageRouter.RouteMessage(subID, "EVENT", eventData)
 		}
@@ -433,7 +433,7 @@ func (rc *RelayConnection) processMessage(message string) error {
 			if !ok {
 				return fmt.Errorf("invalid subscription ID in EOSE")
 			}
-			
+
 			log.ClientCore().Debug("Received EOSE message", "relay", rc.URL, "sub_id", subID)
 			rc.messageRouter.RouteMessage(subID, "EOSE", nil)
 		}
@@ -443,7 +443,7 @@ func (rc *RelayConnection) processMessage(message string) error {
 			if !ok {
 				return fmt.Errorf("invalid subscription ID in CLOSED")
 			}
-			
+
 			log.ClientCore().Debug("Received CLOSED message", "relay", rc.URL, "sub_id", subID)
 			rc.messageRouter.RouteMessage(subID, "CLOSED", nil)
 		}
@@ -463,7 +463,7 @@ func (rc *RelayConnection) processMessage(message string) error {
 	default:
 		log.ClientCore().Debug("Unknown message type", "relay", rc.URL, "type", messageType)
 	}
-	
+
 	return nil
 }
 
@@ -475,13 +475,13 @@ func parseEventFromData(data map[string]interface{}) *nostr.Event {
 		log.ClientCore().Error("Failed to marshal event data", "error", err)
 		return nil
 	}
-	
+
 	var event nostr.Event
 	if err := json.Unmarshal(jsonData, &event); err != nil {
 		log.ClientCore().Error("Failed to unmarshal event", "error", err)
 		return nil
 	}
-	
+
 	return &event
 }
 
@@ -489,11 +489,11 @@ func parseEventFromData(data map[string]interface{}) *nostr.Event {
 func (rc *RelayConnection) ping() error {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	
+
 	if rc.Status != StatusConnected {
 		return fmt.Errorf("connection not active")
 	}
-	
+
 	// Most Nostr relays don't require explicit pings, but we update the timestamp
 	rc.LastPing = time.Now()
 	return nil

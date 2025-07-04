@@ -44,10 +44,10 @@ func SetRateLimit(cfg *cfgType.ServerConfig) {
 		cfg.RateLimit.ReqBurst,
 	)
 
-	log.Config().Info("Rate limiters configured", 
-    "ws_limit", cfg.RateLimit.WsLimit,
-    "event_limit", cfg.RateLimit.EventLimit,
-    "req_limit", cfg.RateLimit.ReqLimit)
+	log.Config().Info("Rate limiters configured",
+		"ws_limit", cfg.RateLimit.WsLimit,
+		"event_limit", cfg.RateLimit.EventLimit,
+		"req_limit", cfg.RateLimit.ReqLimit)
 
 	for _, kindLimit := range cfg.RateLimit.KindLimits {
 		rateLimiter.AddKindLimit(kindLimit.Kind, rate.Limit(kindLimit.Limit), kindLimit.Burst)

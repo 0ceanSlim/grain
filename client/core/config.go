@@ -43,31 +43,31 @@ func (c *Config) Validate() error {
 	if c.ConnectionTimeout <= 0 {
 		return fmt.Errorf("connection timeout must be positive")
 	}
-	
+
 	if c.ReadTimeout <= 0 {
 		return fmt.Errorf("read timeout must be positive")
 	}
-	
+
 	if c.WriteTimeout <= 0 {
 		return fmt.Errorf("write timeout must be positive")
 	}
-	
+
 	if c.MaxConnections <= 0 {
 		return fmt.Errorf("max connections must be positive")
 	}
-	
+
 	if c.RetryAttempts < 0 {
 		return fmt.Errorf("retry attempts cannot be negative")
 	}
-	
+
 	if c.RetryDelay < 0 {
 		return fmt.Errorf("retry delay cannot be negative")
 	}
-	
+
 	if len(c.DefaultRelays) == 0 {
 		return fmt.Errorf("at least one default relay must be specified")
 	}
-	
+
 	// Validate relay URLs (basic check)
 	for _, relay := range c.DefaultRelays {
 		if len(relay) == 0 {
@@ -77,6 +77,6 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("invalid relay URL format: %s", relay)
 		}
 	}
-	
+
 	return nil
 }

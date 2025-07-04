@@ -15,14 +15,14 @@ import (
 
 // fetchHaves queries the local relay for events by the user.
 func fetchHaves(pubKey, localRelayURL string, syncConfig cfgType.UserSyncConfig) ([]nostr.Event, error) {
-	log.UserSync().Debug("Connecting to local relay for haves", 
-		"relay_url", localRelayURL, 
+	log.UserSync().Debug("Connecting to local relay for haves",
+		"relay_url", localRelayURL,
 		"pubkey", pubKey)
 
 	conn, err := websocket.Dial(localRelayURL, "", "http://localhost/")
 	if err != nil {
-		log.UserSync().Error("Failed to connect to local relay", 
-			"error", err, 
+		log.UserSync().Error("Failed to connect to local relay",
+			"error", err,
 			"relay_url", localRelayURL)
 		return nil, fmt.Errorf("failed to connect to local relay: %w", err)
 	}
@@ -44,11 +44,11 @@ func fetchHaves(pubKey, localRelayURL string, syncConfig cfgType.UserSyncConfig)
 
 	var localEvents []nostr.Event
 	eoseReceived := false
-	
+
 	// Set up channels for message handling
 	msgChan := make(chan string)
 	errChan := make(chan error)
-	
+
 	// Goroutine for reading WebSocket messages
 	go func() {
 		defer close(msgChan)
@@ -79,8 +79,8 @@ func fetchHaves(pubKey, localRelayURL string, syncConfig cfgType.UserSyncConfig)
 
 			var response []interface{}
 			if err := json.Unmarshal([]byte(message), &response); err != nil {
-				log.UserSync().Error("Failed to unmarshal response", 
-					"error", err, 
+				log.UserSync().Error("Failed to unmarshal response",
+					"error", err,
 					"raw_message", message)
 				continue
 			}
@@ -92,7 +92,7 @@ func fetchHaves(pubKey, localRelayURL string, syncConfig cfgType.UserSyncConfig)
 
 					eventMap, ok := response[2].(map[string]interface{})
 					if !ok {
-						log.UserSync().Error("Unexpected event format in haves", 
+						log.UserSync().Error("Unexpected event format in haves",
 							"event_data", response[2],
 							"data_type", fmt.Sprintf("%T", response[2]))
 						continue
@@ -110,7 +110,7 @@ func fetchHaves(pubKey, localRelayURL string, syncConfig cfgType.UserSyncConfig)
 						continue
 					}
 
-					log.UserSync().Debug("Received local event", 
+					log.UserSync().Debug("Received local event",
 						"event_id", event.ID,
 						"kind", event.Kind,
 						"created_at", event.CreatedAt)
@@ -123,7 +123,7 @@ func fetchHaves(pubKey, localRelayURL string, syncConfig cfgType.UserSyncConfig)
 			}
 
 		case <-time.After(WebSocketTimeout):
-			log.UserSync().Warn("Timeout waiting for local relay response", 
+			log.UserSync().Warn("Timeout waiting for local relay response",
 				"timeout_seconds", int(WebSocketTimeout.Seconds()))
 			eoseReceived = true
 
@@ -138,13 +138,13 @@ func fetchHaves(pubKey, localRelayURL string, syncConfig cfgType.UserSyncConfig)
 		}
 	}
 
-	log.UserSync().Info("Finished fetching local events", 
+	log.UserSync().Info("Finished fetching local events",
 		"pubkey", pubKey,
 		"total_events", len(localEvents))
 
 	// Send close message
 	closeMsg := `["CLOSE", "sub_local"]`
 	_ = websocket.Message.Send(conn, closeMsg)
-	
+
 	return localEvents, nil
 }

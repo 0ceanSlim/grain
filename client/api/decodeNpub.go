@@ -61,15 +61,15 @@ func ConvertNpubHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.ClientAPI().Error("Npub to pubkey conversion failed", 
-			"npub", npub, 
+		log.ClientAPI().Error("Npub to pubkey conversion failed",
+			"npub", npub,
 			"error", err)
 		response.Error = err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 	} else {
 		response.Pubkey = pubkey
-		log.ClientAPI().Info("Npub to pubkey conversion successful", 
-			"npub", npub, 
+		log.ClientAPI().Info("Npub to pubkey conversion successful",
+			"npub", npub,
 			"pubkey", pubkey)
 	}
 

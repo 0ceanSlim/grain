@@ -35,30 +35,30 @@ func GetPubkeyCache() *PubkeyCache {
 // InitializePubkeyCache starts the cache system with initial refresh and background updates
 func InitializePubkeyCache() {
 	log.Config().Info("Initializing pubkey cache system")
-	
+
 	// Set refresh intervals from config with defaults
 	whitelistCfg := GetWhitelistConfig()
 	blacklistCfg := GetBlacklistConfig()
-	
+
 	if whitelistCfg != nil && whitelistCfg.PubkeyWhitelist.CacheRefreshMinutes > 0 {
 		globalPubkeyCache.whitelistRefreshInterval = time.Duration(whitelistCfg.PubkeyWhitelist.CacheRefreshMinutes) * time.Minute
 	} else {
 		globalPubkeyCache.whitelistRefreshInterval = 60 * time.Minute // Default 1 hour
 	}
-	
+
 	if blacklistCfg != nil && blacklistCfg.MutelistCacheRefreshMinutes > 0 {
 		globalPubkeyCache.blacklistRefreshInterval = time.Duration(blacklistCfg.MutelistCacheRefreshMinutes) * time.Minute
 	} else {
 		globalPubkeyCache.blacklistRefreshInterval = 30 * time.Minute // Default 30 minutes
 	}
-	
+
 	// Initial refresh - always cache regardless of enabled state
 	globalPubkeyCache.RefreshWhitelist()
 	globalPubkeyCache.RefreshBlacklist()
-	
+
 	// Start background refresh routines
 	globalPubkeyCache.startBackgroundRefresh()
-	
+
 	log.Config().Info("Pubkey cache system initialized",
 		"whitelist_interval_min", int(globalPubkeyCache.whitelistRefreshInterval.Minutes()),
 		"blacklist_interval_min", int(globalPubkeyCache.blacklistRefreshInterval.Minutes()))
@@ -69,22 +69,22 @@ func InitializePubkeyCache() {
 func (pc *PubkeyCache) RefreshWhitelist() error {
 	start := time.Now()
 	newWhitelist := make(map[string]bool)
-	
+
 	whitelistCfg := GetWhitelistConfig()
 	if whitelistCfg == nil {
 		log.Config().Warn("Whitelist configuration not available")
 		return fmt.Errorf("whitelist configuration not available")
 	}
-	
+
 	log.Config().Debug("Starting whitelist cache refresh")
-	
+
 	// Always add direct pubkeys (regardless of enabled state)
 	directCount := 0
 	for _, pubkey := range whitelistCfg.PubkeyWhitelist.Pubkeys {
 		newWhitelist[pubkey] = true
 		directCount++
 	}
-	
+
 	// Always decode and add npubs (regardless of enabled state)
 	npubCount := 0
 	for _, npub := range whitelistCfg.PubkeyWhitelist.Npubs {
@@ -96,7 +96,7 @@ func (pc *PubkeyCache) RefreshWhitelist() error {
 		newWhitelist[pubkey] = true
 		npubCount++
 	}
-	
+
 	// Always fetch domain pubkeys (regardless of enabled state)
 	domainCount := 0
 	if len(whitelistCfg.DomainWhitelist.Domains) > 0 {
@@ -110,13 +110,13 @@ func (pc *PubkeyCache) RefreshWhitelist() error {
 			}
 		}
 	}
-	
+
 	// Update cache atomically
 	pc.mu.Lock()
 	pc.whitelistedPubkeys = newWhitelist
 	pc.lastWhitelistRefresh = time.Now()
 	pc.mu.Unlock()
-	
+
 	duration := time.Since(start)
 	log.Config().Info("Whitelist cache refreshed",
 		"duration_ms", duration.Milliseconds(),
@@ -126,7 +126,7 @@ func (pc *PubkeyCache) RefreshWhitelist() error {
 		"domain_pubkeys", domainCount,
 		"pubkey_enabled", whitelistCfg.PubkeyWhitelist.Enabled,
 		"domain_enabled", whitelistCfg.DomainWhitelist.Enabled)
-	
+
 	return nil
 }
 
@@ -135,7 +135,7 @@ func (pc *PubkeyCache) RefreshWhitelist() error {
 func (pc *PubkeyCache) RefreshBlacklist() error {
 	start := time.Now()
 	newBlacklist := make(map[string]bool)
-	
+
 	blacklistCfg := GetBlacklistConfig()
 	if blacklistCfg == nil {
 		log.Config().Debug("Blacklist configuration not available")
@@ -146,16 +146,16 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 		pc.mu.Unlock()
 		return nil
 	}
-	
+
 	log.Config().Debug("Starting blacklist cache refresh")
-	
+
 	// Always add permanent banned pubkeys (regardless of enabled state)
 	directCount := 0
 	for _, pubkey := range blacklistCfg.PermanentBlacklistPubkeys {
 		newBlacklist[pubkey] = true
 		directCount++
 	}
-	
+
 	// Always decode and add banned npubs (regardless of enabled state)
 	npubCount := 0
 	for _, npub := range blacklistCfg.PermanentBlacklistNpubs {
@@ -167,7 +167,7 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 		newBlacklist[pubkey] = true
 		npubCount++
 	}
-	
+
 	// Always fetch mutelist pubkeys (regardless of enabled state)
 	mutelistCount := 0
 	if len(blacklistCfg.MuteListAuthors) > 0 {
@@ -185,13 +185,13 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 			}
 		}
 	}
-	
+
 	// Update cache atomically
 	pc.mu.Lock()
 	pc.blacklistedPubkeys = newBlacklist
 	pc.lastBlacklistRefresh = time.Now()
 	pc.mu.Unlock()
-	
+
 	duration := time.Since(start)
 	log.Config().Info("Blacklist cache refreshed",
 		"duration_ms", duration.Milliseconds(),
@@ -200,7 +200,7 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 		"npub_pubkeys", npubCount,
 		"mutelist_pubkeys", mutelistCount,
 		"blacklist_enabled", blacklistCfg.Enabled)
-	
+
 	return nil
 }
 
@@ -219,12 +219,12 @@ func (pc *PubkeyCache) IsWhitelistedForValidation(pubkey string) bool {
 	if whitelistCfg == nil {
 		return false
 	}
-	
+
 	// If pubkey whitelist is disabled, all pubkeys are considered valid
 	if !whitelistCfg.PubkeyWhitelist.Enabled {
 		return true
 	}
-	
+
 	return pc.IsWhitelisted(pubkey)
 }
 
@@ -243,7 +243,7 @@ func (pc *PubkeyCache) IsBlacklistedForValidation(pubkey string) bool {
 	if blacklistCfg == nil || !blacklistCfg.Enabled {
 		return false
 	}
-	
+
 	return pc.IsBlacklisted(pubkey)
 }
 
@@ -251,7 +251,7 @@ func (pc *PubkeyCache) IsBlacklistedForValidation(pubkey string) bool {
 func (pc *PubkeyCache) GetWhitelistedPubkeys() []string {
 	pc.mu.RLock()
 	defer pc.mu.RUnlock()
-	
+
 	result := make([]string, 0, len(pc.whitelistedPubkeys))
 	for pubkey := range pc.whitelistedPubkeys {
 		result = append(result, pubkey)
@@ -263,7 +263,7 @@ func (pc *PubkeyCache) GetWhitelistedPubkeys() []string {
 func (pc *PubkeyCache) GetBlacklistedPubkeys() []string {
 	pc.mu.RLock()
 	defer pc.mu.RUnlock()
-	
+
 	result := make([]string, 0, len(pc.blacklistedPubkeys))
 	for pubkey := range pc.blacklistedPubkeys {
 		result = append(result, pubkey)
@@ -275,10 +275,10 @@ func (pc *PubkeyCache) GetBlacklistedPubkeys() []string {
 func (pc *PubkeyCache) GetPubkeyCacheStats() map[string]interface{} {
 	pc.mu.RLock()
 	defer pc.mu.RUnlock()
-	
+
 	whitelistCfg := GetWhitelistConfig()
 	blacklistCfg := GetBlacklistConfig()
-	
+
 	stats := map[string]interface{}{
 		"whitelist_count":        len(pc.whitelistedPubkeys),
 		"blacklist_count":        len(pc.blacklistedPubkeys),
@@ -287,7 +287,7 @@ func (pc *PubkeyCache) GetPubkeyCacheStats() map[string]interface{} {
 		"whitelist_age_minutes":  time.Since(pc.lastWhitelistRefresh).Minutes(),
 		"blacklist_age_minutes":  time.Since(pc.lastBlacklistRefresh).Minutes(),
 	}
-	
+
 	// Add enabled state information
 	if whitelistCfg != nil {
 		stats["pubkey_whitelist_enabled"] = whitelistCfg.PubkeyWhitelist.Enabled
@@ -296,10 +296,9 @@ func (pc *PubkeyCache) GetPubkeyCacheStats() map[string]interface{} {
 	if blacklistCfg != nil {
 		stats["blacklist_enabled"] = blacklistCfg.Enabled
 	}
-	
+
 	return stats
 }
-
 
 // startBackgroundRefresh starts goroutines for periodic cache refresh
 func (pc *PubkeyCache) startBackgroundRefresh() {
@@ -307,25 +306,25 @@ func (pc *PubkeyCache) startBackgroundRefresh() {
 	go func() {
 		ticker := time.NewTicker(pc.whitelistRefreshInterval)
 		defer ticker.Stop()
-		
+
 		for range ticker.C {
 			if err := pc.RefreshWhitelist(); err != nil {
 				log.Config().Error("Failed to refresh whitelist cache", "error", err)
 			}
 		}
 	}()
-	
+
 	// Blacklist refresh routine
 	go func() {
 		ticker := time.NewTicker(pc.blacklistRefreshInterval)
 		defer ticker.Stop()
-		
+
 		for range ticker.C {
 			if err := pc.RefreshBlacklist(); err != nil {
 				log.Config().Error("Failed to refresh blacklist cache", "error", err)
 			}
 		}
 	}()
-	
+
 	log.Config().Info("Background cache refresh routines started")
 }

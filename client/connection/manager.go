@@ -15,15 +15,15 @@ var appRelays []string
 func InitializeCoreClient(relays []string) error {
 	config := core.DefaultConfig()
 	config.DefaultRelays = relays
-	
+
 	coreClient = core.NewClient(config)
-	
+
 	// Connect to default relays with retry
 	if err := coreClient.ConnectToRelaysWithRetry(relays, 3); err != nil {
 		log.ClientConnection().Error("Failed to connect to relays after retries", "error", err)
 		return err
 	}
-	
+
 	log.ClientConnection().Info("Core client initialized", "relay_count", len(relays))
 	return nil
 }

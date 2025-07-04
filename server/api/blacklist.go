@@ -13,7 +13,7 @@ import (
 // GetAllBlacklistedPubkeys returns a full list of blacklisted pubkeys, including mutelist authors
 func GetAllBlacklistedPubkeys(w http.ResponseWriter, r *http.Request) {
 	logger := log.GetLogger("RelayAPI")
-	
+
 	blacklistConfig := config.GetBlacklistConfig()
 	if blacklistConfig == nil || !blacklistConfig.Enabled {
 		logger.Warn("Blacklist access attempted but not enabled")

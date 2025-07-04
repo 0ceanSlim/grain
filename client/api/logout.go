@@ -20,7 +20,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	// Get current user session
 	user := session.SessionMgr.GetCurrentUser(r)
 	if user != nil {
-		log.ClientAPI().Info("User logging out", 
+		log.ClientAPI().Info("User logging out",
 			"pubkey", user.PublicKey,
 			"mode", user.Mode,
 			"signing_method", user.SigningMethod)

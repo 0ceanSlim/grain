@@ -13,13 +13,13 @@ func IsValidCachedData(cachedData CachedUserData) bool {
 	if cachedData.Metadata == "" {
 		return false
 	}
-	
+
 	// Try to parse metadata to ensure it's valid JSON
 	var metadata nostr.Event
 	if err := json.Unmarshal([]byte(cachedData.Metadata), &metadata); err != nil {
 		return false
 	}
-	
+
 	// Basic validation - must have ID and PubKey
 	return metadata.ID != "" && metadata.PubKey != ""
 }
@@ -27,7 +27,7 @@ func IsValidCachedData(cachedData CachedUserData) bool {
 // CacheUserDataFromObjects caches user metadata and mailboxes from Go objects
 func CacheUserDataFromObjects(publicKey string, metadata *nostr.Event, mailboxes *core.Mailboxes) {
 	var metadataStr, mailboxesStr string
-	
+
 	if metadata != nil {
 		if metadataBytes, err := json.Marshal(metadata); err == nil {
 			metadataStr = string(metadataBytes)
@@ -35,7 +35,7 @@ func CacheUserDataFromObjects(publicKey string, metadata *nostr.Event, mailboxes
 			log.ClientCache().Warn("Failed to marshal metadata for cache", "pubkey", publicKey, "error", err)
 		}
 	}
-	
+
 	if mailboxes != nil {
 		if mailboxBytes, err := json.Marshal(mailboxes); err == nil {
 			mailboxesStr = string(mailboxBytes)
@@ -43,7 +43,7 @@ func CacheUserDataFromObjects(publicKey string, metadata *nostr.Event, mailboxes
 			log.ClientCache().Warn("Failed to marshal mailboxes for cache", "pubkey", publicKey, "error", err)
 		}
 	}
-	
+
 	if metadataStr != "" || mailboxesStr != "" {
 		SetUserData(publicKey, metadataStr, mailboxesStr)
 		log.ClientCache().Debug("Cached user data from objects", "pubkey", publicKey)
@@ -56,10 +56,10 @@ func GetParsedUserData(publicKey string) (*nostr.Event, *core.Mailboxes, bool) {
 	if !exists {
 		return nil, nil, false
 	}
-	
+
 	var metadata *nostr.Event
 	var mailboxes *core.Mailboxes
-	
+
 	// Parse cached metadata
 	if cachedData.Metadata != "" {
 		var metadataEvent nostr.Event
@@ -69,7 +69,7 @@ func GetParsedUserData(publicKey string) (*nostr.Event, *core.Mailboxes, bool) {
 			metadata = &metadataEvent
 		}
 	}
-	
+
 	// Parse cached mailboxes
 	if cachedData.Mailboxes != "" && cachedData.Mailboxes != "{}" {
 		var mailboxesData core.Mailboxes
@@ -79,7 +79,7 @@ func GetParsedUserData(publicKey string) (*nostr.Event, *core.Mailboxes, bool) {
 			mailboxes = &mailboxesData
 		}
 	}
-	
+
 	return metadata, mailboxes, true
 }
 
@@ -87,11 +87,11 @@ func GetParsedUserData(publicKey string) (*nostr.Event, *core.Mailboxes, bool) {
 func GetCacheStats() map[string]interface{} {
 	cache.mu.RLock()
 	defer cache.mu.RUnlock()
-	
+
 	totalEntries := len(cache.data)
 	entriesWithMetadata := 0
 	entriesWithMailboxes := 0
-	
+
 	for _, data := range cache.data {
 		if data.Metadata != "" {
 			entriesWithMetadata++
@@ -100,7 +100,7 @@ func GetCacheStats() map[string]interface{} {
 			entriesWithMailboxes++
 		}
 	}
-	
+
 	return map[string]interface{}{
 		"total_entries":          totalEntries,
 		"entries_with_metadata":  entriesWithMetadata,

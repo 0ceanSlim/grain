@@ -12,16 +12,16 @@ import (
 
 // RateLimitConfigResponse represents the rate limiting configuration response
 type RateLimitConfigResponse struct {
-	WsLimit        float64                                `json:"ws_limit"`
-	WsBurst        int                                    `json:"ws_burst"`
-	EventLimit     float64                                `json:"event_limit"`
-	EventBurst     int                                    `json:"event_burst"`
-	ReqLimit       float64                                `json:"req_limit"`
-	ReqBurst       int                                    `json:"req_burst"`
-	MaxEventSize   int                                    `json:"max_event_size"`
-	KindSizeLimits []cfgType.KindSizeLimitConfig          `json:"kind_size_limits"`
-	CategoryLimits map[string]cfgType.KindLimitConfig     `json:"category_limits"`
-	KindLimits     []cfgType.KindLimitConfig              `json:"kind_limits"`
+	WsLimit        float64                            `json:"ws_limit"`
+	WsBurst        int                                `json:"ws_burst"`
+	EventLimit     float64                            `json:"event_limit"`
+	EventBurst     int                                `json:"event_burst"`
+	ReqLimit       float64                            `json:"req_limit"`
+	ReqBurst       int                                `json:"req_burst"`
+	MaxEventSize   int                                `json:"max_event_size"`
+	KindSizeLimits []cfgType.KindSizeLimitConfig      `json:"kind_size_limits"`
+	CategoryLimits map[string]cfgType.KindLimitConfig `json:"category_limits"`
+	KindLimits     []cfgType.KindLimitConfig          `json:"kind_limits"`
 }
 
 // GetRateLimitConfig handles the request to return rate limiting configuration

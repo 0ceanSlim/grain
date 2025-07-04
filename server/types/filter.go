@@ -16,7 +16,7 @@ type Filter struct {
 // ToSubscriptionFilter converts Filter to a relay-compatible format
 func (f Filter) ToSubscriptionFilter() map[string]interface{} {
 	filter := make(map[string]interface{})
-	
+
 	if len(f.IDs) > 0 {
 		filter["ids"] = f.IDs
 	}
@@ -40,6 +40,6 @@ func (f Filter) ToSubscriptionFilter() map[string]interface{} {
 	if f.Limit != nil {
 		filter["limit"] = *f.Limit
 	}
-	
+
 	return filter
 }

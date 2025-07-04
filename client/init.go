@@ -57,17 +57,17 @@ func startSessionCleanup() {
 			if session.SessionMgr != nil {
 				// Clean up sessions older than 24 hours of inactivity
 				session.SessionMgr.CleanupSessions(24 * time.Hour)
-				
+
 				// Log session statistics
 				stats := session.SessionMgr.GetSessionStats()
-				log.ClientMain().Debug("Session cleanup completed", 
+				log.ClientMain().Debug("Session cleanup completed",
 					"total_sessions", stats["total_sessions"],
 					"read_only", stats["read_only"],
 					"write_mode", stats["write_mode"])
 			}
 		}
 	}()
-	
+
 	log.ClientMain().Debug("Session cleanup routine started")
 }
 
@@ -100,7 +100,7 @@ func GetSessionStats() map[string]interface{} {
 			"error": "session manager not initialized",
 		}
 	}
-	
+
 	return session.SessionMgr.GetSessionStats()
 }
 

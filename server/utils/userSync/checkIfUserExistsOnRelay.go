@@ -15,16 +15,16 @@ import (
 // CheckIfUserExistsOnRelay checks if a user exists on the relay by their pubkey.
 func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, error) {
 	for _, url := range relays {
-		log.UserSync().Debug("Checking user existence on relay", 
-			"pubkey", pubKey, 
+		log.UserSync().Debug("Checking user existence on relay",
+			"pubkey", pubKey,
 			"relay_url", url,
 			"skip_event_id", eventID)
 
 		// Connect to the relay's WebSocket
 		conn, err := websocket.Dial(url, "", "http://localhost/")
 		if err != nil {
-			log.UserSync().Error("Failed to connect to relay WebSocket", 
-				"error", err, 
+			log.UserSync().Error("Failed to connect to relay WebSocket",
+				"error", err,
 				"relay_url", url)
 			return false, err
 		}
@@ -46,8 +46,8 @@ func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, er
 
 		err = websocket.Message.Send(conn, string(requestJSON))
 		if err != nil {
-			log.UserSync().Error("Failed to send subscription request", 
-				"error", err, 
+			log.UserSync().Error("Failed to send subscription request",
+				"error", err,
 				"relay_url", url)
 			return false, err
 		}
@@ -85,8 +85,8 @@ func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, er
 
 				var response []interface{}
 				if err := json.Unmarshal([]byte(message), &response); err != nil {
-					log.UserSync().Error("Failed to unmarshal response", 
-						"error", err, 
+					log.UserSync().Error("Failed to unmarshal response",
+						"error", err,
 						"raw_message", message)
 					continue
 				}
@@ -95,7 +95,7 @@ func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, er
 					// Parse the event
 					eventData, ok := response[2].(map[string]interface{})
 					if !ok {
-						log.UserSync().Error("Unexpected event data type", 
+						log.UserSync().Error("Unexpected event data type",
 							"data_type", fmt.Sprintf("%T", response[2]),
 							"raw_response", response[2])
 						continue
@@ -122,14 +122,14 @@ func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, er
 
 					eventCount++
 					isNewUser = false
-					log.UserSync().Debug("Found existing event for user", 
-						"pubkey", pubKey, 
+					log.UserSync().Debug("Found existing event for user",
+						"pubkey", pubKey,
 						"event_id", event.ID,
 						"event_count", eventCount)
 				}
 
 				if len(response) > 0 && response[0] == "EOSE" {
-					log.UserSync().Debug("EOSE received", 
+					log.UserSync().Debug("EOSE received",
 						"relay_url", url,
 						"pubkey", pubKey,
 						"is_new_user", isNewUser,
@@ -138,7 +138,7 @@ func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, er
 				}
 
 			case <-time.After(WebSocketTimeout):
-				log.UserSync().Warn("WebSocket timeout while checking user existence", 
+				log.UserSync().Warn("WebSocket timeout while checking user existence",
 					"pubkey", pubKey,
 					"relay_url", url,
 					"timeout_seconds", int(WebSocketTimeout.Seconds()))
@@ -149,8 +149,8 @@ func CheckIfUserExistsOnRelay(pubKey, eventID string, relays []string) (bool, er
 					log.UserSync().Debug("Error channel closed", "relay_url", url)
 					return isNewUser, nil
 				}
-				log.UserSync().Error("Error reading from WebSocket", 
-					"error", err, 
+				log.UserSync().Error("Error reading from WebSocket",
+					"error", err,
 					"relay_url", url)
 				return false, err
 			}

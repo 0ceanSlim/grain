@@ -20,14 +20,14 @@ type MongoDBConfigResponse struct {
 func sanitizeMongoURI(uri string) string {
 	// Pattern to match MongoDB URIs with credentials
 	credentialsPattern := regexp.MustCompile(`mongodb://[^:]+:[^@]+@`)
-	
+
 	// Replace credentials with [HIDDEN]
 	sanitized := credentialsPattern.ReplaceAllString(uri, "mongodb://[HIDDEN]@")
-	
+
 	// Also handle mongodb+srv URIs
 	credentialsPatternSRV := regexp.MustCompile(`mongodb\+srv://[^:]+:[^@]+@`)
 	sanitized = credentialsPatternSRV.ReplaceAllString(sanitized, "mongodb+srv://[HIDDEN]@")
-	
+
 	return sanitized
 }
 

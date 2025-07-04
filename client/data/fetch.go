@@ -33,7 +33,7 @@ func FetchAndCacheUserDataWithCoreClient(publicKey string) error {
 		// Get user's preferred relays
 		userRelays := mailboxes.ToStringSlice()
 		log.ClientData().Debug("User has preferred relays", "pubkey", publicKey, "relay_count", len(userRelays))
-		
+
 		// BUT: Use connected app relays for profile fetch to ensure success
 		// This is more reliable than trying to connect to user's personal relays
 		connectedRelays := coreClient.GetConnectedRelays()

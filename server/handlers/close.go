@@ -29,8 +29,8 @@ func HandleClose(client nostr.ClientInterface, message []interface{}) {
 
 	// Validate subscription ID length (as per Nostr spec)
 	if len(subID) == 0 || len(subID) > 64 {
-		log.Close().Debug("Invalid subscription ID length", 
-			"sub_id", subID, 
+		log.Close().Debug("Invalid subscription ID length",
+			"sub_id", subID,
 			"length", len(subID))
 		// Only send response if client is still connected
 		if client.IsConnected() {
@@ -46,7 +46,7 @@ func HandleClose(client nostr.ClientInterface, message []interface{}) {
 	if _, exists := subscriptions[subID]; !exists {
 		// Use DEBUG since this can happen in normal operation
 		// (e.g., client sends duplicate CLOSE, network issues, race conditions)
-		log.Close().Debug("Attempted to close non-existent subscription", 
+		log.Close().Debug("Attempted to close non-existent subscription",
 			"subscription_id", subID,
 			"active_subscriptions", len(subscriptions),
 			"client_connected", client.IsConnected())
@@ -59,7 +59,7 @@ func HandleClose(client nostr.ClientInterface, message []interface{}) {
 
 	// Remove the subscription
 	delete(subscriptions, subID)
-	log.Close().Info("Subscription closed by client request", 
+	log.Close().Info("Subscription closed by client request",
 		"subscription_id", subID,
 		"remaining_subscriptions", len(subscriptions),
 		"client_connected", client.IsConnected())
@@ -68,7 +68,7 @@ func HandleClose(client nostr.ClientInterface, message []interface{}) {
 	if client.IsConnected() {
 		response.SendClosed(client, subID, "subscription closed")
 	} else {
-		log.Close().Debug("Skipping CLOSED response - client disconnected", 
+		log.Close().Debug("Skipping CLOSED response - client disconnected",
 			"subscription_id", subID)
 	}
 }

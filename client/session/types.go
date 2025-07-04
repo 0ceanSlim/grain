@@ -44,17 +44,17 @@ type UserSession struct {
 	// Core session data
 	PublicKey  string    `json:"public_key"`
 	LastActive time.Time `json:"last_active"`
-	
+
 	// Interaction mode and signing
 	Mode          SessionInteractionMode `json:"mode"`
 	SigningMethod SigningMethod          `json:"signing_method"`
-	
+
 	// Cached user data
 	Metadata UserMetadata `json:"metadata"`
-	
+
 	// Connection info
 	ConnectedRelays []string `json:"connected_relays"`
-	
+
 	// Session security
 	EncryptedPrivateKey string `json:"encrypted_private_key,omitempty"` // Only if using EncryptedKey method
 }
@@ -79,13 +79,13 @@ func (s *UserSession) GetUserRelays() []string {
 	if s.Metadata.Mailboxes == "" {
 		return s.ConnectedRelays
 	}
-	
+
 	// Parse mailboxes and return combined read/write relays
 	var mailboxes core.Mailboxes
 	if err := json.Unmarshal([]byte(s.Metadata.Mailboxes), &mailboxes); err != nil {
 		return s.ConnectedRelays
 	}
-	
+
 	return mailboxes.ToStringSlice()
 }
 

@@ -10,15 +10,15 @@ import (
 
 // Subscription manages a Nostr subscription across multiple relays
 type Subscription struct {
-	ID       string
-	Filters  []nostr.Filter
-	Relays   []string
-	Events   chan *nostr.Event
-	Errors   chan error
-	Done     chan struct{}
-	client   *Client
-	mu       sync.RWMutex
-	active   bool
+	ID      string
+	Filters []nostr.Filter
+	Relays  []string
+	Events  chan *nostr.Event
+	Errors  chan error
+	Done    chan struct{}
+	client  *Client
+	mu      sync.RWMutex
+	active  bool
 }
 
 // NewSubscription creates a new subscription instance
@@ -39,53 +39,53 @@ func NewSubscription(id string, filters []nostr.Filter, relays []string, client 
 func (s *Subscription) Start() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if s.active {
 		return &ClientError{Message: "subscription already active"}
 	}
-	
+
 	log.ClientCore().Debug("Starting subscription", "sub_id", s.ID, "relay_count", len(s.Relays))
-	
+
 	// Register with relay pool for message routing
 	s.client.relayPool.RegisterSubscription(s.ID, s)
-	
+
 	// Send REQ message to all relays
 	reqMessage := []interface{}{"REQ", s.ID}
 	for _, filter := range s.Filters {
 		reqMessage = append(reqMessage, filter)
 	}
-	
+
 	var lastErr error
 	sent := 0
-	
+
 	for _, relayURL := range s.Relays {
 		if err := s.client.relayPool.SendMessage(relayURL, reqMessage); err != nil {
 			log.ClientCore().Warn("Failed to send subscription to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
 			lastErr = err
 			continue
 		}
-		
+
 		// Mark relay as having this subscription
 		if conn, err := s.client.relayPool.GetConnection(relayURL); err == nil {
 			conn.mu.Lock()
 			conn.Subscriptions[s.ID] = true
 			conn.mu.Unlock()
 		}
-		
+
 		sent++
 	}
-	
+
 	if sent == 0 && lastErr != nil {
 		// Unregister since we failed to start
 		s.client.relayPool.UnregisterSubscription(s.ID)
 		return lastErr
 	}
-	
+
 	s.active = true
-	
+
 	// Start message processor
 	go s.processMessages()
-	
+
 	log.ClientCore().Info("Subscription started", "sub_id", s.ID, "sent_to", sent, "total_relays", len(s.Relays))
 	return nil
 }
@@ -94,24 +94,24 @@ func (s *Subscription) Start() error {
 func (s *Subscription) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if !s.active {
 		return nil
 	}
-	
+
 	log.ClientCore().Debug("Closing subscription", "sub_id", s.ID)
-	
+
 	// Unregister from relay pool
 	s.client.relayPool.UnregisterSubscription(s.ID)
-	
+
 	// Send CLOSE message to all relays
 	closeMessage := []interface{}{"CLOSE", s.ID}
-	
+
 	for _, relayURL := range s.Relays {
 		if err := s.client.relayPool.SendMessage(relayURL, closeMessage); err != nil {
 			log.ClientCore().Warn("Failed to send close to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
 		}
-		
+
 		// Remove subscription from relay
 		if conn, err := s.client.relayPool.GetConnection(relayURL); err == nil {
 			conn.mu.Lock()
@@ -119,12 +119,12 @@ func (s *Subscription) Close() error {
 			conn.mu.Unlock()
 		}
 	}
-	
+
 	s.active = false
 	close(s.Done)
 	close(s.Events)
 	close(s.Errors)
-	
+
 	log.ClientCore().Debug("Subscription closed", "sub_id", s.ID)
 	return nil
 }
@@ -133,30 +133,30 @@ func (s *Subscription) Close() error {
 func (s *Subscription) AddRelay(url string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Check if relay is already in the list
 	for _, existingURL := range s.Relays {
 		if existingURL == url {
 			return &ClientError{Message: "relay already in subscription"}
 		}
 	}
-	
+
 	// Add to relay list
 	s.Relays = append(s.Relays, url)
-	
+
 	// If subscription is active, send REQ to new relay
 	if s.active {
 		reqMessage := []interface{}{"REQ", s.ID}
 		for _, filter := range s.Filters {
 			reqMessage = append(reqMessage, filter)
 		}
-		
+
 		if err := s.client.relayPool.SendMessage(url, reqMessage); err != nil {
 			// Remove from list if send failed
 			s.Relays = s.Relays[:len(s.Relays)-1]
 			return err
 		}
-		
+
 		// Mark relay as having this subscription
 		if conn, err := s.client.relayPool.GetConnection(url); err == nil {
 			conn.mu.Lock()
@@ -164,7 +164,7 @@ func (s *Subscription) AddRelay(url string) error {
 			conn.mu.Unlock()
 		}
 	}
-	
+
 	log.ClientCore().Debug("Relay added to subscription", "sub_id", s.ID, "relay", url)
 	return nil
 }
@@ -173,7 +173,7 @@ func (s *Subscription) AddRelay(url string) error {
 func (s *Subscription) RemoveRelay(url string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Find and remove relay from list
 	found := false
 	for i, existingURL := range s.Relays {
@@ -183,18 +183,18 @@ func (s *Subscription) RemoveRelay(url string) error {
 			break
 		}
 	}
-	
+
 	if !found {
 		return &ClientError{Message: "relay not found in subscription"}
 	}
-	
+
 	// If subscription is active, send CLOSE to removed relay
 	if s.active {
 		closeMessage := []interface{}{"CLOSE", s.ID}
 		if err := s.client.relayPool.SendMessage(url, closeMessage); err != nil {
 			log.ClientCore().Warn("Failed to send close to removed relay", "relay", url, "sub_id", s.ID, "error", err)
 		}
-		
+
 		// Remove subscription from relay
 		if conn, err := s.client.relayPool.GetConnection(url); err == nil {
 			conn.mu.Lock()
@@ -202,7 +202,7 @@ func (s *Subscription) RemoveRelay(url string) error {
 			conn.mu.Unlock()
 		}
 	}
-	
+
 	log.ClientCore().Debug("Relay removed from subscription", "sub_id", s.ID, "relay", url)
 	return nil
 }
@@ -211,10 +211,10 @@ func (s *Subscription) RemoveRelay(url string) error {
 func (s *Subscription) processMessages() {
 	// TODO: This will be implemented to process messages from relay read handlers
 	// For now, this is a placeholder that will be connected to relay message routing
-	
+
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-s.Done:
@@ -245,7 +245,7 @@ func (s *Subscription) GetRelayCount() int {
 func (s *Subscription) GetFilters() []nostr.Filter {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	filters := make([]nostr.Filter, len(s.Filters))
 	copy(filters, s.Filters)
 	return filters

@@ -8,5 +8,5 @@ type ClientInterface interface {
 	GetWS() *websocket.Conn
 	GetSubscriptions() map[string][]Filter
 	CloseClient()
-	IsConnected() bool 
+	IsConnected() bool
 }

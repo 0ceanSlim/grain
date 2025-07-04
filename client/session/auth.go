@@ -15,12 +15,12 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSess
 	if SessionMgr == nil {
 		return nil, &SessionError{Message: "session manager not initialized"}
 	}
-	
+
 	if connection.GetCoreClient() == nil {
 		return nil, &SessionError{Message: "core client not initialized"}
 	}
 
-	log.ClientSession().Info("Creating user session", 
+	log.ClientSession().Info("Creating user session",
 		"pubkey", req.PublicKey,
 		"mode", req.RequestedMode,
 		"signing_method", req.SigningMethod)
@@ -33,7 +33,7 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSess
 
 	// Prepare session metadata
 	sessionMetadata := UserMetadata{}
-	
+
 	if metadata != nil {
 		metadataBytes, err := json.Marshal(metadata)
 		if err != nil {
@@ -65,7 +65,7 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSess
 		session.ConnectedRelays = connection.GetAppRelays()
 	}
 
-	log.ClientSession().Info("User session created successfully", 
+	log.ClientSession().Info("User session created successfully",
 		"pubkey", req.PublicKey,
 		"mode", session.Mode,
 		"relay_count", len(session.ConnectedRelays))
@@ -78,12 +78,12 @@ func ValidateSessionRequest(req SessionInitRequest) error {
 	if req.PublicKey == "" {
 		return &SessionError{Message: "public key is required"}
 	}
-	
+
 	// Validate mode
 	if req.RequestedMode != ReadOnlyMode && req.RequestedMode != WriteMode {
 		return &SessionError{Message: "invalid session mode"}
 	}
-	
+
 	// Validate signing method for write mode
 	if req.RequestedMode == WriteMode {
 		validMethods := map[SigningMethod]bool{
@@ -92,16 +92,16 @@ func ValidateSessionRequest(req SessionInitRequest) error {
 			BunkerSigning:    true,
 			EncryptedKey:     true,
 		}
-		
+
 		if !validMethods[req.SigningMethod] {
 			return &SessionError{Message: "invalid signing method for write mode"}
 		}
-		
+
 		// If using encrypted key, private key must be provided
 		if req.SigningMethod == EncryptedKey && req.PrivateKey == "" {
 			return &SessionError{Message: "private key required for encrypted key signing method"}
 		}
 	}
-	
+
 	return nil
 }

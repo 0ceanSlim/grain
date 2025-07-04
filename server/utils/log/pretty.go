@@ -11,9 +11,9 @@ import (
 
 // PrettyLogWriter writes logs ONLY to a file
 type PrettyLogWriter struct {
-	output *os.File
-	level  slog.Level
-	attrs  []slog.Attr
+	output               *os.File
+	level                slog.Level
+	attrs                []slog.Attr
 	suppressedComponents map[string]bool
 }
 
@@ -88,9 +88,9 @@ func (h *PrettyLogWriter) Enabled(ctx context.Context, level slog.Level) bool {
 
 func (h *PrettyLogWriter) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &PrettyLogWriter{
-		output: h.output,
-		level:  h.level,
-		attrs:  append(h.attrs, attrs...),
+		output:               h.output,
+		level:                h.level,
+		attrs:                append(h.attrs, attrs...),
 		suppressedComponents: h.suppressedComponents,
 	}
 }

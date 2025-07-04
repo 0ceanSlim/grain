@@ -36,7 +36,7 @@ func (eb *EventBuilder) Tag(name string, values ...string) *EventBuilder {
 	tag[0] = name
 	copy(tag[1:], values)
 	eb.tags = append(eb.tags, tag)
-	
+
 	log.ClientCore().Debug("Added tag to event", "tag_name", name, "values", values)
 	return eb
 }
@@ -48,7 +48,7 @@ func (eb *EventBuilder) PTag(pubkey string, relayHint ...string) *EventBuilder {
 		tag = append(tag, relayHint[0])
 	}
 	eb.tags = append(eb.tags, tag)
-	
+
 	log.ClientCore().Debug("Added p tag to event", "pubkey", pubkey)
 	return eb
 }
@@ -56,7 +56,7 @@ func (eb *EventBuilder) PTag(pubkey string, relayHint ...string) *EventBuilder {
 // ETag adds an 'e' tag (event reference) to the event
 func (eb *EventBuilder) ETag(eventID string, relayHint, marker string) *EventBuilder {
 	tag := []string{"e", eventID}
-	
+
 	if relayHint != "" {
 		tag = append(tag, relayHint)
 		if marker != "" {
@@ -66,9 +66,9 @@ func (eb *EventBuilder) ETag(eventID string, relayHint, marker string) *EventBui
 		// If we have a marker but no relay hint, add empty string for relay
 		tag = append(tag, "", marker)
 	}
-	
+
 	eb.tags = append(eb.tags, tag)
-	
+
 	log.ClientCore().Debug("Added e tag to event", "event_id", eventID, "marker", marker)
 	return eb
 }
@@ -80,7 +80,7 @@ func (eb *EventBuilder) RTag(relayURL string, marker string) *EventBuilder {
 		tag = append(tag, marker)
 	}
 	eb.tags = append(eb.tags, tag)
-	
+
 	log.ClientCore().Debug("Added r tag to event", "relay", relayURL, "marker", marker)
 	return eb
 }
@@ -88,7 +88,7 @@ func (eb *EventBuilder) RTag(relayURL string, marker string) *EventBuilder {
 // DTag adds a 'd' tag (identifier) to the event
 func (eb *EventBuilder) DTag(identifier string) *EventBuilder {
 	eb.tags = append(eb.tags, []string{"d", identifier})
-	
+
 	log.ClientCore().Debug("Added d tag to event", "identifier", identifier)
 	return eb
 }
@@ -97,13 +97,13 @@ func (eb *EventBuilder) DTag(identifier string) *EventBuilder {
 func (eb *EventBuilder) ATag(kind int, pubkey string, dTag string, relayHint ...string) *EventBuilder {
 	coordinate := fmt.Sprintf("%d:%s:%s", kind, pubkey, dTag)
 	tag := []string{"a", coordinate}
-	
+
 	if len(relayHint) > 0 && relayHint[0] != "" {
 		tag = append(tag, relayHint[0])
 	}
-	
+
 	eb.tags = append(eb.tags, tag)
-	
+
 	log.ClientCore().Debug("Added a tag to event", "coordinate", coordinate)
 	return eb
 }
@@ -111,7 +111,7 @@ func (eb *EventBuilder) ATag(kind int, pubkey string, dTag string, relayHint ...
 // TTag adds a 't' tag (hashtag) to the event
 func (eb *EventBuilder) TTag(hashtag string) *EventBuilder {
 	eb.tags = append(eb.tags, []string{"t", hashtag})
-	
+
 	log.ClientCore().Debug("Added t tag to event", "hashtag", hashtag)
 	return eb
 }
@@ -129,20 +129,20 @@ func (eb *EventBuilder) Build() *nostr.Event {
 		Content: eb.content,
 		Tags:    eb.tags,
 	}
-	
+
 	// Set timestamp
 	if eb.createdAt != nil {
 		event.CreatedAt = eb.createdAt.Unix()
 	} else {
 		event.CreatedAt = time.Now().Unix()
 	}
-	
-	log.ClientCore().Debug("Built event", 
+
+	log.ClientCore().Debug("Built event",
 		"kind", event.Kind,
 		"content_length", len(event.Content),
 		"tag_count", len(event.Tags),
 		"created_at", event.CreatedAt)
-	
+
 	return event
 }
 
@@ -169,11 +169,11 @@ func NewRepost(eventID string, relayHint string) *EventBuilder {
 // NewDeletion creates a builder for a deletion event (kind 5)
 func NewDeletion(eventIDs []string, reason string) *EventBuilder {
 	builder := NewEventBuilder(5).Content(reason)
-	
+
 	for _, eventID := range eventIDs {
 		builder.ETag(eventID, "", "")
 	}
-	
+
 	return builder
 }
 

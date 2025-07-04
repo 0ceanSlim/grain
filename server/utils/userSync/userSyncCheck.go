@@ -38,7 +38,7 @@ func UserSyncCheckCached(evt nostr.Event, cfg *cfgType.ServerConfig) (bool, erro
 		pubkeyCache := config.GetPubkeyCache()
 		isWhitelisted := pubkeyCache.IsWhitelisted(evt.PubKey)
 		if !isWhitelisted {
-			log.UserSync().Info("Non-whitelisted pubkey, skipping sync", 
+			log.UserSync().Info("Non-whitelisted pubkey, skipping sync",
 				"pubkey", evt.PubKey,
 				"exclude_non_whitelisted", cfg.UserSync.ExcludeNonWhitelisted)
 			return false, nil

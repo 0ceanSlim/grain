@@ -46,18 +46,18 @@ func CheckBlacklistCached(pubkey, eventContent string) (bool, string) {
 		if strings.Contains(eventContent, word) {
 			err := AddToPermanentBlacklist(pubkey)
 			if err != nil {
-				log.Config().Error("Failed to add pubkey to permanent blacklist", 
-					"pubkey", pubkey, 
-					"word", word, 
+				log.Config().Error("Failed to add pubkey to permanent blacklist",
+					"pubkey", pubkey,
+					"word", word,
 					"error", err)
 				return true, fmt.Sprintf("pubkey %s is permanently banned and failed to save: %v", pubkey, err)
 			}
-			
+
 			// Trigger immediate blacklist refresh to include this pubkey
 			go GetPubkeyCache().RefreshBlacklist()
-			
-			log.Config().Warn("Pubkey permanently banned due to wordlist match", 
-				"pubkey", pubkey, 
+
+			log.Config().Warn("Pubkey permanently banned due to wordlist match",
+				"pubkey", pubkey,
 				"word", word)
 			return true, "blocked: pubkey is permanently banned"
 		}
@@ -68,14 +68,14 @@ func CheckBlacklistCached(pubkey, eventContent string) (bool, string) {
 		if strings.Contains(eventContent, word) {
 			err := AddToTemporaryBlacklist(pubkey, *blacklistConfig)
 			if err != nil {
-				log.Config().Error("Failed to add pubkey to temporary blacklist", 
-					"pubkey", pubkey, 
-					"word", word, 
+				log.Config().Error("Failed to add pubkey to temporary blacklist",
+					"pubkey", pubkey,
+					"word", word,
 					"error", err)
 				return true, fmt.Sprintf("pubkey %s is temporarily banned and failed to save: %v", pubkey, err)
 			}
-			log.Config().Warn("Pubkey temporarily banned due to wordlist match", 
-				"pubkey", pubkey, 
+			log.Config().Warn("Pubkey temporarily banned due to wordlist match",
+				"pubkey", pubkey,
 				"word", word)
 			return true, "blocked: pubkey is temporarily banned"
 		}
@@ -99,16 +99,16 @@ func isPubKeyTemporarilyBlacklisted(pubkey string) bool {
 	now := time.Now()
 	if now.After(entry.unbanTime) {
 		// Temporary ban expired
-		log.Config().Info("Temporary ban expired", 
-			"pubkey", pubkey, 
+		log.Config().Info("Temporary ban expired",
+			"pubkey", pubkey,
 			"count", entry.count,
 			"unban_time", entry.unbanTime.Format(time.RFC3339))
 		return false
 	}
 
 	// Pubkey currently blacklisted
-	log.Config().Warn("Pubkey currently temporarily blacklisted", 
-		"pubkey", pubkey, 
+	log.Config().Warn("Pubkey currently temporarily blacklisted",
+		"pubkey", pubkey,
 		"count", entry.count,
 		"unban_time", entry.unbanTime.Format(time.RFC3339))
 	return true
@@ -146,13 +146,13 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig cfgType.BlacklistCon
 		tempBannedPubkeys[pubkey] = entry
 	} else {
 		// Updating an existing temp ban entry
-		log.Config().Info("Updating existing temporary ban entry", 
-			"pubkey", pubkey, 
+		log.Config().Info("Updating existing temporary ban entry",
+			"pubkey", pubkey,
 			"current_count", entry.count)
 
 		if time.Now().After(entry.unbanTime) {
-			log.Config().Info("Previous ban expired, keeping count", 
-				"pubkey", pubkey, 
+			log.Config().Info("Previous ban expired, keeping count",
+				"pubkey", pubkey,
 				"count", entry.count)
 		}
 	}
@@ -162,15 +162,15 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig cfgType.BlacklistCon
 	entry.unbanTime = time.Now().Add(time.Duration(blacklistConfig.TempBanDuration) * time.Second)
 
 	// Updating temp ban count
-	log.Config().Debug("Updated temporary ban", 
-		"pubkey", pubkey, 
+	log.Config().Debug("Updated temporary ban",
+		"pubkey", pubkey,
 		"count", entry.count,
 		"max_temp_bans", blacklistConfig.MaxTempBans,
 		"unban_time", entry.unbanTime.Format(time.RFC3339))
 
 	if entry.count > blacklistConfig.MaxTempBans {
 		// Attempting to move to permanent blacklist
-		log.Config().Warn("Max temporary bans exceeded, moving to permanent blacklist", 
+		log.Config().Warn("Max temporary bans exceeded, moving to permanent blacklist",
 			"pubkey", pubkey,
 			"count", entry.count)
 
@@ -183,8 +183,8 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig cfgType.BlacklistCon
 
 		if err != nil {
 			// Error adding to permanent blacklist
-			log.Config().Error("Failed to move pubkey to permanent blacklist", 
-				"pubkey", pubkey, 
+			log.Config().Error("Failed to move pubkey to permanent blacklist",
+				"pubkey", pubkey,
 				"error", err)
 			return err
 		}
@@ -342,7 +342,7 @@ func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []strin
 			return
 		}
 
-		log.Config().Debug("Fetching mutelist from local relay", 
+		log.Config().Debug("Fetching mutelist from local relay",
 			"url", localRelayURL,
 			"authors", len(muteListAuthors))
 

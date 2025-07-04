@@ -23,7 +23,6 @@ type ValidatePubkeyResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
-
 // ValidatePubkeyHandler validates hex pubkey format and provides npub conversion
 func ValidatePubkeyHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -64,18 +63,17 @@ func ValidatePubkeyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.ClientAPI().Debug("Pubkey validation failed", 
-			"pubkey", pubkey, 
+		log.ClientAPI().Debug("Pubkey validation failed",
+			"pubkey", pubkey,
 			"error", err)
 		response.Error = err.Error()
 	} else {
 		response.Npub = npub
-		log.ClientAPI().Debug("Pubkey validation successful", 
-			"pubkey", pubkey, 
+		log.ClientAPI().Debug("Pubkey validation successful",
+			"pubkey", pubkey,
 			"npub", npub)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
-

@@ -166,7 +166,7 @@ func GetRelayStatusHandler(w http.ResponseWriter, r *http.Request) {
 // sendRelayResponse sends a JSON response for relay operations
 func sendRelayResponse(w http.ResponseWriter, response ConnectRelayResponse) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.ClientAPI().Error("Failed to encode relay response", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)

@@ -16,7 +16,7 @@ func TestMain(m *testing.M) {
 func TestBasicConnection(t *testing.T) {
 	client := tests.NewTestClient(t)
 	defer client.Close()
-	
+
 	t.Log("✅ Successfully connected to relay")
 }
 
@@ -36,27 +36,27 @@ func TestEventSubscription(t *testing.T) {
 		"kinds": []int{1},
 		"limit": 1,
 	}
-	
+
 	client.SendMessage([]interface{}{"REQ", "test-sub", filter})
-	
+
 	// Should receive EOSE
 	for {
 		response := client.ReadMessage(5 * time.Second)
-		
+
 		if len(response) < 2 {
 			continue
 		}
-		
+
 		if response[0] == "EOSE" && response[1] == "test-sub" {
 			t.Log("✅ Received EOSE - subscription established")
 			break
 		}
-		
+
 		if response[0] == "EVENT" {
 			t.Logf("📦 Received event: %s", response[1])
 		}
 	}
-	
+
 	// Close subscription
 	client.SendMessage([]interface{}{"CLOSE", "test-sub"})
 	t.Log("✅ Subscription test completed")

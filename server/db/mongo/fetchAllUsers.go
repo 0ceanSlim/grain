@@ -22,8 +22,8 @@ func GetAllAuthorsFromRelay(cfg *cfgType.ServerConfig) []string {
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(cfg.MongoDB.URI))
 	if err != nil {
-		log.Mongo().Error("Failed to connect to MongoDB", 
-			"uri", cfg.MongoDB.URI, 
+		log.Mongo().Error("Failed to connect to MongoDB",
+			"uri", cfg.MongoDB.URI,
 			"error", err)
 		return nil
 	}
@@ -32,14 +32,14 @@ func GetAllAuthorsFromRelay(cfg *cfgType.ServerConfig) []string {
 	db := client.Database(cfg.MongoDB.Database)
 	collectionNames, err := db.ListCollectionNames(ctx, bson.M{})
 	if err != nil {
-		log.Mongo().Error("Failed to list collections", 
-			"database", cfg.MongoDB.Database, 
+		log.Mongo().Error("Failed to list collections",
+			"database", cfg.MongoDB.Database,
 			"error", err)
 		return nil
 	}
 
-	log.Mongo().Debug("Retrieved collection names", 
-		"database", cfg.MongoDB.Database, 
+	log.Mongo().Debug("Retrieved collection names",
+		"database", cfg.MongoDB.Database,
 		"collection_count", len(collectionNames))
 
 	pubkeySet := make(map[string]struct{})
@@ -62,16 +62,16 @@ func GetAllAuthorsFromRelay(cfg *cfgType.ServerConfig) []string {
 
 		// Count pubkeys found in this collection
 		pubkeysInCollection := 0
-		
+
 		for _, pubkey := range cursor {
 			if pk, ok := pubkey.(string); ok {
 				pubkeySet[pk] = struct{}{}
 				pubkeysInCollection++
 			}
 		}
-		
+
 		collectionStats[collectionName] = pubkeysInCollection
-		
+
 		log.Mongo().Debug("Processed collection",
 			"collection", collectionName,
 			"pubkeys_found", pubkeysInCollection)

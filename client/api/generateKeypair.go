@@ -10,9 +10,9 @@ import (
 
 // GenerateKeypairResponse represents the response structure for key generation
 type GenerateKeypairResponse struct {
-	Success    bool              `json:"success"`
-	KeyPair    *tools.KeyPair    `json:"keypair,omitempty"`
-	Error      string            `json:"error,omitempty"`
+	Success bool           `json:"success"`
+	KeyPair *tools.KeyPair `json:"keypair,omitempty"`
+	Error   string         `json:"error,omitempty"`
 }
 
 // GenerateKeypairHandler generates a new random Nostr key pair
@@ -26,7 +26,7 @@ func GenerateKeypairHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Generate new key pair
 	keyPair, err := tools.GenerateKeyPair()
-	
+
 	// Prepare response
 	response := GenerateKeypairResponse{
 		Success: err == nil,
@@ -38,8 +38,8 @@ func GenerateKeypairHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	} else {
 		response.KeyPair = keyPair
-		log.ClientAPI().Info("Key pair generation successful", 
-			"pubkey", keyPair.PublicKey, 
+		log.ClientAPI().Info("Key pair generation successful",
+			"pubkey", keyPair.PublicKey,
 			"npub", keyPair.Npub)
 	}
 

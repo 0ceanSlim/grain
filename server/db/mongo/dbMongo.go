@@ -27,8 +27,8 @@ func InitDB(cfg *cfgType.ServerConfig) (*mongo.Client, error) {
 	clientOptions := options.Client().ApplyURI(cfg.MongoDB.URI)
 	var err error
 
-	log.Mongo().Info("Connecting to MongoDB", 
-		"uri", cfg.MongoDB.URI, 
+	log.Mongo().Info("Connecting to MongoDB",
+		"uri", cfg.MongoDB.URI,
 		"database", cfg.MongoDB.Database)
 
 	client, err = mongo.Connect(context.TODO(), clientOptions)
@@ -44,7 +44,7 @@ func InitDB(cfg *cfgType.ServerConfig) (*mongo.Client, error) {
 		log.Mongo().Error("Failed to ping MongoDB", "error", err)
 		return nil, err
 	}
-	
+
 	log.Mongo().Info("Connected to MongoDB successfully")
 
 	// Store database name globally
@@ -70,7 +70,7 @@ func GetCollection(kind int) *mongo.Collection {
 	if collection, exists := collections[kind]; exists {
 		return collection
 	}
-	
+
 	log.Mongo().Debug("Creating new collection reference",
 		"kind", kind,
 		"collection", collectionName)
@@ -123,7 +123,7 @@ func DisconnectDB(client *mongo.Client) {
 		log.Mongo().Warn("Attempted to disconnect nil MongoDB client")
 		return
 	}
-	
+
 	err := client.Disconnect(context.TODO())
 	if err != nil {
 		log.Mongo().Error("Error disconnecting from MongoDB", "error", err)
@@ -134,7 +134,7 @@ func DisconnectDB(client *mongo.Client) {
 
 func EnsureIndexes(client *mongo.Client, databaseName string) error {
 	log.Mongo().Info("Ensuring indexes for all collections", "database", databaseName)
-	
+
 	collections, err := client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
 	if err != nil {
 		log.Mongo().Error("Error listing collections", "error", err)
@@ -164,19 +164,19 @@ func EnsureIndexes(client *mongo.Client, databaseName string) error {
 
 	indexStats := map[string]int{
 		"processed": 0,
-		"skipped": 0,
-		"errors": 0,
+		"skipped":   0,
+		"errors":    0,
 	}
 
 	for _, collectionName := range collections {
 		collection := client.Database(databaseName).Collection(collectionName)
 		indexStats["processed"]++
-		
+
 		for _, index := range indexes {
 			_, err := collection.Indexes().CreateOne(context.TODO(), index)
 			if err != nil {
-				if strings.Contains(err.Error(), "IndexKeySpecsConflict") || 
-				   strings.Contains(err.Error(), "already exists") {
+				if strings.Contains(err.Error(), "IndexKeySpecsConflict") ||
+					strings.Contains(err.Error(), "already exists") {
 					indexStats["skipped"]++
 				} else {
 					indexStats["errors"]++
@@ -187,7 +187,7 @@ func EnsureIndexes(client *mongo.Client, databaseName string) error {
 				}
 				continue
 			}
-			
+
 			log.Mongo().Debug("Created index",
 				"collection", collectionName,
 				"index", index.Keys)

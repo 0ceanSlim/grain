@@ -27,7 +27,7 @@ func NewTestClient(t *testing.T) *TestClient {
 	if err != nil {
 		t.Fatalf("Failed to connect to test relay: %v", err)
 	}
-	
+
 	return &TestClient{
 		conn: conn,
 		t:    t,
@@ -40,7 +40,7 @@ func (c *TestClient) SendMessage(msg interface{}) {
 	if err != nil {
 		c.t.Fatalf("Failed to marshal message: %v", err)
 	}
-	
+
 	_, err = c.conn.Write(msgBytes)
 	if err != nil {
 		c.t.Fatalf("Failed to send message: %v", err)
@@ -50,19 +50,19 @@ func (c *TestClient) SendMessage(msg interface{}) {
 // ReadMessage reads a message from the relay with timeout
 func (c *TestClient) ReadMessage(timeout time.Duration) []interface{} {
 	c.conn.SetReadDeadline(time.Now().Add(timeout))
-	
+
 	msgBytes := make([]byte, 4096)
 	n, err := c.conn.Read(msgBytes)
 	if err != nil {
 		c.t.Fatalf("Failed to read message: %v", err)
 	}
-	
+
 	var msg []interface{}
 	err = json.Unmarshal(msgBytes[:n], &msg)
 	if err != nil {
 		c.t.Fatalf("Failed to unmarshal message: %v", err)
 	}
-	
+
 	return msg
 }
 
