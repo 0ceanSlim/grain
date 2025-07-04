@@ -1,71 +1,331 @@
-<div class="flex flex-col items-center justify-center p-8">
-  <div class="max-w-2xl text-center">
-    <h2 class="mb-6 text-3xl font-bold">Welcome to Grain 🌾</h2>
-    <p class="mb-8 text-lg text-gray-300">
-      A powerful Nostr relay with an integrated web client. Connect to the
-      decentralized social network.
-    </p>
-
-    <div class="grid grid-cols-1 gap-6 mb-8 md:grid-cols-3">
-      <div class="p-6 bg-gray-700 rounded-lg">
-        <h3 class="mb-2 text-xl font-semibold text-purple-400">🔗 Relay</h3>
-        <p class="text-gray-300">
-          High-performance Nostr relay with advanced filtering and rate limiting
+<!-- GRAIN Relay Dashboard Home View -->
+<div class="min-h-screen p-8 text-white">
+  <!-- Dashboard Header -->
+  <div class="pb-8 mb-8 border-b border-gray-700">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="mb-2 text-4xl font-bold text-white">
+          🌾 GRAIN Relay Dashboard
+        </h1>
+        <p class="text-lg text-gray-400">
+          Relay policies and system configuration
         </p>
       </div>
-
-      <div class="p-6 bg-gray-700 rounded-lg">
-        <h3 class="mb-2 text-xl font-semibold text-purple-400">👥 Client</h3>
-        <p class="text-gray-300">
-          Web-based Nostr client for posting, reading, and managing your profile
-        </p>
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-2">
+          <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+          <span class="font-medium text-green-400">Relay Online</span>
+        </div>
       </div>
+    </div>
+    <div class="mt-4 text-sm text-gray-500">
+      Last updated: <span id="last-updated">Loading...</span>
+    </div>
+  </div>
 
-      <div class="p-6 bg-gray-700 rounded-lg">
-        <h3 class="mb-2 text-xl font-semibold text-purple-400">
-          ⚡ Performance
-        </h3>
-        <p class="text-gray-300">
-          Optimized for speed with MongoDB storage and intelligent caching
-        </p>
+  <!-- Rate Limiting Configuration -->
+  <div
+    class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
+  >
+    <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+      <h2 class="text-xl font-semibold text-white">
+        Rate Limiting Configuration
+      </h2>
+      <p class="text-sm text-gray-400">
+        Traffic control and abuse prevention settings
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-700">
+        <thead class="bg-gray-750">
+          <tr>
+            <th
+              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+            >
+              Policy Type
+            </th>
+            <th
+              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+            >
+              Rate Limit
+            </th>
+            <th
+              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+            >
+              Burst Allowance
+            </th>
+            <th
+              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+            >
+              Status
+            </th>
+          </tr>
+        </thead>
+        <tbody
+          id="rate-limit-table"
+          class="bg-gray-800 divide-y divide-gray-700"
+        >
+          <!-- Loading placeholder -->
+          <tr>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="w-32 h-4 bg-gray-700 rounded animate-pulse"></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="w-20 h-4 bg-gray-700 rounded animate-pulse"></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="w-24 h-4 bg-gray-700 rounded animate-pulse"></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div
+                class="w-16 h-6 bg-gray-700 rounded-full animate-pulse"
+              ></div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Server Configuration -->
+  <div
+    class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
+  >
+    <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+      <h2 class="text-xl font-semibold text-white">Server Configuration</h2>
+      <p class="text-sm text-gray-400">
+        Core server settings and network configuration
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-700">
+        <thead class="bg-gray-750">
+          <tr>
+            <th
+              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+            >
+              Setting
+            </th>
+            <th
+              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+            >
+              Value
+            </th>
+            <th
+              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+            >
+              Description
+            </th>
+            <th
+              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+            >
+              Status
+            </th>
+          </tr>
+        </thead>
+        <tbody
+          id="server-config-table"
+          class="bg-gray-800 divide-y divide-gray-700"
+        >
+          <!-- Loading placeholder -->
+          <tr>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="w-24 h-4 bg-gray-700 rounded animate-pulse"></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="w-16 h-4 bg-gray-700 rounded animate-pulse"></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="w-40 h-4 bg-gray-700 rounded animate-pulse"></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div
+                class="w-16 h-6 bg-gray-700 rounded-full animate-pulse"
+              ></div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Authentication Configuration -->
+  <div
+    class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
+  >
+    <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+      <h2 class="text-xl font-semibold text-white">
+        Authentication & Access Control
+      </h2>
+      <p class="text-sm text-gray-400">
+        User access policies and authentication settings
+      </p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-700">
+        <thead class="bg-gray-750">
+          <tr>
+            <th
+              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+            >
+              Setting
+            </th>
+            <th
+              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+            >
+              Value
+            </th>
+            <th
+              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+            >
+              Description
+            </th>
+            <th
+              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+            >
+              Status
+            </th>
+          </tr>
+        </thead>
+        <tbody
+          id="auth-config-table"
+          class="bg-gray-800 divide-y divide-gray-700"
+        >
+          <!-- Loading placeholder -->
+          <tr>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="h-4 bg-gray-700 rounded animate-pulse w-28"></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="w-16 h-4 bg-gray-700 rounded animate-pulse"></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="w-48 h-4 bg-gray-700 rounded animate-pulse"></div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div
+                class="w-16 h-6 bg-gray-700 rounded-full animate-pulse"
+              ></div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Access Lists -->
+  <div class="grid grid-cols-1 gap-8 mb-8 lg:grid-cols-2">
+    <!-- Whitelist -->
+    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
+      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+        <h2 class="text-xl font-semibold text-white">Whitelist Status</h2>
+        <p class="text-sm text-gray-400">Approved users and domains</p>
+      </div>
+      <div id="whitelist-content" class="p-6">
+        <div class="space-y-3">
+          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        </div>
       </div>
     </div>
 
-    <div id="session-status" class="mb-6">
-      <!-- Session status will be loaded here -->
+    <!-- Blacklist -->
+    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
+      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+        <h2 class="text-xl font-semibold text-white">Blacklist Status</h2>
+        <p class="text-sm text-gray-400">Banned users and content filtering</p>
+      </div>
+      <div id="blacklist-content" class="p-6">
+        <div class="space-y-3">
+          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Additional Configuration Tables -->
+  <div class="grid grid-cols-1 gap-8 mb-8 lg:grid-cols-2">
+    <!-- Logging Configuration -->
+    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
+      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+        <h2 class="text-xl font-semibold text-white">Logging Configuration</h2>
+        <p class="text-sm text-gray-400">
+          System logging and monitoring settings
+        </p>
+      </div>
+      <div id="logging-content" class="p-6">
+        <div class="space-y-3">
+          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MongoDB Configuration -->
+    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
+      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+        <h2 class="text-xl font-semibold text-white">MongoDB Configuration</h2>
+        <p class="text-sm text-gray-400">
+          Database connection and storage settings
+        </p>
+      </div>
+      <div id="mongodb-content" class="p-6">
+        <div class="space-y-3">
+          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resource Limits and Event Configuration -->
+  <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
+    <!-- Resource Limits -->
+    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
+      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+        <h2 class="text-xl font-semibold text-white">Resource Limits</h2>
+        <p class="text-sm text-gray-400">Memory and CPU resource management</p>
+      </div>
+      <div id="resource-limits-content" class="p-6">
+        <div class="space-y-3">
+          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Event Purge Configuration -->
+    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
+      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+        <h2 class="text-xl font-semibold text-white">Event Purge Settings</h2>
+        <p class="text-sm text-gray-400">
+          Event retention and cleanup policies
+        </p>
+      </div>
+      <div id="event-purge-content" class="p-6">
+        <div class="space-y-3">
+          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
-<script>
-  // Check session status on load
-  document.addEventListener("DOMContentLoaded", function () {
-    fetch("/api/v1/session")
-      .then((response) => {
-        if (response.ok) {
-          return response.json();
-        }
-        throw new Error("No session");
-      })
-      .then((data) => {
-        // User is logged in
-        document.getElementById("session-status").innerHTML = `
-          <div class="px-4 py-3 text-green-200 bg-green-800 border border-green-600 rounded">
-            <p>✅ Connected as: <span class="font-mono">${data.publicKey.substring(
-              0,
-              16
-            )}...</span></p>
-          </div>
-        `;
-        document.getElementById("login-btn").style.display = "none";
-      })
-      .catch(() => {
-        // No session, show login button
-        document.getElementById("session-status").innerHTML = `
-          <div class="px-4 py-3 text-yellow-200 bg-yellow-800 border border-yellow-600 rounded">
-            <p>⚠️ Not connected to Nostr</p>
-          </div>
-        `;
-      });
-  });
-</script>
+<!-- Simple Hyperscript only for basic interactions -->
+<div
+  _="on click from #refresh-dashboard-btn
+         add .animate-spin to #refresh-icon
+         then js dashboardManager.refreshAll() end
+         then wait 2s
+         then remove .animate-spin from #refresh-icon"
+></div>
+
+<script src="/static/js/dashboard.js"></script>
