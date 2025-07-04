@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
 
   grain:
-    build: . # Back to building from current directory
+    build: . # Uses the new Dockerfile in current directory
     container_name: grain-relay
     ports:
       - "8181:8181"

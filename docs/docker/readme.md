@@ -1,6 +1,6 @@
 # GRAIN Docker Setup
 
-Run GRAIN relay with Docker using the latest stable release source code.
+Run GRAIN relay with Docker using the latest stable release binaries.
 
 ## Quick Start
 
@@ -41,14 +41,24 @@ Your relay is now running at:
 
 The Dockerfile:
 
-- Downloads the latest release source code from GitHub
-- Builds the GRAIN binary with embedded configuration examples
-- Creates a minimal Alpine Linux container with security best practices
+- Automatically detects your system architecture (amd64/arm64)
+- Downloads the latest pre-built release binary from GitHub releases
+- Extracts the binary and www assets into a minimal Alpine Linux container
+- Creates a secure non-root user environment
 - GRAIN automatically creates configuration files from embedded examples on first startup
+
+## Release Architecture Support
+
+The Docker build automatically selects the correct binary based on your host architecture:
+
+- **x86_64 systems** → Downloads `grain-linux-amd64.tar.gz`
+- **ARM64 systems** → Downloads `grain-linux-arm64.tar.gz`
+
+This eliminates the need for compilation during Docker build, making the process faster and more reliable.
 
 ## Configuration
 
-GRAIN now uses an embedded configuration system that automatically creates config files from built-in examples on first startup. This eliminates the need for external config management.
+GRAIN uses an embedded configuration system that automatically creates config files from built-in examples on first startup. This eliminates the need for external config management.
 
 ### Method 1: Environment Variables (Recommended for Production)
 
@@ -259,8 +269,8 @@ docker exec -it grain-relay sh
 # Check file permissions
 docker exec grain-relay ls -la /app/
 
-# Check embedded config creation
-docker compose logs grain | grep -i "config\|embed"
+# Check release download and extraction
+docker compose logs grain | grep -i "download\|extract\|version"
 
 # Reset configs to defaults (removes and recreates from embedded)
 docker exec grain-relay rm config.yml relay_metadata.json whitelist.yml blacklist.yml
@@ -273,6 +283,7 @@ The Docker setup includes several security best practices:
 
 - **Non-root user**: Container runs as user `grain` (UID 1001)
 - **Minimal base image**: Uses Alpine Linux for smaller attack surface
+- **Pre-built binaries**: Uses official release binaries instead of building from source
 - **Health checks**: Automated monitoring of service health
 - **Resource limits**: Can be configured in docker-compose.yml
 
@@ -312,6 +323,19 @@ docker compose build --no-cache --progress=plain
 
 # Check for port conflicts
 netstat -an | grep :8181
+
+# Check release download issues
+docker compose logs grain | grep -E "(error|fail|download)"
+```
+
+**Architecture issues:**
+
+```bash
+# Check your system architecture
+uname -m
+
+# Force rebuild with verbose output
+docker compose build --no-cache --progress=plain
 ```
 
 **Config changes not taking effect:**
@@ -335,4 +359,4 @@ curl -H "Accept: application/nostr+json" http://localhost:8181
 sudo ufw status
 ```
 
-The build process automatically downloads and compiles the latest tagged release with embedded configurations!
+The build process automatically downloads and extracts the latest stable release binary with all assets!
