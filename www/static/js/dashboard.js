@@ -22,6 +22,9 @@ const newDashboardManager = {
     userProfile: "/api/v1/user/profile",
   },
 
+  // Profile cache to avoid redundant API calls
+  profileCache: new Map(),
+
   // Fetch user profile with caching
   async fetchUserProfile(pubkey) {
     // Check cache first
@@ -107,7 +110,7 @@ const newDashboardManager = {
       <div class="text-sm text-gray-400 mb-3">Loading ${
         keysWithSources.length
       } profiles...</div>
-      <div class="flex space-x-4 overflow-x-auto pb-2">
+      <div class="flex space-x-4 overflow-x-auto pb-2 custom-scroll">
         ${keysWithSources
           .map(
             () => `
@@ -137,36 +140,31 @@ const newDashboardManager = {
       }
     }
 
-    // Update container with horizontal scrolling layout
+    // Update container with horizontal scrolling layout and custom scroll
     container.innerHTML = `
       <div class="text-sm text-gray-400 mb-3">${
         keysWithSources.length
       } users</div>
-      <div class="flex space-x-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+      <div class="flex space-x-4 overflow-x-auto pb-2 custom-scroll">
         ${profileCards.join("")}
       </div>
     `;
   },
 
-  // Profile cache to avoid redundant API calls
-  profileCache: new Map(),
-
   // Initialize dashboard
   init() {
     console.log("New Dashboard initializing...");
-    this.updateTimestamp();
-    this.setupEventListeners();
-    this.refreshAll();
-    // No auto-refresh timer - only loads on page load
-  },
 
-  // Initialize dashboard
-  init() {
-    console.log("New Dashboard initializing...");
+    // Fix container width immediately
+    const container = document.getElementById("dashboard-main");
+    if (container) {
+      container.style.width = "100%";
+      container.style.maxWidth = "none";
+    }
+
     this.updateTimestamp();
     this.setupEventListeners();
     this.refreshAll();
-    // No auto-refresh timer - only loads on page load
   },
 
   // Setup event listeners
@@ -217,27 +215,13 @@ const newDashboardManager = {
       }
       return await response.json();
     } catch (error) {
-      console.error(`Error fetching ${url}:`, error);
-      if (errorContainer) {
-        this.showError(
-          errorContainer,
-          `Failed to load configuration: ${error.message}`
-        );
+      console.error(`Failed to fetch ${url}:`, error);
+      // Show error in container
+      const container = document.getElementById(errorContainer);
+      if (container) {
+        container.innerHTML = `<div class="text-center text-red-400 py-4">Error loading data</div>`;
       }
       return null;
-    }
-  },
-
-  // Show error message in container
-  showError(containerId, message) {
-    const container = document.getElementById(containerId);
-    if (container) {
-      container.innerHTML = `
-        <div class="text-center text-red-400 py-4">
-          <p>⚠️ ${message}</p>
-          <p class="text-sm text-gray-500 mt-2">Refresh the page to retry</p>
-        </div>
-      `;
     }
   },
 
@@ -248,26 +232,26 @@ const newDashboardManager = {
 
     // For now, show basic placeholder - Phase 2 will fetch NIP-11 data
     container.innerHTML = `
-      <div class="space-y-4">
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Relay Status</span>
-          <span class="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-            Online
-          </span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Software</span>
-          <span class="text-white font-medium">🌾 GRAIN</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Protocol</span>
-          <span class="text-white font-medium">Nostr Relay</span>
-        </div>
-        <div class="text-sm text-gray-400 mt-4">
-          <p>Detailed relay information will be available in the next update.</p>
-        </div>
+    <div class="space-y-4">
+      <div class="flex justify-between items-center">
+        <span class="text-gray-300">Relay Status</span>
+        <span class="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+          Online
+        </span>
       </div>
-    `;
+      <div class="flex justify-between items-center">
+        <span class="text-gray-300">Software</span>
+        <span class="text-white font-medium">🌾 GRAIN</span>
+      </div>
+      <div class="flex justify-between items-center">
+        <span class="text-gray-300">Protocol</span>
+        <span class="text-white font-medium">Nostr Relay</span>
+      </div>
+      <div class="text-sm text-gray-400 mt-4">
+        <p>Detailed relay information will be available in the next update.</p>
+      </div>
+    </div>
+  `;
   },
 
   // 2. Load Policy & Limits (rate limits + timeouts + time constraints)
@@ -357,13 +341,13 @@ const newDashboardManager = {
     tbody.innerHTML = rows
       .map(
         (row) => `
-      <tr>
-        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">${row.type}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.limit}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.burst}</td>
-        <td class="px-6 py-4 whitespace-nowrap">${row.status}</td>
-      </tr>
-    `
+    <tr>
+      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">${row.type}</td>
+      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.limit}</td>
+      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.burst}</td>
+      <td class="px-6 py-4 whitespace-nowrap">${row.status}</td>
+    </tr>
+  `
       )
       .join("");
   },
@@ -380,55 +364,55 @@ const newDashboardManager = {
     if (!container) return;
 
     container.innerHTML = `
-      <div class="space-y-4">
+    <div class="space-y-4">
+      <div class="flex justify-between items-center">
+        <span class="text-gray-300">Purge Enabled</span>
+        <span class="inline-flex px-2 py-1 text-xs font-medium ${
+          data.enabled
+            ? "bg-green-100 text-green-800"
+            : "bg-red-100 text-red-800"
+        } rounded-full">
+          ${data.enabled ? "Yes" : "No"}
+        </span>
+      </div>
+      ${
+        data.enabled
+          ? `
         <div class="flex justify-between items-center">
-          <span class="text-gray-300">Purge Enabled</span>
-          <span class="inline-flex px-2 py-1 text-xs font-medium ${
-            data.enabled
-              ? "bg-green-100 text-green-800"
-              : "bg-red-100 text-red-800"
-          } rounded-full">
-            ${data.enabled ? "Yes" : "No"}
-          </span>
+          <span class="text-gray-300">Keep Interval</span>
+          <span class="text-white font-medium">${
+            data.keep_interval_hours
+          } hours</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Purge Interval</span>
+          <span class="text-white font-medium">${
+            data.purge_interval_minutes
+          } minutes</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Exclude Whitelisted</span>
+          <span class="text-white font-medium">${
+            data.exclude_whitelisted ? "Yes" : "No"
+          }</span>
         </div>
         ${
-          data.enabled
+          data.kinds_to_purge && data.kinds_to_purge.length > 0
             ? `
           <div class="flex justify-between items-center">
-            <span class="text-gray-300">Keep Interval</span>
-            <span class="text-white font-medium">${
-              data.keep_interval_hours
-            } hours</span>
+            <span class="text-gray-300">Purge Kinds</span>
+            <span class="text-white font-medium">${data.kinds_to_purge.join(
+              ", "
+            )}</span>
           </div>
-          <div class="flex justify-between items-center">
-            <span class="text-gray-300">Purge Interval</span>
-            <span class="text-white font-medium">${
-              data.purge_interval_minutes
-            } minutes</span>
-          </div>
-          <div class="flex justify-between items-center">
-            <span class="text-gray-300">Exclude Whitelisted</span>
-            <span class="text-white font-medium">${
-              data.exclude_whitelisted ? "Yes" : "No"
-            }</span>
-          </div>
-          ${
-            data.kinds_to_purge && data.kinds_to_purge.length > 0
-              ? `
-            <div class="flex justify-between items-center">
-              <span class="text-gray-300">Purge Kinds</span>
-              <span class="text-white font-medium">${data.kinds_to_purge.join(
-                ", "
-              )}</span>
-            </div>
-          `
-              : ""
-          }
         `
             : ""
         }
-      </div>
-    `;
+      `
+          : ""
+      }
+    </div>
+  `;
   },
 
   // 4. Load System Configuration (auth + backup relay)
@@ -463,13 +447,13 @@ const newDashboardManager = {
     tbody.innerHTML = rows
       .map(
         (row) => `
-      <tr>
-        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">${row.setting}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.value}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${row.description}</td>
-        <td class="px-6 py-4 whitespace-nowrap">${row.status}</td>
-      </tr>
-    `
+    <tr>
+      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">${row.setting}</td>
+      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.value}</td>
+      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${row.description}</td>
+      <td class="px-6 py-4 whitespace-nowrap">${row.status}</td>
+    </tr>
+  `
       )
       .join("");
   },
@@ -486,40 +470,40 @@ const newDashboardManager = {
     if (!container) return;
 
     container.innerHTML = `
-      <div class="space-y-4">
-        <div class="bg-orange-900/20 border border-orange-700 rounded p-4">
-          <div class="flex items-center space-x-2 mb-2">
-            <span class="text-orange-400">⚠️</span>
-            <span class="text-orange-300 font-medium">Experimental Feature</span>
-          </div>
-          <p class="text-sm text-orange-200">User sync is in development and may not function as expected.</p>
+    <div class="space-y-4">
+      <div class="bg-orange-900/20 border border-orange-700 rounded p-4">
+        <div class="flex items-center space-x-2 mb-2">
+          <span class="text-orange-400">⚠️</span>
+          <span class="text-orange-300 font-medium">Experimental Feature</span>
+        </div>
+        <p class="text-sm text-orange-200">User sync is in development and may not function as expected.</p>
+      </div>
+      <div class="flex justify-between items-center">
+        <span class="text-gray-300">Sync Enabled</span>
+        <span class="inline-flex px-2 py-1 text-xs font-medium ${
+          data.enabled
+            ? "bg-green-100 text-green-800"
+            : "bg-gray-100 text-gray-800"
+        } rounded-full">
+          ${data.enabled ? "Yes" : "No"}
+        </span>
+      </div>
+      ${
+        data.enabled
+          ? `
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Sync Interval</span>
+          <span class="text-white font-medium">${data.interval_hours} hours</span>
         </div>
         <div class="flex justify-between items-center">
-          <span class="text-gray-300">Sync Enabled</span>
-          <span class="inline-flex px-2 py-1 text-xs font-medium ${
-            data.enabled
-              ? "bg-green-100 text-green-800"
-              : "bg-gray-100 text-gray-800"
-          } rounded-full">
-            ${data.enabled ? "Yes" : "No"}
-          </span>
+          <span class="text-gray-300">Batch Size</span>
+          <span class="text-white font-medium">${data.batch_size} users</span>
         </div>
-        ${
-          data.enabled
-            ? `
-          <div class="flex justify-between items-center">
-            <span class="text-gray-300">Sync Interval</span>
-            <span class="text-white font-medium">${data.interval_hours} hours</span>
-          </div>
-          <div class="flex justify-between items-center">
-            <span class="text-gray-300">Batch Size</span>
-            <span class="text-white font-medium">${data.batch_size} users</span>
-          </div>
-        `
-            : ""
-        }
-      </div>
-    `;
+      `
+          : ""
+      }
+    </div>
+  `;
   },
 
   // 6. Load Enhanced Whitelist Data with Profiles
@@ -553,103 +537,120 @@ const newDashboardManager = {
         keysData.domains?.map((domain) => domain.domain) || [];
 
       configContainer.innerHTML = `
-        <div class="space-y-6">
-          <!-- Status and Key Counts -->
-          <div class="grid grid-cols-3 gap-6">
-            <div class="space-y-3">
-              <h4 class="text-sm font-medium text-gray-400 uppercase tracking-wide">Status</h4>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-300">Pubkey Whitelist</span>
-                <span class="inline-flex px-2 py-1 text-xs font-medium ${
-                  configData.pubkey_whitelist?.enabled
-                    ? "bg-green-100 text-green-800"
-                    : "bg-gray-100 text-gray-800"
-                } rounded-full">
-                  ${
-                    configData.pubkey_whitelist?.enabled ? "Active" : "Inactive"
-                  }
-                </span>
+        <div class="space-y-4">
+          <!-- Centered Two Column Layout -->
+          <div class="max-w-4xl mx-auto">
+            <div class="whitelist-config-grid">
+              <!-- Status Column (with Event Kinds) -->
+              <div class="space-y-3 text-center">
+                <h4 class="text-xs font-medium text-gray-400 uppercase tracking-wide">Status</h4>
+                <div class="space-y-3">
+                  <!-- Whitelist Status -->
+                  <div class="space-y-2">
+                    <div class="flex flex-col items-center space-y-1">
+                      <span class="text-sm text-gray-300">Pubkey Whitelist</span>
+                      <span class="inline-flex px-2 py-1 text-xs font-medium ${
+                        configData.pubkey_whitelist?.enabled
+                          ? "bg-green-100 text-green-800"
+                          : "bg-gray-100 text-gray-800"
+                      } rounded-full">
+                        ${
+                          configData.pubkey_whitelist?.enabled
+                            ? "Active"
+                            : "Inactive"
+                        }
+                      </span>
+                    </div>
+                    <div class="flex flex-col items-center space-y-1">
+                      <span class="text-sm text-gray-300">Domain Whitelist</span>
+                      <span class="inline-flex px-2 py-1 text-xs font-medium ${
+                        configData.domain_whitelist?.enabled
+                          ? "bg-purple-100 text-purple-800"
+                          : "bg-gray-100 text-gray-800"
+                      } rounded-full">
+                        ${
+                          configData.domain_whitelist?.enabled
+                            ? "Enabled"
+                            : "Disabled"
+                        }
+                      </span>
+                    </div>
+                  </div>
+      
+                  <!-- Event Kinds in Status Column -->
+                  <div class="pt-2 border-t border-gray-600">
+                    ${
+                      configData.kind_whitelist?.enabled
+                        ? `
+                      <div class="flex flex-col items-center space-y-2">
+                        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Event Kinds</span>
+                        <div class="flex flex-wrap gap-1 justify-center max-w-[200px]">
+                          ${(configData.kind_whitelist?.kinds || [])
+                            .map(
+                              (kind) => `
+                            <span class="inline-flex px-2 py-1 text-xs bg-indigo-900 text-indigo-200 rounded font-mono">${kind}</span>
+                          `
+                            )
+                            .join("")}
+                        </div>
+                      </div>
+                      `
+                        : `
+                      <div class="flex flex-col items-center space-y-1">
+                        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Event Kinds</span>
+                        <span class="inline-flex px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded">
+                          Disabled
+                        </span>
+                      </div>
+                      `
+                    }
+                  </div>
+                </div>
               </div>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-300">Domain Whitelist</span>
-                <span class="inline-flex px-2 py-1 text-xs font-medium ${
-                  configData.domain_whitelist?.enabled
-                    ? "bg-purple-100 text-purple-800"
-                    : "bg-gray-100 text-gray-800"
-                } rounded-full">
-                  ${
-                    configData.domain_whitelist?.enabled
-                      ? "Enabled"
-                      : "Disabled"
-                  }
-                </span>
-              </div>
-            </div>
-            
-            <div class="space-y-3">
-              <h4 class="text-sm font-medium text-gray-400 uppercase tracking-wide">Key Counts</h4>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-300">Total Keys</span>
-                <span class="text-white font-medium text-lg">${totalKeys}</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-300">Direct Keys</span>
-                <span class="text-green-400 font-medium">${
-                  keysData.list?.length || 0
-                }</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-gray-300">Domain Keys</span>
-                <span class="text-blue-400 font-medium">${totalDomainKeys} from ${
+      
+              <!-- Key Counts Column -->
+              <div class="space-y-3 text-center">
+                <h4 class="text-xs font-medium text-gray-400 uppercase tracking-wide">Key Counts</h4>
+                <div class="space-y-2">
+                  <div class="flex flex-col items-center space-y-1">
+                    <span class="text-sm text-gray-300">Total Keys</span>
+                    <span class="text-white font-medium text-lg">${totalKeys}</span>
+                  </div>
+                  <div class="flex flex-col items-center space-y-1">
+                    <span class="text-sm text-gray-300">Direct Keys</span>
+                    <span class="text-green-400 font-medium text-sm">${
+                      keysData.list?.length || 0
+                    }</span>
+                  </div>
+                  <div class="flex flex-col items-center space-y-1">
+                    <span class="text-sm text-gray-300">Domain Keys</span>
+                    <span class="text-blue-400 font-medium text-sm">${totalDomainKeys} from ${
         domainNames.length
       } domains</span>
+                  </div>
+                </div>
               </div>
             </div>
-
-            <div class="space-y-3">
-              ${
-                configData.kind_whitelist?.enabled
-                  ? `
-                <h4 class="text-sm font-medium text-gray-400 uppercase tracking-wide">Allowed Event Kinds</h4>
-                <div class="flex flex-wrap gap-1">
-                  ${(configData.kind_whitelist?.kinds || [])
-                    .map(
-                      (kind) => `
-                    <span class="inline-flex px-2 py-1 text-xs bg-indigo-900 text-indigo-200 rounded font-mono">${kind}</span>
-                  `
-                    )
-                    .join("")}
-                </div>
-              `
-                  : `
-                <h4 class="text-sm font-medium text-gray-400 uppercase tracking-wide">Event Kinds</h4>
-                <div class="flex justify-between items-center">
-                  <span class="text-gray-300">Kind Whitelist</span>
-                  <span class="inline-flex px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
-                    Disabled
-                  </span>
-                </div>
-              `
-              }
-            </div>
           </div>
-
-          <!-- Domains List -->
+      
+          <!-- Domains List (centered with better spacing) -->
           ${
             domainNames.length > 0
               ? `
-            <div>
-              <h4 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">Whitelisted Domains</h4>
-              <div class="flex flex-wrap gap-2">
+          <div class="pt-4 border-t border-gray-600">
+            <div class="max-w-3xl mx-auto text-center">
+              <h4 class="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">Whitelisted Domains</h4>
+              <div class="flex flex-wrap gap-3 justify-center">
                 ${domainNames
                   .map(
                     (domain) => `
-                  <span class="inline-flex px-3 py-1 text-sm bg-blue-900 text-blue-200 rounded-md">${domain}</span>
+                  <span class="inline-flex px-4 py-2 text-sm bg-blue-900 text-blue-200 rounded-lg border border-blue-700 hover:bg-blue-800 transition-colors">${domain}</span>
                 `
                   )
                   .join("")}
               </div>
             </div>
+          </div>
           `
               : ""
           }
@@ -716,76 +717,53 @@ const newDashboardManager = {
           </div>
           <div class="flex justify-between items-center">
             <span class="text-gray-300">Permanent</span>
-            <span class="text-white font-medium">${permanentCount}</span>
+            <span class="text-red-400 font-medium">${permanentCount}</span>
           </div>
           <div class="flex justify-between items-center">
             <span class="text-gray-300">Temporary</span>
-            <span class="text-white font-medium">${temporaryCount}</span>
+            <span class="text-yellow-400 font-medium">${temporaryCount}</span>
           </div>
           <div class="flex justify-between items-center">
-            <span class="text-gray-300">Mute Lists</span>
-            <span class="text-white font-medium">${mutelistCount}</span>
+            <span class="text-gray-300">Mutelist</span>
+            <span class="text-orange-400 font-medium">${mutelistCount}</span>
           </div>
         </div>
       `;
     }
 
-    // Collect all unique blacklisted pubkeys
-    const allPubkeys = new Set();
+    // Collect all blacklisted keys with their sources
+    const keysWithSources = [];
 
     // Add permanent blacklist keys
     if (keysData.permanent) {
-      keysData.permanent.forEach((key) => allPubkeys.add(key));
+      keysData.permanent.forEach((key) => {
+        keysWithSources.push({ pubkey: key, source: "permanent" });
+      });
     }
 
     // Add temporary blacklist keys
     if (keysData.temporary) {
-      keysData.temporary.forEach((item) => {
-        if (typeof item === "string") {
-          allPubkeys.add(item);
-        } else if (item.pubkey) {
-          allPubkeys.add(item.pubkey);
-        }
+      keysData.temporary.forEach((key) => {
+        keysWithSources.push({ pubkey: key, source: "temporary" });
       });
     }
 
-    // Add mutelist keys (limit to first 10 for display purposes)
+    // Add mutelist keys
     if (keysData.mutelist) {
-      let count = 0;
-      for (const authorKeys of Object.values(keysData.mutelist)) {
-        if (Array.isArray(authorKeys)) {
-          for (const key of authorKeys) {
-            if (count < 10) {
-              // Limit display to avoid overwhelming
-              allPubkeys.add(key);
-              count++;
-            } else {
-              break;
-            }
-          }
-        }
-        if (count >= 10) break;
-      }
+      Object.keys(keysData.mutelist).forEach((key) => {
+        keysWithSources.push({ pubkey: key, source: "mutelist" });
+      });
     }
 
-    // Load key profiles progressively
-    await this.loadKeyProfiles(
-      Array.from(allPubkeys),
+    // Load key profiles
+    await this.loadHorizontalKeyProfiles(
+      keysWithSources,
       "blacklist-keys",
-      "No blacklisted keys found"
+      "No blacklisted users found"
     );
   },
 
-  // Utility functions
-  formatBytes(bytes, decimals = 2) {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
-  },
-
+  // Utility functions for status badges
   getStatusBadge(status) {
     const statusClass = status
       ? "bg-green-100 text-green-800"
