@@ -19,6 +19,145 @@ const newDashboardManager = {
     blacklistKeys: "/api/v1/relay/keys/blacklist",
     whitelistConfig: "/api/v1/relay/config/whitelist",
     blacklistConfig: "/api/v1/relay/config/blacklist",
+    userProfile: "/api/v1/user/profile",
+  },
+
+  // Fetch user profile with caching
+  async fetchUserProfile(pubkey) {
+    // Check cache first
+    if (this.profileCache.has(pubkey)) {
+      return this.profileCache.get(pubkey);
+    }
+
+    try {
+      const response = await fetch(
+        `${this.endpoints.userProfile}?pubkey=${pubkey}`
+      );
+      if (!response.ok) {
+        throw new Error(`Profile fetch failed: ${response.status}`);
+      }
+
+      const profileData = await response.json();
+
+      // Parse content if it's a JSON string
+      let profile = {};
+      if (profileData.content) {
+        try {
+          profile = JSON.parse(profileData.content);
+        } catch (e) {
+          console.warn(`Failed to parse profile content for ${pubkey}:`, e);
+          profile = { about: profileData.content };
+        }
+      }
+
+      // Cache the parsed profile
+      this.profileCache.set(pubkey, profile);
+      return profile;
+    } catch (error) {
+      console.warn(`Failed to fetch profile for ${pubkey}:`, error);
+      // Cache empty profile to avoid repeated failed requests
+      this.profileCache.set(pubkey, {});
+      return {};
+    }
+  },
+
+  // Create profile card HTML for horizontal layout with source info
+  createHorizontalProfileCard(pubkey, profile, source = "direct") {
+    const name = profile.name || profile.display_name || "Unknown User";
+    const picture = profile.picture || null;
+
+    return `
+      <div class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
+        <div class="w-16 h-16 mx-auto mb-2">
+          ${
+            picture
+              ? `<img src="${picture}" alt="${name}" class="w-16 h-16 rounded-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+             <div class="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-lg" style="display: none;">
+               ${name.charAt(0).toUpperCase()}
+             </div>`
+              : `<div class="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-lg">
+               ${name.charAt(0).toUpperCase()}
+             </div>`
+          }
+        </div>
+        <div class="text-xs text-white font-medium truncate max-w-[80px] mb-1">${name}</div>
+        <div class="text-xs ${
+          source === "direct" ? "text-green-400" : "text-blue-400"
+        } truncate max-w-[80px]">${source}</div>
+      </div>
+    `;
+  },
+
+  // Progressive loading for horizontal key lists with source tracking
+  async loadHorizontalKeyProfiles(
+    keysWithSources,
+    containerId,
+    emptyMessage = "No keys found"
+  ) {
+    const container = document.getElementById(containerId);
+    if (!container || !keysWithSources || keysWithSources.length === 0) {
+      if (container) {
+        container.innerHTML = `<div class="text-center text-gray-400 py-8">${emptyMessage}</div>`;
+      }
+      return;
+    }
+
+    // Show loading state initially with key count
+    container.innerHTML = `
+      <div class="text-sm text-gray-400 mb-3">Loading ${
+        keysWithSources.length
+      } profiles...</div>
+      <div class="flex space-x-4 overflow-x-auto pb-2">
+        ${keysWithSources
+          .map(
+            () => `
+          <div class="flex-shrink-0 text-center animate-pulse">
+            <div class="w-16 h-16 bg-gray-600 rounded-full mx-auto mb-2"></div>
+            <div class="h-3 bg-gray-600 rounded w-16 mb-1"></div>
+            <div class="h-2 bg-gray-600 rounded w-12 mx-auto"></div>
+          </div>
+        `
+          )
+          .join("")}
+      </div>
+    `;
+
+    // Load profiles progressively with small delays
+    const profileCards = [];
+    for (let i = 0; i < keysWithSources.length; i++) {
+      const { pubkey, source } = keysWithSources[i];
+      const profile = await this.fetchUserProfile(pubkey);
+      profileCards.push(
+        this.createHorizontalProfileCard(pubkey, profile, source)
+      );
+
+      // Add small delay between requests to be API-friendly
+      if (i < keysWithSources.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    // Update container with horizontal scrolling layout
+    container.innerHTML = `
+      <div class="text-sm text-gray-400 mb-3">${
+        keysWithSources.length
+      } users</div>
+      <div class="flex space-x-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+        ${profileCards.join("")}
+      </div>
+    `;
+  },
+
+  // Profile cache to avoid redundant API calls
+  profileCache: new Map(),
+
+  // Initialize dashboard
+  init() {
+    console.log("New Dashboard initializing...");
+    this.updateTimestamp();
+    this.setupEventListeners();
+    this.refreshAll();
+    // No auto-refresh timer - only loads on page load
   },
 
   // Initialize dashboard
@@ -27,7 +166,13 @@ const newDashboardManager = {
     this.updateTimestamp();
     this.setupEventListeners();
     this.refreshAll();
-    this.startAutoRefresh();
+    // No auto-refresh timer - only loads on page load
+  },
+
+  // Setup event listeners
+  setupEventListeners() {
+    // No manual refresh button - only auto-refresh on page load
+    console.log("Dashboard event listeners initialized (page load only)");
   },
 
   // Update timestamp
@@ -40,35 +185,27 @@ const newDashboardManager = {
 
   // Refresh all dashboard sections
   async refreshAll() {
-    console.log("Refreshing new dashboard data...");
+    console.log("Loading dashboard data...");
 
     const loadPromises = [
+      // Load whitelist/blacklist first (top priority)
+      this.loadWhitelistData(),
+      this.loadBlacklistData(),
+      // Then other sections
       this.loadRelayOverview(),
       this.loadPolicyLimits(),
       this.loadEventPurgeConfig(),
       this.loadSystemConfig(),
       this.loadUserSyncConfig(),
-      this.loadWhitelistData(),
-      this.loadBlacklistData(),
     ];
 
     try {
       await Promise.allSettled(loadPromises);
       this.updateTimestamp();
-      console.log("Dashboard refresh completed");
+      console.log("Dashboard data loading completed");
     } catch (error) {
-      console.error("Dashboard refresh error:", error);
+      console.error("Dashboard loading error:", error);
     }
-  },
-
-  // Start auto-refresh every 30 seconds
-  startAutoRefresh() {
-    setInterval(() => {
-      if (document.getElementById("relay-overview-content")) {
-        console.log("Auto-refreshing dashboard...");
-        this.refreshAll();
-      }
-    }, 30000);
   },
 
   // Generic fetch wrapper with error handling
@@ -98,9 +235,7 @@ const newDashboardManager = {
       container.innerHTML = `
         <div class="text-center text-red-400 py-4">
           <p>⚠️ ${message}</p>
-          <button onclick="newDashboardManager.refreshAll()" class="mt-2 px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-white text-sm">
-            Retry
-          </button>
+          <p class="text-sm text-gray-500 mt-2">Refresh the page to retry</p>
         </div>
       `;
     }
@@ -387,102 +522,258 @@ const newDashboardManager = {
     `;
   },
 
-  // 6. Load Whitelist Data (simplified for Phase 1, enhanced in Phase 2)
+  // 6. Load Enhanced Whitelist Data with Profiles
   async loadWhitelistData() {
     const [keysData, configData] = await Promise.all([
-      this.fetchConfig(this.endpoints.whitelistKeys, "whitelist-content"),
-      this.fetchConfig(this.endpoints.whitelistConfig, "whitelist-content"),
+      this.fetchConfig(this.endpoints.whitelistKeys, "whitelist-config"),
+      this.fetchConfig(this.endpoints.whitelistConfig, "whitelist-config"),
     ]);
 
     if (!keysData || !configData) return;
 
-    const container = document.getElementById("whitelist-content");
-    if (!container) return;
+    // Load configuration section
+    const configContainer = document.getElementById("whitelist-config");
+    if (configContainer) {
+      const totalKeys =
+        (keysData.list?.length || 0) +
+        (keysData.domains?.reduce(
+          (acc, domain) => acc + (domain.pubkeys?.length || 0),
+          0
+        ) || 0);
 
-    const totalKeys =
-      (keysData.list?.length || 0) +
-      (keysData.domains?.reduce(
-        (acc, domain) => acc + (domain.pubkeys?.length || 0),
-        0
-      ) || 0);
+      // Calculate total domain keys count
+      const totalDomainKeys =
+        keysData.domains?.reduce(
+          (acc, domain) => acc + (domain.pubkeys?.length || 0),
+          0
+        ) || 0;
 
-    container.innerHTML = `
-      <div class="space-y-4">
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Whitelist Status</span>
-          <span class="inline-flex px-2 py-1 text-xs font-medium ${
-            configData.pubkey_whitelist?.enabled
-              ? "bg-green-100 text-green-800"
-              : "bg-gray-100 text-gray-800"
-          } rounded-full">
-            ${configData.pubkey_whitelist?.enabled ? "Active" : "Inactive"}
-          </span>
+      // Get list of domain names
+      const domainNames =
+        keysData.domains?.map((domain) => domain.domain) || [];
+
+      configContainer.innerHTML = `
+        <div class="space-y-6">
+          <!-- Status and Key Counts -->
+          <div class="grid grid-cols-3 gap-6">
+            <div class="space-y-3">
+              <h4 class="text-sm font-medium text-gray-400 uppercase tracking-wide">Status</h4>
+              <div class="flex justify-between items-center">
+                <span class="text-gray-300">Pubkey Whitelist</span>
+                <span class="inline-flex px-2 py-1 text-xs font-medium ${
+                  configData.pubkey_whitelist?.enabled
+                    ? "bg-green-100 text-green-800"
+                    : "bg-gray-100 text-gray-800"
+                } rounded-full">
+                  ${
+                    configData.pubkey_whitelist?.enabled ? "Active" : "Inactive"
+                  }
+                </span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-gray-300">Domain Whitelist</span>
+                <span class="inline-flex px-2 py-1 text-xs font-medium ${
+                  configData.domain_whitelist?.enabled
+                    ? "bg-purple-100 text-purple-800"
+                    : "bg-gray-100 text-gray-800"
+                } rounded-full">
+                  ${
+                    configData.domain_whitelist?.enabled
+                      ? "Enabled"
+                      : "Disabled"
+                  }
+                </span>
+              </div>
+            </div>
+            
+            <div class="space-y-3">
+              <h4 class="text-sm font-medium text-gray-400 uppercase tracking-wide">Key Counts</h4>
+              <div class="flex justify-between items-center">
+                <span class="text-gray-300">Total Keys</span>
+                <span class="text-white font-medium text-lg">${totalKeys}</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-gray-300">Direct Keys</span>
+                <span class="text-green-400 font-medium">${
+                  keysData.list?.length || 0
+                }</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-gray-300">Domain Keys</span>
+                <span class="text-blue-400 font-medium">${totalDomainKeys} from ${
+        domainNames.length
+      } domains</span>
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              ${
+                configData.kind_whitelist?.enabled
+                  ? `
+                <h4 class="text-sm font-medium text-gray-400 uppercase tracking-wide">Allowed Event Kinds</h4>
+                <div class="flex flex-wrap gap-1">
+                  ${(configData.kind_whitelist?.kinds || [])
+                    .map(
+                      (kind) => `
+                    <span class="inline-flex px-2 py-1 text-xs bg-indigo-900 text-indigo-200 rounded font-mono">${kind}</span>
+                  `
+                    )
+                    .join("")}
+                </div>
+              `
+                  : `
+                <h4 class="text-sm font-medium text-gray-400 uppercase tracking-wide">Event Kinds</h4>
+                <div class="flex justify-between items-center">
+                  <span class="text-gray-300">Kind Whitelist</span>
+                  <span class="inline-flex px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
+                    Disabled
+                  </span>
+                </div>
+              `
+              }
+            </div>
+          </div>
+
+          <!-- Domains List -->
+          ${
+            domainNames.length > 0
+              ? `
+            <div>
+              <h4 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">Whitelisted Domains</h4>
+              <div class="flex flex-wrap gap-2">
+                ${domainNames
+                  .map(
+                    (domain) => `
+                  <span class="inline-flex px-3 py-1 text-sm bg-blue-900 text-blue-200 rounded-md">${domain}</span>
+                `
+                  )
+                  .join("")}
+              </div>
+            </div>
+          `
+              : ""
+          }
         </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Total Keys</span>
-          <span class="text-white font-medium">${totalKeys}</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Direct Keys</span>
-          <span class="text-white font-medium">${
-            keysData.list?.length || 0
-          }</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Domain Keys</span>
-          <span class="text-white font-medium">${
-            keysData.domains?.length || 0
-          } domains</span>
-        </div>
-        <div class="text-sm text-gray-400 mt-4">
-          <p>Key profiles and management will be available in the next update.</p>
-        </div>
-      </div>
-    `;
+      `;
+    }
+
+    // Collect all pubkeys with their sources
+    const keysWithSources = [];
+
+    // Add direct list keys
+    if (keysData.list) {
+      keysData.list.forEach((key) => {
+        keysWithSources.push({ pubkey: key, source: "direct" });
+      });
+    }
+
+    // Add domain keys with domain name as source
+    if (keysData.domains) {
+      keysData.domains.forEach((domain) => {
+        if (domain.pubkeys) {
+          domain.pubkeys.forEach((key) => {
+            keysWithSources.push({ pubkey: key, source: domain.domain });
+          });
+        }
+      });
+    }
+
+    // Load key profiles in horizontal layout with source info
+    await this.loadHorizontalKeyProfiles(
+      keysWithSources,
+      "whitelist-keys",
+      "No whitelisted users found"
+    );
   },
 
-  // 7. Load Blacklist Data (simplified for Phase 1)
+  // 7. Load Enhanced Blacklist Data with Profiles
   async loadBlacklistData() {
     const [keysData, configData] = await Promise.all([
-      this.fetchConfig(this.endpoints.blacklistKeys, "blacklist-content"),
-      this.fetchConfig(this.endpoints.blacklistConfig, "blacklist-content"),
+      this.fetchConfig(this.endpoints.blacklistKeys, "blacklist-config"),
+      this.fetchConfig(this.endpoints.blacklistConfig, "blacklist-config"),
     ]);
 
     if (!keysData || !configData) return;
 
-    const container = document.getElementById("blacklist-content");
-    if (!container) return;
+    // Load configuration section
+    const configContainer = document.getElementById("blacklist-config");
+    if (configContainer) {
+      const permanentCount = keysData.permanent?.length || 0;
+      const temporaryCount = keysData.temporary?.length || 0;
+      const mutelistCount = Object.keys(keysData.mutelist || {}).length;
 
-    const permanentCount = keysData.permanent?.length || 0;
-    const temporaryCount = keysData.temporary?.length || 0;
-    const mutelistCount = Object.keys(keysData.mutelist || {}).length;
+      configContainer.innerHTML = `
+        <div class="space-y-3">
+          <div class="flex justify-between items-center">
+            <span class="text-gray-300">Status</span>
+            <span class="inline-flex px-2 py-1 text-xs font-medium ${
+              configData.enabled
+                ? "bg-red-100 text-red-800"
+                : "bg-gray-100 text-gray-800"
+            } rounded-full">
+              ${configData.enabled ? "Active" : "Inactive"}
+            </span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-gray-300">Permanent</span>
+            <span class="text-white font-medium">${permanentCount}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-gray-300">Temporary</span>
+            <span class="text-white font-medium">${temporaryCount}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-gray-300">Mute Lists</span>
+            <span class="text-white font-medium">${mutelistCount}</span>
+          </div>
+        </div>
+      `;
+    }
 
-    container.innerHTML = `
-      <div class="space-y-4">
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Blacklist Status</span>
-          <span class="inline-flex px-2 py-1 text-xs font-medium ${
-            configData.enabled
-              ? "bg-red-100 text-red-800"
-              : "bg-gray-100 text-gray-800"
-          } rounded-full">
-            ${configData.enabled ? "Active" : "Inactive"}
-          </span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Permanent Bans</span>
-          <span class="text-white font-medium">${permanentCount}</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Temporary Bans</span>
-          <span class="text-white font-medium">${temporaryCount}</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Mute Lists</span>
-          <span class="text-white font-medium">${mutelistCount}</span>
-        </div>
-      </div>
-    `;
+    // Collect all unique blacklisted pubkeys
+    const allPubkeys = new Set();
+
+    // Add permanent blacklist keys
+    if (keysData.permanent) {
+      keysData.permanent.forEach((key) => allPubkeys.add(key));
+    }
+
+    // Add temporary blacklist keys
+    if (keysData.temporary) {
+      keysData.temporary.forEach((item) => {
+        if (typeof item === "string") {
+          allPubkeys.add(item);
+        } else if (item.pubkey) {
+          allPubkeys.add(item.pubkey);
+        }
+      });
+    }
+
+    // Add mutelist keys (limit to first 10 for display purposes)
+    if (keysData.mutelist) {
+      let count = 0;
+      for (const authorKeys of Object.values(keysData.mutelist)) {
+        if (Array.isArray(authorKeys)) {
+          for (const key of authorKeys) {
+            if (count < 10) {
+              // Limit display to avoid overwhelming
+              allPubkeys.add(key);
+              count++;
+            } else {
+              break;
+            }
+          }
+        }
+        if (count >= 10) break;
+      }
+    }
+
+    // Load key profiles progressively
+    await this.loadKeyProfiles(
+      Array.from(allPubkeys),
+      "blacklist-keys",
+      "No blacklisted keys found"
+    );
   },
 
   // Utility functions

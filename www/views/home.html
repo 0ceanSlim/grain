@@ -1,5 +1,5 @@
 <!-- GRAIN Relay Dashboard Home View - Phase 1 Redesign -->
-<div class="min-h-screen p-8 text-white">
+<div class="min-h-screen p-2 text-white">
   <!-- Dashboard Header -->
   <div class="pb-8 mb-8 border-b border-gray-700">
     <div class="flex items-center justify-between">
@@ -20,6 +20,71 @@
     </div>
     <div class="mt-4 text-sm text-gray-500">
       Last updated: <span id="last-updated">Loading...</span>
+    </div>
+  </div>
+
+  <!-- Whitelist and Blacklist Containers - Moved to Top for Phase 2 -->
+  <div class="grid grid-cols-1 gap-8 mb-8 lg:grid-cols-3">
+    <!-- Whitelist Container (Larger - 2/3 width) -->
+    <div
+      class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg lg:col-span-2"
+    >
+      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+        <h2 class="text-xl font-semibold text-white">
+          ✅ Whitelist Management
+        </h2>
+        <p class="text-sm text-gray-400">Approved users and configuration</p>
+      </div>
+
+      <!-- Whitelist Configuration Section -->
+      <div class="p-6 border-b border-gray-700">
+        <h3 class="mb-4 text-lg font-medium text-white">Configuration</h3>
+        <div id="whitelist-config" class="space-y-3">
+          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        </div>
+      </div>
+
+      <!-- Whitelist Keys Section -->
+      <div class="p-6">
+        <h3 class="mb-4 text-lg font-medium text-white">Whitelisted Keys</h3>
+        <div id="whitelist-keys" class="space-y-3">
+          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Blacklist Container (Smaller - 1/3 width) -->
+    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
+      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+        <h2 class="text-xl font-semibold text-white">
+          ❌ Blacklist Management
+        </h2>
+        <p class="text-sm text-gray-400">Blocked users and status</p>
+      </div>
+
+      <!-- Blacklist Configuration Section -->
+      <div class="p-6 border-b border-gray-700">
+        <h3 class="mb-4 text-lg font-medium text-white">Configuration</h3>
+        <div id="blacklist-config" class="space-y-3">
+          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        </div>
+      </div>
+
+      <!-- Blacklist Keys Section -->
+      <div class="p-6">
+        <h3 class="mb-4 text-lg font-medium text-white">Blocked Keys</h3>
+        <div id="blacklist-keys" class="space-y-3">
+          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -227,53 +292,10 @@
       </div>
     </div>
   </div>
-
-  <!-- Whitelist and Blacklist Containers - Separate for Phase 2 -->
-  <div class="grid grid-cols-1 gap-8 mb-8 lg:grid-cols-3">
-    <!-- Whitelist Container (Larger - 2/3 width) -->
-    <div
-      class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg lg:col-span-2"
-    >
-      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-        <h2 class="text-xl font-semibold text-white">
-          ✅ Whitelist Management
-        </h2>
-        <p class="text-sm text-gray-400">Approved users and configuration</p>
-      </div>
-      <div id="whitelist-content" class="p-6">
-        <div class="space-y-3">
-          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Blacklist Container (Smaller - 1/3 width) -->
-    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
-      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-        <h2 class="text-xl font-semibold text-white">❌ Blacklist Status</h2>
-        <p class="text-sm text-gray-400">Blocked users overview</p>
-      </div>
-      <div id="blacklist-content" class="p-6">
-        <div class="space-y-3">
-          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- Hyperscript for simple interactions -->
-<div
-  _="on click from #refresh-dashboard-btn
-         add .animate-spin to #refresh-icon
-         then js newDashboardManager.refreshAll() end
-         then wait 2s
-         then remove .animate-spin from #refresh-icon"
-></div>
+<div></div>
 
 <script>
   // Toggle User Sync section visibility
