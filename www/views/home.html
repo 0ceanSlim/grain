@@ -372,3 +372,31 @@
   }
 </style>
 <script src="/static/js/dashboard.js"></script>
+<script>
+  // Safe initialization that waits for both DOM and script to be ready
+  function safeInitializeDashboard() {
+    // Check if the dashboard.js file has loaded and the function exists
+    if (
+      typeof newDashboardManager !== "undefined" &&
+      newDashboardManager &&
+      typeof newDashboardManager.init === "function" &&
+      document.getElementById("last-updated") &&
+      document.getElementById("whitelist-config")
+    ) {
+      console.log("Initializing dashboard...");
+      newDashboardManager.init();
+    } else {
+      console.log("Waiting for dashboard.js to load...");
+      // Wait a bit more for script to load
+      setTimeout(safeInitializeDashboard, 100);
+    }
+  }
+
+  // Initialize dashboard when page loads via any navigation method
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", safeInitializeDashboard);
+  } else {
+    // Give the script tag time to load
+    setTimeout(safeInitializeDashboard, 10);
+  }
+</script>
