@@ -60,25 +60,9 @@ This eliminates the need for compilation during Docker build, making the process
 
 GRAIN uses an embedded configuration system that automatically creates config files from built-in examples on first startup. This eliminates the need for external config management.
 
-### Method 1: Environment Variables (Recommended for Production)
+### Method 1: Direct Config File Editing (Recommended)
 
-The easiest way to configure your relay is through environment variables in docker-compose.yml:
-
-```yaml
-services:
-  grain:
-    # ... other settings ...
-    environment:
-      - GRAIN_ENV=production
-      - MONGO_URI=mongodb://mongo:27017/grain
-      - LOG_LEVEL=info
-      - SERVER_PORT=8181
-      # Add other environment variables as needed
-```
-
-### Method 2: Direct Config File Editing
-
-To customize configuration files beyond environment variables:
+To customize configuration files:
 
 1. **Extract configs from running container:**
 
@@ -109,6 +93,23 @@ docker cp blacklist.yml grain-relay:/app/blacklist.yml
 
 **Note**: GRAIN automatically detects config changes and hot-reloads - no container restart needed!
 
+### Method 2: Environment Variables (Limited Options)
+
+For basic settings, you can use these **four** environment variables in docker-compose.yml:
+
+```yaml
+services:
+  grain:
+    # ... other settings ...
+    environment:
+      - GRAIN_ENV=production # Environment name
+      - MONGO_URI=mongodb://mongo:27017/grain # MongoDB connection
+      - LOG_LEVEL=info # Log level: debug, info, warn, error
+      - SERVER_PORT=8181 # Server port number
+```
+
+**Note**: Only these 4 environment variables are supported. For all other settings (rate limits, authentication, resource limits, etc.), use Method 1.
+
 ### Method 3: Edit Inside Container
 
 For quick changes, you can edit directly inside the container:
@@ -117,7 +118,7 @@ For quick changes, you can edit directly inside the container:
 # Access container shell
 docker exec -it grain-relay sh
 
-# Edit configs with vi (or your preferred editor)
+# Edit configs with vi
 vi config.yml
 vi relay_metadata.json
 vi whitelist.yml
@@ -129,37 +130,47 @@ exit
 
 ## Viewing Logs
 
-GRAIN provides multiple logging options for monitoring and debugging.
+GRAIN uses two distinct logging systems:
 
-### Application Debug Logs
+### 1. Container Startup Logs (Minimal)
 
-GRAIN writes detailed application logs to `debug.log` inside the container:
+Docker container logs **only** show basic startup information:
+
+```bash
+# View startup logs
+docker compose logs grain
+
+# Example output:
+# grain-relay | Server is running on http://localhost:8181
+```
+
+That's it - container logs are minimal by design.
+
+### 2. Application Debug Logs (Everything Else)
+
+**ALL** application logging goes to `debug.log` inside the container:
 
 ```bash
 # View current debug log
 docker exec grain-relay cat /app/debug.log
 
-# Follow debug log in real-time
+# Follow debug log in real-time (THIS IS YOUR MAIN LOG)
 docker exec grain-relay tail -f /app/debug.log
 
 # Copy debug log to host system
 docker cp grain-relay:/app/debug.log ./debug.log
 ```
 
-### Container Logs
+The debug log contains:
 
-Docker container logs show startup and basic operational info:
-
-```bash
-# View container logs
-docker compose logs grain
-
-# Follow container logs in real-time
-docker compose logs -f grain
-
-# View last 50 lines
-docker compose logs --tail=50 grain
-```
+- Configuration loading
+- MongoDB connections
+- WebSocket connections/disconnections
+- Event processing
+- Rate limiting actions
+- Whitelist/blacklist decisions
+- Errors and warnings
+- All other application activity
 
 ### Log Configuration
 
@@ -168,9 +179,9 @@ The debug log behavior is controlled by your `config.yml` logging section:
 ```yaml
 logging:
   level: "info" # Log level: debug, info, warn, error
-  file: "debug" # Log file name (becomes debug.log)
+  file: "debug" # Log file name (becomes debug.log or debug.json)
   max_log_size_mb: 10 # Max size before rotation
-  structure: false # false = pretty logs, true = JSON
+  structure: false # false = pretty logs, true = JSON format
   check_interval_min: 10 # Check for rotation every 10 minutes
   backup_count: 2 # Keep 2 backup files
   suppress_components: # Reduce noise from these components
@@ -182,7 +193,7 @@ logging:
 
 ```bash
 # List all log files in container
-docker exec grain-relay ls -la *.log*
+docker exec grain-relay ls -la *.log* *.json*
 
 # View log rotation files
 docker exec grain-relay ls -la debug.log*
@@ -287,30 +298,6 @@ The Docker setup includes several security best practices:
 - **Health checks**: Automated monitoring of service health
 - **Resource limits**: Can be configured in docker-compose.yml
 
-To add resource limits:
-
-```yaml
-services:
-  grain:
-    # ... other settings ...
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: "0.5"
-```
-
-## Production Deployment
-
-For production use, consider:
-
-1. **Use external MongoDB**: Replace the included MongoDB with a managed service
-2. **Add reverse proxy**: Use nginx/traefik for SSL termination
-3. **Configure monitoring**: Set up log aggregation and metrics
-4. **Backup strategy**: Implement automated database backups
-5. **Resource limits**: Set appropriate CPU/memory limits
-6. **Network security**: Use Docker networks and firewall rules
-
 ## Troubleshooting
 
 ### Common Issues
@@ -341,8 +328,8 @@ docker compose build --no-cache --progress=plain
 **Config changes not taking effect:**
 
 ```bash
-# Check if hot-reload is working
-docker compose logs grain | grep -i "config"
+# Check if hot-reload is working (in debug.log, not container logs!)
+docker exec grain-relay tail -f /app/debug.log | grep -i "config"
 
 # Force restart if needed
 docker compose restart grain
@@ -357,6 +344,18 @@ curl -H "Accept: application/nostr+json" http://localhost:8181
 
 # Check firewall
 sudo ufw status
+
+# Check actual application logs for errors
+docker exec grain-relay tail -100 /app/debug.log
+```
+
+**Need to see what's happening:**
+
+Remember: `docker compose logs` only shows startup messages. For actual application activity:
+
+```bash
+# This is where all the action is:
+docker exec grain-relay tail -f /app/debug.log
 ```
 
 The build process automatically downloads and extracts the latest stable release binary with all assets!
