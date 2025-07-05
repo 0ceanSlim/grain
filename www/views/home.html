@@ -1,4 +1,4 @@
-<!-- GRAIN Relay Dashboard Home View -->
+<!-- GRAIN Relay Dashboard Home View - Phase 1 Redesign -->
 <div class="min-h-screen p-8 text-white">
   <!-- Dashboard Header -->
   <div class="pb-8 mb-8 border-b border-gray-700">
@@ -8,7 +8,7 @@
           🌾 GRAIN Relay Dashboard
         </h1>
         <p class="text-lg text-gray-400">
-          Relay policies and system configuration
+          Relay management and system overview
         </p>
       </div>
       <div class="flex items-center space-x-4">
@@ -23,16 +23,31 @@
     </div>
   </div>
 
-  <!-- Rate Limiting Configuration -->
+  <!-- 1. Relay Overview Section -->
   <div
     class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
   >
     <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-      <h2 class="text-xl font-semibold text-white">
-        Rate Limiting Configuration
-      </h2>
+      <h2 class="text-xl font-semibold text-white">📊 Relay Overview</h2>
+      <p class="text-sm text-gray-400">Basic relay information and identity</p>
+    </div>
+    <div id="relay-overview-content" class="p-6">
+      <div class="space-y-3">
+        <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+        <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Policy & Limits Section -->
+  <div
+    class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
+  >
+    <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+      <h2 class="text-xl font-semibold text-white">⚙️ Policy & Limits</h2>
       <p class="text-sm text-gray-400">
-        Traffic control and abuse prevention settings
+        Rate limits, event constraints, and operational policies
       </p>
     </div>
     <div class="overflow-x-auto">
@@ -47,12 +62,12 @@
             <th
               class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
             >
-              Rate Limit
+              Limit/Value
             </th>
             <th
               class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
             >
-              Burst Allowance
+              Burst/Additional
             </th>
             <th
               class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
@@ -62,7 +77,7 @@
           </tr>
         </thead>
         <tbody
-          id="rate-limit-table"
+          id="policy-limits-table"
           class="bg-gray-800 divide-y divide-gray-700"
         >
           <!-- Loading placeholder -->
@@ -87,14 +102,33 @@
     </div>
   </div>
 
-  <!-- Server Configuration -->
+  <!-- 3. Event Purge Management Section -->
   <div
     class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
   >
     <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-      <h2 class="text-xl font-semibold text-white">Server Configuration</h2>
+      <h2 class="text-xl font-semibold text-white">
+        🗑️ Event Purge Management
+      </h2>
+      <p class="text-sm text-gray-400">Event retention and cleanup policies</p>
+    </div>
+    <div id="event-purge-content" class="p-6">
+      <div class="space-y-3">
+        <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+        <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. System Configuration Section -->
+  <div
+    class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
+  >
+    <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
+      <h2 class="text-xl font-semibold text-white">🔐 System Configuration</h2>
       <p class="text-sm text-gray-400">
-        Core server settings and network configuration
+        Authentication and infrastructure settings
       </p>
     </div>
     <div class="overflow-x-auto">
@@ -124,7 +158,7 @@
           </tr>
         </thead>
         <tbody
-          id="server-config-table"
+          id="system-config-table"
           class="bg-gray-800 divide-y divide-gray-700"
         >
           <!-- Loading placeholder -->
@@ -149,77 +183,62 @@
     </div>
   </div>
 
-  <!-- Authentication Configuration -->
+  <!-- 5. User Sync (Experimental) Section - Collapsible -->
   <div
     class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
   >
-    <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-      <h2 class="text-xl font-semibold text-white">
-        Authentication & Access Control
-      </h2>
-      <p class="text-sm text-gray-400">
-        User access policies and authentication settings
-      </p>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-700">
-        <thead class="bg-gray-750">
-          <tr>
-            <th
-              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
+    <div
+      class="px-6 py-4 transition-colors border-b border-gray-700 cursor-pointer bg-gray-750 hover:bg-gray-700"
+      onclick="toggleUserSyncSection()"
+    >
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-semibold text-white">
+            🔄 User Sync
+            <span class="text-sm font-normal text-orange-400"
+              >(Experimental)</span
             >
-              Setting
-            </th>
-            <th
-              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
-            >
-              Value
-            </th>
-            <th
-              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
-            >
-              Description
-            </th>
-            <th
-              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
-            >
-              Status
-            </th>
-          </tr>
-        </thead>
-        <tbody
-          id="auth-config-table"
-          class="bg-gray-800 divide-y divide-gray-700"
+          </h2>
+          <p class="text-sm text-gray-400">
+            User data synchronization settings
+          </p>
+        </div>
+        <svg
+          id="user-sync-chevron"
+          class="w-5 h-5 text-gray-400 transition-transform duration-200 transform"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
         >
-          <!-- Loading placeholder -->
-          <tr>
-            <td class="px-6 py-4 whitespace-nowrap">
-              <div class="h-4 bg-gray-700 rounded animate-pulse w-28"></div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-              <div class="w-16 h-4 bg-gray-700 rounded animate-pulse"></div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-              <div class="w-48 h-4 bg-gray-700 rounded animate-pulse"></div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-              <div
-                class="w-16 h-6 bg-gray-700 rounded-full animate-pulse"
-              ></div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M9 5l7 7-7 7"
+          />
+        </svg>
+      </div>
+    </div>
+    <div id="user-sync-content" class="hidden p-6">
+      <div class="space-y-3">
+        <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+        <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+      </div>
     </div>
   </div>
 
-  <!-- Access Lists -->
-  <div class="grid grid-cols-1 gap-8 mb-8 lg:grid-cols-2">
-    <!-- Whitelist -->
-    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
+  <!-- Whitelist and Blacklist Containers - Separate for Phase 2 -->
+  <div class="grid grid-cols-1 gap-8 mb-8 lg:grid-cols-3">
+    <!-- Whitelist Container (Larger - 2/3 width) -->
+    <div
+      class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg lg:col-span-2"
+    >
       <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-        <h2 class="text-xl font-semibold text-white">Whitelist Status</h2>
-        <p class="text-sm text-gray-400">Approved users and domains</p>
+        <h2 class="text-xl font-semibold text-white">
+          ✅ Whitelist Management
+        </h2>
+        <p class="text-sm text-gray-400">Approved users and configuration</p>
       </div>
       <div id="whitelist-content" class="p-6">
         <div class="space-y-3">
@@ -230,11 +249,11 @@
       </div>
     </div>
 
-    <!-- Blacklist -->
+    <!-- Blacklist Container (Smaller - 1/3 width) -->
     <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
       <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-        <h2 class="text-xl font-semibold text-white">Blacklist Status</h2>
-        <p class="text-sm text-gray-400">Banned users and content filtering</p>
+        <h2 class="text-xl font-semibold text-white">❌ Blacklist Status</h2>
+        <p class="text-sm text-gray-400">Blocked users overview</p>
       </div>
       <div id="blacklist-content" class="p-6">
         <div class="space-y-3">
@@ -245,87 +264,31 @@
       </div>
     </div>
   </div>
-
-  <!-- Additional Configuration Tables -->
-  <div class="grid grid-cols-1 gap-8 mb-8 lg:grid-cols-2">
-    <!-- Logging Configuration -->
-    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
-      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-        <h2 class="text-xl font-semibold text-white">Logging Configuration</h2>
-        <p class="text-sm text-gray-400">
-          System logging and monitoring settings
-        </p>
-      </div>
-      <div id="logging-content" class="p-6">
-        <div class="space-y-3">
-          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MongoDB Configuration -->
-    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
-      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-        <h2 class="text-xl font-semibold text-white">MongoDB Configuration</h2>
-        <p class="text-sm text-gray-400">
-          Database connection and storage settings
-        </p>
-      </div>
-      <div id="mongodb-content" class="p-6">
-        <div class="space-y-3">
-          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Resource Limits and Event Configuration -->
-  <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
-    <!-- Resource Limits -->
-    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
-      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-        <h2 class="text-xl font-semibold text-white">Resource Limits</h2>
-        <p class="text-sm text-gray-400">Memory and CPU resource management</p>
-      </div>
-      <div id="resource-limits-content" class="p-6">
-        <div class="space-y-3">
-          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Event Purge Configuration -->
-    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
-      <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-        <h2 class="text-xl font-semibold text-white">Event Purge Settings</h2>
-        <p class="text-sm text-gray-400">
-          Event retention and cleanup policies
-        </p>
-      </div>
-      <div id="event-purge-content" class="p-6">
-        <div class="space-y-3">
-          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
 
-<!-- Simple Hyperscript only for basic interactions -->
+<!-- Hyperscript for simple interactions -->
 <div
   _="on click from #refresh-dashboard-btn
          add .animate-spin to #refresh-icon
-         then js dashboardManager.refreshAll() end
+         then js newDashboardManager.refreshAll() end
          then wait 2s
          then remove .animate-spin from #refresh-icon"
 ></div>
+
+<script>
+  // Toggle User Sync section visibility
+  function toggleUserSyncSection() {
+    const content = document.getElementById("user-sync-content");
+    const chevron = document.getElementById("user-sync-chevron");
+
+    if (content.classList.contains("hidden")) {
+      content.classList.remove("hidden");
+      chevron.style.transform = "rotate(90deg)";
+    } else {
+      content.classList.add("hidden");
+      chevron.style.transform = "rotate(0deg)";
+    }
+  }
+</script>
 
 <script src="/static/js/dashboard.js"></script>

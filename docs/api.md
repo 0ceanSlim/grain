@@ -443,10 +443,13 @@ Fetches user profile metadata (kind 0 event). If no pubkey is provided, uses cur
 
 ```json
 {
-  "name": "fiatjaf",
-  "about": "I made Nostr",
-  "picture": "https://example.com/pic.jpg",
-  "nip05": "fiatjaf@fiatjaf.com"
+  "id": "c43be8b4634298e97dde3020a5e6aeec37d7f5a4b0259705f496e81a550c8f8b",
+  "pubkey": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
+  "created_at": 1738588530,
+  "kind": 0,
+  "tags": [],
+  "content": "{\"name\":\"fiatjaf\",\"about\":\"~\",\"picture\":\"https://fiatjaf.com/static/favicon.jpg\",\"nip05\":\"_@fiatjaf.com\",\"lud16\":\"fiatjaf@zbd.gg\",\"website\":\"https://nostr.technology\"}",
+  "sig": "202a1bf6a58943d660c1891662dbdda142aa8e5bca9d4a3cb03cde816ad3bdda6f4ec3b880671506c2820285b32218a0afdec2d172de9694d83972190ab4f9da"
 }
 ```
 
@@ -462,9 +465,9 @@ Fetches user's relay list (kind 10002 event). If no pubkey is provided, uses cur
 
 ```json
 {
-  "read": ["wss://relay.damus.io", "wss://relay.nostr.band"],
-  "write": ["wss://nos.lol", "wss://relay.damus.io"],
-  "both": ["wss://relay.snort.social"]
+  "read": ["wss://inbox.relays.land/"],
+  "write": ["wss://pyramid.fiatjaf.com/", "wss://relay.westernbtc.com/"],
+  "both": null
 }
 ```
 
