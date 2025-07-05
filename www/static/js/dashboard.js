@@ -149,6 +149,12 @@ const newDashboardManager = {
         ${profileCards.join("")}
       </div>
     `;
+
+    // Add horizontal scroll AFTER final content is loaded
+    // Small delay to ensure DOM is fully updated
+    setTimeout(() => {
+      this.enableHorizontalWheelScroll(container);
+    }, 50);
   },
 
   // Initialize dashboard
@@ -171,6 +177,25 @@ const newDashboardManager = {
   setupEventListeners() {
     // No manual refresh button - only auto-refresh on page load
     console.log("Dashboard event listeners initialized (page load only)");
+  },
+
+  enableHorizontalWheelScroll(container) {
+    if (!container) return;
+
+    const scrollElement = container.querySelector(".custom-scroll");
+    if (!scrollElement) return;
+
+    // Simple wheel to horizontal scroll conversion
+    const handleWheel = (e) => {
+      // Only if there's horizontal overflow
+      if (scrollElement.scrollWidth > scrollElement.clientWidth) {
+        e.preventDefault();
+        scrollElement.scrollLeft += e.deltaY * 0.5;
+      }
+    };
+
+    scrollElement.addEventListener("wheel", handleWheel, { passive: false });
+    console.log("Horizontal wheel scroll enabled for custom-scroll container");
   },
 
   // Update timestamp
