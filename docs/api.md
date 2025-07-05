@@ -647,11 +647,19 @@ GET /api/v1/relay/config/logging
 ```json
 {
   "level": "info",
-  "file": "logs/grain.log",
-  "max_size": 100,
-  "max_backups": 5,
-  "max_age": 30,
-  "compress": true
+  "file": "debug",
+  "max_log_size_mb": 10,
+  "structure": false,
+  "check_interval_min": 10,
+  "backup_count": 2,
+  "suppress_components": [
+    "util",
+    "conn-manager",
+    "client",
+    "mongo-query",
+    "event-store",
+    "close-handler"
+  ]
 }
 ```
 
