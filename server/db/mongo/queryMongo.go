@@ -86,7 +86,7 @@ func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName stri
 
 	// Determine the limit to apply
 	implicitLimit := config.GetConfig().Server.ImplicitReqLimit
-	var effectiveLimit int64 = -1
+	var effectiveLimit int64
 
 	// Check if any filter has an explicit limit
 	var lowestExplicitLimit *int

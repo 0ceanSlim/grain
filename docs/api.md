@@ -35,10 +35,9 @@ Complete REST API reference for GRAIN relay operations.
       - [Get User Profile](#get-user-profile)
       - [Get User Relays](#get-user-relays)
   - [Relay Management API](#relay-management-api)
-    - [Whitelist Management](#whitelist-management)
-      - [Get All Whitelisted Pubkeys](#get-all-whitelisted-pubkeys)
-    - [Blacklist Management](#blacklist-management)
-      - [Get All Blacklisted Pubkeys](#get-all-blacklisted-pubkeys)
+    - [Key Management](#key-management)
+      - [Get Whitelisted Keys](#get-whitelisted-keys)
+      - [Get Blacklisted Keys](#get-blacklisted-keys)
     - [Configuration Endpoints](#configuration-endpoints)
       - [Get Server Configuration](#get-server-configuration)
       - [Get Rate Limit Configuration](#get-rate-limit-configuration)
@@ -50,6 +49,8 @@ Complete REST API reference for GRAIN relay operations.
       - [Get Event Time Constraints Configuration](#get-event-time-constraints-configuration)
       - [Get Backup Relay Configuration](#get-backup-relay-configuration)
       - [Get User Sync Configuration](#get-user-sync-configuration)
+      - [Get Whitelist Configuration](#get-whitelist-configuration)
+      - [Get Blacklist Configuration](#get-blacklist-configuration)
   - [WebSocket \& Protocol Endpoints](#websocket--protocol-endpoints)
     - [Nostr WebSocket Relay](#nostr-websocket-relay)
     - [NIP-11 Relay Information](#nip-11-relay-information)
@@ -473,52 +474,80 @@ Fetches user's relay list (kind 10002 event). If no pubkey is provided, uses cur
 
 Administrative endpoints for relay operators.
 
-### Whitelist Management
+### Key Management
 
-#### Get All Whitelisted Pubkeys
+#### Get Whitelisted Keys
 
 ```http
-GET /api/v1/relay/whitelist
+GET /api/v1/relay/keys/whitelist
 ```
+
+Returns all whitelisted pubkeys organized by source. This endpoint always returns configuration data regardless of whether whitelisting is enabled.
 
 **Response:**
 
 ```json
 {
-  "pubkeys": [
+  "list": [
     "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
     "fa984bd7dbb282f07e16e7ae87b26a2a7b9b90b7246a44771f0cf5ae58018f52"
   ],
-  "enabled": true
+  "domains": [
+    {
+      "domain": "example.com",
+      "pubkeys": [
+        "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+        "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+      ]
+    },
+    {
+      "domain": "nostr.example.org",
+      "pubkeys": [
+        "567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234"
+      ]
+    }
+  ]
 }
 ```
 
-### Blacklist Management
+**Response Fields:**
 
-#### Get All Blacklisted Pubkeys
+- `list`: All pubkeys from configuration (direct hex pubkeys + npubs converted to hex)
+- `domains`: Array of domain objects with fetched NIP-05 verified pubkeys
+
+#### Get Blacklisted Keys
 
 ```http
-GET /api/v1/relay/blacklist
+GET /api/v1/relay/keys/blacklist
 ```
+
+Returns all blacklisted pubkeys organized by type. This endpoint always returns configuration data regardless of whether blacklisting is enabled.
 
 **Response:**
 
 ```json
 {
-  "permanent": ["abcd1234567890abcdef..."],
+  "permanent": [
+    "abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd"
+  ],
   "temporary": [
     {
-      "pubkey": "efgh5678901234567890...",
-      "reason": "spam",
+      "pubkey": "efgh5678901234567890abcdef1234567890abcdef1234567890abcdef1234",
       "expires_at": 1704067200
     }
   ],
   "mutelist": {
-    "author_pubkey": ["blocked_author1", "blocked_author2"]
-  },
-  "enabled": true
+    "author_pubkey_1": ["blocked_pubkey_1", "blocked_pubkey_2"],
+    "author_pubkey_2": ["blocked_pubkey_3"]
+  }
 }
 ```
+
+**Response Fields:**
+
+- `permanent`: Pubkeys permanently blacklisted (from config)
+- `temporary`: Pubkeys temporarily banned with expiration timestamps
+- `mutelist`: Pubkeys blocked via NIP-51 mute lists, grouped by list author
 
 ### Configuration Endpoints
 
@@ -553,12 +582,32 @@ GET /api/v1/relay/config/rate_limit
 
 ```json
 {
-  "event_limit": 100,
-  "request_limit": 50,
   "ws_limit": 10,
   "ws_burst": 5,
-  "cpu_limit": 80,
-  "mem_limit": 512
+  "event_limit": 100,
+  "event_burst": 10,
+  "req_limit": 50,
+  "req_burst": 10,
+  "max_event_size": 65536,
+  "kind_size_limits": [
+    {
+      "kind": 0,
+      "max_size": 8192
+    }
+  ],
+  "category_limits": {
+    "regular": {
+      "rate": 100,
+      "burst": 10
+    }
+  },
+  "kind_limits": [
+    {
+      "kind": 1,
+      "rate": 50,
+      "burst": 5
+    }
+  ]
 }
 ```
 
@@ -573,13 +622,16 @@ GET /api/v1/relay/config/event_purge
 ```json
 {
   "enabled": true,
-  "interval_hours": 24,
-  "keep_duration_days": 30,
-  "purge_by_kind": {
-    "0": 0,
-    "3": 0,
-    "10002": 0
+  "disable_at_startup": false,
+  "keep_interval_hours": 24,
+  "purge_interval_minutes": 60,
+  "purge_by_category": {
+    "regular": true,
+    "replaceable": false,
+    "ephemeral": true
   },
+  "purge_by_kind_enabled": true,
+  "kinds_to_purge": [1, 7],
   "exclude_whitelisted": true
 }
 ```
@@ -628,9 +680,9 @@ GET /api/v1/relay/config/resource_limits
 
 ```json
 {
-  "max_connections": 1000,
-  "max_subscriptions_per_client": 10,
-  "max_filters_per_subscription": 10
+  "cpu_cores": 4,
+  "memory_mb": 1024,
+  "heap_size_mb": 512
 }
 ```
 
@@ -645,7 +697,7 @@ GET /api/v1/relay/config/auth
 ```json
 {
   "enabled": true,
-  "required": false
+  "relay_url": "wss://auth.relay.com"
 }
 ```
 
@@ -675,8 +727,7 @@ GET /api/v1/relay/config/backup_relay
 ```json
 {
   "enabled": true,
-  "url": "wss://backup.relay.com",
-  "sync_interval": 3600
+  "url": "wss://backup.relay.com"
 }
 ```
 
@@ -693,6 +744,68 @@ GET /api/v1/relay/config/user_sync
   "enabled": true,
   "interval_hours": 6,
   "batch_size": 100
+}
+```
+
+#### Get Whitelist Configuration
+
+```http
+GET /api/v1/relay/config/whitelist
+```
+
+Returns the complete whitelist configuration from whitelist.yml.
+
+**Response:**
+
+```json
+{
+  "pubkey_whitelist": {
+    "enabled": false,
+    "pubkeys": [
+      "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
+    ],
+    "npubs": [
+      "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6"
+    ],
+    "cache_refresh_minutes": 60
+  },
+  "kind_whitelist": {
+    "enabled": false,
+    "kinds": ["0", "1", "3", "7"]
+  },
+  "domain_whitelist": {
+    "enabled": false,
+    "domains": ["example.com", "nostr.example.org"],
+    "cache_refresh_minutes": 120
+  }
+}
+```
+
+#### Get Blacklist Configuration
+
+```http
+GET /api/v1/relay/config/blacklist
+```
+
+Returns the complete blacklist configuration from blacklist.yml.
+
+**Response:**
+
+```json
+{
+  "enabled": true,
+  "permanent_ban_words": ["spam", "scam"],
+  "temp_ban_words": ["crypto", "airdrop"],
+  "max_temp_bans": 3,
+  "temp_ban_duration": 3600,
+  "permanent_blacklist_pubkeys": [
+    "abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd"
+  ],
+  "permanent_blacklist_npubs": [
+    "npub1abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+  ],
+  "mutelist_authors": ["author_pubkey_1", "author_pubkey_2"],
+  "mutelist_cache_refresh_minutes": 120
 }
 ```
 
@@ -788,20 +901,22 @@ Returns the service worker JavaScript for offline functionality.
 
 ### Relay Management API Endpoints
 
-| Method | Endpoint                                      | Description                   |
-| ------ | --------------------------------------------- | ----------------------------- |
-| GET    | `/api/v1/relay/whitelist`                     | Get whitelisted pubkeys       |
-| GET    | `/api/v1/relay/blacklist`                     | Get blacklisted pubkeys       |
-| GET    | `/api/v1/relay/config/server`                 | Get server configuration      |
-| GET    | `/api/v1/relay/config/rate_limit`             | Get rate limit configuration  |
-| GET    | `/api/v1/relay/config/event_purge`            | Get event purge configuration |
-| GET    | `/api/v1/relay/config/logging`                | Get logging configuration     |
-| GET    | `/api/v1/relay/config/mongodb`                | Get MongoDB configuration     |
-| GET    | `/api/v1/relay/config/resource_limits`        | Get resource limits           |
-| GET    | `/api/v1/relay/config/auth`                   | Get auth configuration        |
-| GET    | `/api/v1/relay/config/event_time_constraints` | Get time constraints          |
-| GET    | `/api/v1/relay/config/backup_relay`           | Get backup relay config       |
-| GET    | `/api/v1/relay/config/user_sync`              | Get user sync config          |
+| Method | Endpoint                                      | Description                    |
+| ------ | --------------------------------------------- | ------------------------------ |
+| GET    | `/api/v1/relay/keys/whitelist`                | Get whitelisted keys by source |
+| GET    | `/api/v1/relay/keys/blacklist`                | Get blacklisted keys by type   |
+| GET    | `/api/v1/relay/config/server`                 | Get server configuration       |
+| GET    | `/api/v1/relay/config/rate_limit`             | Get rate limit configuration   |
+| GET    | `/api/v1/relay/config/event_purge`            | Get event purge configuration  |
+| GET    | `/api/v1/relay/config/logging`                | Get logging configuration      |
+| GET    | `/api/v1/relay/config/mongodb`                | Get MongoDB configuration      |
+| GET    | `/api/v1/relay/config/resource_limits`        | Get resource limits            |
+| GET    | `/api/v1/relay/config/auth`                   | Get auth configuration         |
+| GET    | `/api/v1/relay/config/event_time_constraints` | Get time constraints           |
+| GET    | `/api/v1/relay/config/backup_relay`           | Get backup relay config        |
+| GET    | `/api/v1/relay/config/user_sync`              | Get user sync config           |
+| GET    | `/api/v1/relay/config/whitelist`              | Get complete whitelist config  |
+| GET    | `/api/v1/relay/config/blacklist`              | Get complete blacklist config  |
 
 ### Other Endpoints
 

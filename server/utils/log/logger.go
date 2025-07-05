@@ -104,7 +104,7 @@ func InitializeLoggers(cfg *cfgType.ServerConfig) {
 	// Create main logger
 	mainLogger := slog.New(handler)
 
-	// Print a console message just for initialization confirmation. Supressed Line in produciton.
+	// Print a console message just for initialization confirmation. Suppressed Line in production.
 	//fmt.Printf("Logger initialized: writing to %s\n", logFilePath)
 
 	// Now create all the component loggers

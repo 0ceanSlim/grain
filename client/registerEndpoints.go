@@ -24,8 +24,8 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/auth/amber-callback", api.HandleAmberCallback) // Amber signer callback (NIP-55)
 
 	// relay api endpoints
-	mux.HandleFunc("/api/v1/relay/whitelist", relay.GetAllWhitelistedPubkeys)
-	mux.HandleFunc("/api/v1/relay/blacklist", relay.GetAllBlacklistedPubkeys)
+	mux.HandleFunc("/api/v1/relay/keys/whitelist", relay.GetAllWhitelistedPubkeys)
+	mux.HandleFunc("/api/v1/relay/keys/blacklist", relay.GetAllBlacklistedPubkeys)
 
 	// relay configuration endpoints (read-only)
 	mux.HandleFunc("/api/v1/relay/config/server", relay.GetServerConfig)
@@ -38,6 +38,8 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/relay/config/event_time_constraints", relay.GetEventTimeConstraintsConfig)
 	mux.HandleFunc("/api/v1/relay/config/backup_relay", relay.GetBackupRelayConfig)
 	mux.HandleFunc("/api/v1/relay/config/user_sync", relay.GetUserSyncConfig)
+	mux.HandleFunc("/api/v1/relay/config/whitelist", relay.GetWhitelistConfig)
+	mux.HandleFunc("/api/v1/relay/config/blacklist", relay.GetBlacklistConfig)
 
 	// Key generation endpoint
 	mux.HandleFunc("/api/v1/generate/keypair", api.GenerateKeypairHandler) // Generate random key pair
