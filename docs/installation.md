@@ -1,4 +1,4 @@
-# GRAIN Installation Guide WIP
+# GRAIN Installation Guide
 
 Complete installation instructions for setting up your GRAIN relay server.
 
@@ -245,82 +245,14 @@ CGO_ENABLED=0 go build -a -ldflags="-w -s" -o grain .
 
 ## Method 3: Docker Deployment
 
-Deploy GRAIN using Docker containers for scalable, reproducible deployments.
+For containerized deployment of GRAIN using Docker, please refer to the comprehensive [Docker Documentation](docker/README.md).
 
-### Quick Start with Docker Compose
+The Docker guide covers:
 
-1. **Create docker-compose.yml**:
-
-```yaml
-version: "3.8"
-
-services:
-  grain:
-    image: 0ceanslim/grain:latest
-    ports:
-      - "8181:8181"
-    volumes:
-      - ./config:/app/config
-      - grain-logs:/app/logs
-    depends_on:
-      - mongo
-    environment:
-      - GRAIN_ENV=production
-    restart: unless-stopped
-
-  mongo:
-    image: mongo:7.0
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-    restart: unless-stopped
-
-volumes:
-  mongo-data:
-  grain-logs:
-```
-
-2. **Start services**:
-
-```bash
-# Start GRAIN and MongoDB
-docker-compose up -d
-
-# View logs
-docker-compose logs -f grain
-
-# Stop services
-docker-compose down
-```
-
-### Docker Image Options
-
-**Official Images**:
-
-- `0ceanslim/grain:latest` - Latest stable release
-- `0ceanslim/grain:v0.4.0` - Specific version
-- `0ceanslim/grain:dev` - Development builds
-
-**Custom Build**:
-
-```bash
-# Build your own image
-git clone https://github.com/0ceanslim/grain.git
-cd grain
-docker build -t my-grain .
-
-# Use in docker-compose.yml
-# image: my-grain
-```
-
-### Advanced Docker Configuration
-
-See the [Docker Documentation](../docker/README.md) for:
-
+- Quick start with Docker Compose
+- Official and custom Docker images
 - Production deployment strategies
 - Kubernetes configurations
-- Multi-stage builds
 - Security best practices
 - Monitoring and logging setups
 
@@ -550,9 +482,9 @@ After first run, you'll have:
 ```
 ~/grain-relay/
 ├── config.yml              # Main server configuration
-├── whitelist.yml            # User and content allowlists
-├── blacklist.yml            # User and content blocklists
-├── relay_metadata.json      # Public relay information
+├── whitelist.yml           # User and content allowlists
+├── blacklist.yml           # User and content blocklists
+├── relay_metadata.json     # Public relay information
 ├── debug.log               # Application logs
 └── www/                    # Web interface files
 ```
@@ -567,7 +499,7 @@ After first run, you'll have:
   "description": "A community Nostr relay",
   "pubkey": "your_pubkey_here",
   "contact": "admin@yourdomain.com",
-  "supported_nips": [1, 2, 9, 11],
+  "supported_nips": [1, 7, 9, 11, 19, 42, 55, 65],
   "software": "https://github.com/0ceanslim/grain",
   "version": "0.4.0"
 }
@@ -591,9 +523,25 @@ server:
   idle_timeout: 1200
 ```
 
+**4. Client Settings**: GRAIN will use these default relays for the web client:
+
+```
+- wss://relay.damus.io
+- wss://nos.lol
+- wss://relay.nostr.band
+```
+
 ### Advanced Configuration
 
-For detailed configuration options, see the [Configuration Guide](../docs/configuration.md).
+For detailed configuration options including:
+
+- Complete server settings
+- Rate limiting and resource management
+- Authentication and access control
+- Event purging and retention policies
+- Performance tuning for different use cases
+
+See the comprehensive [Configuration Guide](../docs/configuration.md).
 
 ---
 
