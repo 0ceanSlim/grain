@@ -312,7 +312,6 @@ const dashboardManager = {
     const {
       name = "🌾 GRAIN Relay",
       description = "Go Relay Architecture for Implementing Nostr",
-      icon,
       banner,
       pubkey,
       contact,
@@ -340,19 +339,14 @@ const dashboardManager = {
     // Centered header section with name and icon
     html += `
   <div class="text-center">
-    ${
-      icon
-        ? `<img src="${icon}" alt="Relay Icon" class="w-10 h-10 mx-auto mb-2 rounded-lg">`
-        : ""
-    }
-    <h3 class="text-xl font-bold text-white">${this.escapeHtml(name)}</h3>
+        <h3 class="text-2xl font-bold text-white">${this.escapeHtml(name)}</h3>
   </div>
 `;
 
     // Description (more compact)
     if (description) {
       html += `
-    <div class="bg-gray-750 p-3 rounded-lg">
+    <div class="bg-gray-750 p-2 rounded-lg">
       <p class="text-white text-sm leading-relaxed text-center">${this.escapeHtml(
         description
       )}</p>
@@ -367,67 +361,47 @@ const dashboardManager = {
       versionDisplay = `<a href="${releaseUrl}" target="_blank" class="text-blue-400 hover:text-blue-300">${version}</a>`;
     }
 
-    // Compact Technical Information Grid
+    // Compact Technical Information Grid with integrated policies
     html += `
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-    <div class="bg-gray-750 p-3 rounded-lg">
-      <h4 class="text-sm font-medium text-white mb-3 text-center">Technical Details</h4>
-      <div class="space-y-2 text-sm">
-        <div class="flex justify-between items-center">
-          <span class="text-gray-400">Software</span>
-          <span class="text-white font-medium">
-            ${
-              software.includes("github.com")
-                ? `<a href="${software}" target="_blank" class="text-blue-400 hover:text-blue-300">🌾 GRAIN</a>`
-                : this.escapeHtml(software)
-            }
-          </span>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="bg-gray-750 p-3 rounded-lg">
+        <h4 class="text-sm font-medium text-white mb-3 text-center">Technical Details</h4>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between items-center">
+            <span class="text-gray-400">Software</span>
+            <span class="text-white font-medium">
+              ${
+                software.includes("github.com")
+                  ? `<a href="${software}" target="_blank" class="text-blue-400 hover:text-blue-300">🌾 GRAIN</a>`
+                  : this.escapeHtml(software)
+              }
+            </span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-gray-400">Version</span>
+            <span class="text-white font-medium">${versionDisplay}</span>
+          </div>
         </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-400">Version</span>
-          <span class="text-white font-medium">${versionDisplay}</span>
+        
+        <!-- Policies Section -->
+        <h5 class="text-sm font-medium text-white mt-4 mb-2 text-center">Policies</h5>
+        <div class="flex justify-center gap-3 text-sm">
+          ${this.createPolicyLink(privacy_policy, "Privacy Policy", "Privacy")}
+          ${this.createPolicyLink(
+            terms_of_service,
+            "Terms of Service",
+            "Terms"
+          )}
+          ${this.createPolicyLink(posting_policy, "Posting Policy", "Posting")}
         </div>
       </div>
+      
+      <div class="bg-gray-750 p-3 rounded-lg">
+        <h4 class="text-sm font-medium text-white mb-3 text-center">Contact & Admin</h4>
+        ${this.createAdminSection(pubkey, contact)}
+      </div>
     </div>
-    
-    <div class="bg-gray-750 p-3 rounded-lg">
-      <h4 class="text-sm font-medium text-white mb-3 text-center">Contact & Admin</h4>
-      ${this.createAdminSection(pubkey, contact)}
-    </div>
-  </div>
-`;
-
-    // Policies section - show policies if they exist, otherwise show warning
-    const policies = [];
-    if (privacy_policy)
-      policies.push({ label: "Privacy Policy", url: privacy_policy });
-    if (terms_of_service)
-      policies.push({ label: "Terms of Service", url: terms_of_service });
-    if (posting_policy)
-      policies.push({ label: "Posting Policy", url: posting_policy });
-
-    html += `
-  <div class="bg-gray-750 p-3 rounded-lg">
-    <h4 class="text-sm font-medium text-white mb-3 text-center">Policies & Terms</h4>
-    <div class="text-center">
-      ${
-        policies.length > 0
-          ? `<div class="flex flex-wrap gap-2 justify-center">
-              ${policies
-                .map(
-                  (policy) =>
-                    `<a href="${policy.url}" target="_blank" class="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors">${policy.label}</a>`
-                )
-                .join("")}
-            </div>`
-          : `<div class="p-3 bg-yellow-900/20 border border-yellow-500/30 rounded">
-              <p class="text-yellow-300 text-sm font-medium">⚠️ This relay has no policies or terms of service.</p>
-              <p class="text-yellow-400 text-xs mt-1">Use at your own risk.</p>
-            </div>`
-      }
-    </div>
-  </div>
-`;
+    `;
 
     // Supported NIPs section (more compact)
     if (supported_nips && supported_nips.length > 0) {
@@ -478,6 +452,15 @@ const dashboardManager = {
     }
 
     return html;
+  },
+
+  // Helper function to create policy link with warning if missing
+  createPolicyLink(url, label, shortLabel) {
+    if (url) {
+      return `<a href="${url}" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm">${shortLabel}</a>`;
+    } else {
+      return `<span class="text-gray-500 text-sm cursor-help" title="No ${label.toLowerCase()} specified">⚠️ ${shortLabel}</span>`;
+    }
   },
 
   // Helper function to create admin section with profile
