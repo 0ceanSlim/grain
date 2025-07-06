@@ -9,13 +9,32 @@ import (
 )
 
 type RelayMetadata struct {
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	Pubkey        string `json:"pubkey"`
-	Contact       string `json:"contact"`
-	SupportedNIPs []int  `json:"supported_nips"`
-	Software      string `json:"software"`
-	Version       string `json:"version"`
+	Name            string      `json:"name"`
+	Description     string      `json:"description"`
+	Banner          string      `json:"banner"`
+	Icon            string      `json:"icon"`
+	Pubkey          string      `json:"pubkey"`
+	Contact         string      `json:"contact"`
+	SupportedNIPs   []int       `json:"supported_nips"`
+	Software        string      `json:"software"`
+	Version         string      `json:"version"`
+	PrivacyPolicy   string      `json:"privacy_policy"`
+	TermsOfService  string      `json:"terms_of_service"`
+	Limitation      struct {
+		MaxMessageLength      int    `json:"max_message_length"`
+		MaxContentLength      int    `json:"max_content_length"`
+		MaxSubscriptions      int    `json:"max_subscriptions"`
+		MaxLimit              int    `json:"max_limit"`
+		AuthRequired          bool   `json:"auth_required"`
+		PaymentRequired       bool   `json:"payment_required"`
+		RestrictedWrites      bool   `json:"restricted_writes"`
+		CreatedAtLowerLimit   *int64 `json:"created_at_lower_limit"`
+		CreatedAtUpperLimit   *int64 `json:"created_at_upper_limit"`
+	} `json:"limitation"`
+	RelayCountries []string `json:"relay_countries"`
+	LanguageTags   []string `json:"language_tags"`
+	Tags           []string `json:"tags"`
+	PostingPolicy  string   `json:"posting_policy"`
 }
 
 var relayMetadata RelayMetadata
