@@ -12,7 +12,6 @@ import (
 )
 
 // GetAllBlacklistedPubkeysLive handles the request to return all blacklisted pubkeys with live mutelist fetching
-// This endpoint fetches fresh data from mutelists and is suitable for verification after configuration changes
 func GetAllBlacklistedPubkeysLive(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Live blacklist keys API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),
@@ -45,8 +44,7 @@ func GetAllBlacklistedPubkeysLive(w http.ResponseWriter, r *http.Request) {
 	temporary := config.GetTemporaryBlacklist()
 
 	// Fetch mutelist pubkeys grouped by author LIVE
-	mutelist := make(map[string][]string)
-
+	var mutelist map[string][]string
 	if len(blacklistConfig.MuteListAuthors) > 0 {
 		cfg := config.GetConfig()
 		if cfg == nil {
@@ -58,44 +56,22 @@ func GetAllBlacklistedPubkeysLive(w http.ResponseWriter, r *http.Request) {
 
 		localRelayURL := fmt.Sprintf("ws://localhost%s", cfg.Server.Port)
 
-		// Fetch mutelist for each author LIVE
-		for _, authorPubkey := range blacklistConfig.MuteListAuthors {
-			mutelistedPubkeys, err := config.FetchPubkeysFromLocalMuteList(localRelayURL, []string{authorPubkey})
-			if err != nil {
-				log.RelayAPI().Error("Failed to fetch live mutelist",
-					"author", authorPubkey,
-					"error", err)
-				continue
-			}
-
-			if len(mutelistedPubkeys) > 0 {
-				mutelist[authorPubkey] = mutelistedPubkeys
-			}
+		var err error
+		mutelist, err = config.FetchGroupedMuteListPubkeys(localRelayURL, blacklistConfig.MuteListAuthors)
+		if err != nil {
+			log.RelayAPI().Error("Failed to fetch grouped mutelist",
+				"error", err)
+			mutelist = make(map[string][]string) // Empty map on error
 		}
-	}
-
-	// Build complete list for response
-	var allPubkeys []string
-	allPubkeys = append(allPubkeys, permanent...)
-
-	// Add temporary pubkeys to complete list
-	for _, tempEntry := range temporary {
-		if pubkey, ok := tempEntry["pubkey"].(string); ok {
-			allPubkeys = append(allPubkeys, pubkey)
-		}
-	}
-
-	// Add mutelist pubkeys to complete list
-	for _, authorPubkeys := range mutelist {
-		allPubkeys = append(allPubkeys, authorPubkeys...)
+	} else {
+		mutelist = make(map[string][]string)
 	}
 
 	// Prepare response
 	response := BlacklistKeysResponse{
-		List:      allPubkeys,
 		Permanent: permanent,
 		Temporary: temporary,
-		Mutelist:  flattenMutelist(mutelist),
+		Mutelist:  mutelist,
 	}
 
 	// Set response headers
@@ -115,17 +91,7 @@ func GetAllBlacklistedPubkeysLive(w http.ResponseWriter, r *http.Request) {
 
 	log.RelayAPI().Info("Live blacklist keys served successfully",
 		"client_ip", utils.GetClientIP(r),
-		"live_pubkeys", len(allPubkeys),
 		"permanent_count", len(permanent),
 		"temporary_count", len(temporary),
 		"mutelist_authors", len(mutelist))
-}
-
-// flattenMutelist converts grouped mutelist to flat array for consistency with cached endpoint
-func flattenMutelist(mutelist map[string][]string) []string {
-	var flattened []string
-	for _, authorPubkeys := range mutelist {
-		flattened = append(flattened, authorPubkeys...)
-	}
-	return flattened
 }

@@ -723,20 +723,15 @@ Returns all whitelisted pubkeys with fresh domain fetching. **Fetches live data*
 GET /api/v1/relay/keys/blacklist
 ```
 
-Returns all blacklisted pubkeys from cache. **Uses cached data** - may not reflect recent mutelist changes until next cache refresh. This endpoint provides fast responses and is suitable for regular operations.
-
-**Cache Refresh Interval:** Based on `mutelist_cache_refresh_minutes` in blacklist configuration (default: 30 minutes)
+Returns all blacklisted pubkeys organized by source. **Uses live mutelist data** - fetches current mutelist data for consistent structure with live endpoint.
 
 **Response:**
 
 ```json
 {
-  "list": [
-    "abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
-    "efgh5678901234567890abcdef1234567890abcdef1234567890abcdef1234567"
-  ],
   "permanent": [
-    "abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd"
+    "33c74427f3b2b73d5e38f3e6c991c122a55d204072356f71da49a0e209fb6940",
+    "db0c9b8acd6101adb9b281c5321f98f6eebb33c5719d230ed1870997538a9765"
   ],
   "temporary": [
     {
@@ -744,18 +739,24 @@ Returns all blacklisted pubkeys from cache. **Uses cached data** - may not refle
       "expires_at": 1704067200
     }
   ],
-  "mutelist": [
-    "ijkl9012345678901234567890abcdef1234567890abcdef1234567890abcdef"
-  ]
+  "mutelist": {
+    "16f1a0100d4cfffbcc4230e8e0e4290cc5849c1adc64d6653fda07c031b1074b": [
+      "a30816b063c858965f032ee5aa50b6e8091225e583970c2b167ac00de6c54ba5",
+      "cf94884ef3330842f55faeeeec6bb3b0e3f0c63ccf2b9ac5f15c94752f637cda"
+    ],
+    "3fe0ab6cbdb7ee27148202249e3fb3b89423c6f6cda6ef43ea5057c3d93088e4": [
+      "0f45cbe562351c7211742fe02cc3e6f91d6cf5b306873c0f3e9fc0c570d3371c",
+      "d8a6ecf0c396eaa8f79a4497fe9b77dc977633451f3ca5c634e208659116647b"
+    ]
+  }
 }
 ```
 
 **Response Fields:**
 
-- `list`: All cached blacklisted pubkeys from all sources
 - `permanent`: Permanently blacklisted pubkeys from config
-- `temporary`: Temporarily banned pubkeys with expiration timestamps
-- `mutelist`: Cached pubkeys from NIP-51 mute lists (flattened)
+- `temporary`: Temporarily banned pubkeys with expiration timestamps (null if none)
+- `mutelist`: Object where keys are mutelist author pubkeys and values are arrays of their muted pubkeys
 
 #### Get Blacklisted Keys (Live)
 
@@ -771,31 +772,29 @@ Returns all blacklisted pubkeys with fresh mutelist fetching. **Fetches live dat
 
 ```json
 {
-  "list": [
-    "abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
-    "efgh5678901234567890abcdef1234567890abcdef1234567890abcdef1234567"
-  ],
   "permanent": [
-    "abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd"
+    "33c74427f3b2b73d5e38f3e6c991c122a55d204072356f71da49a0e209fb6940",
+    "db0c9b8acd6101adb9b281c5321f98f6eebb33c5719d230ed1870997538a9765"
   ],
-  "temporary": [
-    {
-      "pubkey": "efgh5678901234567890abcdef1234567890abcdef1234567890abcdef1234",
-      "expires_at": 1704067200
-    }
-  ],
-  "mutelist": [
-    "ijkl9012345678901234567890abcdef1234567890abcdef1234567890abcdef"
-  ]
+  "temporary": null,
+  "mutelist": {
+    "16f1a0100d4cfffbcc4230e8e0e4290cc5849c1adc64d6653fda07c031b1074b": [
+      "a30816b063c858965f032ee5aa50b6e8091225e583970c2b167ac00de6c54ba5",
+      "cf94884ef3330842f55faeeeec6bb3b0e3f0c63ccf2b9ac5f15c94752f637cda"
+    ],
+    "3fe0ab6cbdb7ee27148202249e3fb3b89423c6f6cda6ef43ea5057c3d93088e4": [
+      "0f45cbe562351c7211742fe02cc3e6f91d6cf5b306873c0f3e9fc0c570d3371c",
+      "d8a6ecf0c396eaa8f79a4497fe9b77dc977633451f3ca5c634e208659116647b"
+    ]
+  }
 }
 ```
 
 **Response Fields:**
 
-- `list`: All blacklisted pubkeys from all sources (config + live mutelist)
 - `permanent`: Permanently blacklisted pubkeys from config
-- `temporary`: Temporarily banned pubkeys with expiration timestamps
-- `mutelist`: Live-fetched pubkeys from NIP-51 mute lists (flattened)
+- `temporary`: Temporarily banned pubkeys with expiration timestamps (null if none)
+- `mutelist`: Object where keys are mutelist author pubkeys and values are arrays of their live-fetched muted pubkeys
 
 #### Usage Guidelines
 
@@ -803,21 +802,32 @@ Returns all blacklisted pubkeys with fresh mutelist fetching. **Fetches live dat
 
 - Regular operations and monitoring
 - Building dashboards or UIs
-- Performance is important
-- Data doesn't need to be real-time
+- Need structured breakdown by source
+- Want to see mutelist author organization
 
 **Use Live Endpoints When:**
 
 - Verifying configuration changes
-- Testing new domain/mutelist additions
-- Debugging whitelist/blacklist issues
-- Need guaranteed current data
+- Testing new mutelist author additions
+- Debugging blacklist issues
+- Need guaranteed current mutelist data
 
 **Configuration Notes:**
 
-- Both endpoint types return data regardless of enabled/disabled state
-- Cached data is used for actual relay validation
-- Live endpoints are for verification and testing only
+- Both endpoints return the same structure for consistency
+- Cached endpoint still fetches live mutelist data for proper grouping
+- `mutelist` field shows which pubkeys came from which mutelist authors
+- Data is returned regardless of blacklist enabled/disabled state
+- `temporary` field returns `null` when no temporary bans exist
+
+**Mutelist Structure:**
+
+The `mutelist` object uses mutelist author pubkeys as keys:
+
+- Key: Mutelist author's pubkey (from `mutelist_authors` config)
+- Value: Array of pubkeys that author has muted (from their kind 10000 events)
+
+This allows you to see which specific mutelist authors contributed which muted pubkeys to your relay's blacklist.
 
 ## Configuration Endpoints
 

@@ -67,18 +67,48 @@ func GetDatabaseName() string {
 func GetCollection(kind int) *mongo.Collection {
 	collectionName := fmt.Sprintf("event-kind%d", kind)
 
+	// Check if we already have this collection cached
 	if collection, exists := collections[kind]; exists {
 		return collection
+	}
+
+	// Check if client is available
+	client := GetClient()
+	if client == nil {
+		log.Mongo().Warn("MongoDB client is nil when getting collection",
+			"kind", kind,
+			"collection", collectionName)
+		return nil
+	}
+
+	// Check if database name is available
+	dbName := GetDatabaseName()
+	if dbName == "" {
+		log.Mongo().Warn("Database name is empty when getting collection",
+			"kind", kind,
+			"collection", collectionName)
+		return nil
 	}
 
 	log.Mongo().Debug("Creating new collection reference",
 		"kind", kind,
 		"collection", collectionName)
 
-	client := GetClient()
-	collection := client.Database(GetDatabaseName()).Collection(collectionName)
+	collection := client.Database(dbName).Collection(collectionName)
 	collections[kind] = collection
 
+	// Create indexes for this collection
+	go ensureCollectionIndexes(collection, collectionName)
+
+	log.Mongo().Debug("Collection ready",
+		"kind", kind,
+		"collection", collectionName)
+
+	return collection
+}
+
+// ensureCollectionIndexes creates indexes for a collection in the background
+func ensureCollectionIndexes(collection *mongo.Collection, collectionName string) {
 	indexes := []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "id", Value: 1}},
@@ -101,7 +131,8 @@ func GetCollection(kind int) *mongo.Collection {
 	for _, index := range indexes {
 		_, err := collection.Indexes().CreateOne(context.TODO(), index)
 		if err != nil {
-			if !strings.Contains(err.Error(), "IndexKeySpecsConflict") && !strings.Contains(err.Error(), "already exists") {
+			if !strings.Contains(err.Error(), "IndexKeySpecsConflict") && 
+			   !strings.Contains(err.Error(), "already exists") {
 				log.Mongo().Error("Failed to create index",
 					"collection", collectionName,
 					"key", index.Keys,
@@ -109,12 +140,44 @@ func GetCollection(kind int) *mongo.Collection {
 			}
 		}
 	}
+}
 
-	log.Mongo().Debug("Collection ready with indexes",
-		"kind", kind,
-		"collection", collectionName)
+// isConnectionError checks if an error is related to MongoDB connection issues
+func isConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
 
-	return collection
+	errStr := strings.ToLower(err.Error())
+	connectionErrors := []string{
+		"client is disconnected",
+		"connection reset",
+		"connection refused",
+		"no reachable servers",
+		"topology is closed",
+		"context deadline exceeded",
+		"network is unreachable",
+	}
+
+	for _, connErr := range connectionErrors {
+		if strings.Contains(errStr, connErr) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// IsClientHealthy checks if the MongoDB client is available and connected
+func IsClientHealthy(ctx context.Context) bool {
+	client := GetClient()
+	if client == nil {
+		return false
+	}
+
+	// Quick ping to verify connection
+	err := client.Ping(ctx, nil)
+	return err == nil
 }
 
 // Disconnect from MongoDB

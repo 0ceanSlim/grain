@@ -455,3 +455,124 @@ func extractPubkeysFromMuteListEvent(eventData map[string]interface{}) []string 
 	log.Config().Debug("Extracted pubkeys from mute list event", "count", len(pubkeys))
 	return pubkeys
 }
+
+// FetchGroupedMuteListPubkeys fetches mutelist pubkeys grouped by author
+func FetchGroupedMuteListPubkeys(localRelayURL string, muteListAuthors []string) (map[string][]string, error) {
+	result := make(map[string][]string)
+	
+	if len(muteListAuthors) == 0 {
+		return result, nil
+	}
+
+	// Parse WebSocket URL
+	wsURL, err := url.Parse(localRelayURL)
+	if err != nil {
+		log.Config().Error("Invalid WebSocket URL", "url", localRelayURL, "error", err)
+		return nil, err
+	}
+
+	// Construct WebSocket origin
+	origin := "http://" + wsURL.Host
+
+	// Dial WebSocket connection
+	conn, err := websocket.Dial(localRelayURL, "", origin)
+	if err != nil {
+		log.Config().Error("Failed to connect to local relay", "url", localRelayURL, "error", err)
+		return nil, err
+	}
+	defer conn.Close()
+
+	subscriptionID := "grouped-mutelist-fetch"
+
+	// Create the REQ message to fetch the mute list events
+	req := []interface{}{"REQ", subscriptionID, map[string]interface{}{
+		"authors": muteListAuthors,
+		"kinds":   []int{10000}, // Mute list events kind
+	}}
+
+	reqJSON, err := json.Marshal(req)
+	if err != nil {
+		log.Config().Error("Failed to marshal request", "error", err)
+		return nil, err
+	}
+
+	log.Config().Debug("Fetching grouped mutelist from local relay",
+		"url", localRelayURL,
+		"authors", muteListAuthors)
+
+	// Send the message
+	if _, err := conn.Write(reqJSON); err != nil {
+		log.Config().Error("Failed to send request to local relay", "url", localRelayURL, "error", err)
+		return nil, err
+	}
+
+	// Listen for messages
+	for {
+		message := make([]byte, 4096)
+		n, err := conn.Read(message)
+		if err != nil {
+			if err == io.EOF {
+				log.Config().Debug("Connection closed by server")
+				break
+			}
+			log.Config().Error("Error reading from local relay", "url", localRelayURL, "error", err)
+			break
+		}
+
+		// Trim message to actual length
+		message = message[:n]
+		log.Config().Debug("Received WebSocket message", "size", n)
+
+		var response []interface{}
+		err = json.Unmarshal(message, &response)
+		if err != nil || len(response) < 2 {
+			log.Config().Error("Invalid message format", "error", err)
+			continue
+		}
+
+		if len(response) > 0 {
+			eventType, ok := response[0].(string)
+			if !ok {
+				log.Config().Warn("Unexpected event type", "type", response[0])
+				continue
+			}
+
+			// Handle "EVENT"
+			if eventType == "EVENT" && len(response) >= 3 {
+				eventData, ok := response[2].(map[string]interface{})
+				if !ok {
+					log.Config().Warn("Unexpected event data format", "data", response[2])
+					continue
+				}
+
+				// Get the author pubkey from this event
+				authorPubkey, ok := eventData["pubkey"].(string)
+				if !ok {
+					log.Config().Warn("No pubkey found in event data")
+					continue
+				}
+
+				// Extract pubkeys from this specific author's mute list
+				pubkeys := extractPubkeysFromMuteListEvent(eventData)
+				if len(pubkeys) > 0 {
+					result[authorPubkey] = pubkeys
+					log.Config().Debug("Extracted pubkeys from mutelist event", 
+						"author", authorPubkey,
+						"count", len(pubkeys))
+				}
+			}
+
+			// Handle "EOSE"
+			if eventType == "EOSE" {
+				closeReq := []interface{}{"CLOSE", subscriptionID}
+				closeReqJSON, _ := json.Marshal(closeReq)
+				_, _ = conn.Write(closeReqJSON)
+				log.Config().Debug("Sent CLOSE request to end subscription")
+				break
+			}
+		}
+	}
+
+	log.Config().Debug("Total authors with mutelists", "count", len(result))
+	return result, nil
+}

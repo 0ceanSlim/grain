@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/0ceanslim/grain/client/core/tools"
@@ -12,10 +13,9 @@ import (
 
 // BlacklistKeysResponse represents the blacklist keys response
 type BlacklistKeysResponse struct {
-	List      []string                 `json:"list"`
-	Permanent []string                 `json:"permanent"`
-	Temporary []map[string]interface{} `json:"temporary"`
-	Mutelist  []string                 `json:"mutelist"`
+	Permanent []string                            `json:"permanent"`
+	Temporary []map[string]interface{}            `json:"temporary"`
+	Mutelist  map[string][]string                 `json:"mutelist"`
 }
 
 // GetAllBlacklistedPubkeys handles the request to return all blacklisted pubkeys organized by source
@@ -33,14 +33,7 @@ func GetAllBlacklistedPubkeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get cached blacklist pubkeys - this includes all sources (permanent + temporary + mutelist)
-	pubkeyCache := config.GetPubkeyCache()
-	cachedBlacklistPubkeys := pubkeyCache.GetBlacklistedPubkeys()
-
-	log.RelayAPI().Debug("Retrieved cached blacklist pubkeys",
-		"cached_count", len(cachedBlacklistPubkeys))
-
-	// Build permanent list from config (for breakdown)
+	// Build permanent list from config
 	var permanent []string
 	for _, npub := range blacklistConfig.PermanentBlacklistNpubs {
 		decodedPubKey, err := tools.DecodeNpub(npub)
@@ -57,15 +50,32 @@ func GetAllBlacklistedPubkeys(w http.ResponseWriter, r *http.Request) {
 	// Get temporary blacklisted pubkeys with expiration times
 	temporary := config.GetTemporaryBlacklist()
 
-	// Extract mutelist pubkeys from cache by subtracting permanent and temporary
-	mutelistFromCache := extractMutelistFromCache(cachedBlacklistPubkeys, permanent, temporary)
+	// For mutelist structure, fetch grouped data (same as live for consistency)
+	var mutelist map[string][]string
+	if len(blacklistConfig.MuteListAuthors) > 0 {
+		cfg := config.GetConfig()
+		if cfg != nil {
+			localRelayURL := fmt.Sprintf("ws://localhost%s", cfg.Server.Port)
 
-	// Prepare response using cached data for list
+			var err error
+			mutelist, err = config.FetchGroupedMuteListPubkeys(localRelayURL, blacklistConfig.MuteListAuthors)
+			if err != nil {
+				log.RelayAPI().Error("Failed to fetch grouped mutelist for cached endpoint",
+					"error", err)
+				mutelist = make(map[string][]string) // Empty map on error
+			}
+		} else {
+			mutelist = make(map[string][]string)
+		}
+	} else {
+		mutelist = make(map[string][]string)
+	}
+
+	// Prepare response
 	response := BlacklistKeysResponse{
-		List:      cachedBlacklistPubkeys,
 		Permanent: permanent,
 		Temporary: temporary,
-		Mutelist:  mutelistFromCache,
+		Mutelist:  mutelist,
 	}
 
 	// Set response headers
@@ -85,34 +95,7 @@ func GetAllBlacklistedPubkeys(w http.ResponseWriter, r *http.Request) {
 
 	log.RelayAPI().Info("Blacklist keys served successfully",
 		"client_ip", utils.GetClientIP(r),
-		"cached_pubkeys", len(cachedBlacklistPubkeys),
 		"permanent_count", len(permanent),
 		"temporary_count", len(temporary),
-		"mutelist_count", len(mutelistFromCache))
-}
-
-// extractMutelistFromCache extracts mutelist pubkeys by filtering out permanent and temporary ones
-func extractMutelistFromCache(allCached, permanent []string, temporary []map[string]interface{}) []string {
-	// Create lookup maps for efficient filtering
-	permanentMap := make(map[string]bool)
-	for _, pubkey := range permanent {
-		permanentMap[pubkey] = true
-	}
-
-	temporaryMap := make(map[string]bool)
-	for _, tempEntry := range temporary {
-		if pubkey, ok := tempEntry["pubkey"].(string); ok {
-			temporaryMap[pubkey] = true
-		}
-	}
-
-	// Extract mutelist by filtering out permanent and temporary
-	var mutelist []string
-	for _, pubkey := range allCached {
-		if !permanentMap[pubkey] && !temporaryMap[pubkey] {
-			mutelist = append(mutelist, pubkey)
-		}
-	}
-
-	return mutelist
+		"mutelist_authors", len(mutelist))
 }
