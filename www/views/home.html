@@ -4,9 +4,7 @@
   <div class="pb-4 mb-6 border-b border-gray-700">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="mb-1 text-2xl font-bold text-white">
-          🌾 GRAIN Relay Dashboard
-        </h1>
+        <h1 class="mb-1 text-2xl font-bold text-white">Relay Dashboard</h1>
         <p class="text-sm text-gray-400">
           Relay management and system overview
         </p>
@@ -22,6 +20,19 @@
     </div>
     <div class="mt-2 text-xs text-gray-500">
       Last updated: <span id="last-updated">Loading...</span>
+    </div>
+  </div>
+
+  <!-- 1. Relay Overview Section - MOVED ABOVE WHITELIST/BLACKLIST -->
+  <div
+    class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
+  >
+    <div id="relay-overview-content" class="p-6">
+      <div class="space-y-3">
+        <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+        <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+      </div>
     </div>
   </div>
 
@@ -82,23 +93,6 @@
           <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
           <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 1. Relay Overview Section -->
-  <div
-    class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
-  >
-    <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-      <h2 class="text-xl font-semibold text-white">📊 Relay Overview</h2>
-      <p class="text-sm text-gray-400">Basic relay information and identity</p>
-    </div>
-    <div id="relay-overview-content" class="p-6">
-      <div class="space-y-3">
-        <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-        <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-        <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
       </div>
     </div>
   </div>
@@ -379,14 +373,14 @@
   function safeInitializeDashboard() {
     // Check if the dashboard.js file has loaded and the function exists
     if (
-      typeof newDashboardManager !== "undefined" &&
-      newDashboardManager &&
-      typeof newDashboardManager.init === "function" &&
+      typeof dashboardManager !== "undefined" &&
+      dashboardManager &&
+      typeof dashboardManager.init === "function" &&
       document.getElementById("last-updated") &&
       document.getElementById("whitelist-config")
     ) {
       console.log("Initializing dashboard...");
-      newDashboardManager.init();
+      dashboardManager.init();
     } else {
       console.log("Waiting for dashboard.js to load...");
       // Wait a bit more for script to load

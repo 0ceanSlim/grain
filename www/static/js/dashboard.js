@@ -328,36 +328,36 @@ const dashboardManager = {
     // Create HTML sections
     let html = '<div class="space-y-4">';
 
-    // Centered header section with name and icon
-    html += `
-    <div class="text-center">
-      ${
-        icon
-          ? `<img src="${icon}" alt="Relay Icon" class="w-10 h-10 mx-auto mb-2 rounded-lg">`
-          : ""
-      }
-      <h3 class="text-xl font-bold text-white">${this.escapeHtml(name)}</h3>
-    </div>
-  `;
-
-    // Banner if available
+    // Banner if available - fills the top of the container
     if (banner) {
       html += `
-      <div class="rounded-lg overflow-hidden">
-        <img src="${banner}" alt="Relay Banner" class="w-full h-24 object-cover">
-      </div>
-    `;
+    <div class="rounded-lg overflow-hidden">
+      <img src="${banner}" alt="Relay Banner" class="w-full h-32 object-cover">
+    </div>
+  `;
     }
+
+    // Centered header section with name and icon
+    html += `
+  <div class="text-center">
+    ${
+      icon
+        ? `<img src="${icon}" alt="Relay Icon" class="w-10 h-10 mx-auto mb-2 rounded-lg">`
+        : ""
+    }
+    <h3 class="text-xl font-bold text-white">${this.escapeHtml(name)}</h3>
+  </div>
+`;
 
     // Description (more compact)
     if (description) {
       html += `
-      <div class="bg-gray-750 p-3 rounded-lg">
-        <p class="text-white text-sm leading-relaxed text-center">${this.escapeHtml(
-          description
-        )}</p>
-      </div>
-    `;
+    <div class="bg-gray-750 p-3 rounded-lg">
+      <p class="text-white text-sm leading-relaxed text-center">${this.escapeHtml(
+        description
+      )}</p>
+    </div>
+  `;
     }
 
     // Create version link if software is GitHub repo
@@ -369,80 +369,35 @@ const dashboardManager = {
 
     // Compact Technical Information Grid
     html += `
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div class="bg-gray-750 p-3 rounded-lg">
-        <h4 class="text-sm font-medium text-white mb-3 text-center">Technical Details</h4>
-        <div class="space-y-2 text-sm">
-          <div class="flex justify-between items-center">
-            <span class="text-gray-400">Software</span>
-            <span class="text-white font-medium">
-              ${
-                software.includes("github.com")
-                  ? `<a href="${software}" target="_blank" class="text-blue-400 hover:text-blue-300">🌾 GRAIN</a>`
-                  : this.escapeHtml(software)
-              }
-            </span>
-          </div>
-          <div class="flex justify-between items-center">
-            <span class="text-gray-400">Version</span>
-            <span class="text-white font-medium">${versionDisplay}</span>
-          </div>
-          <div class="flex justify-between items-center">
-            <span class="text-gray-400">Protocol</span>
-            <span class="text-white font-medium">Nostr Relay</span>
-          </div>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="bg-gray-750 p-3 rounded-lg">
+      <h4 class="text-sm font-medium text-white mb-3 text-center">Technical Details</h4>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between items-center">
+          <span class="text-gray-400">Software</span>
+          <span class="text-white font-medium">
+            ${
+              software.includes("github.com")
+                ? `<a href="${software}" target="_blank" class="text-blue-400 hover:text-blue-300">🌾 GRAIN</a>`
+                : this.escapeHtml(software)
+            }
+          </span>
         </div>
-      </div>
-      
-      <div class="bg-gray-750 p-3 rounded-lg">
-        <h4 class="text-sm font-medium text-white mb-3 text-center">Contact & Admin</h4>
-        ${this.createAdminSection(pubkey, contact)}
+        <div class="flex justify-between items-center">
+          <span class="text-gray-400">Version</span>
+          <span class="text-white font-medium">${versionDisplay}</span>
+        </div>
       </div>
     </div>
-  `;
+    
+    <div class="bg-gray-750 p-3 rounded-lg">
+      <h4 class="text-sm font-medium text-white mb-3 text-center">Contact & Admin</h4>
+      ${this.createAdminSection(pubkey, contact)}
+    </div>
+  </div>
+`;
 
-    // Supported NIPs section (more compact)
-    if (supported_nips && supported_nips.length > 0) {
-      html += `
-      <div class="bg-gray-750 p-3 rounded-lg">
-        <h4 class="text-sm font-medium text-white mb-3 text-center">Supported NIPs</h4>
-        <div class="flex flex-wrap gap-1.5 justify-center">
-          ${supported_nips
-            .map(
-              (nip) =>
-                `<a href="https://github.com/nostr-protocol/nips/blob/master/${String(
-                  nip
-                ).padStart(
-                  2,
-                  "0"
-                )}.md" target="_blank" class="inline-flex items-center px-2 py-1 text-xs font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded hover:bg-blue-500/30 transition-colors">${nip}</a>`
-            )
-            .join("")}
-        </div>
-      </div>
-    `;
-    }
-
-    // Tags section (more compact)
-    if (tags && tags.length > 0) {
-      html += `
-      <div class="bg-gray-750 p-3 rounded-lg">
-        <h4 class="text-sm font-medium text-white mb-3 text-center">Tags</h4>
-        <div class="flex flex-wrap gap-1.5 justify-center">
-          ${tags
-            .map(
-              (tag) =>
-                `<span class="inline-flex items-center px-2 py-1 text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded">${this.escapeHtml(
-                  tag
-                )}</span>`
-            )
-            .join("")}
-        </div>
-      </div>
-    `;
-    }
-
-    // Policies section (only show if any policies exist)
+    // Policies section - show policies if they exist, otherwise show warning
     const policies = [];
     if (privacy_policy)
       policies.push({ label: "Privacy Policy", url: privacy_policy });
@@ -451,20 +406,68 @@ const dashboardManager = {
     if (posting_policy)
       policies.push({ label: "Posting Policy", url: posting_policy });
 
-    if (policies.length > 0) {
+    html += `
+  <div class="bg-gray-750 p-3 rounded-lg">
+    <h4 class="text-sm font-medium text-white mb-3 text-center">Policies & Terms</h4>
+    <div class="text-center">
+      ${
+        policies.length > 0
+          ? `<div class="flex flex-wrap gap-2 justify-center">
+              ${policies
+                .map(
+                  (policy) =>
+                    `<a href="${policy.url}" target="_blank" class="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors">${policy.label}</a>`
+                )
+                .join("")}
+            </div>`
+          : `<div class="p-3 bg-yellow-900/20 border border-yellow-500/30 rounded">
+              <p class="text-yellow-300 text-sm font-medium">⚠️ This relay has no policies or terms of service.</p>
+              <p class="text-yellow-400 text-xs mt-1">Use at your own risk.</p>
+            </div>`
+      }
+    </div>
+  </div>
+`;
+
+    // Supported NIPs section (more compact)
+    if (supported_nips && supported_nips.length > 0) {
       html += `
-      <div class="bg-gray-750 p-3 rounded-lg">
-        <h4 class="text-sm font-medium text-white mb-3 text-center">Policies</h4>
-        <div class="flex flex-wrap gap-2 justify-center">
-          ${policies
-            .map(
-              (policy) =>
-                `<a href="${policy.url}" target="_blank" class="inline-flex items-center px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors">${policy.label}</a>`
-            )
-            .join("")}
-        </div>
+    <div class="bg-gray-750 p-3 rounded-lg">
+      <h4 class="text-sm font-medium text-white mb-3 text-center">Supported NIPs</h4>
+      <div class="flex flex-wrap gap-1.5 justify-center">
+        ${supported_nips
+          .map(
+            (nip) =>
+              `<a href="https://github.com/nostr-protocol/nips/blob/master/${String(
+                nip
+              ).padStart(
+                2,
+                "0"
+              )}.md" target="_blank" class="inline-flex items-center px-2 py-1 text-xs font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded hover:bg-blue-500/30 transition-colors">${nip}</a>`
+          )
+          .join("")}
       </div>
-    `;
+    </div>
+  `;
+    }
+
+    // Tags section (more compact)
+    if (tags && tags.length > 0) {
+      html += `
+    <div class="bg-gray-750 p-3 rounded-lg">
+      <h4 class="text-sm font-medium text-white mb-3 text-center">Tags</h4>
+      <div class="flex flex-wrap gap-1.5 justify-center">
+        ${tags
+          .map(
+            (tag) =>
+              `<span class="inline-flex items-center px-2 py-1 text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded">${this.escapeHtml(
+                tag
+              )}</span>`
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
     }
 
     html += "</div>";
