@@ -712,7 +712,7 @@ const dashboardManager = {
     );
   },
 
-  // 7. Load Enhanced Blacklist Data with Profiles
+  // 7. Load Enhanced Blacklist Data with Profiles - Restructured
   async loadBlacklistData() {
     const [keysData, configData] = await Promise.all([
       this.fetchConfig(this.endpoints.blacklistKeys, "blacklist-config"),
@@ -721,15 +721,24 @@ const dashboardManager = {
 
     if (!keysData || !configData) return;
 
-    // Load configuration section
+    // Load configuration section with new structure
     const configContainer = document.getElementById("blacklist-config");
     if (configContainer) {
       const permanentCount = keysData.permanent?.length || 0;
       const temporaryCount = keysData.temporary?.length || 0;
-      const mutelistCount = Object.keys(keysData.mutelist || {}).length;
+
+      // Count total mutelist entries across all authors
+      const mutelistTotalCount = Object.values(keysData.mutelist || {}).reduce(
+        (total, entries) => total + entries.length,
+        0
+      );
+
+      // Count mutelist authors
+      const mutelistAuthorCount = Object.keys(keysData.mutelist || {}).length;
 
       configContainer.innerHTML = `
-        <div class="space-y-3">
+        <div class="space-y-4">
+          <!-- Status Section -->
           <div class="flex justify-between items-center">
             <span class="text-gray-300">Status</span>
             <span class="inline-flex px-2 py-1 text-xs font-medium ${
@@ -740,52 +749,322 @@ const dashboardManager = {
               ${configData.enabled ? "Active" : "Inactive"}
             </span>
           </div>
-          <div class="flex justify-between items-center">
-            <span class="text-gray-300">Permanent</span>
-            <span class="text-red-400 font-medium">${permanentCount}</span>
+          
+          <!-- Expandable Config Section -->
+          <div class="border-t border-gray-600 pt-3">
+            <button 
+              class="w-full flex justify-between items-center text-sm text-gray-300 hover:text-white transition-colors"
+              onclick="this.nextElementSibling.classList.toggle('hidden')"
+            >
+              <span>Configuration Details</span>
+              <svg class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div class="mt-2 space-y-2 text-xs hidden">
+              <div class="flex justify-between items-center">
+                <span class="text-gray-400">Max Temp Bans</span>
+                <span class="text-yellow-400">${
+                  configData.max_temp_bans || 0
+                }</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-gray-400">Temp Ban Duration</span>
+                <span class="text-yellow-400">${Math.floor(
+                  (configData.temp_ban_duration || 0) / 3600
+                )}h</span>
+              </div>
+              ${
+                configData.temp_ban_words &&
+                configData.temp_ban_words.length > 0
+                  ? `
+                <div class="pt-2 border-t border-gray-700">
+                  <span class="text-gray-400 block mb-1">Temp Ban Words</span>
+                  <div class="flex flex-wrap gap-1">
+                    ${configData.temp_ban_words
+                      .map(
+                        (word) =>
+                          `<span class="px-2 py-1 bg-yellow-900 text-yellow-200 rounded text-xs">${word}</span>`
+                      )
+                      .join("")}
+                  </div>
+                </div>
+              `
+                  : ""
+              }
+              <div class="pt-2 border-t border-gray-700 text-xs text-gray-500">
+                <span>⚠️ Permanent ban words not shown as they may be offensive</span>
+              </div>
+            </div>
           </div>
-          <div class="flex justify-between items-center">
-            <span class="text-gray-300">Temporary</span>
-            <span class="text-yellow-400 font-medium">${temporaryCount}</span>
+
+          <!-- User Counts Summary -->
+          <div class="grid grid-cols-3 gap-3 pt-3 border-t border-gray-600">
+            <div class="text-center">
+              <div class="text-lg font-medium text-red-400">${permanentCount}</div>
+              <div class="text-xs text-gray-400">Permanent</div>
+            </div>
+            <div class="text-center">
+              <div class="text-lg font-medium text-yellow-400">${temporaryCount}</div>
+              <div class="text-xs text-gray-400">Temporary</div>
+            </div>
+            <div class="text-center">
+              <div class="text-lg font-medium text-orange-400">${mutelistTotalCount}</div>
+              <div class="text-xs text-gray-400">Mutelist</div>
+            </div>
           </div>
-          <div class="flex justify-between items-center">
-            <span class="text-gray-300">Mutelist</span>
-            <span class="text-orange-400 font-medium">${mutelistCount}</span>
-          </div>
+
+          <!-- Mutelist Authors Section -->
+          ${
+            mutelistAuthorCount > 0
+              ? `
+            <div class="pt-3 border-t border-gray-600">
+              <h4 class="text-sm text-gray-300 mb-2">Mutelist Authors (${mutelistAuthorCount})</h4>
+              <div id="mutelist-authors" class="flex space-x-3 overflow-x-auto pb-2 custom-scroll">
+                <div class="text-xs text-gray-400">Loading authors...</div>
+              </div>
+            </div>
+          `
+              : ""
+          }
         </div>
       `;
+
+      // Load mutelist author profiles if any exist
+      if (mutelistAuthorCount > 0) {
+        this.loadMutelistAuthors(Object.keys(keysData.mutelist));
+      }
     }
 
-    // Collect all blacklisted keys with their sources
+    // Collect all blacklisted keys with their sources (enhanced)
     const keysWithSources = [];
 
     // Add permanent blacklist keys
     if (keysData.permanent) {
       keysData.permanent.forEach((key) => {
-        keysWithSources.push({ pubkey: key, source: "permanent" });
+        keysWithSources.push({
+          pubkey: key,
+          source: "permanent",
+          sourceType: "permanent",
+        });
       });
     }
 
     // Add temporary blacklist keys
     if (keysData.temporary) {
-      keysData.temporary.forEach((key) => {
-        keysWithSources.push({ pubkey: key, source: "temporary" });
+      keysData.temporary.forEach((entry) => {
+        // Handle both old format (string) and new format (object with expiration)
+        const pubkey = typeof entry === "string" ? entry : entry.pubkey;
+        keysWithSources.push({
+          pubkey: pubkey,
+          source: "temporary",
+          sourceType: "temporary",
+        });
       });
     }
 
-    // Add mutelist keys
+    // Add mutelist keys with author attribution
     if (keysData.mutelist) {
-      Object.keys(keysData.mutelist).forEach((key) => {
-        keysWithSources.push({ pubkey: key, source: "mutelist" });
-      });
+      Object.entries(keysData.mutelist).forEach(
+        ([authorPubkey, mutedPubkeys]) => {
+          mutedPubkeys.forEach((mutedPubkey) => {
+            keysWithSources.push({
+              pubkey: mutedPubkey,
+              source: authorPubkey,
+              sourceType: "mutelist",
+              authorPubkey: authorPubkey,
+            });
+          });
+        }
+      );
     }
 
-    // Load key profiles
-    await this.loadHorizontalKeyProfiles(
+    // Load user profiles with enhanced source info
+    await this.loadEnhancedBlacklistProfiles(
       keysWithSources,
       "blacklist-keys",
       "No blacklisted users found"
     );
+  },
+
+  // Load mutelist author profiles separately
+  async loadMutelistAuthors(authorPubkeys) {
+    const container = document.getElementById("mutelist-authors");
+    if (!container || !authorPubkeys || authorPubkeys.length === 0) return;
+
+    // Show loading state
+    container.innerHTML = authorPubkeys
+      .map(
+        () => `
+      <div class="flex-shrink-0 text-center animate-pulse">
+        <div class="w-12 h-12 bg-gray-600 rounded-full mx-auto mb-1"></div>
+        <div class="h-2 bg-gray-600 rounded w-12"></div>
+      </div>
+    `
+      )
+      .join("");
+
+    // Load author profiles
+    const authorCards = [];
+    for (const authorPubkey of authorPubkeys) {
+      const profile = await this.fetchUserProfile(authorPubkey);
+      const name = profile.name || profile.display_name || "?";
+      const picture = profile.picture || null;
+
+      authorCards.push(`
+        <div class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${authorPubkey}">
+          <div class="w-12 h-12 mx-auto mb-1">
+            ${
+              picture
+                ? `<img src="${picture}" alt="${name}" class="w-12 h-12 rounded-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-sm" style="display: none;">
+                  <img src="https://robohash.org/${authorPubkey}?set=set6&size=48x48" alt="${name}" class="w-12 h-12 rounded-full object-cover">
+                </div>`
+                : `<div class="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
+                  <img src="https://robohash.org/${authorPubkey}?set=set6&size=48x48" alt="${name}" class="w-12 h-12 rounded-full object-cover">
+                </div>`
+            }
+          </div>
+          <div class="text-xs text-white font-medium truncate max-w-[60px]">${name}</div>
+        </div>
+      `);
+
+      // Small delay between requests
+      if (authorPubkey !== authorPubkeys[authorPubkeys.length - 1]) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    container.innerHTML = authorCards.join("");
+
+    // Enable horizontal scroll for authors
+    setTimeout(() => {
+      this.enableHorizontalWheelScroll(container.parentElement);
+    }, 50);
+  },
+
+  // Enhanced profile loading for blacklisted users with better source attribution
+  async loadEnhancedBlacklistProfiles(
+    keysWithSources,
+    containerId,
+    emptyMessage = "No keys found"
+  ) {
+    const container = document.getElementById(containerId);
+    if (!container || !keysWithSources || keysWithSources.length === 0) {
+      if (container) {
+        container.innerHTML = `<div class="text-center text-gray-400 py-8">${emptyMessage}</div>`;
+      }
+      return;
+    }
+
+    // Show loading state
+    container.innerHTML = `
+      <div class="text-sm text-gray-400 mb-3">Loading ${
+        keysWithSources.length
+      } profiles...</div>
+      <div class="flex space-x-4 overflow-x-auto pb-2 custom-scroll">
+        ${keysWithSources
+          .map(
+            () => `
+          <div class="flex-shrink-0 text-center animate-pulse">
+            <div class="w-16 h-16 bg-gray-600 rounded-full mx-auto mb-2"></div>
+            <div class="h-3 bg-gray-600 rounded w-16 mb-1"></div>
+            <div class="h-2 bg-gray-600 rounded w-12 mx-auto"></div>
+          </div>
+        `
+          )
+          .join("")}
+      </div>
+    `;
+
+    // Load profiles progressively
+    const profileCards = [];
+    for (let i = 0; i < keysWithSources.length; i++) {
+      const { pubkey, source, sourceType, authorPubkey } = keysWithSources[i];
+      const profile = await this.fetchUserProfile(pubkey);
+
+      // Get author name for mutelist entries
+      let displaySource = source;
+      if (sourceType === "mutelist" && authorPubkey) {
+        const authorProfile = await this.fetchUserProfile(authorPubkey);
+        displaySource =
+          authorProfile.name || authorProfile.display_name || "Mutelist";
+      }
+
+      profileCards.push(
+        this.createEnhancedBlacklistProfileCard(
+          pubkey,
+          profile,
+          displaySource,
+          sourceType
+        )
+      );
+
+      // Small delay between requests
+      if (i < keysWithSources.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    // Update container with final content
+    container.innerHTML = `
+      <div class="text-sm text-gray-400 mb-3">${
+        keysWithSources.length
+      } users</div>
+      <div class="flex space-x-4 overflow-x-auto pb-2 custom-scroll">
+        ${profileCards.join("")}
+      </div>
+    `;
+
+    // Enable horizontal scroll
+    setTimeout(() => {
+      this.enableHorizontalWheelScroll(container);
+    }, 50);
+  },
+
+  // Enhanced profile card with better source indication
+  createEnhancedBlacklistProfileCard(pubkey, profile, source, sourceType) {
+    const name = profile.name || profile.display_name || "?";
+    const picture = profile.picture || null;
+
+    // Source styling based on type
+    let sourceClass, sourceLabel;
+    switch (sourceType) {
+      case "permanent":
+        sourceClass = "text-red-400";
+        sourceLabel = "Permanent";
+        break;
+      case "temporary":
+        sourceClass = "text-yellow-400";
+        sourceLabel = "Temporary";
+        break;
+      case "mutelist":
+        sourceClass = "text-orange-400";
+        sourceLabel = source; // Author name or "Mutelist"
+        break;
+      default:
+        sourceClass = "text-gray-400";
+        sourceLabel = source;
+    }
+
+    return `
+      <div class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
+        <div class="w-16 h-16 mx-auto mb-2">
+          ${
+            picture
+              ? `<img src="${picture}" alt="${name}" class="w-16 h-16 rounded-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+              <div class="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-lg" style="display: none;">
+                <img src="https://robohash.org/${pubkey}?set=set6&size=64x64" alt="${name}" class="w-16 h-16 rounded-full object-cover">
+              </div>`
+              : `<div class="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-lg">
+                <img src="https://robohash.org/${pubkey}?set=set6&size=64x64" alt="${name}" class="w-16 h-16 rounded-full object-cover">
+              </div>`
+          }
+        </div>
+        <div class="text-xs text-white font-medium truncate max-w-[80px] mb-1">${name}</div>
+        <div class="text-xs ${sourceClass} truncate max-w-[80px]">${sourceLabel}</div>
+      </div>
+    `;
   },
 
   // Utility functions for status badges
