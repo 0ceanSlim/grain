@@ -250,33 +250,366 @@ const dashboardManager = {
     }
   },
 
-  // 1. Load Relay Overview (basic info - for Phase 2 we'll add NIP-11 data)
+  // 1. Load Relay Overview (fetches NIP-11 data from relay)
   async loadRelayOverview() {
     const container = document.getElementById("relay-overview-content");
     if (!container) return;
 
-    // For now, show basic placeholder - Phase 2 will fetch NIP-11 data
+    // Show loading state
     container.innerHTML = `
-    <div class="space-y-4">
-      <div class="flex justify-between items-center">
-        <span class="text-gray-300">Relay Status</span>
-        <span class="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-          Online
-        </span>
+    <div class="space-y-3">
+      <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
+      <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+      <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+    </div>
+  `;
+
+    try {
+      // Fetch NIP-11 relay information with proper headers
+      const response = await fetch(window.location.origin, {
+        method: "GET",
+        headers: {
+          Accept: "application/nostr+json",
+          "Content-Type": "application/nostr+json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch relay info: ${response.status}`);
+      }
+
+      const relayInfo = await response.json();
+
+      // Create the relay info display
+      container.innerHTML = this.createRelayInfoHTML(relayInfo);
+    } catch (error) {
+      console.error("Failed to load relay information:", error);
+
+      // Show error state with fallback basic info
+      container.innerHTML = `
+      <div class="space-y-4">
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Relay Status</span>
+          <span class="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+            Online
+          </span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300">Software</span>
+          <span class="text-white font-medium">🌾 GRAIN</span>
+        </div>
+        <div class="text-sm text-gray-400 mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded">
+          <p class="text-red-300">⚠️ Unable to load detailed relay information</p>
+          <p class="text-xs mt-1">${error.message}</p>
+        </div>
       </div>
-      <div class="flex justify-between items-center">
-        <span class="text-gray-300">Software</span>
-        <span class="text-white font-medium">🌾 GRAIN</span>
+    `;
+    }
+  },
+
+  // Helper function to create the relay info HTML
+  createRelayInfoHTML(relayInfo) {
+    const {
+      name = "🌾 GRAIN Relay",
+      description = "Go Relay Architecture for Implementing Nostr",
+      icon,
+      banner,
+      pubkey,
+      contact,
+      supported_nips = [],
+      software = "https://github.com/0ceanslim/grain",
+      version = "Unknown",
+      privacy_policy,
+      terms_of_service,
+      posting_policy,
+      tags = [],
+    } = relayInfo;
+
+    // Create HTML sections
+    let html = '<div class="space-y-4">';
+
+    // Centered header section with name and icon
+    html += `
+    <div class="text-center">
+      ${
+        icon
+          ? `<img src="${icon}" alt="Relay Icon" class="w-10 h-10 mx-auto mb-2 rounded-lg">`
+          : ""
+      }
+      <h3 class="text-xl font-bold text-white">${this.escapeHtml(name)}</h3>
+    </div>
+  `;
+
+    // Banner if available
+    if (banner) {
+      html += `
+      <div class="rounded-lg overflow-hidden">
+        <img src="${banner}" alt="Relay Banner" class="w-full h-24 object-cover">
       </div>
-      <div class="flex justify-between items-center">
-        <span class="text-gray-300">Protocol</span>
-        <span class="text-white font-medium">Nostr Relay</span>
+    `;
+    }
+
+    // Description (more compact)
+    if (description) {
+      html += `
+      <div class="bg-gray-750 p-3 rounded-lg">
+        <p class="text-white text-sm leading-relaxed text-center">${this.escapeHtml(
+          description
+        )}</p>
       </div>
-      <div class="text-sm text-gray-400 mt-4">
-        <p>Detailed relay information will be available in the next update.</p>
+    `;
+    }
+
+    // Create version link if software is GitHub repo
+    let versionDisplay = this.escapeHtml(version);
+    if (software.includes("github.com") && version !== "Unknown") {
+      const releaseUrl = `${software}/releases/tag/v${version}`;
+      versionDisplay = `<a href="${releaseUrl}" target="_blank" class="text-blue-400 hover:text-blue-300">${version}</a>`;
+    }
+
+    // Compact Technical Information Grid
+    html += `
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="bg-gray-750 p-3 rounded-lg">
+        <h4 class="text-sm font-medium text-white mb-3 text-center">Technical Details</h4>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between items-center">
+            <span class="text-gray-400">Software</span>
+            <span class="text-white font-medium">
+              ${
+                software.includes("github.com")
+                  ? `<a href="${software}" target="_blank" class="text-blue-400 hover:text-blue-300">🌾 GRAIN</a>`
+                  : this.escapeHtml(software)
+              }
+            </span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-gray-400">Version</span>
+            <span class="text-white font-medium">${versionDisplay}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-gray-400">Protocol</span>
+            <span class="text-white font-medium">Nostr Relay</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="bg-gray-750 p-3 rounded-lg">
+        <h4 class="text-sm font-medium text-white mb-3 text-center">Contact & Admin</h4>
+        ${this.createAdminSection(pubkey, contact)}
       </div>
     </div>
   `;
+
+    // Supported NIPs section (more compact)
+    if (supported_nips && supported_nips.length > 0) {
+      html += `
+      <div class="bg-gray-750 p-3 rounded-lg">
+        <h4 class="text-sm font-medium text-white mb-3 text-center">Supported NIPs</h4>
+        <div class="flex flex-wrap gap-1.5 justify-center">
+          ${supported_nips
+            .map(
+              (nip) =>
+                `<a href="https://github.com/nostr-protocol/nips/blob/master/${String(
+                  nip
+                ).padStart(
+                  2,
+                  "0"
+                )}.md" target="_blank" class="inline-flex items-center px-2 py-1 text-xs font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded hover:bg-blue-500/30 transition-colors">${nip}</a>`
+            )
+            .join("")}
+        </div>
+      </div>
+    `;
+    }
+
+    // Tags section (more compact)
+    if (tags && tags.length > 0) {
+      html += `
+      <div class="bg-gray-750 p-3 rounded-lg">
+        <h4 class="text-sm font-medium text-white mb-3 text-center">Tags</h4>
+        <div class="flex flex-wrap gap-1.5 justify-center">
+          ${tags
+            .map(
+              (tag) =>
+                `<span class="inline-flex items-center px-2 py-1 text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded">${this.escapeHtml(
+                  tag
+                )}</span>`
+            )
+            .join("")}
+        </div>
+      </div>
+    `;
+    }
+
+    // Policies section (only show if any policies exist)
+    const policies = [];
+    if (privacy_policy)
+      policies.push({ label: "Privacy Policy", url: privacy_policy });
+    if (terms_of_service)
+      policies.push({ label: "Terms of Service", url: terms_of_service });
+    if (posting_policy)
+      policies.push({ label: "Posting Policy", url: posting_policy });
+
+    if (policies.length > 0) {
+      html += `
+      <div class="bg-gray-750 p-3 rounded-lg">
+        <h4 class="text-sm font-medium text-white mb-3 text-center">Policies</h4>
+        <div class="flex flex-wrap gap-2 justify-center">
+          ${policies
+            .map(
+              (policy) =>
+                `<a href="${policy.url}" target="_blank" class="inline-flex items-center px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors">${policy.label}</a>`
+            )
+            .join("")}
+        </div>
+      </div>
+    `;
+    }
+
+    html += "</div>";
+
+    // Load admin profile after HTML is inserted
+    if (pubkey) {
+      setTimeout(() => this.loadAdminProfile(pubkey), 100);
+    }
+
+    return html;
+  },
+
+  // Helper function to create admin section with profile
+  createAdminSection(pubkey, contact) {
+    if (!pubkey && !contact)
+      return '<p class="text-gray-400 text-center text-sm">No admin information available</p>';
+
+    return `
+    <div class="flex flex-col items-center space-y-2">
+      ${
+        pubkey
+          ? `
+        <div id="admin-profile-${pubkey.slice(
+          0,
+          8
+        )}" class="flex flex-col items-center space-y-1">
+          <div class="w-12 h-12 bg-gray-600 rounded-full animate-pulse cursor-pointer"></div>
+          <span class="text-gray-400 text-xs">Loading...</span>
+        </div>
+      `
+          : ""
+      }
+      ${this.createContactDisplay(contact)}
+    </div>
+  `;
+  },
+
+  // Helper function to create contact display
+  createContactDisplay(contact) {
+    if (!contact) return "";
+
+    if (contact.startsWith("mailto:")) {
+      return `<a href="${contact}" class="text-blue-400 hover:text-blue-300 text-xs">${contact.replace(
+        "mailto:",
+        ""
+      )}</a>`;
+    } else if (
+      contact.startsWith("http://") ||
+      contact.startsWith("https://")
+    ) {
+      return `<a href="${contact}" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs">Contact Website</a>`;
+    } else {
+      return `<span class="text-white text-xs">${this.escapeHtml(
+        contact
+      )}</span>`;
+    }
+  },
+
+  // Load admin profile using existing fetchUserProfile function
+  async loadAdminProfile(pubkey) {
+    const profileContainer = document.getElementById(
+      `admin-profile-${pubkey.slice(0, 8)}`
+    );
+    if (!profileContainer) return;
+
+    try {
+      const profile = await this.fetchUserProfile(pubkey);
+      const name = profile.name || profile.display_name || "Unknown";
+      const picture = profile.picture || null;
+
+      // Convert pubkey to npub
+      const npub = await this.convertPubkeyToNpub(pubkey);
+
+      profileContainer.innerHTML = `
+      <div class="w-12 h-12 rounded-full overflow-hidden bg-gray-600 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" onclick="window.open('https://njump.me/${npub}', '_blank')">
+        ${
+          picture
+            ? `<img src="${picture}" alt="${name}" class="w-full h-full object-cover">`
+            : `<span class="text-white text-sm font-bold">${name
+                .charAt(0)
+                .toUpperCase()}</span>`
+        }
+      </div>
+      <div class="text-center">
+        <div class="text-white font-medium text-sm">${this.escapeHtml(
+          name
+        )}</div>
+        <div class="flex items-center space-x-1 text-xs">
+          <span class="text-gray-400 font-mono">${npub.slice(
+            0,
+            12
+          )}...${npub.slice(-8)}</span>
+          <button onclick="navigator.clipboard.writeText('${npub}'); this.textContent='✓'; setTimeout(() => this.textContent='📋', 1000)" class="text-gray-400 hover:text-white transition-colors" title="Copy npub">📋</button>
+        </div>
+      </div>
+    `;
+    } catch (error) {
+      console.error("Failed to load admin profile:", error);
+      profileContainer.innerHTML = `
+      <div class="w-12 h-12 rounded-full bg-gray-600 flex items-center justify-center">
+        <span class="text-white text-sm">?</span>
+      </div>
+      <div class="text-center">
+        <div class="text-gray-400 font-mono text-xs">${pubkey.slice(
+          0,
+          8
+        )}...${pubkey.slice(-8)}</div>
+      </div>
+    `;
+    }
+  },
+
+  // Helper function to convert pubkey to npub using your API
+  async convertPubkeyToNpub(pubkey) {
+    try {
+      const response = await fetch("/api/v1/convert/pubkey", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          pubkey: pubkey,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.npub || pubkey;
+      }
+      throw new Error("API conversion failed");
+    } catch (error) {
+      console.warn(
+        "Failed to convert pubkey to npub via API, using fallback:",
+        error
+      );
+      // Fallback: return original pubkey if conversion fails
+      return pubkey;
+    }
+  },
+
+  // Helper function to escape HTML
+  escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
   },
 
   // 2. Load Policy & Limits (rate limits + timeouts + time constraints)
