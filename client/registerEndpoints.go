@@ -17,15 +17,19 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/cache", api.GetCacheHandler)             // GET for cache data
 	mux.HandleFunc("/api/v1/cache/refresh", api.RefreshCacheHandler) // POST for manual refresh
 
-	// Auth API endpoints (preferred)
+	// Auth API endpoints
 	mux.HandleFunc("/api/v1/auth/login", api.LoginHandler)   // Login via API
 	mux.HandleFunc("/api/v1/auth/logout", api.LogoutHandler) // Logout via API
 	// Amber NIP-55 callback endpoint
 	mux.HandleFunc("/api/v1/auth/amber-callback", api.HandleAmberCallback) // Amber signer callback (NIP-55)
 
-	// relay api endpoints
+	// relay api endpoints - key management (cached)
 	mux.HandleFunc("/api/v1/relay/keys/whitelist", relay.GetAllWhitelistedPubkeys)
 	mux.HandleFunc("/api/v1/relay/keys/blacklist", relay.GetAllBlacklistedPubkeys)
+	
+	// relay api endpoints - key management (live)
+	mux.HandleFunc("/api/v1/relay/keys/whitelist/live", relay.GetAllWhitelistedPubkeysLive)
+	mux.HandleFunc("/api/v1/relay/keys/blacklist/live", relay.GetAllBlacklistedPubkeysLive)
 
 	// relay configuration endpoints (read-only)
 	mux.HandleFunc("/api/v1/relay/config/server", relay.GetServerConfig)

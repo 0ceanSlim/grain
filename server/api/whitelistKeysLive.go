@@ -4,26 +4,16 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/0ceanslim/grain/client/core/tools"
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// WhitelistKeysResponse represents the whitelist keys response
-type WhitelistKeysResponse struct {
-	List    []string                    `json:"list"`
-	Domains []WhitelistDomainInfo       `json:"domains"`
-}
-
-// WhitelistDomainInfo represents domain information with its pubkeys
-type WhitelistDomainInfo struct {
-	Domain  string   `json:"domain"`
-	Pubkeys []string `json:"pubkeys"`
-}
-
-// GetAllWhitelistedPubkeys handles the request to return all whitelisted pubkeys organized by source
-func GetAllWhitelistedPubkeys(w http.ResponseWriter, r *http.Request) {
-	log.RelayAPI().Debug("Whitelist keys API endpoint accessed",
+// GetAllWhitelistedPubkeysLive handles the request to return all whitelisted pubkeys with live domain fetching
+// This endpoint fetches fresh data from domains and is suitable for verification after configuration changes
+func GetAllWhitelistedPubkeysLive(w http.ResponseWriter, r *http.Request) {
+	log.RelayAPI().Debug("Live whitelist keys API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),
 		"user_agent", r.UserAgent())
 
@@ -36,15 +26,25 @@ func GetAllWhitelistedPubkeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get cached whitelist pubkeys - this includes all sources (config + domains)
-	pubkeyCache := config.GetPubkeyCache()
-	cachedPubkeys := pubkeyCache.GetWhitelistedPubkeys()
+	// Collect all pubkeys from config (regardless of enabled state)
+	var listPubkeys []string
 
-	log.RelayAPI().Debug("Retrieved cached whitelist pubkeys",
-		"cached_count", len(cachedPubkeys))
+	// Add direct pubkeys from config
+	listPubkeys = append(listPubkeys, cfg.PubkeyWhitelist.Pubkeys...)
 
-	// For domain breakdown, fetch from each domain individually
-	// Note: This could be optimized in the future by storing domain pubkeys separately in cache
+	// Convert npubs to pubkeys and add them
+	for _, npub := range cfg.PubkeyWhitelist.Npubs {
+		decodedPubKey, err := tools.DecodeNpub(npub)
+		if err != nil {
+			log.RelayAPI().Error("Failed to decode npub",
+				"npub", npub,
+				"error", err)
+			continue
+		}
+		listPubkeys = append(listPubkeys, decodedPubKey)
+	}
+
+	// Fetch pubkeys from domains LIVE (regardless of enabled state)
 	var domainInfos []WhitelistDomainInfo
 	for _, domain := range cfg.DomainWhitelist.Domains {
 		domainPubkeys, err := utils.FetchPubkeysFromDomains([]string{domain})
@@ -60,15 +60,18 @@ func GetAllWhitelistedPubkeys(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// Add domain pubkeys to the main list
+		listPubkeys = append(listPubkeys, domainPubkeys...)
+
 		domainInfos = append(domainInfos, WhitelistDomainInfo{
 			Domain:  domain,
 			Pubkeys: domainPubkeys,
 		})
 	}
 
-	// Prepare response using cached data for list
+	// Prepare response
 	response := WhitelistKeysResponse{
-		List:    cachedPubkeys,
+		List:    listPubkeys,
 		Domains: domainInfos,
 	}
 
@@ -80,15 +83,15 @@ func GetAllWhitelistedPubkeys(w http.ResponseWriter, r *http.Request) {
 
 	// Encode and send response
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.RelayAPI().Error("Failed to encode whitelist keys response",
+		log.RelayAPI().Error("Failed to encode live whitelist keys response",
 			"client_ip", utils.GetClientIP(r),
 			"error", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
 
-	log.RelayAPI().Info("Whitelist keys served successfully",
+	log.RelayAPI().Info("Live whitelist keys served successfully",
 		"client_ip", utils.GetClientIP(r),
-		"cached_pubkeys", len(cachedPubkeys),
+		"live_pubkeys", len(listPubkeys),
 		"domain_count", len(domainInfos))
 }

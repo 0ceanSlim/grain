@@ -4,7 +4,7 @@
  */
 
 // New Dashboard Manager with reorganized structure
-const newDashboardManager = {
+const dashboardManager = {
   // API endpoints for the new dashboard structure
   endpoints: {
     // Core configs we're using
@@ -809,10 +809,10 @@ const newDashboardManager = {
 // Initialize dashboard when DOM is ready
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
-    newDashboardManager.init();
+    dashboardManager.init();
   });
 } else {
-  newDashboardManager.init();
+  dashboardManager.init();
 }
 
 // Function to update relay status based on whitelist configuration
@@ -891,9 +891,6 @@ document.addEventListener("htmx:afterSwap", function (event) {
 setTimeout(updateRelayStatus, 1000);
 
 // Expose globally for Hyperscript and compatibility
-window.newDashboardManager = newDashboardManager;
-
-// Legacy compatibility - keep old dashboard manager for transition
-window.dashboardManager = newDashboardManager;
+window.dashboardManager = dashboardManager;
 
 console.log("New Dashboard.js loaded successfully");
