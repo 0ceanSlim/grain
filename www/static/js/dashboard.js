@@ -66,29 +66,29 @@ const newDashboardManager = {
 
   // Create profile card HTML for horizontal layout with source info
   createHorizontalProfileCard(pubkey, profile, source = "direct") {
-    const name = profile.name || profile.display_name || "Unknown User";
+    const name = profile.name || profile.display_name || "?";
     const picture = profile.picture || null;
 
     return `
-      <div class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
-        <div class="w-16 h-16 mx-auto mb-2">
-          ${
-            picture
-              ? `<img src="${picture}" alt="${name}" class="w-16 h-16 rounded-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-             <div class="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-lg" style="display: none;">
-               ${name.charAt(0).toUpperCase()}
-             </div>`
-              : `<div class="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-lg">
-               ${name.charAt(0).toUpperCase()}
-             </div>`
-          }
-        </div>
-        <div class="text-xs text-white font-medium truncate max-w-[80px] mb-1">${name}</div>
-        <div class="text-xs ${
-          source === "direct" ? "text-green-400" : "text-blue-400"
-        } truncate max-w-[80px]">${source}</div>
+    <div class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
+      <div class="w-16 h-16 mx-auto mb-2">
+        ${
+          picture
+            ? `<img src="${picture}" alt="${name}" class="w-16 h-16 rounded-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+           <div class="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-lg" style="display: none;">
+             <img src="https://robohash.org/${pubkey}?set=set6&size=64x64" alt="${name}" class="w-16 h-16 rounded-full object-cover">
+           </div>`
+            : `<div class="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-lg">
+             <img src="https://robohash.org/${pubkey}?set=set6&size=64x64" alt="${name}" class="w-16 h-16 rounded-full object-cover">
+           </div>`
+        }
       </div>
-    `;
+      <div class="text-xs text-white font-medium truncate max-w-[80px] mb-1">${name}</div>
+      <div class="text-xs ${
+        source === "direct" ? "text-green-400" : "text-blue-400"
+      } truncate max-w-[80px]">${source}</div>
+    </div>
+  `;
   },
 
   // Progressive loading for horizontal key lists with source tracking
@@ -669,7 +669,7 @@ const newDashboardManager = {
                 ${domainNames
                   .map(
                     (domain) => `
-                  <span class="inline-flex px-4 py-2 text-sm bg-blue-900 text-blue-200 rounded-lg border border-blue-700 hover:bg-blue-800 transition-colors">${domain}</span>
+                  <a href="https://${domain}" target="_blank" rel="noopener noreferrer" class="inline-flex px-4 py-2 text-sm bg-blue-900 text-blue-200 rounded-lg border border-blue-700 hover:bg-blue-800 transition-colors cursor-pointer">${domain}</a>
                 `
                   )
                   .join("")}
@@ -814,6 +814,81 @@ if (document.readyState === "loading") {
 } else {
   newDashboardManager.init();
 }
+
+// Function to update relay status based on whitelist configuration
+async function updateRelayStatus() {
+  console.log("Updating relay status...");
+
+  try {
+    console.log(
+      "Fetching whitelist config from /api/v1/relay/config/whitelist"
+    );
+    const response = await fetch("/api/v1/relay/config/whitelist");
+
+    console.log("Response status:", response.status);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch whitelist config: ${response.status}`);
+    }
+
+    const config = await response.json();
+    console.log("Whitelist config received:", config);
+
+    const statusElement = document.getElementById("relay-status");
+    console.log("Status element found:", !!statusElement);
+
+    if (statusElement) {
+      const isPrivate = config.pubkey_whitelist?.enabled || false;
+      console.log("Is private relay:", isPrivate);
+
+      if (isPrivate) {
+        // Private relay - orange/amber colors
+        statusElement.innerHTML = `
+          <div class="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></div>
+          <span class="font-medium text-amber-400">Private Relay Online</span>
+        `;
+        console.log("Updated to private relay status");
+      } else {
+        // Public relay - green colors
+        statusElement.innerHTML = `
+          <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+          <span class="font-medium text-green-400">Public Relay Online</span>
+        `;
+        console.log("Updated to public relay status");
+      }
+    } else {
+      console.error("relay-status element not found");
+    }
+  } catch (error) {
+    console.error("Failed to update relay status:", error);
+    // On error, show neutral status
+    const statusElement = document.getElementById("relay-status");
+    if (statusElement) {
+      statusElement.innerHTML = `
+        <div class="w-3 h-3 bg-gray-500 rounded-full animate-pulse"></div>
+        <span class="font-medium text-gray-400">Relay Online</span>
+      `;
+    }
+  }
+}
+
+// Call the function when page loads normally
+document.addEventListener("DOMContentLoaded", function () {
+  console.log("DOM loaded, calling updateRelayStatus");
+  updateRelayStatus();
+});
+
+// Call the function when HTMX loads content (for navigation)
+document.addEventListener("htmx:afterSwap", function (event) {
+  // Only update if we're loading the home page
+  if (event.detail.target.id === "main-content") {
+    console.log("HTMX content swapped, calling updateRelayStatus");
+    setTimeout(updateRelayStatus, 100); // Small delay to ensure elements are ready
+  }
+});
+
+// Also try calling it after a short delay in case of timing issues
+setTimeout(updateRelayStatus, 1000);
 
 // Expose globally for Hyperscript and compatibility
 window.newDashboardManager = newDashboardManager;
