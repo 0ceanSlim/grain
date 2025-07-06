@@ -21,9 +21,9 @@ type WhitelistDomainInfo struct {
 	Pubkeys []string `json:"pubkeys"`
 }
 
-// GetAllWhitelistedPubkeys handles the request to return all whitelisted pubkeys organized by source
+// GetAllWhitelistedPubkeys handles the cached request to return all whitelisted pubkeys organized by source
 func GetAllWhitelistedPubkeys(w http.ResponseWriter, r *http.Request) {
-	log.RelayAPI().Debug("Whitelist keys API endpoint accessed",
+	log.RelayAPI().Debug("Cached whitelist keys API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),
 		"user_agent", r.UserAgent())
 
@@ -38,35 +38,30 @@ func GetAllWhitelistedPubkeys(w http.ResponseWriter, r *http.Request) {
 
 	// Get cached whitelist pubkeys - this includes all sources (config + domains)
 	pubkeyCache := config.GetPubkeyCache()
-	cachedPubkeys := pubkeyCache.GetWhitelistedPubkeys()
+	// Use GetDirectWhitelistedPubkeys() to get only direct config pubkeys (not domain pubkeys)
+	// This avoids duplication since domain pubkeys are shown separately in domains section
+	cachedPubkeys := pubkeyCache.GetDirectWhitelistedPubkeys()
 
-	log.RelayAPI().Debug("Retrieved cached whitelist pubkeys",
-		"cached_count", len(cachedPubkeys))
+	log.RelayAPI().Debug("Retrieved direct cached whitelist pubkeys",
+		"direct_cached_count", len(cachedPubkeys))
 
-	// For domain breakdown, fetch from each domain individually
-	// Note: This could be optimized in the future by storing domain pubkeys separately in cache
+	// Build domain breakdown using cached data
 	var domainInfos []WhitelistDomainInfo
 	for _, domain := range cfg.DomainWhitelist.Domains {
-		domainPubkeys, err := utils.FetchPubkeysFromDomains([]string{domain})
-		if err != nil {
-			log.RelayAPI().Error("Failed to fetch pubkeys from domain",
-				"domain", domain,
-				"error", err)
-			// Still include the domain but with empty pubkeys array
-			domainInfos = append(domainInfos, WhitelistDomainInfo{
-				Domain:  domain,
-				Pubkeys: []string{},
-			})
-			continue
-		}
-
+		// Get cached domain pubkeys (no live fetching!)
+		domainPubkeys := pubkeyCache.GetDomainPubkeys(domain)
+		
 		domainInfos = append(domainInfos, WhitelistDomainInfo{
 			Domain:  domain,
 			Pubkeys: domainPubkeys,
 		})
+
+		log.RelayAPI().Debug("Added cached domain pubkeys to response",
+			"domain", domain,
+			"cached_pubkey_count", len(domainPubkeys))
 	}
 
-	// Prepare response using cached data for list
+	// Prepare response using cached data for both list and domains
 	response := WhitelistKeysResponse{
 		List:    cachedPubkeys,
 		Domains: domainInfos,
@@ -80,14 +75,14 @@ func GetAllWhitelistedPubkeys(w http.ResponseWriter, r *http.Request) {
 
 	// Encode and send response
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.RelayAPI().Error("Failed to encode whitelist keys response",
+		log.RelayAPI().Error("Failed to encode cached whitelist keys response",
 			"client_ip", utils.GetClientIP(r),
 			"error", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
 
-	log.RelayAPI().Info("Whitelist keys served successfully",
+	log.RelayAPI().Info("Cached whitelist keys served successfully",
 		"client_ip", utils.GetClientIP(r),
 		"cached_pubkeys", len(cachedPubkeys),
 		"domain_count", len(domainInfos))

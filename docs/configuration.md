@@ -49,6 +49,7 @@ Comprehensive documentation for configuring your GRAIN relay server.
       - [Common Kind Combinations](#common-kind-combinations)
     - [Domain Whitelist](#domain-whitelist)
       - [Domain Verification Process](#domain-verification-process)
+      - [Domain Compatibility Requirements](#domain-compatibility-requirements)
       - [Domain Whitelist Use Cases](#domain-whitelist-use-cases)
   - [Blacklist Configuration (`blacklist.yml`)](#blacklist-configuration-blacklistyml)
     - [Content Filtering](#content-filtering)
@@ -634,7 +635,7 @@ kinds: [] # Empty = allow all kinds
 
 ### Domain Whitelist
 
-Allow users who have verified at a domain via NIP-05.
+Allow users who have verified at a domain via [NIP-05](https://github.com/nostr-protocol/nips/blob/master/05.md).
 
 ```yaml
 domain_whitelist:
@@ -653,11 +654,28 @@ domain_whitelist:
 3. Allows events from those pubkeys
 4. Refreshes cache periodically
 
+#### Domain Compatibility Requirements
+
+**Compatible Domains**
+
+- Domains that serve the complete `nostr.json` file with all user mappings
+- Static file serving with full `names` object
+- Dynamic servers that return complete user lists
+
+**Incompatible Domains**
+
+- Domains that only respond to query-based requests (`?name=localpart`)
+- Services like `primal.net` that require specific user lookups
+- Providers that don't expose their full user directory
+
+**Note**: The domain whitelist only works with domains that serve their entire `nostr.json` file. Domains that only serve individual user lookups via query parameters cannot be whitelisted in bulk, as GRAIN cannot enumerate all valid users at those domains.
+
 #### Domain Whitelist Use Cases
 
 - **Corporate relays** - Only company domain holders
 - **Verified communities** - Users with established identities
 - **Quality control** - Filter for serious users with domains
+- **Curated networks** - Known domain operators with full NIP-05 exposure
 
 ---
 

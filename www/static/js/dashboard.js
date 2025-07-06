@@ -608,7 +608,7 @@ const dashboardManager = {
                       configData.kind_whitelist?.enabled
                         ? `
                       <div class="flex flex-col items-center space-y-2">
-                        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Event Kinds</span>
+                        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Allowed Event Kinds</span>
                         <div class="flex flex-wrap gap-1 justify-center max-w-[200px]">
                           ${(configData.kind_whitelist?.kinds || [])
                             .map(
@@ -622,9 +622,9 @@ const dashboardManager = {
                       `
                         : `
                       <div class="flex flex-col items-center space-y-1">
-                        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Event Kinds</span>
+                        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Allowed Event Kinds</span>
                         <span class="inline-flex px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded">
-                          Disabled
+                          Any
                         </span>
                       </div>
                       `

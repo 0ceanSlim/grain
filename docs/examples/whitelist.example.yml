@@ -22,8 +22,6 @@ kind_whitelist:
 domain_whitelist:
   enabled: false # Enable to verify users from specific domains (NIP-05)
   domains: # Allowed domains for verification
-    - "nostr.com"
-    - "iris.to"
+    - "happytavern.co"
     - "damus.io"
-    - "primal.net"
   cache_refresh_minutes: 120 # Refresh domain cache every 2 hours
