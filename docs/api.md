@@ -843,7 +843,6 @@ GET /api/v1/relay/config/server
 
 ```json
 {
-  "port": ":8080",
   "read_timeout": 10,
   "write_timeout": 10,
   "idle_timeout": 120,

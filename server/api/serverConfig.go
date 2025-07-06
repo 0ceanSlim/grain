@@ -11,7 +11,6 @@ import (
 
 // ServerConfigResponse represents the server configuration response
 type ServerConfigResponse struct {
-	Port                      string `json:"port"`
 	ReadTimeout               int    `json:"read_timeout"`
 	WriteTimeout              int    `json:"write_timeout"`
 	IdleTimeout               int    `json:"idle_timeout"`
@@ -36,7 +35,6 @@ func GetServerConfig(w http.ResponseWriter, r *http.Request) {
 
 	// Prepare response with server configuration
 	response := ServerConfigResponse{
-		Port:                      cfg.Server.Port,
 		ReadTimeout:               cfg.Server.ReadTimeout,
 		WriteTimeout:              cfg.Server.WriteTimeout,
 		IdleTimeout:               cfg.Server.IdleTimeout,
