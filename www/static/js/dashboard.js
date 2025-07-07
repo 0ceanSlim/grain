@@ -598,28 +598,21 @@ const dashboardManager = {
     return div.innerHTML;
   },
 
-  // 2. Load Policy & Limits (rate limits + timeouts + time constraints)
-  // Fixed loadPolicyLimits function with formatBytes included
+  // 2. Load Policy & Limits - Redesigned layout with working data loading
   async loadPolicyLimits() {
     try {
       const [rateLimitData, serverData, timeConstraintsData] =
         await Promise.all([
-          this.fetchConfig(this.endpoints.rateLimit, "policy-limits-table"),
-          this.fetchConfig(this.endpoints.server, "policy-limits-table"),
+          this.fetchConfig(this.endpoints.rateLimit, "rate-limits-overall"),
+          this.fetchConfig(this.endpoints.server, "connection-timeouts"),
           this.fetchConfig(
             this.endpoints.eventTimeConstraints,
-            "policy-limits-table"
+            "time-constraints"
           ),
         ]);
 
       if (!rateLimitData || !serverData || !timeConstraintsData) {
         console.error("Failed to load policy configuration data");
-        return;
-      }
-
-      const tbody = document.getElementById("policy-limits-table");
-      if (!tbody) {
-        console.error("Policy limits table not found");
         return;
       }
 
@@ -632,181 +625,309 @@ const dashboardManager = {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
       };
 
-      const rows = [];
+      // 1. Populate Rate Limits - Overall
+      const rateLimitsOverall = document.getElementById("rate-limits-overall");
+      if (rateLimitsOverall) {
+        rateLimitsOverall.innerHTML = `
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-700">
+                <th class="text-left pb-1 text-xs text-gray-500 font-medium">Type</th>
+                <th class="text-right pb-1 text-xs text-gray-500 font-medium">Rate</th>
+                <th class="text-right pb-1 text-xs text-gray-500 font-medium">Burst</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-gray-700/30">
+                <td class="py-1 text-white text-xs">WebSocket</td>
+                <td class="py-1 text-right text-green-400 font-mono text-xs">${rateLimitData.ws_limit}/s</td>
+                <td class="py-1 text-right text-gray-300 text-xs">${rateLimitData.ws_burst}</td>
+              </tr>
+              <tr class="border-b border-gray-700/30">
+                <td class="py-1 text-white text-xs">Events</td>
+                <td class="py-1 text-right text-green-400 font-mono text-xs">${rateLimitData.event_limit}/s</td>
+                <td class="py-1 text-right text-gray-300 text-xs">${rateLimitData.event_burst}</td>
+              </tr>
+              <tr class="border-b border-gray-700/30">
+                <td class="py-1 text-white text-xs">Requests</td>
+                <td class="py-1 text-right text-green-400 font-mono text-xs">${rateLimitData.req_limit}/s</td>
+                <td class="py-1 text-right text-gray-300 text-xs">${rateLimitData.req_burst}</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+      }
 
-      // === EVENT TIME CONSTRAINTS SECTION ===
-      let futureSeconds = 900; // default 15 minutes
-      if (
-        timeConstraintsData.max_created_at_string &&
-        timeConstraintsData.max_created_at_string.startsWith("now+")
-      ) {
-        const offsetStr = timeConstraintsData.max_created_at_string.replace(
-          "now+",
-          ""
-        );
-        if (offsetStr.endsWith("m")) {
-          futureSeconds = parseInt(offsetStr.replace("m", "")) * 60;
-        } else if (offsetStr.endsWith("s")) {
-          futureSeconds = parseInt(offsetStr.replace("s", ""));
-        } else if (offsetStr.endsWith("h")) {
-          futureSeconds = parseInt(offsetStr.replace("h", "")) * 3600;
+      // 2. Populate Rate Limits - By Category
+      const rateLimitsCategory = document.getElementById(
+        "rate-limits-category"
+      );
+      if (rateLimitsCategory) {
+        if (
+          rateLimitData.category_limits &&
+          Object.keys(rateLimitData.category_limits).length > 0
+        ) {
+          const categoryEntries = Object.entries(rateLimitData.category_limits);
+          rateLimitsCategory.innerHTML = `
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-700">
+                  <th class="text-left pb-1 text-xs text-gray-500 font-medium">Category</th>
+                  <th class="text-right pb-1 text-xs text-gray-500 font-medium">Rate</th>
+                  <th class="text-right pb-1 text-xs text-gray-500 font-medium">Burst</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${categoryEntries
+                  .map(
+                    ([category, limits]) => `
+                  <tr class="border-b border-gray-700/30">
+                    <td class="py-1 text-white text-xs capitalize">${category}</td>
+                    <td class="py-1 text-right text-green-400 font-mono text-xs">${limits.Limit}/s</td>
+                    <td class="py-1 text-right text-gray-300 text-xs">${limits.Burst}</td>
+                  </tr>
+                `
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          `;
+        } else {
+          rateLimitsCategory.innerHTML =
+            '<p class="text-xs text-gray-500">No category-specific limits configured</p>';
         }
       }
 
-      const now = Math.floor(Date.now() / 1000);
-      const pastSeconds = timeConstraintsData.min_created_at
-        ? now - timeConstraintsData.min_created_at
-        : 94608000;
-
-      rows.push({
-        type: "Future Events",
-        limit: `${futureSeconds}s`,
-        burst: "Max future time",
-        status: this.getStatusBadge(true),
-      });
-
-      rows.push({
-        type: "Past Events",
-        limit: `${Math.floor(pastSeconds / 86400)} days`,
-        burst: "Max past time",
-        status: this.getStatusBadge(true),
-      });
-
-      // === SERVER CONFIGURATION SECTION ===
-      rows.push({
-        type: "Read Timeout",
-        limit: `${serverData.read_timeout}s`,
-        burst: "HTTP requests",
-        status: this.getStatusBadge(true),
-      });
-
-      rows.push({
-        type: "Write Timeout",
-        limit: `${serverData.write_timeout}s`,
-        burst: "HTTP responses",
-        status: this.getStatusBadge(true),
-      });
-
-      rows.push({
-        type: "Idle Timeout",
-        limit: `${serverData.idle_timeout}s`,
-        burst: "Connections",
-        status: this.getStatusBadge(true),
-      });
-
-      rows.push({
-        type: "Max Subscriptions",
-        limit: `${serverData.max_subscriptions_per_client}`,
-        burst: "Per client",
-        status: this.getStatusBadge(true),
-      });
-
-      rows.push({
-        type: "Implicit REQ Limit",
-        limit: `${serverData.implicit_req_limit}`,
-        burst: "Query results",
-        status: this.getStatusBadge(true),
-      });
-
-      // === RATE LIMITING SECTION ===
-      rows.push({
-        type: "WebSocket Messages",
-        limit: `${rateLimitData.ws_limit}/sec`,
-        burst: `${rateLimitData.ws_burst} messages`,
-        status: this.getStatusBadge(true),
-      });
-
-      rows.push({
-        type: "Event Publishing",
-        limit: `${rateLimitData.event_limit}/sec`,
-        burst: `${rateLimitData.event_burst} events`,
-        status: this.getStatusBadge(true),
-      });
-
-      rows.push({
-        type: "Query Requests",
-        limit: `${rateLimitData.req_limit}/sec`,
-        burst: `${rateLimitData.req_burst} queries`,
-        status: this.getStatusBadge(true),
-      });
-
-      rows.push({
-        type: "Max Event Size",
-        limit: formatBytes(rateLimitData.max_event_size),
-        burst: "Per event",
-        status: this.getStatusBadge(true),
-      });
-
-      // === KIND-SPECIFIC LIMITS (if configured) ===
-      if (rateLimitData.kind_limits && rateLimitData.kind_limits.length > 0) {
-        rateLimitData.kind_limits.forEach((kindLimit) => {
-          rows.push({
-            type: `Kind ${kindLimit.Kind}`,
-            limit: `${kindLimit.Limit}/sec`,
-            burst: `${kindLimit.Burst} events`,
-            status: this.getStatusBadge(true),
-          });
-        });
+      // 3. Populate Rate Limits - By Kind
+      const rateLimitsKind = document.getElementById("rate-limits-kind");
+      if (rateLimitsKind) {
+        if (rateLimitData.kind_limits && rateLimitData.kind_limits.length > 0) {
+          rateLimitsKind.innerHTML = `
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-700">
+                  <th class="text-left pb-1 text-xs text-gray-500 font-medium">Kind</th>
+                  <th class="text-right pb-1 text-xs text-gray-500 font-medium">Rate</th>
+                  <th class="text-right pb-1 text-xs text-gray-500 font-medium">Burst</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rateLimitData.kind_limits
+                  .map(
+                    (kindLimit) => `
+                  <tr class="border-b border-gray-700/30">
+                    <td class="py-1 text-white text-xs">Kind ${kindLimit.Kind}</td>
+                    <td class="py-1 text-right text-green-400 font-mono text-xs">${kindLimit.Limit}/s</td>
+                    <td class="py-1 text-right text-gray-300 text-xs">${kindLimit.Burst}</td>
+                  </tr>
+                `
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          `;
+        } else {
+          rateLimitsKind.innerHTML =
+            '<p class="text-xs text-gray-500">No kind-specific limits configured</p>';
+        }
       }
 
-      // === KIND SIZE LIMITS (if configured) ===
-      if (
-        rateLimitData.kind_size_limits &&
-        rateLimitData.kind_size_limits.length > 0
-      ) {
-        rateLimitData.kind_size_limits.forEach((sizeLimit) => {
-          rows.push({
-            type: `Kind ${sizeLimit.Kind} Size`,
-            limit: formatBytes(sizeLimit.MaxSize),
-            burst: "Max size",
-            status: this.getStatusBadge(true),
-          });
-        });
+      // 4. Populate Size Limits - Overall
+      const sizeLimitsOverall = document.getElementById("size-limits-overall");
+      if (sizeLimitsOverall) {
+        sizeLimitsOverall.innerHTML = `
+          <h4 class="text-xs font-medium text-gray-400 uppercase mb-2">Overall</h4>
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-700">
+                <th class="text-left pb-1 text-xs text-gray-500 font-medium">Type</th>
+                <th class="text-right pb-1 text-xs text-gray-500 font-medium">Limit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-gray-700/30">
+                <td class="py-1 text-white text-xs">Max Event Size</td>
+                <td class="py-1 text-right text-purple-400 font-mono text-xs">${formatBytes(
+                  rateLimitData.max_event_size
+                )}</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
       }
 
-      // === CATEGORY LIMITS (if configured) ===
-      if (rateLimitData.category_limits) {
-        Object.entries(rateLimitData.category_limits).forEach(
-          ([category, limits]) => {
-            rows.push({
-              type: `${
-                category.charAt(0).toUpperCase() + category.slice(1)
-              } Events`,
-              limit: `${limits.Limit}/sec`,
-              burst: `${limits.Burst} events`,
-              status: this.getStatusBadge(true),
-            });
+      // 5. Populate Size Limits - By Kind
+      const sizeLimitsKind = document.getElementById("size-limits-kind");
+      if (sizeLimitsKind) {
+        if (
+          rateLimitData.kind_size_limits &&
+          rateLimitData.kind_size_limits.length > 0
+        ) {
+          sizeLimitsKind.innerHTML = `
+            <h4 class="text-xs font-medium text-gray-400 uppercase mb-2">By Kind</h4>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-700">
+                  <th class="text-left pb-1 text-xs text-gray-500 font-medium">Kind</th>
+                  <th class="text-right pb-1 text-xs text-gray-500 font-medium">Max Size</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rateLimitData.kind_size_limits
+                  .map(
+                    (sizeLimit) => `
+                  <tr class="border-b border-gray-700/30">
+                    <td class="py-1 text-white text-xs">Kind ${
+                      sizeLimit.Kind
+                    }</td>
+                    <td class="py-1 text-right text-purple-400 font-mono text-xs">${formatBytes(
+                      sizeLimit.MaxSize
+                    )}</td>
+                  </tr>
+                `
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          `;
+        } else {
+          sizeLimitsKind.innerHTML = `
+            <h4 class="text-xs font-medium text-gray-400 uppercase mb-2">By Kind</h4>
+            <p class="text-xs text-gray-500">No kind-specific size limits configured</p>
+          `;
+        }
+      }
+
+      // 6. Populate Time Constraints
+      const timeConstraints = document.getElementById("time-constraints");
+      if (timeConstraints) {
+        // Parse future time constraints
+        let futureSeconds = 900; // default 15 minutes
+        if (
+          timeConstraintsData.max_created_at_string &&
+          timeConstraintsData.max_created_at_string.startsWith("now+")
+        ) {
+          const offsetStr = timeConstraintsData.max_created_at_string.replace(
+            "now+",
+            ""
+          );
+          if (offsetStr.endsWith("m")) {
+            futureSeconds = parseInt(offsetStr.replace("m", "")) * 60;
+          } else if (offsetStr.endsWith("s")) {
+            futureSeconds = parseInt(offsetStr.replace("s", ""));
+          } else if (offsetStr.endsWith("h")) {
+            futureSeconds = parseInt(offsetStr.replace("h", "")) * 3600;
           }
-        );
+        }
+
+        // Parse past time constraints
+        const now = Math.floor(Date.now() / 1000);
+        const pastSeconds = timeConstraintsData.min_created_at
+          ? now - timeConstraintsData.min_created_at
+          : 94608000;
+
+        timeConstraints.innerHTML = `
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-700">
+                <th class="text-left pb-2 text-xs text-gray-500 font-medium">Type</th>
+                <th class="text-right pb-2 text-xs text-gray-500 font-medium">Limit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-gray-700/30">
+                <td class="py-2 text-white text-xs">Future Events</td>
+                <td class="py-2 text-right text-orange-400 font-mono text-xs">${Math.floor(
+                  futureSeconds / 60
+                )}min</td>
+              </tr>
+              <tr class="border-b border-gray-700/30">
+                <td class="py-2 text-white text-xs">Past Events</td>
+                <td class="py-2 text-right text-orange-400 font-mono text-xs">${Math.floor(
+                  pastSeconds / 86400
+                )} days</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
       }
 
-      // Render the table
-      tbody.innerHTML = rows
-        .map(
-          (row) => `
-      <tr>
-        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">${row.type}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.limit}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.burst}</td>
-        <td class="px-6 py-4 whitespace-nowrap">${row.status}</td>
-      </tr>
-    `
-        )
-        .join("");
+      // 7. Populate Connection Timeouts
+      const connectionTimeouts = document.getElementById("connection-timeouts");
+      if (connectionTimeouts) {
+        connectionTimeouts.innerHTML = `
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-700">
+                <th class="text-left pb-2 text-xs text-gray-500 font-medium">Type</th>
+                <th class="text-right pb-2 text-xs text-gray-500 font-medium">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-gray-700/30">
+                <td class="py-2 text-white text-xs">Read Timeout</td>
+                <td class="py-2 text-right text-blue-400 font-mono text-xs">${serverData.read_timeout}s</td>
+              </tr>
+              <tr class="border-b border-gray-700/30">
+                <td class="py-2 text-white text-xs">Write Timeout</td>
+                <td class="py-2 text-right text-blue-400 font-mono text-xs">${serverData.write_timeout}s</td>
+              </tr>
+              <tr class="border-b border-gray-700/30">
+                <td class="py-2 text-white text-xs">Idle Timeout</td>
+                <td class="py-2 text-right text-blue-400 font-mono text-xs">${serverData.idle_timeout}s</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+      }
+
+      // 8. Populate Connection Limits
+      const connectionLimits = document.getElementById("connection-limits");
+      if (connectionLimits) {
+        connectionLimits.innerHTML = `
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-700">
+                <th class="text-left pb-2 text-xs text-gray-500 font-medium">Setting</th>
+                <th class="text-right pb-2 text-xs text-gray-500 font-medium">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-gray-700/30">
+                <td class="py-2 text-white text-xs">Max Subscriptions <div class="text-gray-400 text-xs">(per client connection)</div></td>
+                <td class="py-2 text-right text-cyan-400 font-mono text-xs">${serverData.max_subscriptions_per_client}</td>
+              </tr>
+              <tr class="border-b border-gray-700/30">
+                <td class="py-2 text-white text-xs">Implicit REQ Limit</td>
+                <td class="py-2 text-right text-cyan-400 font-mono text-xs">${serverData.implicit_req_limit}</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+      }
 
       console.log("✅ Policy limits loaded successfully");
     } catch (error) {
       console.error("Error loading policy limits:", error);
-      const tbody = document.getElementById("policy-limits-table");
-      if (tbody) {
-        tbody.innerHTML = `
-        <tr>
-          <td colspan="4" class="px-6 py-4 text-center text-red-400">
-            ⚠️ Failed to load policy configuration
-          </td>
-        </tr>
-      `;
-      }
+
+      // Show error in all containers
+      const containers = [
+        "rate-limits-overall",
+        "rate-limits-category",
+        "rate-limits-kind",
+        "size-limits-overall",
+        "size-limits-kind",
+        "time-constraints",
+        "connection-timeouts",
+        "connection-limits",
+      ];
+
+      containers.forEach((containerId) => {
+        const container = document.getElementById(containerId);
+        if (container) {
+          container.innerHTML = `<div class="text-center text-red-400 py-4">⚠️ Failed to load data</div>`;
+        }
+      });
     }
   },
 

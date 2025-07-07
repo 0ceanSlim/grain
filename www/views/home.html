@@ -97,65 +97,111 @@
     </div>
   </div>
 
-  <!-- 2. Policy & Limits Section -->
+  <!-- 2. Policy & Limits Section - Redesigned with Detailed Breakdown -->
   <div
     class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
   >
     <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
       <h2 class="text-xl font-semibold text-white">⚙️ Policy & Limits</h2>
       <p class="text-sm text-gray-400">
-        Rate limits, event constraints, and operational policies
+        Comprehensive relay configuration and constraints
       </p>
     </div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-700">
-        <thead class="bg-gray-750">
-          <tr>
-            <th
-              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
-            >
-              Policy Type
-            </th>
-            <th
-              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
-            >
-              Limit/Value
-            </th>
-            <th
-              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
-            >
-              Burst/Additional
-            </th>
-            <th
-              class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-300 uppercase"
-            >
-              Status
-            </th>
-          </tr>
-        </thead>
-        <tbody
-          id="policy-limits-table"
-          class="bg-gray-800 divide-y divide-gray-700"
-        >
-          <!-- Loading placeholder -->
-          <tr>
-            <td class="px-6 py-4 whitespace-nowrap">
-              <div class="w-32 h-4 bg-gray-700 rounded animate-pulse"></div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-              <div class="w-20 h-4 bg-gray-700 rounded animate-pulse"></div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-              <div class="w-24 h-4 bg-gray-700 rounded animate-pulse"></div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-              <div
-                class="w-16 h-6 bg-gray-700 rounded-full animate-pulse"
-              ></div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+
+    <!-- Top Row: Rate Limits and Size Limits -->
+    <div class="grid grid-cols-1 xl:grid-cols-2 border-b border-gray-700">
+      <!-- Rate Limits Container -->
+      <div class="border-r border-gray-700">
+        <div class="px-4 py-3 bg-gray-750 border-b border-gray-700">
+          <h3 class="text-sm font-medium text-white">📊 Rate Limits</h3>
+        </div>
+        <div class="p-4 space-y-4">
+          <!-- Overall Rate Limits -->
+          <div id="rate-limits-overall">
+            <!-- Loading placeholder -->
+            <div class="w-20 h-4 bg-gray-700 rounded animate-pulse mb-2"></div>
+            <div class="w-full h-16 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+
+          <!-- Category Limits -->
+          <div id="rate-limits-category">
+            <!-- Loading placeholder -->
+            <div class="w-24 h-4 bg-gray-700 rounded animate-pulse mb-2"></div>
+            <div class="w-full h-20 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+
+          <!-- Kind-Specific Limits -->
+          <div id="rate-limits-kind">
+            <!-- Loading placeholder -->
+            <div class="w-16 h-4 bg-gray-700 rounded animate-pulse mb-2"></div>
+            <div class="w-full h-16 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Size Limits Container -->
+      <div>
+        <div class="px-4 py-3 bg-gray-750 border-b border-gray-700">
+          <h3 class="text-sm font-medium text-white">📏 Size Limits</h3>
+        </div>
+        <div class="p-4 space-y-4">
+          <!-- Overall Size Limits -->
+          <div id="size-limits-overall">
+            <!-- Loading placeholder -->
+            <div class="w-20 h-4 bg-gray-700 rounded animate-pulse mb-2"></div>
+            <div class="w-full h-12 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+
+          <!-- Kind-Specific Size Limits -->
+          <div id="size-limits-kind">
+            <!-- Loading placeholder -->
+            <div class="w-16 h-4 bg-gray-700 rounded animate-pulse mb-2"></div>
+            <div class="w-full h-20 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Row: Time Constraints, Timeouts, and Connection Limits -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+      <!-- Time Constraints Container -->
+      <div class="border-r border-gray-700">
+        <div class="px-4 py-3 bg-gray-750 border-b border-gray-700">
+          <h3 class="text-sm font-medium text-white">⏰ Time Constraints</h3>
+        </div>
+        <div class="p-4">
+          <div id="time-constraints">
+            <!-- Loading placeholder -->
+            <div class="w-full h-16 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection Timeouts Container -->
+      <div class="border-r border-gray-700 md:border-r-0 xl:border-r">
+        <div class="px-4 py-3 bg-gray-750 border-b border-gray-700">
+          <h3 class="text-sm font-medium text-white">⚡ Timeouts</h3>
+        </div>
+        <div class="p-4">
+          <div id="connection-timeouts">
+            <!-- Loading placeholder -->
+            <div class="w-full h-20 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection Limits Container -->
+      <div class="md:col-span-2 xl:col-span-1">
+        <div class="px-4 py-3 bg-gray-750 border-b border-gray-700">
+          <h3 class="text-sm font-medium text-white">🔗 Connection Limits</h3>
+        </div>
+        <div class="p-4">
+          <div id="connection-limits">
+            <!-- Loading placeholder -->
+            <div class="w-full h-16 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
