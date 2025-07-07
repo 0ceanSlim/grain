@@ -599,101 +599,215 @@ const dashboardManager = {
   },
 
   // 2. Load Policy & Limits (rate limits + timeouts + time constraints)
+  // Fixed loadPolicyLimits function with formatBytes included
   async loadPolicyLimits() {
-    const [rateLimitData, serverData, timeConstraintsData] = await Promise.all([
-      this.fetchConfig(this.endpoints.rateLimit, "policy-limits-table"),
-      this.fetchConfig(this.endpoints.server, "policy-limits-table"),
-      this.fetchConfig(
-        this.endpoints.eventTimeConstraints,
-        "policy-limits-table"
-      ),
-    ]);
+    try {
+      const [rateLimitData, serverData, timeConstraintsData] =
+        await Promise.all([
+          this.fetchConfig(this.endpoints.rateLimit, "policy-limits-table"),
+          this.fetchConfig(this.endpoints.server, "policy-limits-table"),
+          this.fetchConfig(
+            this.endpoints.eventTimeConstraints,
+            "policy-limits-table"
+          ),
+        ]);
 
-    if (!rateLimitData || !serverData || !timeConstraintsData) return;
+      if (!rateLimitData || !serverData || !timeConstraintsData) {
+        console.error("Failed to load policy configuration data");
+        return;
+      }
 
-    const tbody = document.getElementById("policy-limits-table");
-    if (!tbody) return;
+      const tbody = document.getElementById("policy-limits-table");
+      if (!tbody) {
+        console.error("Policy limits table not found");
+        return;
+      }
 
-    const rows = [
-      // Rate limits
-      {
-        type: "WebSocket Messages",
-        limit: `${rateLimitData.ws_limit}/sec`,
-        burst: `${rateLimitData.ws_burst} messages`,
+      // Helper function to format bytes
+      const formatBytes = (bytes) => {
+        if (bytes === 0) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+      };
+
+      const rows = [];
+
+      // === EVENT TIME CONSTRAINTS SECTION ===
+      let futureSeconds = 900; // default 15 minutes
+      if (
+        timeConstraintsData.max_created_at_string &&
+        timeConstraintsData.max_created_at_string.startsWith("now+")
+      ) {
+        const offsetStr = timeConstraintsData.max_created_at_string.replace(
+          "now+",
+          ""
+        );
+        if (offsetStr.endsWith("m")) {
+          futureSeconds = parseInt(offsetStr.replace("m", "")) * 60;
+        } else if (offsetStr.endsWith("s")) {
+          futureSeconds = parseInt(offsetStr.replace("s", ""));
+        } else if (offsetStr.endsWith("h")) {
+          futureSeconds = parseInt(offsetStr.replace("h", "")) * 3600;
+        }
+      }
+
+      const now = Math.floor(Date.now() / 1000);
+      const pastSeconds = timeConstraintsData.min_created_at
+        ? now - timeConstraintsData.min_created_at
+        : 94608000;
+
+      rows.push({
+        type: "Future Events",
+        limit: `${futureSeconds}s`,
+        burst: "Max future time",
         status: this.getStatusBadge(true),
-      },
-      {
-        type: "Event Publishing",
-        limit: `${rateLimitData.event_limit}/sec`,
-        burst: `${rateLimitData.event_burst} events`,
+      });
+
+      rows.push({
+        type: "Past Events",
+        limit: `${Math.floor(pastSeconds / 86400)} days`,
+        burst: "Max past time",
         status: this.getStatusBadge(true),
-      },
-      {
-        type: "Query Requests",
-        limit: `${rateLimitData.req_limit}/sec`,
-        burst: `${rateLimitData.req_burst} queries`,
-        status: this.getStatusBadge(true),
-      },
-      {
-        type: "Max Event Size",
-        limit: this.formatBytes(rateLimitData.max_event_size),
-        burst: "Per event",
-        status: this.getStatusBadge(true),
-      },
-      // Server timeouts (excluding port)
-      {
+      });
+
+      // === SERVER CONFIGURATION SECTION ===
+      rows.push({
         type: "Read Timeout",
         limit: `${serverData.read_timeout}s`,
         burst: "HTTP requests",
         status: this.getStatusBadge(true),
-      },
-      {
+      });
+
+      rows.push({
         type: "Write Timeout",
         limit: `${serverData.write_timeout}s`,
         burst: "HTTP responses",
         status: this.getStatusBadge(true),
-      },
-      {
+      });
+
+      rows.push({
         type: "Idle Timeout",
         limit: `${serverData.idle_timeout}s`,
         burst: "Connections",
         status: this.getStatusBadge(true),
-      },
-      {
+      });
+
+      rows.push({
         type: "Max Subscriptions",
         limit: `${serverData.max_subscriptions_per_client}`,
         burst: "Per client",
         status: this.getStatusBadge(true),
-      },
-      // Time constraints
-      {
-        type: "Future Events",
-        limit: `${timeConstraintsData.max_created_at_future_seconds}s`,
-        burst: "Max future time",
-        status: this.getStatusBadge(true),
-      },
-      {
-        type: "Past Events",
-        limit: `${Math.floor(
-          timeConstraintsData.max_created_at_past_seconds / 86400
-        )} days`,
-        burst: "Max past time",
-        status: this.getStatusBadge(true),
-      },
-    ];
+      });
 
-    tbody.innerHTML = rows
-      .map(
-        (row) => `
-    <tr>
-      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">${row.type}</td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.limit}</td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.burst}</td>
-      <td class="px-6 py-4 whitespace-nowrap">${row.status}</td>
-    </tr>
-  `
-      )
-      .join("");
+      rows.push({
+        type: "Implicit REQ Limit",
+        limit: `${serverData.implicit_req_limit}`,
+        burst: "Query results",
+        status: this.getStatusBadge(true),
+      });
+
+      // === RATE LIMITING SECTION ===
+      rows.push({
+        type: "WebSocket Messages",
+        limit: `${rateLimitData.ws_limit}/sec`,
+        burst: `${rateLimitData.ws_burst} messages`,
+        status: this.getStatusBadge(true),
+      });
+
+      rows.push({
+        type: "Event Publishing",
+        limit: `${rateLimitData.event_limit}/sec`,
+        burst: `${rateLimitData.event_burst} events`,
+        status: this.getStatusBadge(true),
+      });
+
+      rows.push({
+        type: "Query Requests",
+        limit: `${rateLimitData.req_limit}/sec`,
+        burst: `${rateLimitData.req_burst} queries`,
+        status: this.getStatusBadge(true),
+      });
+
+      rows.push({
+        type: "Max Event Size",
+        limit: formatBytes(rateLimitData.max_event_size),
+        burst: "Per event",
+        status: this.getStatusBadge(true),
+      });
+
+      // === KIND-SPECIFIC LIMITS (if configured) ===
+      if (rateLimitData.kind_limits && rateLimitData.kind_limits.length > 0) {
+        rateLimitData.kind_limits.forEach((kindLimit) => {
+          rows.push({
+            type: `Kind ${kindLimit.Kind}`,
+            limit: `${kindLimit.Limit}/sec`,
+            burst: `${kindLimit.Burst} events`,
+            status: this.getStatusBadge(true),
+          });
+        });
+      }
+
+      // === KIND SIZE LIMITS (if configured) ===
+      if (
+        rateLimitData.kind_size_limits &&
+        rateLimitData.kind_size_limits.length > 0
+      ) {
+        rateLimitData.kind_size_limits.forEach((sizeLimit) => {
+          rows.push({
+            type: `Kind ${sizeLimit.Kind} Size`,
+            limit: formatBytes(sizeLimit.MaxSize),
+            burst: "Max size",
+            status: this.getStatusBadge(true),
+          });
+        });
+      }
+
+      // === CATEGORY LIMITS (if configured) ===
+      if (rateLimitData.category_limits) {
+        Object.entries(rateLimitData.category_limits).forEach(
+          ([category, limits]) => {
+            rows.push({
+              type: `${
+                category.charAt(0).toUpperCase() + category.slice(1)
+              } Events`,
+              limit: `${limits.Limit}/sec`,
+              burst: `${limits.Burst} events`,
+              status: this.getStatusBadge(true),
+            });
+          }
+        );
+      }
+
+      // Render the table
+      tbody.innerHTML = rows
+        .map(
+          (row) => `
+      <tr>
+        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">${row.type}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.limit}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.burst}</td>
+        <td class="px-6 py-4 whitespace-nowrap">${row.status}</td>
+      </tr>
+    `
+        )
+        .join("");
+
+      console.log("✅ Policy limits loaded successfully");
+    } catch (error) {
+      console.error("Error loading policy limits:", error);
+      const tbody = document.getElementById("policy-limits-table");
+      if (tbody) {
+        tbody.innerHTML = `
+        <tr>
+          <td colspan="4" class="px-6 py-4 text-center text-red-400">
+            ⚠️ Failed to load policy configuration
+          </td>
+        </tr>
+      `;
+      }
+    }
   },
 
   // 3. Load Event Purge Management
