@@ -67,6 +67,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // CRITICAL: Skip NIP-11 requests - always go to network for JSON
+  if (
+    request.headers.get("accept") &&
+    request.headers.get("accept").includes("application/nostr+json")
+  ) {
+    console.log(
+      "[SW] Skipping NIP-11 request (need fresh JSON):",
+      url.pathname
+    );
+    return;
+  }
+
   // CRITICAL: Skip HTMX requests - let them always go to network
   if (request.headers.get("hx-request") === "true") {
     console.log(

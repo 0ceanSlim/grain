@@ -218,7 +218,6 @@ const dashboardManager = {
       this.loadRelayOverview(),
       this.loadPolicyLimits(),
       this.loadEventPurgeConfig(),
-      this.loadSystemConfig(),
       this.loadUserSyncConfig(),
     ];
 
@@ -250,7 +249,7 @@ const dashboardManager = {
     }
   },
 
-  // 1. Load Relay Overview (fetches NIP-11 data from relay)
+  // 1. Load Relay Overview with 4 containers structure
   async loadRelayOverview() {
     const container = document.getElementById("relay-overview-content");
     if (!container) return;
@@ -280,8 +279,18 @@ const dashboardManager = {
 
       const relayInfo = await response.json();
 
-      // Create the relay info display
-      container.innerHTML = this.createRelayInfoHTML(relayInfo);
+      // Fetch auth and backup relay data for system configuration container
+      const [authData, backupData] = await Promise.all([
+        this.fetchConfig(this.endpoints.auth, "relay-overview-content"),
+        this.fetchConfig(this.endpoints.backupRelay, "relay-overview-content"),
+      ]);
+
+      // Create the relay info display with 4 containers
+      container.innerHTML = this.createRelayInfoHTML(
+        relayInfo,
+        authData,
+        backupData
+      );
     } catch (error) {
       console.error("Failed to load relay information:", error);
 
@@ -307,8 +316,8 @@ const dashboardManager = {
     }
   },
 
-  // Helper function to create the relay info HTML
-  createRelayInfoHTML(relayInfo) {
+  // Helper function to create the relay info HTML with 4 containers
+  createRelayInfoHTML(relayInfo, authData, backupData) {
     const {
       name = "🌾 GRAIN Relay",
       description = "Go Relay Architecture for Implementing Nostr",
@@ -325,33 +334,33 @@ const dashboardManager = {
     } = relayInfo;
 
     // Create HTML sections
-    let html = '<div class="space-y-4">';
+    let html = '<div class="space-y-6">';
 
-    // Banner if available - fills the top of the container
+    // Banner if available
     if (banner) {
       html += `
-    <div class="rounded-lg overflow-hidden">
-      <img src="${banner}" alt="Relay Banner" class="w-full h-32 object-cover">
-    </div>
-  `;
+      <div class="rounded-lg overflow-hidden">
+        <img src="${banner}" alt="Relay Banner" class="w-full h-32 object-cover">
+      </div>
+    `;
     }
 
-    // Centered header section with name and icon
+    // Centered header section with name
     html += `
-  <div class="text-center">
-        <h3 class="text-2xl font-bold text-white">${this.escapeHtml(name)}</h3>
-  </div>
-`;
-
-    // Description (more compact)
-    if (description) {
-      html += `
-    <div class="bg-gray-750 p-2 rounded-lg">
-      <p class="text-white text-sm leading-relaxed text-center">${this.escapeHtml(
-        description
-      )}</p>
+    <div class="text-center">
+      <h3 class="text-2xl font-bold text-white">${this.escapeHtml(name)}</h3>
     </div>
   `;
+
+    // Description
+    if (description) {
+      html += `
+      <div class="bg-gray-750 p-3 rounded-lg">
+        <p class="text-white text-sm leading-relaxed text-center">${this.escapeHtml(
+          description
+        )}</p>
+      </div>
+    `;
     }
 
     // Create version link if software is GitHub repo
@@ -361,97 +370,236 @@ const dashboardManager = {
       versionDisplay = `<a href="${releaseUrl}" target="_blank" class="text-blue-400 hover:text-blue-300">${version}</a>`;
     }
 
-    // Compact Technical Information Grid with integrated policies
+    // 4 Containers Layout
     html += `
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div class="bg-gray-750 p-3 rounded-lg">
-        <h4 class="text-sm font-medium text-white mb-3 text-center">Technical Details</h4>
-        <div class="space-y-2 text-sm">
-          <div class="flex justify-between items-center">
-            <span class="text-gray-400">Software</span>
-            <span class="text-white font-medium">
-              ${
-                software.includes("github.com")
-                  ? `<a href="${software}" target="_blank" class="text-blue-400 hover:text-blue-300">🌾 GRAIN</a>`
-                  : this.escapeHtml(software)
-              }
-            </span>
-          </div>
-          <div class="flex justify-between items-center">
-            <span class="text-gray-400">Version</span>
-            <span class="text-white font-medium">${versionDisplay}</span>
-          </div>
-        </div>
-        
-        <!-- Policies Section -->
-        <h5 class="text-sm font-medium text-white mt-4 mb-2 text-center">Policies</h5>
-        <div class="flex justify-center gap-3 text-sm">
-          ${this.createPolicyLink(privacy_policy, "Privacy Policy", "Privacy")}
-          ${this.createPolicyLink(
-            terms_of_service,
-            "Terms of Service",
-            "Terms"
-          )}
-          ${this.createPolicyLink(posting_policy, "Posting Policy", "Posting")}
-        </div>
-      </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       
-      <div class="bg-gray-750 p-3 rounded-lg">
-        <h4 class="text-sm font-medium text-white mb-3 text-center">Contact & Admin</h4>
-        ${this.createAdminSection(pubkey, contact)}
-      </div>
-    </div>
-    `;
+      <!-- Left Column -->
+      <div class="space-y-6">
+        
+        <!-- Technical Details Container -->
+        <div class="bg-gray-750 border border-gray-600 rounded-lg p-4">
+          <h4 class="text-lg font-semibold text-white mb-3 text-center border-b border-gray-600 pb-2">🔧 Technical Details</h4>
+          <div class="space-y-3 text-sm">
+            <div class="flex justify-between items-center">
+              <span class="text-gray-400">Software</span>
+              <span class="text-white font-medium">
+                ${
+                  software.includes("github.com")
+                    ? `<a href="${software}" target="_blank" class="text-blue-400 hover:text-blue-300">🌾 GRAIN</a>`
+                    : "🌾 GRAIN"
+                }
+              </span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-gray-400">Version</span>
+              <span class="text-white font-medium">${versionDisplay}</span>
+            </div>
+            
+            <!-- Policies Section -->
+            <div class="pt-3 border-t border-gray-600">
+              <h5 class="text-center text-white font-medium mb-3">Policies</h5>
+              ${this.createPoliciesSection(
+                privacy_policy,
+                terms_of_service,
+                posting_policy
+              )}
+            </div>
+          </div>
+        </div>
 
-    // Supported NIPs section (more compact)
-    if (supported_nips && supported_nips.length > 0) {
-      html += `
-    <div class="bg-gray-750 p-3 rounded-lg">
-      <h4 class="text-sm font-medium text-white mb-3 text-center">Supported NIPs</h4>
-      <div class="flex flex-wrap gap-1.5 justify-center">
-        ${supported_nips
-          .map(
-            (nip) =>
-              `<a href="https://github.com/nostr-protocol/nips/blob/master/${String(
-                nip
-              ).padStart(
-                2,
-                "0"
-              )}.md" target="_blank" class="inline-flex items-center px-2 py-1 text-xs font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded hover:bg-blue-500/30 transition-colors">${nip}</a>`
-          )
-          .join("")}
+        <!-- Supported NIPs Container -->
+        <div class="bg-gray-750 border border-gray-600 rounded-lg p-4">
+          <h4 class="text-lg font-semibold text-white mb-3 text-center border-b border-gray-600 pb-2">📋 Supported NIPs</h4>
+          <div class="flex flex-wrap gap-1 justify-center">
+            ${this.createNIPSLinks(supported_nips)}
+          </div>
+        </div>
+
+        <!-- Tags Container -->
+        <div class="bg-gray-750 border border-gray-600 rounded-lg p-4">
+          <h4 class="text-lg font-semibold text-white mb-3 text-center border-b border-gray-600 pb-2">🏷️ Tags</h4>
+          <div class="flex flex-wrap gap-1 justify-center">
+            ${this.createTagsLinks(tags)}
+          </div>
+        </div>
+
       </div>
+
+      <!-- Right Column -->
+      <div class="space-y-6">
+
+        <!-- Contact and Admin Container -->
+        <div class="bg-gray-750 border border-gray-600 rounded-lg p-4">
+          <h4 class="text-lg font-semibold text-white mb-3 text-center border-b border-gray-600 pb-2">📞 Contact & Admin</h4>
+          ${this.createAdminSection(pubkey, contact)}
+        </div>
+
+        <!-- System Configuration Container -->
+        <div class="bg-gray-750 border border-gray-600 rounded-lg p-4">
+          <h4 class="text-lg font-semibold text-white mb-3 text-center border-b border-gray-600 pb-2">⚙️ System Configuration</h4>
+          <div class="space-y-3 text-sm">
+            ${this.createSystemConfigContent(authData, backupData)}
+          </div>
+        </div>
+
+      </div>
+
     </div>
   `;
-    }
-
-    // Tags section (more compact)
-    if (tags && tags.length > 0) {
-      html += `
-    <div class="bg-gray-750 p-3 rounded-lg">
-      <h4 class="text-sm font-medium text-white mb-3 text-center">Tags</h4>
-      <div class="flex flex-wrap gap-1.5 justify-center">
-        ${tags
-          .map(
-            (tag) =>
-              `<span class="inline-flex items-center px-2 py-1 text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded">${this.escapeHtml(
-                tag
-              )}</span>`
-          )
-          .join("")}
-      </div>
-    </div>
-  `;
-    }
 
     html += "</div>";
 
-    // Load admin profile after HTML is inserted
+    // Load admin profile after HTML is inserted - THIS IS CRITICAL
     if (pubkey) {
       setTimeout(() => this.loadAdminProfile(pubkey), 100);
     }
 
     return html;
+  },
+
+  // Helper function to create policies section
+  createPoliciesSection(privacy_policy, terms_of_service, posting_policy) {
+    const policies = [
+      { url: privacy_policy, label: "Privacy" },
+      { url: terms_of_service, label: "Terms" },
+      { url: posting_policy, label: "Posting" },
+    ].filter((policy) => policy.url);
+
+    if (policies.length === 0) {
+      return `
+      <div class="text-center">
+        <span class="text-gray-400 text-xs cursor-help" title="No policies configured for this relay">No Policies</span>
+      </div>
+    `;
+    }
+
+    return `
+    <div class="flex justify-center space-x-4">
+      ${policies
+        .map(
+          (policy) =>
+            `<a href="${policy.url}" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs">${policy.label}</a>`
+        )
+        .join("")}
+    </div>
+  `;
+  },
+
+  // Helper function to create NIPs links
+  createNIPSLinks(supported_nips) {
+    if (!supported_nips || supported_nips.length === 0) {
+      return `<div class="text-center text-gray-400 text-sm">No NIPs specified</div>`;
+    }
+
+    const nipLinks = supported_nips
+      .slice(0, 12)
+      .map((nip) => {
+        const nipNum = String(nip).padStart(2, "0");
+        return `<a href="https://github.com/nostr-protocol/nips/blob/master/${nipNum}.md" target="_blank" class="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200 transition-colors">NIP-${nipNum}</a>`;
+      })
+      .join("");
+
+    const remaining =
+      supported_nips.length > 12
+        ? `<span class="text-xs text-gray-400">+${
+            supported_nips.length - 12
+          } more</span>`
+        : "";
+
+    return nipLinks + remaining;
+  },
+
+  // Helper function to create tags links
+  createTagsLinks(tags) {
+    if (!tags || tags.length === 0) {
+      return `<div class="text-center text-gray-400 text-sm">No tags specified</div>`;
+    }
+
+    const tagLinks = tags
+      .slice(0, 8)
+      .map(
+        (tag) =>
+          `<a href="https://nostr.band/?q=%23${encodeURIComponent(
+            tag
+          )}" target="_blank" class="inline-flex px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full hover:bg-purple-200 transition-colors">${this.escapeHtml(
+            tag
+          )}</a>`
+      )
+      .join("");
+
+    const remaining =
+      tags.length > 8
+        ? `<span class="text-xs text-gray-400">+${tags.length - 8} more</span>`
+        : "";
+
+    return tagLinks + remaining;
+  },
+
+  // Helper function to create system configuration content
+  createSystemConfigContent(authData, backupData) {
+    let content = "";
+
+    // Authentication configuration
+    if (authData) {
+      content += `
+      <div class="flex justify-between items-center">
+        <span class="text-gray-400">Authentication</span>
+        <div class="text-right">
+          <div class="inline-flex px-2 py-1 text-xs font-medium ${
+            authData.enabled
+              ? "bg-green-100 text-green-800"
+              : "bg-gray-100 text-gray-800"
+          } rounded-full">
+            ${authData.enabled ? "Enabled" : "Disabled"}
+          </div>
+          ${
+            authData.enabled && authData.relay_url
+              ? `
+            <div class="text-xs text-gray-400 mt-1">${this.escapeHtml(
+              authData.relay_url
+            )}</div>
+          `
+              : ""
+          }
+        </div>
+      </div>
+    `;
+    }
+
+    // Backup Relay configuration
+    if (backupData) {
+      content += `
+      <div class="flex justify-between items-center">
+        <span class="text-gray-400">Backup Relay</span>
+        <div class="text-right">
+          <div class="inline-flex px-2 py-1 text-xs font-medium ${
+            backupData.enabled
+              ? "bg-blue-100 text-blue-800"
+              : "bg-gray-100 text-gray-800"
+          } rounded-full">
+            ${backupData.enabled ? "Enabled" : "Disabled"}
+          </div>
+          ${
+            backupData.enabled && backupData.url
+              ? `
+            <div class="text-xs text-gray-400 mt-1">${this.escapeHtml(
+              backupData.url
+            )}</div>
+          `
+              : ""
+          }
+        </div>
+      </div>
+    `;
+    }
+
+    // If no data is available
+    if (!authData && !backupData) {
+      content = `<div class="text-center text-gray-400">Configuration loading...</div>`;
+    }
+
+    return content;
   },
 
   // Helper function to create policy link with warning if missing
@@ -1166,50 +1314,7 @@ const dashboardManager = {
     console.log("✅ Event purge configuration loaded successfully");
   },
 
-  // 4. Load System Configuration (auth + backup relay)
-  async loadSystemConfig() {
-    const [authData, backupData] = await Promise.all([
-      this.fetchConfig(this.endpoints.auth, "system-config-table"),
-      this.fetchConfig(this.endpoints.backupRelay, "system-config-table"),
-    ]);
-
-    if (!authData || !backupData) return;
-
-    const tbody = document.getElementById("system-config-table");
-    if (!tbody) return;
-
-    const rows = [
-      {
-        setting: "Authentication",
-        value: authData.enabled ? "NIP-42 Enabled" : "Disabled",
-        description: "Cryptographic user verification",
-        status: this.getBooleanBadge(authData.enabled),
-      },
-      {
-        setting: "Backup Relay",
-        value: backupData.enabled ? "Enabled" : "Disabled",
-        description: backupData.enabled
-          ? `Connected to ${backupData.url}`
-          : "No backup configured",
-        status: this.getBooleanBadge(backupData.enabled),
-      },
-    ];
-
-    tbody.innerHTML = rows
-      .map(
-        (row) => `
-    <tr>
-      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">${row.setting}</td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${row.value}</td>
-      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${row.description}</td>
-      <td class="px-6 py-4 whitespace-nowrap">${row.status}</td>
-    </tr>
-  `
-      )
-      .join("");
-  },
-
-  // 5. Load User Sync Configuration (experimental section)
+  // 4. Load User Sync Configuration (experimental section)
   async loadUserSyncConfig() {
     const data = await this.fetchConfig(
       this.endpoints.userSync,
