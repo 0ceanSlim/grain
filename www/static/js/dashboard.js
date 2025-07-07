@@ -931,8 +931,10 @@ const dashboardManager = {
     }
   },
 
-  // 3. Load Event Purge Management
+  // 3. Load Event Purge Management - Enhanced to match other container styles
   async loadEventPurgeConfig() {
+    console.log("🗑️ Loading event purge configuration...");
+
     const data = await this.fetchConfig(
       this.endpoints.eventPurge,
       "event-purge-content"
@@ -942,56 +944,226 @@ const dashboardManager = {
     const container = document.getElementById("event-purge-content");
     if (!container) return;
 
+    // Helper function to create category badges
+    const createCategoryBadge = (enabled) => {
+      return `<span class="inline-flex px-2 py-1 text-xs font-medium ${
+        enabled ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"
+      } rounded-full">
+      ${enabled ? "Purging" : "Keeping"}
+    </span>`;
+    };
+
+    // Format interval display
+    const formatInterval = (hours) => {
+      if (hours < 24) {
+        return `${hours} hour${hours !== 1 ? "s" : ""}`;
+      } else {
+        const days = Math.floor(hours / 24);
+        const remainingHours = hours % 24;
+        if (remainingHours === 0) {
+          return `${days} day${days !== 1 ? "s" : ""}`;
+        } else {
+          return `${days}d ${remainingHours}h`;
+        }
+      }
+    };
+
+    const formatPurgeInterval = (minutes) => {
+      if (minutes < 60) {
+        return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
+      } else {
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+        if (remainingMinutes === 0) {
+          return `${hours} hour${hours !== 1 ? "s" : ""}`;
+        } else {
+          return `${hours}h ${remainingMinutes}m`;
+        }
+      }
+    };
+
     container.innerHTML = `
-    <div class="space-y-4">
-      <div class="flex justify-between items-center">
-        <span class="text-gray-300">Purge Enabled</span>
-        <span class="inline-flex px-2 py-1 text-xs font-medium ${
-          data.enabled
-            ? "bg-green-100 text-green-800"
-            : "bg-red-100 text-red-800"
-        } rounded-full">
-          ${data.enabled ? "Yes" : "No"}
-        </span>
+    <div class="space-y-6">
+      <!-- Main Status Section -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Status Column -->
+        <div class="bg-gray-750 rounded-lg p-4 border border-gray-600 space-y-4">
+          <!-- Primary Status -->
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-gray-300">Status</span>
+            <span class="inline-flex px-3 py-1 text-sm font-medium ${
+              data.enabled
+                ? "bg-green-100 text-green-800"
+                : "bg-red-100 text-red-800"
+            } rounded-full">
+              ${data.enabled ? "Enabled" : "Disabled"}
+            </span>
+          </div>
+          <div class="text-xs text-gray-400 mb-3">
+            ${
+              data.enabled
+                ? "Events are being purged automatically"
+                : "Event purging is disabled"
+            }
+          </div>
+          
+          <!-- Whitelist Protection -->
+          <div class="pt-3 border-t border-gray-600">
+            <div class="flex justify-between items-center">
+              <span class="text-sm font-medium text-gray-300">Whitelist Protection</span>
+              <span class="inline-flex px-3 py-1 text-sm font-medium ${
+                data.exclude_whitelisted
+                  ? "bg-green-100 text-green-800"
+                  : "bg-yellow-100 text-yellow-800"
+              } rounded-full">
+                ${data.exclude_whitelisted ? "Protected" : "Unprotected"}
+              </span>
+            </div>
+            <div class="text-xs text-gray-400 mt-2">
+              ${
+                data.exclude_whitelisted
+                  ? "Whitelisted users' events are safe"
+                  : "Whitelisted users' events can be purged"
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- Timing Configuration -->
+        <div class="bg-gray-750 rounded-lg p-4 border border-gray-600">
+          <h4 class="text-sm font-medium text-white mb-4">⏰ Timing Configuration</h4>
+          <div class="space-y-4">
+            <div class="flex justify-between items-center">
+              <div>
+                <span class="text-gray-300 text-sm">Event Retention</span>
+                <div class="text-xs text-gray-400">How long to keep events</div>
+              </div>
+              <span class="text-white font-medium text-lg">${formatInterval(
+                data.keep_interval_hours
+              )}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <div>
+                <span class="text-gray-300 text-sm">Purge Frequency</span>
+                <div class="text-xs text-gray-400">How often to clean up</div>
+              </div>
+              <span class="text-white font-medium text-lg">${formatPurgeInterval(
+                data.purge_interval_minutes
+              )}</span>
+            </div>
+          </div>
+        </div>
       </div>
+
       ${
         data.enabled
           ? `
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Keep Interval</span>
-          <span class="text-white font-medium">${
-            data.keep_interval_hours
-          } hours</span>
+        <!-- Event Category Configuration -->
+        <div class="bg-gray-750 rounded-lg border border-gray-600">
+          <div class="px-4 py-3 border-b border-gray-600">
+            <h4 class="text-sm font-medium text-white">📂 Event Categories</h4>
+          </div>
+          <div class="p-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              ${Object.entries(data.purge_by_category || {})
+                .map(
+                  ([category, enabled]) => `
+                <div class="flex flex-col items-center space-y-2 p-3 rounded-lg ${
+                  enabled
+                    ? "bg-red-900/20 border border-red-700"
+                    : "bg-gray-700/30 border border-gray-600"
+                }">
+                  <span class="text-sm font-medium text-white capitalize">${category}</span>
+                  ${createCategoryBadge(enabled)}
+                </div>
+              `
+                )
+                .join("")}
+            </div>
+          </div>
         </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Purge Interval</span>
-          <span class="text-white font-medium">${
-            data.purge_interval_minutes
-          } minutes</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Exclude Whitelisted</span>
-          <span class="text-white font-medium">${
-            data.exclude_whitelisted ? "Yes" : "No"
-          }</span>
-        </div>
+
         ${
-          data.kinds_to_purge && data.kinds_to_purge.length > 0
+          data.purge_by_kind_enabled
             ? `
-          <div class="flex justify-between items-center">
-            <span class="text-gray-300">Purge Kinds</span>
-            <span class="text-white font-medium">${data.kinds_to_purge.join(
-              ", "
-            )}</span>
+          <!-- Event Kinds Configuration -->
+          <div class="bg-gray-750 rounded-lg border border-gray-600">
+            <div class="px-4 py-3 border-b border-gray-600">
+              <h4 class="text-sm font-medium text-white">🏷️ Event Kinds to Purge</h4>
+            </div>
+            <div class="p-4">
+              ${
+                data.kinds_to_purge && data.kinds_to_purge.length > 0
+                  ? `
+                <div class="flex flex-wrap gap-2">
+                  ${data.kinds_to_purge
+                    .map(
+                      (kind) => `
+                    <span class="inline-flex px-3 py-1 text-sm font-medium bg-red-100 text-red-800 rounded-full">
+                      Kind ${kind}
+                    </span>
+                  `
+                    )
+                    .join("")}
+                </div>
+                <div class="mt-3 text-xs text-gray-400">
+                  Only these event kinds will be purged when kind-specific purging is enabled
+                </div>
+              `
+                  : `
+                <div class="text-center text-gray-400 py-4">
+                  <span class="text-sm">No specific kinds configured for purging</span>
+                </div>
+              `
+              }
+            </div>
           </div>
         `
-            : ""
+            : `
+          <!-- Kind Purging Disabled Notice -->
+          <div class="bg-gray-750 rounded-lg border border-gray-600">
+            <div class="px-4 py-3 border-b border-gray-600">
+              <h4 class="text-sm font-medium text-white">🏷️ Event Kinds</h4>
+            </div>
+            <div class="p-4">
+              <div class="text-center text-gray-400 py-4">
+                <span class="text-sm">Kind-specific purging is disabled</span>
+                <div class="text-xs mt-1">All event categories follow the category rules above</div>
+              </div>
+            </div>
+          </div>
+        `
         }
       `
-          : ""
+          : `
+        <!-- Disabled State Information -->
+        <div class="bg-gray-750 rounded-lg border border-gray-600">
+          <div class="p-6 text-center">
+            <div class="text-gray-400 mb-4">
+              <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+              </svg>
+            </div>
+            <h3 class="text-white font-medium mb-2">Event Purging Disabled</h3>
+            <p class="text-sm text-gray-400 mb-4">
+              Event purging is currently disabled. Events will be stored indefinitely until purging is enabled.
+            </p>
+            <div class="text-center max-w-md mx-auto">
+              <div class="text-xs">
+                <span class="text-gray-300 font-medium">Whitelist Protection:</span>
+                <span class="text-gray-400 ml-2">${
+                  data.exclude_whitelisted ? "Enabled" : "Disabled"
+                }</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `
       }
     </div>
   `;
+
+    console.log("✅ Event purge configuration loaded successfully");
   },
 
   // 4. Load System Configuration (auth + backup relay)
