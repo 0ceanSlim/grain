@@ -70,4 +70,3 @@ func CheckDuplicateEvent(ctx context.Context, evt nostr.Event) (bool, error) {
 		"pubkey", evt.PubKey)
 	return true, nil // Duplicate found
 }
-

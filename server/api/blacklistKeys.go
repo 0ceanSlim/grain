@@ -13,9 +13,9 @@ import (
 
 // BlacklistKeysResponse represents the blacklist keys response
 type BlacklistKeysResponse struct {
-	Permanent []string                            `json:"permanent"`
-	Temporary []map[string]interface{}            `json:"temporary"`
-	Mutelist  map[string][]string                 `json:"mutelist"`
+	Permanent []string                 `json:"permanent"`
+	Temporary []map[string]interface{} `json:"temporary"`
+	Mutelist  map[string][]string      `json:"mutelist"`
 }
 
 // GetAllBlacklistedPubkeys handles the request to return all blacklisted pubkeys organized by source

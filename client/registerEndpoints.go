@@ -26,7 +26,7 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	// relay api endpoints - key management (cached)
 	mux.HandleFunc("/api/v1/relay/keys/whitelist", relay.GetAllWhitelistedPubkeys)
 	mux.HandleFunc("/api/v1/relay/keys/blacklist", relay.GetAllBlacklistedPubkeys)
-	
+
 	// relay api endpoints - key management (live)
 	mux.HandleFunc("/api/v1/relay/keys/whitelist/live", relay.GetAllWhitelistedPubkeysLive)
 	mux.HandleFunc("/api/v1/relay/keys/blacklist/live", relay.GetAllBlacklistedPubkeysLive)

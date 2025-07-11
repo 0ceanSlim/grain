@@ -131,8 +131,8 @@ func ensureCollectionIndexes(collection *mongo.Collection, collectionName string
 	for _, index := range indexes {
 		_, err := collection.Indexes().CreateOne(context.TODO(), index)
 		if err != nil {
-			if !strings.Contains(err.Error(), "IndexKeySpecsConflict") && 
-			   !strings.Contains(err.Error(), "already exists") {
+			if !strings.Contains(err.Error(), "IndexKeySpecsConflict") &&
+				!strings.Contains(err.Error(), "already exists") {
 				log.Mongo().Error("Failed to create index",
 					"collection", collectionName,
 					"key", index.Keys,

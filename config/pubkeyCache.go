@@ -13,14 +13,14 @@ import (
 // PubkeyCache manages cached pubkey lists with source tracking for whitelist and blacklist operations
 type PubkeyCache struct {
 	// Enhanced whitelist data with source tracking
-	whitelistDirectPubkeys   map[string]bool            // Direct config pubkeys
-	whitelistNpubPubkeys     map[string]bool            // Converted npub pubkeys  
-	whitelistDomainPubkeys   map[string]map[string]bool // domain -> pubkeys map
-	whitelistedPubkeys       map[string]bool            // Combined all sources (for fast lookup - backward compatibility)
-	
+	whitelistDirectPubkeys map[string]bool            // Direct config pubkeys
+	whitelistNpubPubkeys   map[string]bool            // Converted npub pubkeys
+	whitelistDomainPubkeys map[string]map[string]bool // domain -> pubkeys map
+	whitelistedPubkeys     map[string]bool            // Combined all sources (for fast lookup - backward compatibility)
+
 	// Blacklist data (unchanged)
-	blacklistedPubkeys       map[string]bool
-	
+	blacklistedPubkeys map[string]bool
+
 	// Mutex and timing (unchanged)
 	mu                       sync.RWMutex
 	lastWhitelistRefresh     time.Time
@@ -79,7 +79,7 @@ func InitializePubkeyCache() {
 // Always caches all sources regardless of enabled state for sync/purge operations
 func (pc *PubkeyCache) RefreshWhitelist() error {
 	start := time.Now()
-	
+
 	// Initialize new source-specific maps
 	newDirectPubkeys := make(map[string]bool)
 	newNpubPubkeys := make(map[string]bool)
@@ -131,7 +131,7 @@ func (pc *PubkeyCache) RefreshWhitelist() error {
 			newDomainPubkeys[domain] = make(map[string]bool)
 			for _, pubkey := range domainPubkeys {
 				newDomainPubkeys[domain][pubkey] = true
-				newAllPubkeys[pubkey] = true  // Keep for validation purposes
+				newAllPubkeys[pubkey] = true // Keep for validation purposes
 				totalDomainCount++
 			}
 
@@ -184,17 +184,17 @@ func (pc *PubkeyCache) GetDirectWhitelistedPubkeys() []string {
 	defer pc.mu.RUnlock()
 
 	result := make([]string, 0, len(pc.whitelistDirectPubkeys)+len(pc.whitelistNpubPubkeys))
-	
+
 	// Add direct pubkeys
 	for pubkey := range pc.whitelistDirectPubkeys {
 		result = append(result, pubkey)
 	}
-	
+
 	// Add npub pubkeys
 	for pubkey := range pc.whitelistNpubPubkeys {
 		result = append(result, pubkey)
 	}
-	
+
 	return result
 }
 

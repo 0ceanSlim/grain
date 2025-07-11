@@ -459,7 +459,7 @@ func extractPubkeysFromMuteListEvent(eventData map[string]interface{}) []string 
 // FetchGroupedMuteListPubkeys fetches mutelist pubkeys grouped by author
 func FetchGroupedMuteListPubkeys(localRelayURL string, muteListAuthors []string) (map[string][]string, error) {
 	result := make(map[string][]string)
-	
+
 	if len(muteListAuthors) == 0 {
 		return result, nil
 	}
@@ -556,7 +556,7 @@ func FetchGroupedMuteListPubkeys(localRelayURL string, muteListAuthors []string)
 				pubkeys := extractPubkeysFromMuteListEvent(eventData)
 				if len(pubkeys) > 0 {
 					result[authorPubkey] = pubkeys
-					log.Config().Debug("Extracted pubkeys from mutelist event", 
+					log.Config().Debug("Extracted pubkeys from mutelist event",
 						"author", authorPubkey,
 						"count", len(pubkeys))
 				}

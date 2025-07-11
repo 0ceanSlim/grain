@@ -11,11 +11,11 @@ import (
 
 // ServerConfigResponse represents the server configuration response
 type ServerConfigResponse struct {
-	ReadTimeout               int    `json:"read_timeout"`
-	WriteTimeout              int    `json:"write_timeout"`
-	IdleTimeout               int    `json:"idle_timeout"`
-	MaxSubscriptionsPerClient int    `json:"max_subscriptions_per_client"`
-	ImplicitReqLimit          int    `json:"implicit_req_limit"`
+	ReadTimeout               int `json:"read_timeout"`
+	WriteTimeout              int `json:"write_timeout"`
+	IdleTimeout               int `json:"idle_timeout"`
+	MaxSubscriptionsPerClient int `json:"max_subscriptions_per_client"`
+	ImplicitReqLimit          int `json:"implicit_req_limit"`
 }
 
 // GetServerConfig handles the request to return server configuration

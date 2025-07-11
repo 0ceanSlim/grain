@@ -11,8 +11,8 @@ import (
 
 // WhitelistKeysResponse represents the whitelist keys response
 type WhitelistKeysResponse struct {
-	List    []string                    `json:"list"`
-	Domains []WhitelistDomainInfo       `json:"domains"`
+	List    []string              `json:"list"`
+	Domains []WhitelistDomainInfo `json:"domains"`
 }
 
 // WhitelistDomainInfo represents domain information with its pubkeys
@@ -50,7 +50,7 @@ func GetAllWhitelistedPubkeys(w http.ResponseWriter, r *http.Request) {
 	for _, domain := range cfg.DomainWhitelist.Domains {
 		// Get cached domain pubkeys (no live fetching!)
 		domainPubkeys := pubkeyCache.GetDomainPubkeys(domain)
-		
+
 		domainInfos = append(domainInfos, WhitelistDomainInfo{
 			Domain:  domain,
 			Pubkeys: domainPubkeys,
