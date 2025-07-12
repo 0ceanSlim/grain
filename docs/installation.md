@@ -73,40 +73,69 @@ The fastest way to get GRAIN running is using pre-built binaries.
    # Download grain-windows-amd64.zip from the releases page
    ```
 
-### Step 2: Extract and Install
+### Step 2: Extract and Set Up
 
 **Linux/macOS**:
 
 ```bash
-# Extract the archive
-tar -xzf grain-*.tar.gz
-
-# Move to installation directory
-sudo mv grain /usr/local/bin/
-sudo mv www /usr/local/share/grain/
-
-# Make executable
-sudo chmod +x /usr/local/bin/grain
-
-# Create working directory
+# Create installation directory (can be anywhere you prefer)
 mkdir -p ~/grain-relay
 cd ~/grain-relay
 
-# Copy www directory to working directory
-cp -r /usr/local/share/grain/www ./
+# Extract the archive
+tar -xzf ~/Downloads/grain-*.tar.gz --strip-components=1
+
+# Make executable
+chmod +x grain
+
+# Verify structure
+ls -la
+# Should show: grain (executable), www/ (directory)
 ```
 
 **Windows**:
 
-1. Extract `grain-windows-amd64.zip`
-2. Create folder `C:\grain\`
-3. Move `grain.exe` and `www\` folder to `C:\grain\`
-4. Add `C:\grain\` to your PATH environment variable
+1. Create folder where you want GRAIN (e.g., `C:\grain\` or `C:\Users\YourName\grain\`)
+2. Extract `grain-windows-amd64.zip` to that folder
+3. Verify you have `grain.exe` and `www\` folder in the same directory
 
-### Step 3: Verify Installation
+### Step 3: Add to PATH (Optional)
+
+This step allows you to run `grain` from anywhere for CLI commands.
+
+**Linux/macOS**:
 
 ```bash
-# Check version
+# Add to your shell profile (choose one):
+echo 'export PATH="$HOME/grain-relay:$PATH"' >> ~/.bashrc   # Bash
+echo 'export PATH="$HOME/grain-relay:$PATH"' >> ~/.zshrc    # Zsh
+
+# Reload shell
+source ~/.bashrc  # or ~/.zshrc
+
+# Or create a symbolic link
+sudo ln -s ~/grain-relay/grain /usr/local/bin/grain
+```
+
+**Windows**:
+
+1. Open System Properties → Advanced → Environment Variables
+2. Add your GRAIN directory (e.g., `C:\grain\`) to the PATH variable
+3. Or create a batch file in a directory already in PATH:
+
+```batch
+@echo off
+cd /d "C:\grain"
+grain.exe %*
+```
+
+### Step 4: Verify Installation
+
+```bash
+# From the GRAIN directory
+./grain --version
+
+# Or if added to PATH
 grain --version
 
 # Verify www directory structure
@@ -184,41 +213,25 @@ go mod download
 
 # Build binary
 go build -o grain .
-
-# Or use Makefile (if available)
-make build
 ```
 
-### Step 3: Install Built Binary
-
-**Linux/macOS**:
+### Step 3: Set Up Built Binary
 
 ```bash
-# Install binary
-sudo cp grain /usr/local/bin/
-
-# Install www directory
-sudo mkdir -p /usr/local/share/grain
-sudo cp -r www /usr/local/share/grain/
-
-# Create working directory
+# Create your installation directory
 mkdir -p ~/grain-relay
 cd ~/grain-relay
-cp -r www ~/grain-relay/
-```
 
-**Windows**:
+# Copy built binary and www directory
+cp ~/path/to/grain/grain .
+cp -r ~/path/to/grain/www .
 
-```cmd
-# Create installation directory
-mkdir C:\grain
+# Make executable (Linux/macOS)
+chmod +x grain
 
-# Copy files
-copy grain.exe C:\grain\
-xcopy www C:\grain\www\ /E /I
-
-# Add to PATH (requires admin privileges)
-setx PATH "%PATH%;C:\grain" /M
+# Verify structure
+ls -la
+# Should show: grain (executable), www/ (directory)
 ```
 
 ### Build Options
@@ -402,16 +415,18 @@ storage:
 
 Initial configuration and startup process.
 
-### Step 1: Create Working Directory
+### Step 1: Navigate to GRAIN Directory
 
 ```bash
-# Create and enter working directory
-mkdir -p ~/grain-relay
+# Navigate to your GRAIN installation directory
 cd ~/grain-relay
 
-# Ensure www directory is present
-# (copied during installation or available in current directory)
-ls -la www/
+# Or wherever you extracted GRAIN
+# cd /path/to/your/grain/directory
+
+# Verify you have both grain executable and www directory
+ls -la
+# Should show: grain (or grain.exe), www/
 ```
 
 ### Step 2: Start GRAIN
@@ -419,14 +434,17 @@ ls -la www/
 **First run (creates default configs)**:
 
 ```bash
-# Start GRAIN - this will create default configuration files
-grain
-
-# Or if not in PATH
+# Start GRAIN from its directory
 ./grain
+
+# On Windows
+grain.exe
+
+# Or if added to PATH, from any directory
+grain
 ```
 
-**Expected output**:
+**Expected output in debug.log**:
 
 ```
 Server configuration not found, creating from example: config.yml
@@ -477,16 +495,17 @@ Customize GRAIN for your specific needs.
 
 ### Generated Configuration Files
 
-After first run, you'll have:
+After first run, your GRAIN directory will contain:
 
 ```
 ~/grain-relay/
+├── grain                   # Executable (grain.exe on Windows)
+├── www/                    # Web interface files
 ├── config.yml              # Main server configuration
 ├── whitelist.yml           # User and content allowlists
 ├── blacklist.yml           # User and content blocklists
 ├── relay_metadata.json     # Public relay information
-├── debug.log               # Application logs
-└── www/                    # Web interface files
+└── debug.log               # Application logs (created after first run)
 ```
 
 ### Essential Configuration Changes
@@ -563,8 +582,8 @@ Wants=mongod.service
 Type=simple
 User=grain
 Group=grain
-WorkingDirectory=/opt/grain
-ExecStart=/usr/local/bin/grain
+WorkingDirectory=/home/grain/grain-relay
+ExecStart=/home/grain/grain-relay/grain
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -575,7 +594,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/grain
+ReadWritePaths=/home/grain/grain-relay
 
 [Install]
 WantedBy=multi-user.target
@@ -585,15 +604,13 @@ WantedBy=multi-user.target
 
 ```bash
 # Create grain user
-sudo useradd -r -s /bin/false grain
+sudo useradd -r -m -s /bin/false grain
 
-# Create working directory
-sudo mkdir -p /opt/grain
-sudo chown grain:grain /opt/grain
-
-# Copy configuration files to service directory
-sudo cp -r ~/grain-relay/* /opt/grain/
-sudo chown -R grain:grain /opt/grain
+# Set up GRAIN directory for service user
+sudo mkdir -p /home/grain/grain-relay
+sudo cp -r ~/grain-relay/* /home/grain/grain-relay/
+sudo chown -R grain:grain /home/grain/grain-relay
+sudo chmod +x /home/grain/grain-relay/grain
 
 # Enable and start service
 sudo systemctl daemon-reload
@@ -618,7 +635,7 @@ sudo journalctl -u grain -f
     <string>com.grain.relay</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/grain</string>
+        <string>/Users/yourusername/grain-relay/grain</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/yourusername/grain-relay</string>
@@ -655,7 +672,7 @@ Use [NSSM](https://nssm.cc/) (Non-Sucking Service Manager):
 # Download and install NSSM
 # https://nssm.cc/download
 
-# Install GRAIN as service
+# Install GRAIN as service (adjust path to your GRAIN directory)
 nssm install GRAIN "C:\grain\grain.exe"
 nssm set GRAIN AppDirectory "C:\grain"
 nssm set GRAIN AppStdout "C:\grain\grain.log"
@@ -749,7 +766,7 @@ mongosh grain --eval "db.events_1.countDocuments()"
 **Check logs for errors**:
 
 ```bash
-# View recent logs
+# View recent logs (from GRAIN directory)
 tail -f debug.log
 
 # Look for error patterns
@@ -832,7 +849,7 @@ chmod +x grain
 ls -la www/
 
 # 4. For service installation
-sudo chown -R grain:grain /opt/grain
+sudo chown -R grain:grain /home/grain/grain-relay
 ```
 
 ### Configuration File Errors
@@ -887,6 +904,26 @@ server:
   port: "0.0.0.0:8181"  # Listen on all interfaces
 
 # 3. Check reverse proxy configuration (nginx/apache)
+```
+
+### Working Directory Issues
+
+**Problem**: `www directory not found` or similar errors
+
+**Solutions**:
+
+```bash
+# 1. Ensure you're running GRAIN from the correct directory
+cd /path/to/your/grain/directory
+ls -la  # Should show grain executable and www/ directory
+
+# 2. Check if www directory exists and has correct structure
+ls -la www/
+# Should show: static/, style/, views/
+
+# 3. For service installations, verify WorkingDirectory is correct
+sudo systemctl status grain
+# Check WorkingDirectory in service file
 ```
 
 ---
