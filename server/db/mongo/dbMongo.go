@@ -107,7 +107,7 @@ func GetCollection(kind int) *mongo.Collection {
 	return collection
 }
 
-// ensureCollectionIndexes creates indexes for a collection in the background
+// ensureCollectionIndexes creates indexes for a collection with improved error handling
 func ensureCollectionIndexes(collection *mongo.Collection, collectionName string) {
 	indexes := []mongo.IndexModel{
 		{
@@ -131,13 +131,29 @@ func ensureCollectionIndexes(collection *mongo.Collection, collectionName string
 	for _, index := range indexes {
 		_, err := collection.Indexes().CreateOne(context.TODO(), index)
 		if err != nil {
-			if !strings.Contains(err.Error(), "IndexKeySpecsConflict") &&
-				!strings.Contains(err.Error(), "already exists") {
+			// Check for various index conflict errors
+			errStr := strings.ToLower(err.Error())
+			if strings.Contains(errStr, "indexkeyspecsconflict") ||
+				strings.Contains(errStr, "indexoptionsconflict") ||
+				strings.Contains(errStr, "already exists") ||
+				strings.Contains(errStr, "duplicate key error") {
+
+				// Log at debug level since this is expected behavior
+				log.Mongo().Debug("Index already exists with different options, skipping",
+					"collection", collectionName,
+					"index_keys", fmt.Sprintf("%v", index.Keys),
+					"error_type", "index_conflict")
+			} else {
+				// Log unexpected errors at error level
 				log.Mongo().Error("Failed to create index",
 					"collection", collectionName,
-					"key", index.Keys,
+					"index_keys", fmt.Sprintf("%v", index.Keys),
 					"error", err)
 			}
+		} else {
+			log.Mongo().Debug("Index created successfully",
+				"collection", collectionName,
+				"index_keys", fmt.Sprintf("%v", index.Keys))
 		}
 	}
 }

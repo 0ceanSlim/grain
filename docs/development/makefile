@@ -3,17 +3,42 @@
 
 # Configuration
 APP_NAME := grain
-VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 PROJECT_ROOT := ../..
 BUILD_IMAGE := grain-builder
 
+# Version Management
+# 1. Check for VERSION env var first
+# 2. Try to get from git tags
+# 3. Fall back to default
+ifdef VERSION
+    BUILD_VERSION := $(VERSION)
+else
+    GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
+    ifdef GIT_TAG
+        BUILD_VERSION := $(GIT_TAG)
+    else
+        GIT_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null)
+        ifdef GIT_VERSION
+            GIT_COMMITS := $(shell git rev-list $(GIT_VERSION)..HEAD --count 2>/dev/null)
+            ifneq ($(GIT_COMMITS),0)
+                BUILD_VERSION := $(GIT_VERSION)-dev.$(GIT_COMMITS)
+            else
+                BUILD_VERSION := $(GIT_VERSION)
+            endif
+        else
+            BUILD_VERSION := v0.0.0-dev
+        endif
+    endif
+endif
+
 # Colors for output
+RED := \033[0;31m
 GREEN := \033[0;32m
 YELLOW := \033[1;33m
 BLUE := \033[0;34m
 NC := \033[0m
 
-.PHONY: help clean build-image release test info
+.PHONY: help clean build-image release test info version check-docker
 
 # Default target
 all: release
@@ -25,21 +50,38 @@ help: ## Show available targets
 	@echo "Available targets:"
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(GREEN)%-12s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
-	@echo "$(YELLOW)Usage:$(NC)"
-	@echo "  make release VERSION=v1.2.3"
-	@echo "  make test release VERSION=v1.2.3"
+	@echo "$(YELLOW)Version Management:$(NC)"
+	@echo "  make release                    # Auto-detect version from git"
+	@echo "  make release VERSION=v1.2.3    # Use specific version"
+	@echo "  make version                    # Show current version info"
+	@echo ""
+	@echo "$(YELLOW)Current Version: $(BUILD_VERSION)$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Requirements:$(NC)"
 	@echo "  - Docker installed and running"
 	@echo "  - No other dependencies needed"
 
+version: ## Show version information
+	@echo "$(BLUE)Version Information$(NC)"
+	@echo "Build Version: $(BUILD_VERSION)"
+	@echo "Git Tag:       $(shell git describe --tags --exact-match 2>/dev/null || echo 'none')"
+	@echo "Latest Tag:    $(shell git describe --tags --abbrev=0 2>/dev/null || echo 'none')"
+	@echo "Git Commit:    $(shell git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+	@echo "Git Status:    $(shell git status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted changes"
+
 clean: ## Clean build artifacts
 	@echo "$(YELLOW)Cleaning build artifacts...$(NC)"
 	@rm -rf $(PROJECT_ROOT)/build
+	@docker rm -f grain-build-temp 2>/dev/null || true
 	@docker rmi $(BUILD_IMAGE) 2>/dev/null || true
 	@echo "$(GREEN)Clean completed$(NC)"
 
-build-image: ## Build the Docker build image
+check-docker: ## Check if Docker is available
+	@docker --version >/dev/null 2>&1 || (echo "$(RED)Error: Docker not found. Please install Docker.$(NC)" && exit 1)
+	@docker info >/dev/null 2>&1 || (echo "$(RED)Error: Docker daemon not running.$(NC)" && exit 1)
+	@echo "$(GREEN)Docker is ready$(NC)"
+
+build-image: check-docker ## Build the Docker build image
 	@echo "$(YELLOW)Building Docker build image...$(NC)"
 	@cd $(PROJECT_ROOT) && docker build \
 		--no-cache \
@@ -49,41 +91,73 @@ build-image: ## Build the Docker build image
 		.
 	@echo "$(GREEN)Build image ready$(NC)"
 
-test: ## Run tests
+test: check-docker ## Run tests
 	@echo "$(YELLOW)Running tests...$(NC)"
 	@cd $(PROJECT_ROOT)/tests && $(MAKE) test
 	@echo "$(GREEN)Tests completed$(NC)"
 
-release: test build-image ## Build complete release using Docker (runs tests first)
+release: version test build-image ## Build complete release using Docker (runs tests first)
 	@echo "$(BLUE)Starting Docker-based release build$(NC)"
+	@echo "$(YELLOW)Building version: $(BUILD_VERSION)$(NC)"
 	@echo ""
 	@mkdir -p $(PROJECT_ROOT)/build/dist
+	@echo "$(YELLOW)Cleaning up any existing build containers...$(NC)"
+	@docker rm -f grain-build-temp 2>/dev/null || true
 	@echo "$(YELLOW)Running build in container...$(NC)"
 	@docker run --name grain-build-temp \
+		-e VERSION=$(BUILD_VERSION) \
 		$(BUILD_IMAGE)
 	@echo "$(YELLOW)Copying artifacts from container...$(NC)"
 	@docker cp grain-build-temp:/output/dist/. $(PROJECT_ROOT)/build/dist/
 	@docker rm grain-build-temp
 	@echo ""
 	@echo "$(GREEN)Release build completed!$(NC)"
+	@echo "$(YELLOW)Version: $(BUILD_VERSION)$(NC)"
 	@echo ""
 	@echo "$(BLUE)Artifacts in $(PROJECT_ROOT)/build/dist/:$(NC)"
 	@ls -la $(PROJECT_ROOT)/build/dist/ 2>/dev/null || echo "No artifacts found"
 
-# Quick development cycle
-quick: test release ## Quick cycle: test then release
+# Development shortcuts
+dev-release: ## Quick release build for development (skip tests)
+	@echo "$(YELLOW)Development release (skipping tests)$(NC)"
+	@$(MAKE) build-image
+	@mkdir -p $(PROJECT_ROOT)/build/dist
+	@docker rm -f grain-build-temp 2>/dev/null || true
+	@docker run --name grain-build-temp \
+		-e VERSION=$(BUILD_VERSION)-dev \
+		$(BUILD_IMAGE)
+	@docker cp grain-build-temp:/output/dist/. $(PROJECT_ROOT)/build/dist/
+	@docker rm grain-build-temp
+	@echo "$(GREEN)Development build completed$(NC)"
+
+# Tag and release workflow
+tag: ## Create a new version tag (use: make tag VERSION=v1.2.3)
+ifndef VERSION
+	@echo "$(RED)Error: VERSION required. Use: make tag VERSION=v1.2.3$(NC)"
+	@exit 1
+endif
+	@echo "$(YELLOW)Creating tag $(VERSION)$(NC)"
+	@git tag -a $(VERSION) -m "Release $(VERSION)"
+	@echo "$(GREEN)Tag $(VERSION) created. Push with: git push origin $(VERSION)$(NC)"
 
 # Show build information  
 info: ## Show build information
 	@echo "$(BLUE)Build Information$(NC)"
-	@echo "App Name:     $(APP_NAME)"
-	@echo "Version:      $(VERSION)"
-	@echo "Project Root: $(PROJECT_ROOT)"
-	@echo "Build Image:  $(BUILD_IMAGE)"
-	@echo "Docker:       $(shell docker --version 2>/dev/null || echo 'Not installed')"
+	@echo "App Name:      $(APP_NAME)"
+	@echo "Build Version: $(BUILD_VERSION)"
+	@echo "Project Root:  $(PROJECT_ROOT)"
+	@echo "Build Image:   $(BUILD_IMAGE)"
+	@echo "Docker:        $(shell docker --version 2>/dev/null || echo 'Not installed')"
+	@echo "Git Status:    $(shell git status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted changes"
 
-# Verify Docker is available
-check-docker: ## Check if Docker is available
-	@docker --version >/dev/null 2>&1 || (echo "$(RED)Error: Docker not found. Please install Docker.$(NC)" && exit 1)
-	@docker info >/dev/null 2>&1 || (echo "$(RED)Error: Docker daemon not running.$(NC)" && exit 1)
-	@echo "$(GREEN)Docker is ready$(NC)"
+# Workflow helpers
+prepare-release: test ## Prepare for release (run tests, check git status)
+	@echo "$(BLUE)Preparing for release$(NC)"
+	@if [ "$$(git status --porcelain 2>/dev/null | wc -l)" -ne 0 ]; then \
+		echo "$(RED)Error: Working directory has uncommitted changes$(NC)"; \
+		git status --short; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Ready for release$(NC)"
+
+quick: dev-release ## Quick development build (alias for dev-release)

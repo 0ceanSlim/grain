@@ -9,7 +9,8 @@ RUN apk add --no-cache \
     gzip \
     curl \
     bash \
-    ca-certificates
+    ca-certificates \
+    dos2unix
 
 # Set environment variables for cross-compilation
 ENV CGO_ENABLED=0
@@ -19,7 +20,10 @@ WORKDIR /app
 
 # Copy build script first
 COPY docs/development/build-in-docker.sh /usr/local/bin/build-script
-RUN chmod +x /usr/local/bin/build-script
+
+# Fix line endings and make executable
+RUN dos2unix /usr/local/bin/build-script && \
+    chmod +x /usr/local/bin/build-script
 
 # Copy the entire project (excluding items in .dockerignore)
 COPY . .

@@ -41,6 +41,64 @@ Developer documentation for building, testing, and releasing GRAIN.
    air
    ```
 
+## Version Management
+
+GRAIN uses semantic versioning with automatic version detection from Git tags, plus support for development builds.
+
+### Version Detection Logic
+
+The build system automatically determines the version using this priority:
+
+1. **Environment Variable**: `VERSION=v1.2.3 make release`
+2. **Exact Git Tag**: If current commit has a tag (e.g., `v1.2.3`)
+3. **Development Version**: `v1.2.3-dev.5` (5 commits since last tag)
+4. **Fallback**: `v0.0.0-dev` (no tags found)
+
+### Version Commands
+
+```bash
+make version        # Show current version info
+make tag VERSION=v1.3.0  # Create new version tag
+make prepare-release     # Check if workspace is clean for release
+```
+
+### Version Workflow Examples
+
+**Development Builds**:
+
+```bash
+# Auto-detect version from git
+make release
+# Output: v1.2.0-dev.3 (3 commits since v1.2.0 tag)
+```
+
+**Release Builds**:
+
+```bash
+# Create and push a tag
+git tag -a v1.3.0 -m "Release v1.3.0"
+git push origin v1.3.0
+
+# Build the release
+make release
+# Output: v1.3.0 (exact tag match)
+```
+
+**Custom Version**:
+
+```bash
+# Force a specific version
+make release VERSION=v2.0.0-beta.1
+```
+
+### Semantic Versioning
+
+GRAIN follows a relaxed approach to [Semantic Versioning](https://semver.org/) suitable for a hobby project:
+
+- **Major** (`v1.0.0`): Reserved for future stable release (no timeline planned)
+- **Minor** (`v0.5.0`): New features and significant improvements
+- **Patch** (`v0.4.1`): Bug fixes, small improvements, and maintenance
+
 ## Building Releases
 
 ### Docker-based Build System
@@ -67,11 +125,50 @@ This will:
 ### Available Commands
 
 ```bash
-make help      # Show all available commands
-make test      # Run tests only
-make release   # Run tests, then build all platforms
-make clean     # Clean build artifacts
+make help           # Show all available commands
+make version        # Show version information
+make test           # Run tests only
+make release        # Run tests, then build all platforms
+make dev-release    # Quick build without tests
+make quick          # Alias for dev-release
+make clean          # Clean build artifacts and containers
+make prepare-release # Check if workspace is ready for release
 ```
+
+### Build Types
+
+**Full Release Build**:
+
+```bash
+make release
+```
+
+- Runs tests first
+- Builds all platforms
+- Uses proper version detection
+- Creates production artifacts
+
+**Development Build**:
+
+```bash
+make dev-release
+# or
+make quick
+```
+
+- Skips tests for speed
+- Adds `-dev` suffix to version
+- Faster iteration during development
+
+**Clean Build**:
+
+```bash
+make clean release
+```
+
+- Removes all build artifacts
+- Rebuilds Docker image
+- Full clean build
 
 ### Build Artifacts
 
@@ -88,6 +185,29 @@ Each archive contains:
 
 - Binary executable (`grain` or `grain.exe`)
 - Complete `www/` directory with web assets
+
+### Version in Binary
+
+The built binary includes version information accessible via:
+
+```bash
+# Show version
+grain --version
+```
+
+Output:
+
+```
+GRAIN v1.2.0-dev.3
+Go Relay Architecture for Implementing Nostr
+
+Build Information:
+  Version:    v1.2.0-dev.3
+  Build Time: 2024-07-12T14:30:45Z
+  Git Commit: abc1234
+  Go Version: go1.23.0
+  Platform:   linux/amd64
+```
 
 ## Testing
 
@@ -119,14 +239,71 @@ See the [Testing Documentation](../tests/README.md) for:
 
 ## Release Process
 
-The new automated build system simplifies releases:
+### Complete Release Workflow
 
-1. **Build everything**: `make release`
-2. **Test binaries**: Extract and test key platforms from `build/dist/`
-3. **Create GitHub release**: Manually create release on GitHub
-4. **Upload artifacts**: Drag and drop all files from `build/dist/`
-5. **Write release notes**: Document changes and features manually
-6. **Publish**: When ready
+#### 1. Development Phase
+
+```bash
+# Work on features
+git commit -m "Add new feature"
+
+# Build and test during development
+make dev-release
+# Version: v1.2.0-dev.3
+```
+
+#### 2. Pre-release Testing
+
+```bash
+# Create pre-release tag
+make tag VERSION=v1.3.0-beta.1
+git push origin v1.3.0-beta.1
+
+# Build pre-release
+make release
+# Version: v1.3.0-beta.1
+```
+
+#### 3. Release Preparation
+
+```bash
+# Ensure clean workspace
+make prepare-release
+
+# Final full build and test
+make release
+```
+
+#### 4. Create Release
+
+```bash
+# Create release tag
+make tag VERSION=v1.3.0
+git push origin v1.3.0
+
+# Build final release
+make release
+# Version: v1.3.0
+```
+
+#### 5. Publish Release
+
+1. **Test binaries**: Extract and test key platforms from `build/dist/`
+2. **Create GitHub release**: Manually create release on GitHub
+3. **Upload artifacts**: Drag and drop all files from `build/dist/`
+4. **Write release notes**: Document changes and features
+5. **Publish**: When ready
+
+### Release Checklist
+
+- [ ] All tests passing (`make test`)
+- [ ] Clean workspace (`make prepare-release`)
+- [ ] Version tag created and pushed
+- [ ] Release build successful (`make release`)
+- [ ] Artifacts tested on target platforms
+- [ ] GitHub release created with artifacts
+- [ ] Release notes written
+- [ ] Release published
 
 ### Benefits of Docker Build System
 
@@ -134,7 +311,8 @@ The new automated build system simplifies releases:
 ✅ **Consistent Environment** - Same Go version, same tools everywhere  
 ✅ **No Local Dependencies** - Only Docker required  
 ✅ **Reproducible Builds** - Same container = same results  
-✅ **Easy CI/CD** - Same process for local and automated builds
+✅ **Easy CI/CD** - Same process for local and automated builds  
+✅ **Automatic Versioning** - Smart version detection from Git
 
 ## Code Standards
 
@@ -166,8 +344,11 @@ log.Printf("Event %s processed", evt.ID)
 # View live logs with pretty printing
 tail -f debug.log
 
-# Monitor MongoDB operations (if running locally)
-mongosh --eval "db.setLogLevel(2)"
+# Check current version info
+make version
+
+# Quick development builds
+make quick
 ```
 
 ### Common Issues
@@ -177,6 +358,31 @@ mongosh --eval "db.setLogLevel(2)"
 - **WebSocket errors** - Verify client compatibility and message format
 - **Configuration syntax** - YAML parsing errors and validation
 - **Rate limiting** - Client requests exceeding configured limits
+- **Version not detected** - Check git status and tags (`git tag --list`)
+- **Build container conflicts** - Use `make clean` to reset
+
+### Troubleshooting Version Issues
+
+**Version Not Detected**:
+
+```bash
+# Check git status
+git status
+git tag --list
+
+# Create initial tag if none exist
+git tag -a v0.1.0 -m "Initial version"
+```
+
+**Wrong Version Detected**:
+
+```bash
+# Force specific version
+make release VERSION=v1.2.3
+
+# Or check git tag issues
+git describe --tags --abbrev=0
+```
 
 ## Contributing
 
@@ -197,6 +403,15 @@ mongosh --eval "db.setLogLevel(2)"
 - **Documentation** - Is the code well-documented?
 - **Tests** - Are there appropriate tests?
 - **Build** - Does `make release` complete successfully?
+- **Versioning** - Are version tags appropriate for the changes?
+
+### Release Guidelines
+
+- **Always tag releases**: Use `git tag` for proper version detection
+- **Clean releases**: Use `make prepare-release` to check workspace
+- **Test before tagging**: Run `make release` to verify build works
+- **Consistent naming**: Use `v` prefix for tags (`v1.2.3`, not `1.2.3`)
+- **Development builds**: Use `make quick` for faster iteration
 
 ## Resources
 
@@ -204,5 +419,6 @@ mongosh --eval "db.setLogLevel(2)"
 - **MongoDB Docs** - [MongoDB Manual](https://www.mongodb.com/docs/manual/)
 - **Go Documentation** - [Go Language Docs](https://golang.org/doc/)
 - **Docker Documentation** - [Docker Docs](https://docs.docker.com/)
+- **Semantic Versioning** - [SemVer Specification](https://semver.org/)
 - **GRAIN Repository** - [GitHub](https://github.com/0ceanslim/grain)
 - **Issue Tracker** - [GitHub Issues](https://github.com/0ceanslim/grain/issues)
