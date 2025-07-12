@@ -8,54 +8,99 @@
 
 ## Go Relay Architecture for Implementing Nostr
 
-GRAIN is a nostr relay designed for operators who need fine-grained control over their relay's behavior.
+GRAIN is a comprehensive Nostr solution that serves primarily as a powerful relay for operators who need fine-grained control, while also providing a complete Go client library for developers building Nostr applications.
 
 ## What is Nostr?
 
 Nostr is a simple, open protocol for creating censorship-resistant social networks. Users publish signed events (posts, profiles, reactions) to relays, which store and distribute them. Unlike centralized platforms, users control their identity through cryptographic keys and can freely move between relays.
 
-GRAIN acts as one of these relays - storing events, serving them to clients, and ensuring your relay operates according to your policies.
+GRAIN acts as one of these relays - storing events, serving them to clients, and ensuring your relay operates according to your policies. It also provides the building blocks for creating your own Nostr clients.
 
 ## Why GRAIN?
 
-### **Intelligent Content Control**
+### **Powerful Relay Engine**
+
+#### **Intelligent Content Control**
 
 - Real-time blacklist/whitelist filtering with automatic caching
 - Word-based content filtering that escalates temporary bans to permanent ones
 - Import blacklists from Nostr mute lists (kind 10000 events)
 - Domain-based whitelisting by fetching pubkeys from `.well-known/nostr.json`
 
-### **Intelligent Management**
+#### **Intelligent Management**
 
 - Hot configuration reloading - change settings without restarting
 - Comprehensive structured logging with automatic rotation
 - Memory-aware connection management prevents resource exhaustion
 - Multi-layer rate limiting (connections, events, queries) with per-kind controls
 
-### **Event Management**
+#### **Event Management**
 
 - Supports all Nostr event categories: regular, replaceable, addressable, ephemeral & deletion events
 - Automatic event deletion handling (kind 5 events) with proper cascade cleanup
 - Intelligent event purging with category-based retention policies
 - MongoDB storage optimized for Nostr's event structure
 
-### **Performance Focused**
+#### **Performance Focused**
 
 - Unified cross-collection database queries for efficient event retrieval
 - Per-kind MongoDB collections with automatic indexing
 - Configurable event size limits to prevent abuse
 - Connection pooling and timeout management
 
-## Web Interface
+### **Complete Go Client Library**
 
-GRAIN includes a basic web interface accessible at `http://your-relay-domain:port`:
+GRAIN now includes a full-featured Nostr client library that developers can use to build their own applications:
 
-- NIP-11 relay metadata served at the root with proper CORS headers for client discovery
-- User login system that displays basic profile information for users who exist on the relay
-- Simple API endpoints for checking lists and relay status
-- Static file serving including favicon and basic assets
+#### **Core Client Features**
 
-The frontend is currently minimal but functional. Future development will expand this into a reference Nostr client implementation with comprehensive relay metrics and management APIs.
+- **Connection pooling** with automatic relay management
+- **Event publishing** with multi-relay broadcasting and result aggregation
+- **Subscription management** with filter support and relay hints
+- **Event signing** with private key support and extensible signer interface
+- **Session management** with user authentication and session persistence
+
+#### **Production-Ready Components**
+
+- **Structured logging** integration matching relay standards
+- **Error handling** with proper context and type safety
+- **Concurrent operations** with proper synchronization
+- **Memory management** with buffered channels and cleanup routines
+
+#### **Developer Experience**
+
+- **Standard library first** - minimal dependencies
+- **Clear documentation** with examples and best practices
+- **Go modules support** for easy integration
+- **Consistent API** following Go conventions
+
+## Web Interface & Reference Implementation
+
+GRAIN includes a modern web interface that serves as both a relay dashboard and reference client implementation:
+
+### **Relay Dashboard**
+
+- **Real-time monitoring** of relay status, connections, and event flow
+- **Configuration management** with hot-reload support for all settings
+- **User management** with whitelist/blacklist administration
+- **Visual analytics** showing relay performance and usage patterns
+
+### **Reference Client**
+
+The web interface showcases the client library capabilities with:
+
+- **User authentication** supporting multiple signing methods
+- **Event publishing** with multi-relay support and status tracking
+- **Profile management** with metadata caching and display
+- **Session handling** demonstrating secure user flows
+
+This reference implementation serves as both a functional interface and documentation for developers using the client library.
+
+### **API Endpoints**
+
+- **RESTful APIs** for client integration and relay management
+- **NIP-11 compliance** for relay discovery and metadata
+- **Progressive Web App** features for mobile-friendly usage
 
 ## 🌾 Wheat Relay Status
 
@@ -123,6 +168,52 @@ Configuration files are automatically created from embedded examples on first ru
 
 **📖 For detailed configuration options and examples, see [Configuration Documentation](docs/configuration.md)**
 
+## Using GRAIN as a Go Library
+
+GRAIN can be imported as a Go module for building Nostr clients:
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/0ceanslim/grain/client/core"
+    nostr "github.com/0ceanslim/grain/server/types"
+)
+
+func main() {
+    // Create client with default configuration
+    client := core.NewClient(nil)
+
+    // Connect to relays
+    relays := []string{"wss://relay.damus.io", "wss://nos.lol"}
+    if err := client.ConnectToRelays(relays); err != nil {
+        panic(err)
+    }
+
+    // Create and sign an event
+    signer, _ := core.NewEventSigner("your-private-key-hex")
+    event := signer.CreateEvent(1, "Hello Nostr!", nil)
+
+    // Broadcast to all connected relays
+    results := client.BroadcastEvent(event, nil)
+    fmt.Printf("Broadcast results: %+v\n", results)
+
+    // Subscribe to events
+    filters := []nostr.Filter{{Kinds: []int{1}, Limit: 10}}
+    sub, _ := client.Subscribe(filters, nil)
+
+    // Handle incoming events
+    go func() {
+        for event := range sub.Events {
+            fmt.Printf("Received event: %s\n", event.Content)
+        }
+    }()
+}
+```
+
+> **Note**: A comprehensive Client Library Guide with complete examples and documentation will be available soon after all client methods are fully implemented.
+
 ## License
 
 This project is Open Source and licensed under the MIT License. See the [LICENSE](license) file for details.
@@ -136,10 +227,13 @@ I welcome contributions, bug reports, and feature requests via GitHub.
 
 ### Development Resources
 
-- **🔧 Development Guide** - _[Development Documentation](docs/development/)_
+- **🔧 Development Guide** - _[Development Documentation](docs/development/readme.md)_
 - **🧪 Testing Guide** - _[Testing Documentation](tests/readme.md)_
+- **📚 API Documentation** - _[API Documentation](docs/api.md)_
 
-## These guides cover setting up your development environment, code standards, testing procedures, and contribution workflows.
+These guides cover setting up your development environment, code standards, testing procedures, client library usage, and contribution workflows.
+
+---
 
 made with 💦 by [OceanSlim](https://njump.me/npub1zmc6qyqdfnllhnzzxr5wpepfpnzcf8q6m3jdveflmgruqvd3qa9sjv7f60)
 
