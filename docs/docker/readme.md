@@ -1,8 +1,71 @@
 # GRAIN Docker Setup
 
-Run GRAIN relay with Docker using the latest stable release binaries.
+Run GRAIN relay with Docker using either the latest stable release or pre-release binaries.
+
+## Table of Contents
+
+1. [Quick Start](#quick-start)
+
+- [Option 1: Stable Release (Recommended)](#option-1-stable-release-recommended)
+- [Option 2: Pre-release Version (Testing/Development)](#option-2-pre-release-version-testingdevelopment)
+
+2. [Manual Docker Build Commands](#manual-docker-build-commands)
+
+- [Stable Release](#stable-release)
+- [Pre-release Version](#pre-release-version)
+
+3. [Docker Compose Configuration](#docker-compose-configuration)
+
+- [Default docker-compose.yml (Stable)](#default-docker-composeyml-stable)
+- [Pre-release docker-compose.yml](#pre-release-docker-composeyml)
+
+4. [Check Status](#check-status)
+5. [Version Information](#version-information)
+
+- [Stable Release](#stable-release-1)
+- [Pre-release Version](#pre-release-version-1)
+
+6. [Switching Between Versions](#switching-between-versions)
+
+- [From Stable to Pre-release](#from-stable-to-pre-release)
+- [From Pre-release to Stable](#from-pre-release-to-stable)
+
+7. [How It Works](#how-it-works)
+8. [Release Architecture Support](#release-architecture-support)
+9. [Configuration](#configuration)
+
+- [Method 1: Direct Config File Editing (Recommended)](#method-1-direct-config-file-editing-recommended)
+- [Method 2: Environment Variables (Limited Options)](#method-2-environment-variables-limited-options)
+- [Method 3: Edit Inside Container](#method-3-edit-inside-container)
+
+10. [Viewing Logs](#viewing-logs)
+
+- [1. Container Startup Logs (Minimal)](#1-container-startup-logs-minimal)
+- [2. Application Debug Logs (Everything Else)](#2-application-debug-logs-everything-else)
+- [Log Configuration](#log-configuration)
+- [Accessing Log Files](#accessing-log-files)
+
+11. [Health Monitoring](#health-monitoring)
+12. [Management Commands](#management-commands)
+
+- [Basic Operations](#basic-operations)
+- [Updates and Maintenance](#updates-and-maintenance)
+- [Database Operations](#database-operations)
+- [Troubleshooting](#troubleshooting)
+
+13. [Security Considerations](#security-considerations)
+14. [Troubleshooting](#troubleshooting-1)
+
+- [Common Issues](#common-issues)
+- [Architecture issues](#architecture-issues)
+- [Config changes not taking effect](#config-changes-not-taking-effect)
+- [Can't connect to relay](#cant-connect-to-relay)
+- [Pre-release not found](#pre-release-not-found)
+- [Need to see what's happening](#need-to-see-whats-happening)
 
 ## Quick Start
+
+### Option 1: Stable Release (Recommended)
 
 1. **Create project directory:**
 
@@ -25,6 +88,170 @@ curl -O https://raw.githubusercontent.com/0ceanslim/grain/main/docs/docker/docke
 docker compose up -d
 ```
 
+### Option 2: Pre-release Version (Testing/Development)
+
+1. **Create project directory:**
+
+```bash
+mkdir grain-docker
+cd grain-docker
+```
+
+2. **Download files:**
+
+```bash
+# Download both Dockerfiles and docker-compose.yml
+curl -O https://raw.githubusercontent.com/0ceanslim/grain/main/docs/docker/Dockerfile
+curl -O https://raw.githubusercontent.com/0ceanslim/grain/main/docs/docker/Dockerfile-prerelease
+curl -O https://raw.githubusercontent.com/0ceanslim/grain/main/docs/docker/docker-compose.yml
+```
+
+3. **Start relay with pre-release:**
+
+```bash
+# Build and start using pre-release Dockerfile
+docker compose -f docker-compose.yml up -d --build grain-prerelease
+```
+
+**OR** modify your `docker-compose.yml` to use the pre-release Dockerfile:
+
+```yaml
+services:
+  grain:
+    build:
+      context: .
+      dockerfile: Dockerfile-prerelease
+    # ... rest of your config
+```
+
+Then run normally:
+
+```bash
+docker compose up -d
+```
+
+## Manual Docker Build Commands
+
+If you prefer to build manually instead of using docker-compose:
+
+### Stable Release
+
+```bash
+# Build stable version
+docker build -t grain:stable .
+
+# Run stable version
+docker run -d -p 8181:8181 --name grain-relay grain:stable
+```
+
+### Pre-release Version
+
+```bash
+# Build pre-release version
+docker build -f Dockerfile-prerelease -t grain:prerelease .
+
+# Run pre-release version
+docker run -d -p 8181:8181 --name grain-relay grain:prerelease
+```
+
+## Docker Compose Configuration
+
+### Default docker-compose.yml (Stable)
+
+```yaml
+version: "3.8"
+
+services:
+  grain:
+    build:
+      context: .
+      dockerfile: Dockerfile # Uses stable release
+    ports:
+      - "8181:8181"
+    environment:
+      - GRAIN_ENV=production
+      - MONGO_URI=mongodb://mongo:27017/grain
+      - LOG_LEVEL=info
+      - SERVER_PORT=8181
+    depends_on:
+      - mongo
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8181/",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+```
+
+### Pre-release docker-compose.yml
+
+```yaml
+version: "3.8"
+
+services:
+  grain:
+    build:
+      context: .
+      dockerfile: Dockerfile-prerelease # Uses pre-release
+    ports:
+      - "8181:8181"
+    environment:
+      - GRAIN_ENV=development # Note: development environment
+      - MONGO_URI=mongodb://mongo:27017/grain
+      - LOG_LEVEL=debug # More verbose logging for testing
+      - SERVER_PORT=8181
+    depends_on:
+      - mongo
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8181/",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+```
+
+## Check Status
+
 4. **Check status:**
 
 ```bash
@@ -37,19 +264,65 @@ Your relay is now running at:
 - WebSocket: `ws://localhost:8181`
 - Web: `http://localhost:8181`
 
+## Version Information
+
+### Stable Release
+
+- **Source**: Uses `releases/latest` from GitHub API
+- **Stability**: Production-ready, thoroughly tested
+- **Update frequency**: Major/minor releases
+- **Recommended for**: Production deployments
+
+### Pre-release Version
+
+- **Source**: Uses latest tagged pre-release from GitHub API
+- **Stability**: Testing/development, may contain bugs
+- **Update frequency**: Release candidates, beta versions
+- **Recommended for**: Testing new features, development
+- **Fallback**: Automatically falls back to stable if no pre-release exists
+
+## Switching Between Versions
+
+### From Stable to Pre-release
+
+```bash
+# Stop current container
+docker compose down
+
+# Build and start with pre-release
+docker build -f Dockerfile-prerelease -t grain:prerelease .
+docker run -d -p 8181:8181 --name grain-relay grain:prerelease
+```
+
+### From Pre-release to Stable
+
+```bash
+# Stop current container
+docker compose down
+
+# Build and start with stable
+docker build -f Dockerfile -t grain:stable .
+docker run -d -p 8181:8181 --name grain-relay grain:stable
+```
+
 ## How It Works
 
-The Dockerfile:
+Both Dockerfiles:
 
-- Automatically detects your system architecture (amd64/arm64)
-- Downloads the latest pre-built release binary from GitHub releases
-- Extracts the binary and www assets into a minimal Alpine Linux container
-- Creates a secure non-root user environment
+- Automatically detect your system architecture (amd64/arm64)
+- Download the appropriate release binary from GitHub releases
+- Extract the binary and www assets into a minimal Alpine Linux container
+- Create a secure non-root user environment
 - GRAIN automatically creates configuration files from embedded examples on first startup
+
+**Key Differences:**
+
+- **Dockerfile**: Downloads from `/releases/latest` (stable releases only)
+- **Dockerfile-prerelease**: Downloads from `/releases` and filters for `prerelease: true`
 
 ## Release Architecture Support
 
-The Docker build automatically selects the correct binary based on your host architecture:
+Both Docker builds automatically select the correct binary based on your host architecture:
 
 - **x86_64 systems** → Downloads `grain-linux-amd64.tar.gz`
 - **ARM64 systems** → Downloads `grain-linux-arm64.tar.gz`
@@ -102,9 +375,9 @@ services:
   grain:
     # ... other settings ...
     environment:
-      - GRAIN_ENV=production # Environment name
+      - GRAIN_ENV=production # Environment name (use 'development' for pre-release)
       - MONGO_URI=mongodb://mongo:27017/grain # MongoDB connection
-      - LOG_LEVEL=info # Log level: debug, info, warn, error
+      - LOG_LEVEL=info # Log level: debug, info, warn, error (use 'debug' for pre-release)
       - SERVER_PORT=8181 # Server port number
 ```
 
@@ -240,9 +513,14 @@ docker compose ps
 ### Updates and Maintenance
 
 ```bash
-# Update to latest release
+# Update to latest stable release
 docker compose down
 docker compose build --no-cache
+docker compose up -d
+
+# Update to latest pre-release
+docker compose down
+docker build -f Dockerfile-prerelease --no-cache -t grain:prerelease .
 docker compose up -d
 
 # View build logs
@@ -280,8 +558,11 @@ docker exec -it grain-relay sh
 # Check file permissions
 docker exec grain-relay ls -la /app/
 
-# Check release download and extraction
+# Check release download and extraction (stable)
 docker compose logs grain | grep -i "download\|extract\|version"
+
+# Check pre-release download (when using Dockerfile-prerelease)
+docker logs grain-relay | grep -i "pre-release\|download\|extract\|version"
 
 # Reset configs to defaults (removes and recreates from embedded)
 docker exec grain-relay rm config.yml relay_metadata.json whitelist.yml blacklist.yml
@@ -349,6 +630,16 @@ sudo ufw status
 docker exec grain-relay tail -100 /app/debug.log
 ```
 
+**Pre-release not found:**
+
+```bash
+# Check if pre-releases exist
+curl -s https://api.github.com/repos/0ceanslim/grain/releases | jq '.[] | select(.prerelease == true) | .tag_name'
+
+# Check build logs for fallback to stable
+docker logs grain-relay | grep -i "no pre-release found"
+```
+
 **Need to see what's happening:**
 
 Remember: `docker compose logs` only shows startup messages. For actual application activity:
@@ -358,4 +649,4 @@ Remember: `docker compose logs` only shows startup messages. For actual applicat
 docker exec grain-relay tail -f /app/debug.log
 ```
 
-The build process automatically downloads and extracts the latest stable release binary with all assets!
+The build process automatically downloads and extracts the appropriate release binary with all assets based on your chosen Dockerfile!
