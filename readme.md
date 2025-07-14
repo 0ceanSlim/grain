@@ -103,20 +103,20 @@ This reference implementation serves as both a functional interface and document
 - **Progressive Web App** features for mobile-friendly usage
 
 ## 🌾 Wheat Relay Status
-
-[![Status](https://img.shields.io/endpoint?url=https://0ceanslim.github.io/grain/api/status-badge.json)](https://0ceanslim.github.io/grain/)
-[![Uptime 24h](https://img.shields.io/endpoint?url=https://0ceanslim.github.io/grain/api/24h-uptime-badge.json)](https://0ceanslim.github.io/grain/)
-[![Uptime 90d](https://img.shields.io/endpoint?url=https://0ceanslim.github.io/grain/api/90d-uptime-badge.json)](https://0ceanslim.github.io/grain/)
+[![Wheat Status](https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2F0ceanSlim%2Fupptime%2FHEAD%2Fhistory%2Fwheat.yml&query=%24.status&label=Status&logo=statuspage)](https://0ceanSlim.github.io/upptime/history/wheat)
+[![24h Uptime](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F0ceanSlim%2Fupptime%2FHEAD%2Fapi%2Fwheat%2Fuptime-day.json)](https://0ceanSlim.github.io/upptime/history/wheat)
+[![Overall Uptime](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F0ceanSlim%2Fupptime%2FHEAD%2Fapi%2Fwheat%2Fuptime.json)](https://0ceanSlim.github.io/upptime/history/wheat)
+[![Response Time](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F0ceanSlim%2Fupptime%2FHEAD%2Fapi%2Fwheat%2Fresponse-time.json)](https://0ceanSlim.github.io/upptime/history/wheat)
 
 **Development Relay**: `wss://wheat.happytavern.co`
 
-[📊 **View Detailed Status & Historical Data**](https://0ceanslim.github.io/grain/)
+[📊 **View Detailed Status & Historical Data**](https://0ceanSlim.github.io/upptime/history/wheat)
 
 My development relay **wheat.happytavern.co** serves as the testing and demo environment for Grain. This relay helps me validate new features, test performance optimizations, and provide a platform for developers to experiment with grain. This relay routinely runs unreleased versions of grain and may contain bugs.
 
 Wheat is a public nostr relay that anyone can write to and read from. Wheat will delete events from non whitelisted users periodically. You can add your npub to the whitelist by paying for a [Happy Tavern NIP05](https://happytavern.co/nostr-verified).
 
-_Status monitoring powered by GitHub Actions with 5-minute check intervals_
+*Status monitoring powered by [Upptime](https://github.com/upptime/upptime)*
 
 ## Installation
 
