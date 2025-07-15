@@ -91,10 +91,23 @@ build-image: check-docker ## Build the Docker build image
 		.
 	@echo "$(GREEN)Build image ready$(NC)"
 
-test: check-docker ## Run tests
-	@echo "$(YELLOW)Running tests...$(NC)"
+test: check-docker ## Run all tests (integration + code review)
+	@echo "$(YELLOW)Running all tests...$(NC)"
+	@echo "$(BLUE)1/2: Running integration tests...$(NC)"
+	@cd $(PROJECT_ROOT)/tests && $(MAKE) test-start test-run test-stop
+	@echo "$(BLUE)2/2: Running code review tests...$(NC)"
+	@cd $(PROJECT_ROOT)/tests && $(MAKE) test-review
+	@echo "$(GREEN)All tests completed$(NC)"
+
+test-integration: check-docker ## Run integration tests only
+	@echo "$(YELLOW)Running integration tests...$(NC)"
 	@cd $(PROJECT_ROOT)/tests && $(MAKE) test
-	@echo "$(GREEN)Tests completed$(NC)"
+	@echo "$(GREEN)Integration tests completed$(NC)"
+
+test-review: ## Run code review tests only
+	@echo "$(YELLOW)Running code review tests...$(NC)"
+	@cd $(PROJECT_ROOT)/tests && $(MAKE) test-review
+	@echo "$(GREEN)Code review tests completed$(NC)"
 
 release: version test build-image ## Build complete release using Docker (runs tests first)
 	@echo "$(BLUE)Starting Docker-based release build$(NC)"
