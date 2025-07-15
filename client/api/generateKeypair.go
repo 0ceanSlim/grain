@@ -17,7 +17,7 @@ type GenerateKeypairResponse struct {
 
 // GenerateKeypairHandler generates a new random Nostr key pair
 func GenerateKeypairHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}

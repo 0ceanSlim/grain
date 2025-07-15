@@ -24,20 +24,13 @@ type NpubToPubkeyResponse struct {
 
 // ConvertNpubHandler converts npub to hex pubkey format
 func ConvertNpubHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req NpubToPubkeyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.ClientAPI().Error("Failed to parse npub convert request", "error", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Validate input
-	npub := strings.TrimSpace(req.Npub)
+	// Get npub from query parameter
+	npub := strings.TrimSpace(r.URL.Query().Get("npub"))
 	if npub == "" {
 		response := NpubToPubkeyResponse{
 			Success: false,

@@ -206,26 +206,32 @@ Generates a new random Nostr keypair.
 
 ```json
 {
-  "privateKey": "nsec1...",
-  "publicKey": "npub1..."
+  "success": true,
+  "keypair": {
+    "private_key": "ee5e36081fe74482ce9085a8e97ee020d6d20a0d1fddc0dd986c5629883b111a",
+    "public_key": "68027a7931229f043fed19028462df6279fcaf099d33cb75edaf2c5d698b23ad",
+    "nsec": "nsec1ae0rvzqluazg9n5ssk5wjlhqyrtdyzsdrlwuphvcd3tznzpmzydqzxfym7",
+    "npub": "npub1dqp857f3y20sg0ldrypggcklvfuletcfn5euka0d4uk966vtywksrs7n24"
+  }
 }
 ```
 
 #### Convert Public Key to npub
 
 ```http
-POST /api/v1/convert/pubkey
-Content-Type: application/json
-
-{
-  "pubkey": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
-}
+GET /api/v1/convert/pubkey?pubkey=3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d
 ```
+
+**Parameters:**
+
+- `pubkey` (required) - Hex-encoded public key
 
 **Response:**
 
 ```json
 {
+  "success": true,
+  "pubkey": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
   "npub": "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6"
 }
 ```
@@ -233,18 +239,19 @@ Content-Type: application/json
 #### Convert npub to Public Key
 
 ```http
-POST /api/v1/convert/npub
-Content-Type: application/json
-
-{
-  "npub": "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6"
-}
+GET /api/v1/convert/npub?npub=npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6
 ```
+
+**Parameters:**
+
+- `npub` (required) - Bech32-encoded public key (npub format)
 
 **Response:**
 
 ```json
 {
+  "success": true,
+  "npub": "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
   "pubkey": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
 }
 ```
@@ -252,38 +259,51 @@ Content-Type: application/json
 #### Validate Public Key
 
 ```http
-POST /api/v1/validate/pubkey
-Content-Type: application/json
-
-{
-  "pubkey": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
-}
+GET /api/v1/validate/pubkey?pubkey=3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d
 ```
+
+**Parameters:**
+
+- `pubkey` (required) - Hex-encoded public key to validate
 
 **Response:**
 
 ```json
 {
-  "valid": true
+  "success": true,
+  "pubkey": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d",
+  "valid": true,
+  "npub": "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6"
 }
 ```
 
 #### Validate npub
 
 ```http
-POST /api/v1/validate/npub
-Content-Type: application/json
-
-{
-  "npub": "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6"
-}
+GET /api/v1/validate/npub?npub=npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6
 ```
+
+**Parameters:**
+
+- `npub` (required) - Bech32-encoded public key (npub format) to validate
 
 **Response:**
 
 ```json
 {
-  "valid": true
+  "success": true,
+  "npub": "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6",
+  "valid": true,
+  "pubkey": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
+}
+```
+
+**Error Response (for all endpoints):**
+
+```json
+{
+  "success": false,
+  "error": "Error message"
 }
 ```
 

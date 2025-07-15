@@ -25,20 +25,13 @@ type ValidatePubkeyResponse struct {
 
 // ValidatePubkeyHandler validates hex pubkey format and provides npub conversion
 func ValidatePubkeyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req ValidatePubkeyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.ClientAPI().Error("Failed to parse pubkey validate request", "error", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Validate input
-	pubkey := strings.TrimSpace(req.Pubkey)
+	// Get pubkey from query parameter
+	pubkey := strings.TrimSpace(r.URL.Query().Get("pubkey"))
 	if pubkey == "" {
 		response := ValidatePubkeyResponse{
 			Success: false,

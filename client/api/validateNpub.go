@@ -25,20 +25,13 @@ type ValidateNpubResponse struct {
 
 // ValidateNpubHandler validates npub format and provides pubkey conversion
 func ValidateNpubHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req ValidateNpubRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.ClientAPI().Error("Failed to parse npub validate request", "error", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Validate input
-	npub := strings.TrimSpace(req.Npub)
+	// Get npub from query parameter
+	npub := strings.TrimSpace(r.URL.Query().Get("npub"))
 	if npub == "" {
 		response := ValidateNpubResponse{
 			Success: false,
