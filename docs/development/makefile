@@ -31,12 +31,22 @@ else
     endif
 endif
 
-# Colors for output
-RED := \033[0;31m
-GREEN := \033[0;32m
-YELLOW := \033[1;33m
-BLUE := \033[0;34m
-NC := \033[0m
+# Colors for output (Windows compatible)
+ifeq ($(OS),Windows_NT)
+    # Windows - no colors, use echo
+    RED := 
+    GREEN := 
+    YELLOW := 
+    BLUE := 
+    NC := 
+else
+    # Unix/Linux/macOS - use colors
+    RED := \033[0;31m
+    GREEN := \033[0;32m
+    YELLOW := \033[1;33m
+    BLUE := \033[0;34m
+    NC := \033[0m
+endif
 
 .PHONY: help clean build-image release test info version check-docker
 
@@ -44,20 +54,38 @@ NC := \033[0m
 all: release
 
 help: ## Show available targets
-	@echo "$(BLUE)GRAIN Docker Build System$(NC)"
+	@echo "GRAIN Docker Build System"
 	@echo "Platform-independent builds using Docker"
 	@echo ""
 	@echo "Available targets:"
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(GREEN)%-12s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@echo "  help             Show this help message"
+	@echo "  version          Show version information"
+	@echo "  clean            Clean build artifacts"
+	@echo "  check-docker     Check if Docker is available"
+	@echo "  build-image      Build the Docker build image"
+	@echo "  test             Run all tests (integration + code review)"
+	@echo "  test-integration Run integration tests only"
+	@echo "  test-review      Run code review tests only"
+	@echo "  release          Build complete release using Docker"
+	@echo "  dev-release      Quick release build for development"
+	@echo "  tag              Create a new version tag"
+	@echo "  info             Show build information"
+	@echo "  prepare-release  Prepare for release (run tests, check git)"
+	@echo "  quick            Quick development build (alias for dev-release)"
 	@echo ""
-	@echo "$(YELLOW)Version Management:$(NC)"
+	@echo "Testing Options:"
+	@echo "  make test                       # Run all tests (integration + review)"
+	@echo "  make test-integration           # Run integration tests only"
+	@echo "  make test-review                # Run code review tests only"
+	@echo ""
+	@echo "Version Management:"
 	@echo "  make release                    # Auto-detect version from git"
 	@echo "  make release VERSION=v1.2.3    # Use specific version"
 	@echo "  make version                    # Show current version info"
 	@echo ""
-	@echo "$(YELLOW)Current Version: $(BUILD_VERSION)$(NC)"
+	@echo "Current Version: $(BUILD_VERSION)"
 	@echo ""
-	@echo "$(YELLOW)Requirements:$(NC)"
+	@echo "Requirements:"
 	@echo "  - Docker installed and running"
 	@echo "  - No other dependencies needed"
 
