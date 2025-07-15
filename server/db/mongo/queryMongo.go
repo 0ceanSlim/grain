@@ -50,20 +50,47 @@ func buildSingleMongoFilter(filter nostr.Filter) bson.M {
 }
 
 // buildTagFilter adds tag filtering to the MongoDB filter
+// Properly handles multiple tag filters using $and instead of overwriting
 func buildTagFilter(filterBson bson.M, tags map[string][]string) {
-	if tags == nil {
+	if len(tags) == 0 {
 		return
 	}
+
+	var tagConditions []bson.M
 
 	for key, values := range tags {
 		if len(values) > 0 && len(key) > 0 {
 			tagKey := strings.TrimPrefix(key, "#")
-			filterBson["tags"] = bson.M{
-				"$elemMatch": bson.M{
-					"0": tagKey,
-					"1": bson.M{"$in": values},
+			tagCondition := bson.M{
+				"tags": bson.M{
+					"$elemMatch": bson.M{
+						"0": tagKey,
+						"1": bson.M{"$in": values},
+					},
 				},
 			}
+			tagConditions = append(tagConditions, tagCondition)
+
+			log.MongoQuery().Debug("Added tag filter condition",
+				"tag_key", tagKey,
+				"values", values,
+				"condition_count", len(tagConditions))
+		}
+	}
+
+	// If we have tag conditions, add them to the filter
+	if len(tagConditions) > 0 {
+		if len(tagConditions) == 1 {
+			// Single tag filter - merge directly
+			for k, v := range tagConditions[0] {
+				filterBson[k] = v
+			}
+			log.MongoQuery().Debug("Applied single tag filter")
+		} else {
+			// Multiple tag filters - use $and to combine them
+			filterBson["$and"] = tagConditions
+			log.MongoQuery().Debug("Applied multiple tag filters using $and",
+				"filter_count", len(tagConditions))
 		}
 	}
 }
@@ -197,6 +224,12 @@ func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName stri
 	combinedFilters := buildMongoFilters(filters)
 	query := buildQueryFromFilters(combinedFilters)
 	effectiveLimit := determineEffectiveLimit(filters)
+
+	log.MongoQuery().Debug("Built MongoDB query",
+		"filter_count", len(filters),
+		"combined_filters", len(combinedFilters),
+		"effective_limit", effectiveLimit,
+		"query", query)
 
 	collections, hasKindFilters, err := determineTargetCollections(filters, client, databaseName)
 	if err != nil {
