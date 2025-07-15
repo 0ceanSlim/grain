@@ -301,8 +301,7 @@ make dev-release
 
 ```bash
 # Create pre-release tag
-make tag VERSION=v1.3.0-beta.1
-git push origin v1.3.0-beta.1
+git tag -a v0.4.1-pre-release -m "Pre-Release v0.4.1"
 
 # Build pre-release
 make release
@@ -323,12 +322,11 @@ make release
 
 ```bash
 # Create release tag
-make tag VERSION=v1.3.0
-git push origin v1.3.0
+git tag -a v0.4.1 -m "Release v0.4.1"
 
 # Build final release
 make release
-# Version: v1.3.0
+# Version: v0.4.1
 ```
 
 #### 5. Publish Release
