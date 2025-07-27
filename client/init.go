@@ -6,25 +6,36 @@ import (
 	"github.com/0ceanslim/grain/client/cache"
 	"github.com/0ceanslim/grain/client/connection"
 	"github.com/0ceanslim/grain/client/session"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// InitializeClient sets up the client package with  session management
-func InitializeClient(relays []string) error {
-	log.ClientMain().Info("Initializing client package with  session management", "relay_count", len(relays))
+// InitializeClient sets up the client package with server configuration
+func InitializeClient(serverCfg *cfgType.ServerConfig) error {
+	log.ClientMain().Info("Initializing client package with configurable settings")
 
-	// Initialize  session manager
+	// Initialize session manager
 	if err := initializeSessionManager(); err != nil {
 		return err
 	}
 
-	// Initialize core client with relays
-	if err := connection.InitializeCoreClient(relays); err != nil {
+	// Initialize core client with server configuration
+	if err := connection.InitializeCoreClient(serverCfg); err != nil {
 		return err
 	}
 
-	// Set app relays for discovery
-	connection.SetAppRelays(relays)
+	// Set app relays for discovery (from config or defaults)
+	if serverCfg != nil && len(serverCfg.Client.DefaultRelays) > 0 {
+		connection.SetAppRelays(serverCfg.Client.DefaultRelays)
+	} else {
+		// Fallback to hardcoded defaults if no config
+		defaultRelays := []string{
+			"wss://relay.damus.io",
+			"wss://nos.lol",
+			"wss://relay.nostr.band",
+		}
+		connection.SetAppRelays(defaultRelays)
+	}
 
 	// Start background session cleanup
 	startSessionCleanup()
@@ -32,7 +43,7 @@ func InitializeClient(relays []string) error {
 	// Start cache cleanup
 	cache.StartCacheCleanup()
 
-	log.ClientMain().Info("Client package initialized successfully with  features")
+	log.ClientMain().Info("Client package initialized successfully")
 	return nil
 }
 

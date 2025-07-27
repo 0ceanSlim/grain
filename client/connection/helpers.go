@@ -3,6 +3,7 @@ package connection
 import (
 	"fmt"
 
+	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -67,6 +68,13 @@ func ReinitializeCoreClient() error {
 		coreClient.Close()
 	}
 
-	// Reinitialize
-	return InitializeCoreClient(appRelays)
+	// Get current server configuration for reinitialization
+	serverCfg := config.GetConfig()
+	if serverCfg == nil {
+		// Fallback to last known config if current config unavailable
+		serverCfg = lastServerConfig
+	}
+
+	// Reinitialize with current configuration
+	return InitializeCoreClient(serverCfg)
 }

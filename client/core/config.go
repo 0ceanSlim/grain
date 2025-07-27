@@ -3,6 +3,8 @@ package core
 import (
 	"fmt"
 	"time"
+
+	cfgType "github.com/0ceanslim/grain/config/types"
 )
 
 // Config holds client-specific configuration
@@ -18,14 +20,13 @@ type Config struct {
 	UserAgent         string        `json:"user_agent"`
 }
 
-// Default Relays should not be hardcoded, TODO: Make this configurable later
 // DefaultConfig returns a sensible default configuration
 func DefaultConfig() *Config {
 	return &Config{
 		DefaultRelays: []string{
 			"wss://relay.damus.io",
 			"wss://nos.lol",
-			"wss://relay.snort.social",
+			"wss://relay.nostr.band",
 		},
 		ConnectionTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -36,6 +37,51 @@ func DefaultConfig() *Config {
 		KeepAlive:         true,
 		UserAgent:         "grain-client/1.0",
 	}
+}
+
+// ConfigFromServerConfig creates a client config from server configuration
+func ConfigFromServerConfig(serverCfg *cfgType.ServerConfig) *Config {
+	// Start with defaults
+	config := DefaultConfig()
+
+	// Override with values from YAML if provided
+	if serverCfg != nil && len(serverCfg.Client.DefaultRelays) > 0 {
+		config.DefaultRelays = serverCfg.Client.DefaultRelays
+	}
+
+	if serverCfg != nil && serverCfg.Client.ConnectionTimeout > 0 {
+		config.ConnectionTimeout = time.Duration(serverCfg.Client.ConnectionTimeout) * time.Second
+	}
+
+	if serverCfg != nil && serverCfg.Client.ReadTimeout > 0 {
+		config.ReadTimeout = time.Duration(serverCfg.Client.ReadTimeout) * time.Second
+	}
+
+	if serverCfg != nil && serverCfg.Client.WriteTimeout > 0 {
+		config.WriteTimeout = time.Duration(serverCfg.Client.WriteTimeout) * time.Second
+	}
+
+	if serverCfg != nil && serverCfg.Client.MaxConnections > 0 {
+		config.MaxConnections = serverCfg.Client.MaxConnections
+	}
+
+	if serverCfg != nil && serverCfg.Client.RetryAttempts >= 0 {
+		config.RetryAttempts = serverCfg.Client.RetryAttempts
+	}
+
+	if serverCfg != nil && serverCfg.Client.RetryDelay > 0 {
+		config.RetryDelay = time.Duration(serverCfg.Client.RetryDelay) * time.Second
+	}
+
+	if serverCfg != nil {
+		config.KeepAlive = serverCfg.Client.KeepAlive
+	}
+
+	if serverCfg != nil && serverCfg.Client.UserAgent != "" {
+		config.UserAgent = serverCfg.Client.UserAgent
+	}
+
+	return config
 }
 
 // Validate checks if the configuration is valid

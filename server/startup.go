@@ -188,16 +188,8 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 	// Initialize pubkey cache system
 	config.InitializePubkeyCache()
 
-	// TODO: make these configurable. Change the dfdefault config for the client
-	// package to the same defaults I put in the example config.
-	// Initialize client package (includes session manager and core client)
-	appRelays := []string{
-		"wss://relay.damus.io",
-		"wss://nos.lol",
-		"wss://relay.nostr.band",
-	}
-
-	if err := client.InitializeClient(appRelays); err != nil {
+	// Initialize client package with server configuration
+	if err := client.InitializeClient(cfg); err != nil {
 		log.Startup().Error("Failed to initialize client package", "error", err)
 		return fmt.Errorf("client initialization failed: %w", err)
 	}

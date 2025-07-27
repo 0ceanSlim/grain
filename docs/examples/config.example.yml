@@ -33,6 +33,28 @@ mongodb:
   uri: mongodb://localhost:27017/ # MongoDB connection string
   database: grain # Name your database
 
+# Client configuration for the built-in Nostr client
+client:
+  # Default relays for the web client (matches installation docs)
+  default_relays:
+    - "wss://relay.damus.io"
+    - "wss://nos.lol"
+    - "wss://relay.nostr.band"
+
+  # Connection settings (in seconds)
+  connection_timeout: 10 # Time to wait for relay connection
+  read_timeout: 30 # Time to wait for relay responses
+  write_timeout: 10 # Time to wait when sending to relays
+
+  # Connection management
+  max_connections: 10 # Maximum simultaneous relay connections
+  retry_attempts: 3 # Number of retry attempts for failed connections
+  retry_delay: 2 # Delay between retry attempts (seconds)
+
+  # Client behavior
+  keep_alive: true # Maintain persistent connections
+  user_agent: "grain-client/1.0" # User agent string for relay connections
+
 server:
   port: :8181
   read_timeout: 60 # Timeout for reading a single WebSocket message from client
