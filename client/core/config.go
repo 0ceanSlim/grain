@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	cfgType "github.com/0ceanslim/grain/config/types"
@@ -119,8 +120,15 @@ func (c *Config) Validate() error {
 		if len(relay) == 0 {
 			return fmt.Errorf("empty relay URL found")
 		}
-		if len(relay) < 6 || (relay[:4] != "ws://" && relay[:5] != "wss://") {
+
+		// Check for valid WebSocket URL schemes
+		if !strings.HasPrefix(relay, "ws://") && !strings.HasPrefix(relay, "wss://") {
 			return fmt.Errorf("invalid relay URL format: %s", relay)
+		}
+
+		// Basic length validation (minimum viable WebSocket URL)
+		if len(relay) < 8 { // Minimum: "ws://x.x" = 8 chars
+			return fmt.Errorf("relay URL too short: %s", relay)
 		}
 	}
 
