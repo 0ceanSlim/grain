@@ -714,15 +714,15 @@ const dashboardManager = {
   // Helper function to convert pubkey to npub using your API
   async convertPubkeyToNpub(pubkey) {
     try {
-      const response = await fetch("/api/v1/convert/pubkey", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          pubkey: pubkey,
-        }),
-      });
+      const response = await fetch(
+        `/api/v1/keys/convert/public/${encodeURIComponent(pubkey)}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();

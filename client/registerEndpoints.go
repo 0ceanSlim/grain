@@ -46,15 +46,17 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/relay/config/blacklist", relay.GetBlacklistConfig)
 
 	// Key generation endpoint
-	mux.HandleFunc("/api/v1/generate/keypair", api.GenerateKeypairHandler) // Generate random key pair
+	mux.HandleFunc("/api/v1/keys/generate", api.KeyGenerationHandler) // Generate random key pair
+
+	// Key derivation endpoint
+	mux.HandleFunc("/api/v1/keys/derive/", api.KeyDeriveHandler) // Derive public key from private key
 
 	// Key conversion endpoints
-	mux.HandleFunc("/api/v1/convert/pubkey", api.ConvertPubkeyHandler) // Convert pubkey to npub
-	mux.HandleFunc("/api/v1/convert/npub", api.ConvertNpubHandler)     // Convert npub to pubkey
+	mux.HandleFunc("/api/v1/keys/convert/public/", api.PublicKeyConversionHandler)   // Convert hex ↔ npub
+	mux.HandleFunc("/api/v1/keys/convert/private/", api.PrivateKeyConversionHandler) // Convert hex ↔ nsec
 
-	// Key validation endpoints
-	mux.HandleFunc("/api/v1/validate/pubkey", api.ValidatePubkeyHandler) // Validate pubkey
-	mux.HandleFunc("/api/v1/validate/npub", api.ValidateNpubHandler)     // Validate npub
+	// Key validation endpoint
+	mux.HandleFunc("/api/v1/keys/validate/", api.KeyValidationHandler) // Validate any key type
 
 	mux.HandleFunc("/api/v1/relay/ping", api.RelayPingHandler)
 

@@ -19,10 +19,10 @@ Complete REST API reference for GRAIN relay operations.
       - [Amber Callback (NIP-55)](#amber-callback-nip-55)
     - [Key Operations](#key-operations)
       - [Generate Keypair](#generate-keypair)
-      - [Convert Public Key to npub](#convert-public-key-to-npub)
-      - [Convert npub to Public Key](#convert-npub-to-public-key)
-      - [Validate Public Key](#validate-public-key)
-      - [Validate npub](#validate-npub)
+      - [Derive Public Key from Private Key](#derive-public-key-from-private-key)
+      - [Convert Public Key](#convert-public-key)
+      - [Convert Private Key](#convert-private-key)
+      - [Validate Key](#validate-key)
     - [Relay Operations](#relay-operations)
       - [Ping Relay](#ping-relay)
       - [Connect to Relay](#connect-to-relay)
@@ -197,7 +197,7 @@ Handles the callback from Amber signer for NIP-55 authentication flow.
 #### Generate Keypair
 
 ```http
-GET /api/v1/generate/keypair
+GET /api/v1/keys/generate
 ```
 
 Generates a new random Nostr keypair.
@@ -206,23 +206,69 @@ Generates a new random Nostr keypair.
 
 ```json
 {
-  "privateKey": "nsec1...",
-  "publicKey": "npub1..."
+  "private_key": "ee5e36081fe74482ce9085a8e97ee020d6d20a0d1fddc0dd986c5629883b111a",
+  "public_key": "68027a7931229f043fed19028462df6279fcaf099d33cb75edaf2c5d698b23ad",
+  "nsec": "nsec1ae0rvzqluazg9n5ssk5wjlhqyrtdyzsdrlwuphvcd3tznzpmzydqzxfym7",
+  "npub": "npub1dqp857f3y20sg0ldrypggcklvfuletcfn5euka0d4uk966vtywksrs7n24"
 }
 ```
 
-#### Convert Public Key to npub
+#### Derive Public Key from Private Key
 
 ```http
-POST /api/v1/convert/pubkey
-Content-Type: application/json
+GET /api/v1/keys/derive/<private_key>
+```
 
-{
-  "pubkey": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
-}
+Derives the public key from a private key. Accepts both hex and nsec formats.
+
+**Examples:**
+
+Derive from hex private key:
+
+```http
+GET /api/v1/keys/derive/ee5e36081fe74482ce9085a8e97ee020d6d20a0d1fddc0dd986c5629883b111a
+```
+
+Derive from nsec:
+
+```http
+GET /api/v1/keys/derive/nsec1ae0rvzqluazg9n5ssk5wjlhqyrtdyzsdrlwuphvcd3tznzpmzydqzxfym7
 ```
 
 **Response:**
+
+```json
+{
+  "public_key": "68027a7931229f043fed19028462df6279fcaf099d33cb75edaf2c5d698b23ad",
+  "npub": "npub1dqp857f3y20sg0ldrypggcklvfuletcfn5euka0d4uk966vtywksrs7n24"
+}
+```
+
+#### Convert Public Key
+
+```http
+GET /api/v1/keys/convert/public/<key>
+```
+
+Converts between hex and npub formats. Auto-detects input format.
+
+**Examples:**
+
+Convert hex to npub:
+
+```http
+GET /api/v1/keys/convert/public/3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d
+```
+
+Convert npub to hex:
+
+```http
+GET /api/v1/keys/convert/public/npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6
+```
+
+**Response:**
+
+Convert hex to npub:
 
 ```json
 {
@@ -230,60 +276,108 @@ Content-Type: application/json
 }
 ```
 
-#### Convert npub to Public Key
+Convert npub to hex:
+
+```json
+{
+  "public_key": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
+}
+```
+
+#### Convert Private Key
 
 ```http
-POST /api/v1/convert/npub
-Content-Type: application/json
+GET /api/v1/keys/convert/private/<key>
+```
 
-{
-  "npub": "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6"
-}
+Converts between hex and nsec formats. Auto-detects input format.
+
+**Examples:**
+
+Convert hex to nsec:
+
+```http
+GET /api/v1/keys/convert/private/ee5e36081fe74482ce9085a8e97ee020d6d20a0d1fddc0dd986c5629883b111a
+```
+
+Convert nsec to hex:
+
+```http
+GET /api/v1/keys/convert/private/nsec1ae0rvzqluazg9n5ssk5wjlhqyrtdyzsdrlwuphvcd3tznzpmzydqzxfym7
 ```
 
 **Response:**
 
+Convert hex to nsec:
+
 ```json
 {
-  "pubkey": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
+  "nsec": "nsec1ae0rvzqluazg9n5ssk5wjlhqyrtdyzsdrlwuphvcd3tznzpmzydqzxfym7"
 }
 ```
 
-#### Validate Public Key
+Convert nsec to hex:
+
+```json
+{
+  "private_key": "ee5e36081fe74482ce9085a8e97ee020d6d20a0d1fddc0dd986c5629883b111a"
+}
+```
+
+#### Validate Key
 
 ```http
-POST /api/v1/validate/pubkey
-Content-Type: application/json
+GET /api/v1/keys/validate/<key>
+```
 
-{
-  "pubkey": "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
-}
+Validates any key type (hex, npub, or nsec) and returns the key type.
+
+**Examples:**
+
+Validate hex public key:
+
+```http
+GET /api/v1/keys/validate/3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d
+```
+
+Validate npub:
+
+```http
+GET /api/v1/keys/validate/npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6
+```
+
+Validate nsec:
+
+```http
+GET /api/v1/keys/validate/nsec1ae0rvzqluazg9n5ssk5wjlhqyrtdyzsdrlwuphvcd3tznzpmzydqzxfym7
 ```
 
 **Response:**
 
-```json
-{
-  "valid": true
-}
-```
-
-#### Validate npub
-
-```http
-POST /api/v1/validate/npub
-Content-Type: application/json
-
-{
-  "npub": "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6"
-}
-```
-
-**Response:**
+Valid key:
 
 ```json
 {
-  "valid": true
+  "valid": true,
+  "type": "npub"
+}
+```
+
+Invalid key:
+
+```json
+{
+  "valid": false,
+  "type": "unknown",
+  "error": "Invalid key format"
+}
+```
+
+**Error Response (for all endpoints):**
+
+```json
+{
+  "error": "Error message"
 }
 ```
 

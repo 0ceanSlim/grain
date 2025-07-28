@@ -6,9 +6,6 @@ import (
 	"fmt"
 
 	"github.com/0ceanslim/grain/server/utils/log"
-	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcutil/bech32"
 )
 
 // KeyPair represents a Nostr key pair
@@ -66,46 +63,4 @@ func GenerateKeyPair() (*KeyPair, error) {
 		"npub", npub)
 
 	return keyPair, nil
-}
-
-// DerivePublicKey derives a public key from a private key
-func DerivePublicKey(privateKeyHex string) (string, error) {
-	if len(privateKeyHex) != 64 {
-		return "", fmt.Errorf("private key must be 64 hex characters")
-	}
-
-	privateKeyBytes, err := hex.DecodeString(privateKeyHex)
-	if err != nil {
-		return "", fmt.Errorf("invalid hex private key: %w", err)
-	}
-
-	_, publicKey := btcec.PrivKeyFromBytes(privateKeyBytes)
-	publicKeyBytes := schnorr.SerializePubKey(publicKey)
-	publicKeyHex := hex.EncodeToString(publicKeyBytes)
-
-	return publicKeyHex, nil
-}
-
-// EncodePrivateKey encodes a hex private key into a Bech32 nsec
-func EncodePrivateKey(hexPrivateKey string) (string, error) {
-	decoded, err := hex.DecodeString(hexPrivateKey)
-	if err != nil {
-		return "", fmt.Errorf("invalid hex private key: %w", err)
-	}
-
-	if len(decoded) != 32 {
-		return "", fmt.Errorf("private key must be 32 bytes")
-	}
-
-	encoded, err := bech32.ConvertBits(decoded, 8, 5, true)
-	if err != nil {
-		return "", fmt.Errorf("failed to convert bits: %w", err)
-	}
-
-	nsec, err := bech32.Encode("nsec", encoded)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode nsec: %w", err)
-	}
-
-	return nsec, nil
 }
