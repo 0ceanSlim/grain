@@ -58,7 +58,7 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	// Key validation endpoint
 	mux.HandleFunc("/api/v1/keys/validate/", api.KeyValidationHandler) // Validate any key type
 
-	mux.HandleFunc("/api/v1/relay/ping", api.RelayPingHandler)
+	mux.HandleFunc("/api/v1/ping/", api.PingHandler)
 
 	// Core Nostr client function endpoints
 	registerCoreClientEndpoints(mux)
@@ -77,7 +77,7 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/events/query", api.QueryEventsHandler)
 
 	// Relay management endpoints
-	mux.HandleFunc("/api/v1/relays/connect", api.ConnectRelayHandler)
-	mux.HandleFunc("/api/v1/relays/disconnect", api.DisconnectRelayHandler)
-	mux.HandleFunc("/api/v1/relays/status", api.GetRelayStatusHandler)
+	mux.HandleFunc("/api/v1/client/relays", api.ClientRelaysHandler)
+	mux.HandleFunc("/api/v1/client/connect/", api.ClientConnectHandler)
+	mux.HandleFunc("/api/v1/client/disconnect/", api.ClientDisconnectHandler)
 }

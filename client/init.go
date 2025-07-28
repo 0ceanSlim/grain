@@ -24,9 +24,9 @@ func InitializeClient(serverCfg *cfgType.ServerConfig) error {
 		return err
 	}
 
-	// Set app relays for discovery (from config or defaults)
+	// Set client relays for discovery (from config or defaults)
 	if serverCfg != nil && len(serverCfg.Client.DefaultRelays) > 0 {
-		connection.SetAppRelays(serverCfg.Client.DefaultRelays)
+		connection.SetClientRelays(serverCfg.Client.DefaultRelays)
 	} else {
 		// Fallback to hardcoded defaults if no config
 		defaultRelays := []string{
@@ -34,7 +34,7 @@ func InitializeClient(serverCfg *cfgType.ServerConfig) error {
 			"wss://nos.lol",
 			"wss://relay.nostr.band",
 		}
-		connection.SetAppRelays(defaultRelays)
+		connection.SetClientRelays(defaultRelays)
 	}
 
 	// Start background session cleanup

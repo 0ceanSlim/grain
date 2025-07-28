@@ -10,7 +10,7 @@ import (
 var coreClient *core.Client
 
 // Application relays for initial discovery
-var appRelays []string
+var clientRelays []string
 
 // Store reference to server config for reinitialization
 var lastServerConfig *cfgType.ServerConfig
@@ -32,7 +32,7 @@ func InitializeCoreClient(serverCfg *cfgType.ServerConfig) error {
 	coreClient = core.NewClient(config)
 
 	// Store relays for later use
-	appRelays = config.DefaultRelays
+	clientRelays = config.DefaultRelays
 
 	// Attempt to connect to default relays but don't fail if offline
 	if err := coreClient.ConnectToRelaysWithRetry(config.DefaultRelays, config.RetryAttempts); err != nil {
@@ -65,15 +65,15 @@ func CloseCoreClient() error {
 	return nil
 }
 
-// SetAppRelays sets the application relays for initial discovery
-func SetAppRelays(relays []string) {
-	appRelays = relays
+// SetClientRelays sets the application relays for initial discovery
+func SetClientRelays(relays []string) {
+	clientRelays = relays
 	log.ClientConnection().Debug("App relays set", "relay_count", len(relays))
 }
 
-// GetAppRelays returns the configured application relays
-func GetAppRelays() []string {
-	return appRelays
+// GetClientRelays returns the configured application relays
+func GetClientRelays() []string {
+	return clientRelays
 }
 
 // IsCoreClientInitialized checks if the core client is properly initialized

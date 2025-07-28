@@ -1,10 +1,7 @@
 package session
 
 import (
-	"encoding/json"
 	"time"
-
-	"github.com/0ceanslim/grain/client/core"
 )
 
 // SessionInteractionMode defines how the user interacts with the app
@@ -33,13 +30,7 @@ const (
 	NoSigning SigningMethod = "none"
 )
 
-// SessionMetadata holds cached user data for the session
-type UserMetadata struct {
-	Profile   string `json:"profile"`   // JSON serialized kind 0 event
-	Mailboxes string `json:"mailboxes"` // JSON serialized kind 10002 relay list
-}
-
-// UserSession represents a comprehensive user session
+// UserSession represents a lightweight user session (no user data - that's in cache)
 type UserSession struct {
 	// Core session data
 	PublicKey  string    `json:"public_key"`
@@ -49,10 +40,7 @@ type UserSession struct {
 	Mode          SessionInteractionMode `json:"mode"`
 	SigningMethod SigningMethod          `json:"signing_method"`
 
-	// Cached user data
-	Metadata UserMetadata `json:"metadata"`
-
-	// Connection info
+	// Connection info (app-level relays, not user-specific)
 	ConnectedRelays []string `json:"connected_relays"`
 
 	// Session security
@@ -72,21 +60,6 @@ func (s *UserSession) CanCreateEvents() bool {
 // CanSign returns true if the user can sign events
 func (s *UserSession) CanSign() bool {
 	return s.Mode == WriteMode && s.SigningMethod != NoSigning
-}
-
-// GetUserRelays returns the user's relay list as a string slice
-func (s *UserSession) GetUserRelays() []string {
-	if s.Metadata.Mailboxes == "" {
-		return s.ConnectedRelays
-	}
-
-	// Parse mailboxes and return combined read/write relays
-	var mailboxes core.Mailboxes
-	if err := json.Unmarshal([]byte(s.Metadata.Mailboxes), &mailboxes); err != nil {
-		return s.ConnectedRelays
-	}
-
-	return mailboxes.ToStringSlice()
 }
 
 // SessionInitRequest represents data needed to initialize a session

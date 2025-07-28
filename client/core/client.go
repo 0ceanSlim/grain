@@ -332,3 +332,87 @@ func parseMailboxEvent(event *nostr.Event) *Mailboxes {
 
 	return mailboxes
 }
+
+// RelayConfig represents relay configuration with permissions
+type RelayConfig struct {
+	URL   string `json:"url"`
+	Read  bool   `json:"read"`
+	Write bool   `json:"write"`
+}
+
+// ReplaceRelayConnections replaces current relay connections with a new set
+func (c *Client) ReplaceRelayConnections(newRelays []RelayConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	log.ClientCore().Info("Replacing relay connections", "new_relay_count", len(newRelays))
+
+	// Close existing connections
+	if err := c.relayPool.Close(); err != nil {
+		log.ClientCore().Warn("Error closing existing relay pool", "error", err)
+	}
+
+	// Create new relay pool with current config
+	c.relayPool = NewRelayPool(c.config)
+
+	// Extract URLs for connection
+	var relayURLs []string
+	for _, relay := range newRelays {
+		relayURLs = append(relayURLs, relay.URL)
+	}
+
+	// Connect to new relays
+	if err := c.ConnectToRelaysWithRetry(relayURLs, 2); err != nil {
+		return fmt.Errorf("failed to connect to new relay set: %w", err)
+	}
+
+	// Log relay permissions
+	for _, relay := range newRelays {
+		permissions := []string{}
+		if relay.Read {
+			permissions = append(permissions, "read")
+		}
+		if relay.Write {
+			permissions = append(permissions, "write")
+		}
+		log.ClientCore().Debug("Relay permissions set",
+			"relay", relay.URL,
+			"permissions", permissions)
+	}
+
+	log.ClientCore().Info("Successfully replaced relay connections",
+		"connected_count", len(c.GetConnectedRelays()))
+
+	return nil
+}
+
+// SwitchToUserRelays switches the client to use user's cached relays
+func (c *Client) SwitchToUserRelays(userRelays []RelayConfig) error {
+	log.ClientCore().Info("Switching to user relays", "relay_count", len(userRelays))
+
+	if len(userRelays) == 0 {
+		log.ClientCore().Warn("No user relays found, keeping current connections")
+		return nil
+	}
+
+	// Replace connections with user's relays
+	return c.ReplaceRelayConnections(userRelays)
+}
+
+// SwitchToDefaultRelays switches the client back to default app relays
+func (c *Client) SwitchToDefaultRelays() error {
+	log.ClientCore().Info("Switching to default app relays")
+
+	// Convert default relays to RelayConfig format (both read and write)
+	var defaultRelayConfigs []RelayConfig
+	for _, url := range c.config.DefaultRelays {
+		defaultRelayConfigs = append(defaultRelayConfigs, RelayConfig{
+			URL:   url,
+			Read:  true,
+			Write: true,
+		})
+	}
+
+	// Replace connections with default relays
+	return c.ReplaceRelayConnections(defaultRelayConfigs)
+}

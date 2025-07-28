@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/0ceanslim/grain/client/cache"
 	"github.com/0ceanslim/grain/client/data"
 	"github.com/0ceanslim/grain/client/session"
 	"github.com/0ceanslim/grain/server/utils/log"
@@ -27,7 +28,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		response := session.Response{
 			Success: true,
 			Message: "Already logged in",
-			Session: userSession, // Use userSession here too
+			Session: userSession,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -103,9 +104,8 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		log.ClientAPI().Error("Failed to create session", "error", err)
 
 		response := session.Response{
-			Success: true,
-			Message: "Login successful",
-			Session: userSession, // Use userSession instead of session
+			Success: false, // Fixed: this should be false on error
+			Message: "Failed to create session: " + err.Error(),
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -113,6 +113,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	// Check cache for logging (since session no longer has metadata)
+	cachedData, hasCachedData := cache.GetUserData(loginReq.PublicKey)
 
 	// Successful login response
 	response := session.Response{
@@ -126,8 +129,8 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		"mode", userSession.Mode,
 		"signing_method", userSession.SigningMethod,
 		"can_create_events", userSession.CanCreateEvents(),
-		"cached_profile", userSession.Metadata.Profile != "",
-		"cached_mailboxes", userSession.Metadata.Mailboxes != "")
+		"cached_profile", hasCachedData && cachedData.Metadata != "",
+		"cached_mailboxes", hasCachedData && cachedData.Mailboxes != "" && cachedData.Mailboxes != "{}")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)

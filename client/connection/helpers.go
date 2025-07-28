@@ -25,7 +25,7 @@ func EnsureRelayConnections() error {
 	// No connections, try to reconnect
 	log.ClientConnection().Warn("No relay connections found, attempting to reconnect")
 
-	if err := coreClient.ConnectToRelaysWithRetry(appRelays, 3); err != nil {
+	if err := coreClient.ConnectToRelaysWithRetry(clientRelays, 3); err != nil {
 		log.ClientConnection().Error("Failed to reconnect to relays", "error", err)
 		return err
 	}
@@ -55,7 +55,7 @@ func GetCoreClientStatus() map[string]interface{} {
 		"initialized":      true,
 		"connected_relays": connectedRelays,
 		"connected_count":  len(connectedRelays),
-		"app_relays":       appRelays,
+		"client_relays":    clientRelays,
 	}
 }
 

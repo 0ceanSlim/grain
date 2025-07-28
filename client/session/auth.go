@@ -1,7 +1,6 @@
 package session
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -10,7 +9,7 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// CreateUserSession creates a new user session with comprehensive initialization
+// CreateUserSession creates a new user session and ensures user data is cached
 func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSession, error) {
 	if SessionMgr == nil {
 		return nil, &SessionError{Message: "session manager not initialized"}
@@ -25,50 +24,32 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSess
 		"mode", req.RequestedMode,
 		"signing_method", req.SigningMethod)
 
-	// Get or fetch user data
-	metadata, mailboxes, err := data.GetUserDataForSession(req.PublicKey)
+	// Ensure user data is cached (this populates metadata + mailboxes in cache)
+	// This function handles fetching from Nostr network if not cached
+	_, _, err := data.GetUserDataForSession(req.PublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user data: %w", err)
+		log.ClientSession().Warn("Failed to get user data for session, continuing anyway",
+			"pubkey", req.PublicKey,
+			"error", err)
+		// Don't fail the session creation - user can still login without cached data
+	} else {
+		log.ClientSession().Info("User data cached successfully for session",
+			"pubkey", req.PublicKey)
 	}
 
-	// Prepare session metadata
-	sessionMetadata := UserMetadata{}
-
-	if metadata != nil {
-		metadataBytes, err := json.Marshal(metadata)
-		if err != nil {
-			log.ClientSession().Warn("Failed to marshal metadata", "pubkey", req.PublicKey, "error", err)
-		} else {
-			sessionMetadata.Profile = string(metadataBytes)
-		}
-	}
-
-	if mailboxes != nil {
-		mailboxBytes, err := json.Marshal(mailboxes)
-		if err != nil {
-			log.ClientSession().Warn("Failed to marshal mailboxes", "pubkey", req.PublicKey, "error", err)
-		} else {
-			sessionMetadata.Mailboxes = string(mailboxBytes)
-		}
-	}
-
-	// Create the session
-	session, err := SessionMgr.CreateSession(w, req, sessionMetadata)
+	// Create lightweight session (no user data stored in session)
+	session, err := SessionMgr.CreateSession(w, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
-	// Update connected relays in session
-	if mailboxes != nil {
-		session.ConnectedRelays = mailboxes.ToStringSlice()
-	} else {
-		session.ConnectedRelays = connection.GetAppRelays()
-	}
+	// Set connected relays to app relays (user-specific relays are in cache, not session)
+	session.ConnectedRelays = connection.GetClientRelays()
 
 	log.ClientSession().Info("User session created successfully",
 		"pubkey", req.PublicKey,
 		"mode", session.Mode,
-		"relay_count", len(session.ConnectedRelays))
+		"app_relay_count", len(session.ConnectedRelays))
 
 	return session, nil
 }
@@ -77,6 +58,11 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSess
 func ValidateSessionRequest(req SessionInitRequest) error {
 	if req.PublicKey == "" {
 		return &SessionError{Message: "public key is required"}
+	}
+
+	// Validate public key format (basic check)
+	if len(req.PublicKey) != 64 {
+		return &SessionError{Message: "invalid public key format"}
 	}
 
 	// Validate mode
@@ -100,6 +86,11 @@ func ValidateSessionRequest(req SessionInitRequest) error {
 		// If using encrypted key, private key must be provided
 		if req.SigningMethod == EncryptedKey && req.PrivateKey == "" {
 			return &SessionError{Message: "private key required for encrypted key signing method"}
+		}
+	} else {
+		// Read-only mode should use NoSigning
+		if req.SigningMethod == "" {
+			req.SigningMethod = NoSigning
 		}
 	}
 

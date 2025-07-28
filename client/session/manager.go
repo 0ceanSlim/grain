@@ -54,17 +54,15 @@ func (sm *SessionManager) GetUserSession(token string) *UserSession {
 	return session
 }
 
-// CreateSession creates a new comprehensive user session
-func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRequest, metadata UserMetadata) (*UserSession, error) {
+// CreateSession creates a new lightweight user session (no user data - that goes in cache)
+func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRequest) (*UserSession, error) {
 	token := GenerateRandomToken(32)
 
 	session := &UserSession{
-		PublicKey:       req.PublicKey,
-		LastActive:      time.Now(),
-		Mode:            req.RequestedMode,
-		SigningMethod:   req.SigningMethod,
-		Metadata:        metadata,
-		ConnectedRelays: []string{}, // Will be populated during login
+		PublicKey:     req.PublicKey,
+		LastActive:    time.Now(),
+		Mode:          req.RequestedMode,
+		SigningMethod: req.SigningMethod,
 	}
 
 	// Store encrypted private key if provided
@@ -95,23 +93,6 @@ func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRe
 		"token", token[:8])
 
 	return session, nil
-}
-
-// UpdateSessionMetadata updates cached metadata for a session
-func (sm *SessionManager) UpdateSessionMetadata(token string, metadata UserMetadata) error {
-	sm.sessionMutex.Lock()
-	defer sm.sessionMutex.Unlock()
-
-	session, exists := sm.sessions[token]
-	if !exists {
-		return &SessionError{Message: "session not found"}
-	}
-
-	session.Metadata = metadata
-	session.LastActive = time.Now()
-
-	log.ClientSession().Debug("Updated session metadata", "pubkey", session.PublicKey)
-	return nil
 }
 
 // ClearSession removes a user session and clears the cookie
