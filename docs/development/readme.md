@@ -2,6 +2,51 @@
 
 Developer documentation for building, testing, and releasing GRAIN.
 
+## Table of Contents
+
+- [Development Guide](#development-guide)
+  - [Table of Contents](#table-of-contents)
+  - [Development Environment](#development-environment)
+    - [Prerequisites](#prerequisites)
+    - [Setup](#setup)
+  - [Version Management](#version-management)
+    - [Version Detection Logic](#version-detection-logic)
+    - [Version Commands](#version-commands)
+    - [Version Workflow Examples](#version-workflow-examples)
+    - [Semantic Versioning](#semantic-versioning)
+  - [Building Releases](#building-releases)
+    - [Docker-based Build System](#docker-based-build-system)
+    - [Available Commands](#available-commands)
+    - [Build Types](#build-types)
+    - [Build Artifacts](#build-artifacts)
+    - [Version in Binary](#version-in-binary)
+  - [Testing](#testing)
+    - [Quick Test Run](#quick-test-run)
+    - [Test Development](#test-development)
+    - [Test Environment](#test-environment)
+  - [Release Process](#release-process)
+    - [Complete Release Workflow](#complete-release-workflow)
+      - [1. Development Phase](#1-development-phase)
+      - [2. Pre-release Testing](#2-pre-release-testing)
+      - [3. Release Preparation](#3-release-preparation)
+      - [4. Create Release](#4-create-release)
+      - [5. Publish Release](#5-publish-release)
+    - [Release Checklist](#release-checklist)
+    - [Benefits of Docker Build System](#benefits-of-docker-build-system)
+  - [Code Standards](#code-standards)
+    - [Go Conventions](#go-conventions)
+    - [Pre-commit](#pre-commit)
+    - [Logging Guidelines](#logging-guidelines)
+  - [Debugging](#debugging)
+    - [Development Tools](#development-tools)
+    - [Common Issues](#common-issues)
+    - [Troubleshooting Version Issues](#troubleshooting-version-issues)
+  - [Contributing](#contributing)
+    - [Development Workflow](#development-workflow)
+    - [Code Review](#code-review)
+    - [Release Guidelines](#release-guidelines)
+  - [Resources](#resources)
+
 ## Development Environment
 
 ### Prerequisites
@@ -256,8 +301,7 @@ make dev-release
 
 ```bash
 # Create pre-release tag
-make tag VERSION=v1.3.0-beta.1
-git push origin v1.3.0-beta.1
+git tag -a v0.4.1-pre-release -m "Pre-Release v0.4.1"
 
 # Build pre-release
 make release
@@ -278,12 +322,11 @@ make release
 
 ```bash
 # Create release tag
-make tag VERSION=v1.3.0
-git push origin v1.3.0
+git tag -a v0.4.1 -m "Release v0.4.1"
 
 # Build final release
 make release
-# Version: v1.3.0
+# Version: v0.4.1
 ```
 
 #### 5. Publish Release
@@ -322,6 +365,58 @@ make release
 - **Structured logging** - Use log levels and key-value pairs
 - **Clear documentation** - Descriptive but not verbose
 - **Error handling** - Proper error wrapping and context
+
+### Pre-commit
+
+You can use this pre-commit script `(.git/hook/pre-commit)` to ensure your code is properly formatted.
+
+```bash
+#!/bin/bash
+
+set -e
+
+echo "🔧 Running pre-commit checks..."
+
+# Store initial status
+INITIAL_STATUS=$(git status --porcelain)
+
+# Format code
+echo "📝 Formatting Go code..."
+go fmt ./...
+gofmt -s -w .
+
+# Install goimports if not present and format imports
+if ! command -v goimports &> /dev/null; then
+    echo "📦 Installing goimports..."
+    go install golang.org/x/tools/cmd/goimports@latest
+fi
+goimports -w .
+
+# Tidy modules
+echo "🧹 Tidying Go modules..."
+go mod tidy
+go mod verify
+
+# Check if anything changed
+CURRENT_STATUS=$(git status --porcelain)
+
+if [ "$INITIAL_STATUS" != "$CURRENT_STATUS" ]; then
+    echo "✨ Code was formatted/tidied. Staging changes..."
+
+    # Stage all changes
+    git add .
+
+    # Show what changed
+    echo "📋 Changes made:"
+    git diff --cached --name-only
+
+    echo "✅ Changes staged and ready for commit."
+else
+    echo "✅ No formatting or module changes needed."
+fi
+
+echo "🎉 Pre-commit checks completed!"
+```
 
 ### Logging Guidelines
 

@@ -9,9 +9,11 @@ MONGO_CONTAINER = grain-test-mongo
 
 help:
 	@echo "Available make targets:"
-	@echo "  make test              			- Start environment, run all tests, then prompt to stop"
+	@echo "  make test              			- Start environment, run integration tests, then prompt to stop"
+	@echo "  make test-all          			- Run integration tests + code review tests"
+	@echo "  make test-review       			- Run code quality review tests only"
 	@echo "  make test-start        			- Start test Docker environment"
-	@echo "  make test-run          			- Run all tests"
+	@echo "  make test-run          			- Run integration tests"
 	@echo "  make test-single TEST=TestName 	- Run a specific test by name"
 	@echo "  make test-file FILE=filename.go	- Run all tests in a specific file"
 	@echo "  make test-stop       				- Stop environment, collect log, and cleanup images"
@@ -107,3 +109,22 @@ test-clean-logs:
 	@echo "Removing all logs from $(TEST_LOG_DIR)..."
 	@rm -f $(TEST_LOG_DIR)/*.log 2>/dev/null || true
 	@echo "All logs removed."
+
+# Review tests for code quality and standards
+test-review:
+	@echo "Running code quality review tests..."
+	@mkdir -p $(TEST_LOG_DIR)
+	@cd .. && go test -v ./tests/review 2>&1 | tee tests/$(TEST_LOG_DIR)/review-$(TIMESTAMP).log
+
+# Run review tests as part of full test suite
+test-all: test-start test-run test-review
+	@echo ""
+	@echo "All tests completed (integration + review)."
+	@echo -n "Stop the test environment and collect logs? (y/n): "; \
+	read answer; \
+	if [ "$$answer" = "y" ] || [ "$$answer" = "Y" ]; then \
+		$(MAKE) test-stop; \
+	else \
+		echo "Test environment is still running."; \
+		echo "Use 'make test-stop' to stop and cleanup"; \
+	fi

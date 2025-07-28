@@ -35,6 +35,7 @@ type ServerConfig struct {
 		MaxSubscriptionsPerClient int    `yaml:"max_subscriptions_per_client"`
 		ImplicitReqLimit          int    `yaml:"implicit_req_limit"` // New field for implicit REQ limit
 	} `yaml:"server"`
+	Client               ClientConfig         `yaml:"client"`
 	RateLimit            RateLimitConfig      `yaml:"rate_limit"`
 	Blacklist            BlacklistConfig      `yaml:"blacklist"`
 	ResourceLimits       ResourceLimits       `yaml:"resource_limits"`

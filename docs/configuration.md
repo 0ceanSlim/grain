@@ -17,6 +17,13 @@ Comprehensive documentation for configuring your GRAIN relay server.
       - [Component Suppression](#component-suppression)
     - [MongoDB Configuration](#mongodb-configuration)
       - [Connection String Options](#connection-string-options)
+    - [Client Configuration](#client-configuration)
+      - [Default Relays](#default-relays)
+      - [Connection Management](#connection-management)
+      - [Connection Pool Settings](#connection-pool-settings)
+      - [Client Behavior](#client-behavior)
+      - [Offline Operation](#offline-operation)
+      - [Hot Reload Support](#hot-reload-support)
     - [Server Settings](#server-settings)
       - [Timeout Configuration](#timeout-configuration)
       - [Subscription Management](#subscription-management)
@@ -228,6 +235,124 @@ uri: "mongodb+srv://user:pass@cluster.mongodb.net/"
 # Connection with options
 uri: "mongodb://localhost:27017/?maxPoolSize=20&retryWrites=true"
 ```
+
+### Client Configuration
+
+Built-in Nostr client settings for the web interface and relay connections.
+
+```yaml
+client:
+  default_relays:
+    - "wss://relay.damus.io"
+    - "wss://nos.lol"
+    - "wss://relay.nostr.band"
+  connection_timeout: 10
+  read_timeout: 30
+  write_timeout: 10
+  max_connections: 10
+  retry_attempts: 3
+  retry_delay: 2
+  keep_alive: true
+  user_agent: "grain-client/1.0"
+```
+
+#### Default Relays
+
+**Default Relays (`default_relays`)**
+
+- Purpose: Initial relay connections for the web client
+- Default: Damus, nos.lol, and Nostr Band relays
+- Behavior: Web clients connect to these relays automatically
+- Tuning: Use relays with good uptime and low latency for your users
+
+#### Connection Management
+
+**Connection Timeout (`connection_timeout`)**
+
+- Purpose: Maximum time to establish WebSocket connection to relay
+- Default: 10 seconds
+- Units: Seconds
+- Tuning: Lower for faster failure detection, higher for slow networks
+
+**Read Timeout (`read_timeout`)**
+
+- Purpose: Maximum time to wait for relay responses
+- Default: 30 seconds
+- Units: Seconds
+- Impact: Affects subscription and event fetching performance
+
+**Write Timeout (`write_timeout`)**
+
+- Purpose: Maximum time to send messages to relays
+- Default: 10 seconds
+- Units: Seconds
+- Tuning: Lower for congestion detection, higher for unreliable connections
+
+#### Connection Pool Settings
+
+**Max Connections (`max_connections`)**
+
+- Purpose: Limit simultaneous relay connections per client session
+- Default: 10
+- Behavior: Prevents resource exhaustion from too many connections
+- Tuning: Higher for power users, lower for resource-constrained deployments
+
+**Retry Attempts (`retry_attempts`)**
+
+- Purpose: Number of connection retry attempts for failed relays
+- Default: 3
+- Behavior: 0 = no retries, higher values = more persistent connections
+- Impact: Affects startup time when relays are unreachable
+
+**Retry Delay (`retry_delay`)**
+
+- Purpose: Delay between connection retry attempts
+- Default: 2 seconds
+- Units: Seconds
+- Tuning: Balance between quick recovery and avoiding spam
+
+#### Client Behavior
+
+**Keep Alive (`keep_alive`)**
+
+- Purpose: Maintain persistent WebSocket connections
+- Default: true
+- Benefits: Better performance, faster message delivery
+- Trade-off: Uses more server resources but improves user experience
+
+**User Agent (`user_agent`)**
+
+- Purpose: Identifies GRAIN clients to relay operators
+- Default: "grain-client/1.0"
+- Usage: Helps with debugging and relay analytics
+- Customization: Include version or deployment information
+
+#### Offline Operation
+
+The client configuration supports **offline and localhost operation**:
+
+- **Graceful Degradation**: If external relays are unreachable during startup, GRAIN continues to operate
+- **Local Relay Support**: Configure GRAIN's web client to use its own relay for complete offline operation:
+
+```yaml
+client:
+  default_relays:
+    - "ws://localhost:8181" # Connect to your own GRAIN relay
+    - "wss://relay.damus.io" # Fallback external relay
+```
+
+- **Self-Contained**: Events published to the web client are stored locally and accessible immediately
+- **Network Independent**: Full Nostr functionality without external relay dependencies
+- **Automatic Recovery**: External connections re-establish when network becomes available
+
+#### Hot Reload Support
+
+Client configuration supports **hot reload** like other GRAIN settings:
+
+- **Runtime Changes**: Modify `config.yml` without restarting GRAIN
+- **Connection Updates**: New relay lists take effect for new client sessions
+- **Timeout Adjustments**: Connection and timeout changes apply to new connections
+- **Immediate Effect**: No server restart required for configuration changes
 
 ### Server Settings
 

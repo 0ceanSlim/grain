@@ -235,6 +235,10 @@ Derive from nsec:
 GET /api/v1/keys/derive/nsec1ae0rvzqluazg9n5ssk5wjlhqyrtdyzsdrlwuphvcd3tznzpmzydqzxfym7
 ```
 
+**Parameters:**
+
+- `pubkey` (required) - Hex-encoded public key
+
 **Response:**
 
 ```json
@@ -305,6 +309,10 @@ Convert nsec to hex:
 ```http
 GET /api/v1/keys/convert/private/nsec1ae0rvzqluazg9n5ssk5wjlhqyrtdyzsdrlwuphvcd3tznzpmzydqzxfym7
 ```
+
+**Parameters:**
+
+- `pubkey` (required) - Hex-encoded public key to validate
 
 **Response:**
 

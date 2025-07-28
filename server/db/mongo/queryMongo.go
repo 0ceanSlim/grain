@@ -17,78 +17,103 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// QueryEvents queries events from the MongoDB collection(s) based on filters
-func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName string) ([]nostr.Event, error) {
+// buildMongoFilters converts nostr filters to MongoDB filters
+func buildMongoFilters(filters []nostr.Filter) []bson.M {
 	var combinedFilters []bson.M
 
-	// Build MongoDB filters for each nostr.Filter
 	for _, filter := range filters {
-		filterBson := bson.M{}
-
-		if len(filter.IDs) > 0 {
-			filterBson["id"] = bson.M{"$in": filter.IDs}
-		}
-		if len(filter.Authors) > 0 {
-			filterBson["pubkey"] = bson.M{"$in": filter.Authors}
-		}
-		if len(filter.Kinds) > 0 {
-			filterBson["kind"] = bson.M{"$in": filter.Kinds}
-		}
-
-		// Tag filtering implementation
-		if filter.Tags != nil {
-			for key, values := range filter.Tags {
-				if len(values) > 0 && len(key) > 0 {
-					// Remove the # prefix if present
-					tagKey := key
-					if tagKey[0] == '#' {
-						tagKey = tagKey[1:]
-					}
-
-					filterBson["tags"] = bson.M{
-						"$elemMatch": bson.M{
-							"0": tagKey,
-							"1": bson.M{"$in": values},
-						},
-					}
-				}
-			}
-		}
-		if filter.Since != nil {
-			filterBson["created_at"] = bson.M{"$gte": filter.Since.Unix()}
-		}
-		if filter.Until != nil {
-			if filterBson["created_at"] == nil {
-				filterBson["created_at"] = bson.M{"$lte": filter.Until.Unix()}
-			} else {
-				filterBson["created_at"].(bson.M)["$lte"] = filter.Until.Unix()
-			}
-		}
-
+		filterBson := buildSingleMongoFilter(filter)
 		combinedFilters = append(combinedFilters, filterBson)
 	}
 
-	// Handle empty filters properly
-	query := bson.M{}
-	if len(combinedFilters) > 0 {
-		hasActualFilters := false
-		for _, filter := range combinedFilters {
-			if len(filter) > 0 {
-				hasActualFilters = true
-				break
-			}
-		}
+	return combinedFilters
+}
 
-		if hasActualFilters {
-			query["$or"] = combinedFilters
+// buildSingleMongoFilter converts a single nostr filter to MongoDB filter
+func buildSingleMongoFilter(filter nostr.Filter) bson.M {
+	filterBson := bson.M{}
+
+	if len(filter.IDs) > 0 {
+		filterBson["id"] = bson.M{"$in": filter.IDs}
+	}
+	if len(filter.Authors) > 0 {
+		filterBson["pubkey"] = bson.M{"$in": filter.Authors}
+	}
+	if len(filter.Kinds) > 0 {
+		filterBson["kind"] = bson.M{"$in": filter.Kinds}
+	}
+
+	buildTagFilter(filterBson, filter.Tags)
+	buildTimeFilters(filterBson, filter.Since, filter.Until)
+
+	return filterBson
+}
+
+// buildTagFilter adds tag filtering to the MongoDB filter
+// Properly handles multiple tag filters using $and instead of overwriting
+func buildTagFilter(filterBson bson.M, tags map[string][]string) {
+	if len(tags) == 0 {
+		return
+	}
+
+	var tagConditions []bson.M
+
+	for key, values := range tags {
+		if len(values) > 0 && len(key) > 0 {
+			tagKey := strings.TrimPrefix(key, "#")
+			tagCondition := bson.M{
+				"tags": bson.M{
+					"$elemMatch": bson.M{
+						"0": tagKey,
+						"1": bson.M{"$in": values},
+					},
+				},
+			}
+			tagConditions = append(tagConditions, tagCondition)
+
+			log.MongoQuery().Debug("Added tag filter condition",
+				"tag_key", tagKey,
+				"values", values,
+				"condition_count", len(tagConditions))
 		}
 	}
 
-	// Determine the limit to apply
-	implicitLimit := config.GetConfig().Server.ImplicitReqLimit
-	var effectiveLimit int64
+	// If we have tag conditions, add them to the filter
+	if len(tagConditions) > 0 {
+		if len(tagConditions) == 1 {
+			// Single tag filter - merge directly
+			for k, v := range tagConditions[0] {
+				filterBson[k] = v
+			}
+			log.MongoQuery().Debug("Applied single tag filter")
+		} else {
+			// Multiple tag filters - use $and to combine them
+			filterBson["$and"] = tagConditions
+			log.MongoQuery().Debug("Applied multiple tag filters using $and",
+				"filter_count", len(tagConditions))
+		}
+	}
+}
 
-	// Check if any filter has an explicit limit
+// buildTimeFilters adds time-based filtering to the MongoDB filter
+func buildTimeFilters(filterBson bson.M, since, until *time.Time) {
+	if since != nil {
+		filterBson["created_at"] = bson.M{"$gte": since.Unix()}
+	}
+	if until != nil {
+		if filterBson["created_at"] == nil {
+			filterBson["created_at"] = bson.M{"$lte": until.Unix()}
+		} else {
+			filterBson["created_at"].(bson.M)["$lte"] = until.Unix()
+		}
+	}
+}
+
+// determineEffectiveLimit calculates the appropriate limit to apply
+func determineEffectiveLimit(filters []nostr.Filter) int64 {
+	implicitLimit := config.GetConfig().Server.ImplicitReqLimit
+
+	// Find the lowest explicit limit
 	var lowestExplicitLimit *int
 	for _, filter := range filters {
 		if filter.Limit != nil {
@@ -98,45 +123,67 @@ func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName stri
 		}
 	}
 
-	// Apply the limit logic: implicit limit is the maximum cap
+	// Apply limit logic
 	if implicitLimit > 0 {
 		if lowestExplicitLimit != nil {
-			// Use the smaller of explicit limit and implicit limit
 			if *lowestExplicitLimit < implicitLimit {
-				effectiveLimit = int64(*lowestExplicitLimit)
 				log.MongoQuery().Debug("Using explicit limit (under implicit cap)",
 					"explicit_limit", *lowestExplicitLimit,
 					"implicit_cap", implicitLimit)
+				return int64(*lowestExplicitLimit)
 			} else {
-				effectiveLimit = int64(implicitLimit)
 				log.MongoQuery().Debug("Capping explicit limit to implicit maximum",
 					"requested_limit", *lowestExplicitLimit,
 					"applied_limit", implicitLimit)
+				return int64(implicitLimit)
 			}
 		} else {
-			// No explicit limit, use implicit limit
-			effectiveLimit = int64(implicitLimit)
 			log.MongoQuery().Debug("Using implicit limit (no explicit limit provided)",
 				"limit", implicitLimit)
+			return int64(implicitLimit)
 		}
 	} else {
-		// No implicit limit configured
 		if lowestExplicitLimit != nil {
-			effectiveLimit = int64(*lowestExplicitLimit)
 			log.MongoQuery().Debug("Using explicit limit (no implicit cap configured)",
 				"limit", *lowestExplicitLimit)
+			return int64(*lowestExplicitLimit)
 		} else {
-			// No limits at all - use a sensible default
-			effectiveLimit = 1000
 			log.MongoQuery().Warn("No limits configured, using default", "default_limit", 1000)
+			return 1000
+		}
+	}
+}
+
+// buildQueryFromFilters creates the final MongoDB query from combined filters
+func buildQueryFromFilters(combinedFilters []bson.M) bson.M {
+	query := bson.M{}
+
+	if len(combinedFilters) == 0 {
+		return query
+	}
+
+	// Check if any filters have actual content
+	hasActualFilters := false
+	for _, filter := range combinedFilters {
+		if len(filter) > 0 {
+			hasActualFilters = true
+			break
 		}
 	}
 
-	// Collection selection logic
-	var collections []string
-	hasKindFilters := false
-	kindsMap := make(map[int]bool)
+	if hasActualFilters {
+		query["$or"] = combinedFilters
+	}
 
+	return query
+}
+
+// determineTargetCollections identifies which collections to query based on kind filters
+func determineTargetCollections(filters []nostr.Filter, client *mongo.Client, databaseName string) ([]string, bool, error) {
+	kindsMap := make(map[int]bool)
+	hasKindFilters := false
+
+	// Extract kinds from filters
 	for _, filter := range filters {
 		if len(filter.Kinds) > 0 {
 			hasKindFilters = true
@@ -147,29 +194,52 @@ func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName stri
 	}
 
 	if !hasKindFilters {
-		// No kinds specified - get all event collections for cross-collection query
+		// Get all event collections for cross-collection query
 		allCollections, err := client.Database(databaseName).ListCollectionNames(context.TODO(), bson.D{})
 		if err != nil {
 			log.MongoQuery().Error("Failed to list collections", "error", err)
-			return nil, fmt.Errorf("error listing collections: %v", err)
+			return nil, false, fmt.Errorf("error listing collections: %v", err)
 		}
 
+		var collections []string
 		for _, name := range allCollections {
-			if len(name) > 10 && name[:10] == "event-kind" {
+			if strings.HasPrefix(name, "event-kind") {
 				collections = append(collections, name)
 			}
 		}
-
-		// For no-kind queries, use MongoDB aggregation for efficiency
-		return queryAcrossAllCollections(client, databaseName, collections, query, effectiveLimit)
+		return collections, false, nil
 	} else {
-		// Kinds specified - query each kind collection with limit per kind
+		// Build kind-specific collections
+		var collections []string
 		for kind := range kindsMap {
 			collectionName := fmt.Sprintf("event-kind%d", kind)
 			collections = append(collections, collectionName)
 		}
+		return collections, true, nil
+	}
+}
 
+// QueryEvents queries events from the MongoDB collection(s) based on filters
+func QueryEvents(filters []nostr.Filter, client *mongo.Client, databaseName string) ([]nostr.Event, error) {
+	combinedFilters := buildMongoFilters(filters)
+	query := buildQueryFromFilters(combinedFilters)
+	effectiveLimit := determineEffectiveLimit(filters)
+
+	log.MongoQuery().Debug("Built MongoDB query",
+		"filter_count", len(filters),
+		"combined_filters", len(combinedFilters),
+		"effective_limit", effectiveLimit,
+		"query", query)
+
+	collections, hasKindFilters, err := determineTargetCollections(filters, client, databaseName)
+	if err != nil {
+		return nil, err
+	}
+
+	if hasKindFilters {
 		return querySpecificKinds(client, databaseName, collections, query, effectiveLimit)
+	} else {
+		return queryAcrossAllCollections(client, databaseName, collections, query, effectiveLimit)
 	}
 }
 
@@ -255,13 +325,11 @@ func querySpecificKinds(client *mongo.Client, databaseName string, collections [
 	for _, collectionName := range collections {
 		collection := client.Database(databaseName).Collection(collectionName)
 
-		// Create fresh options for each collection
 		opts := options.Find().SetSort(bson.D{
 			{Key: "created_at", Value: -1},
 			{Key: "id", Value: 1},
 		})
 
-		// Apply limit per kind if specified
 		if limit > 0 {
 			opts.SetLimit(limit)
 		}
@@ -282,7 +350,6 @@ func querySpecificKinds(client *mongo.Client, databaseName string, collections [
 
 		allResults = append(allResults, collectionEvents...)
 
-		// Extract kind from collection name for logging
 		kindStr := strings.TrimPrefix(collectionName, "event-kind")
 		kind, _ := strconv.Atoi(kindStr)
 
@@ -293,7 +360,6 @@ func querySpecificKinds(client *mongo.Client, databaseName string, collections [
 			"limit_applied", limit)
 	}
 
-	// Sort final results by created_at (descending)
 	sort.Slice(allResults, func(i, j int) bool {
 		if allResults[i].CreatedAt != allResults[j].CreatedAt {
 			return allResults[i].CreatedAt > allResults[j].CreatedAt

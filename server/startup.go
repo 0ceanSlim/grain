@@ -100,12 +100,8 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 		return
 	}
 
-	// Initialize database connection
-	dbClient, err := mongo.InitDB(cfg)
-	if err != nil {
-		log.Startup().Error("Failed to initialize database", "error", err, "uri", cfg.MongoDB.URI)
-		return
-	}
+	// Initialize database connection with graceful degradation
+	dbClient, dbAvailable := mongo.InitializeDatabase(cfg)
 	defer func() {
 		if dbClient != nil {
 			mongo.DisconnectDB(dbClient)
@@ -125,8 +121,17 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 		httpServer.Close()
 	}()
 
-	// Start background services
-	startBackgroundServices(cfg)
+	// Start background services (pass DB availability status)
+	startBackgroundServices(cfg, dbAvailable)
+
+	// Start MongoDB health monitoring if DB was initially unavailable
+	if !dbAvailable {
+		go mongo.StartMongoHealthMonitor(cfg)
+	}
+
+	log.Startup().Info("Server instance started successfully",
+		"database_available", dbAvailable,
+		"port", cfg.Server.Port)
 
 	// Wait for shutdown, restart, or signal
 	select {
@@ -183,16 +188,8 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 	// Initialize pubkey cache system
 	config.InitializePubkeyCache()
 
-	// TODO: make these configurable. Change the dfdefault config for the client
-	// package to the same defaults I put in the example config.
-	// Initialize client package (includes session manager and core client)
-	appRelays := []string{
-		"wss://relay.damus.io",
-		"wss://nos.lol",
-		"wss://relay.nostr.band",
-	}
-
-	if err := client.InitializeClient(appRelays); err != nil {
+	// Initialize client package with server configuration
+	if err := client.InitializeClient(cfg); err != nil {
 		log.Startup().Error("Failed to initialize client package", "error", err)
 		return fmt.Errorf("client initialization failed: %w", err)
 	}
@@ -230,19 +227,28 @@ func setupHTTPServer(cfg *cfgType.ServerConfig) *http.Server {
 }
 
 // startBackgroundServices starts all background services
-func startBackgroundServices(cfg *cfgType.ServerConfig) {
-	log.Startup().Debug("Starting background services")
+func startBackgroundServices(cfg *cfgType.ServerConfig, dbAvailable bool) {
+	log.Startup().Debug("Starting background services",
+		"database_available", dbAvailable)
 
+	// Always start these services regardless of DB availability
 	// Start client statistics monitoring
 	go InitStatsMonitoring()
 
-	// Start event purging service
-	go mongo.ScheduleEventPurgingOptimized(cfg)
+	// Only start DB-dependent services if database is available
+	if dbAvailable {
+		// Start event purging service
+		go mongo.ScheduleEventPurgingOptimized(cfg)
 
-	// Start periodic user sync service
-	go userSync.StartPeriodicUserSync(cfg)
+		// Start periodic user sync service
+		go userSync.StartPeriodicUserSync(cfg)
 
-	log.Startup().Info("Background services started")
+		log.Startup().Info("All background services started")
+	} else {
+		log.Startup().Warn("Database-dependent services disabled due to MongoDB unavailability",
+			"disabled_services", "event_purging, user_sync")
+		log.Startup().Info("Non-database background services started")
+	}
 }
 
 // resetConfigurations resets all configuration state for restart
