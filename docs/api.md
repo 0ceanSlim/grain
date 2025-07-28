@@ -1266,27 +1266,27 @@ Returns the service worker JavaScript for offline functionality.
 
 ### Client API Endpoints
 
-| Method | Endpoint                      | Description                 |
-| ------ | ----------------------------- | --------------------------- |
-| GET    | `/api/v1/session`             | Get current session info    |
-| GET    | `/api/v1/cache`               | Get cached user data        |
-| POST   | `/api/v1/cache/refresh`       | Refresh cache manually      |
-| POST   | `/api/v1/auth/login`          | Login with public key       |
-| POST   | `/api/v1/auth/logout`         | Logout current session      |
-| GET    | `/api/v1/auth/amber-callback` | Amber signer callback       |
-| GET    | `/api/v1/generate/keypair`    | Generate new keypair        |
-| POST   | `/api/v1/convert/pubkey`      | Convert pubkey to npub      |
-| POST   | `/api/v1/convert/npub`        | Convert npub to pubkey      |
-| POST   | `/api/v1/validate/pubkey`     | Validate public key         |
-| POST   | `/api/v1/validate/npub`       | Validate npub               |
-| GET    | `/api/v1/relay/ping`          | Ping relay                  |
-| POST   | `/api/v1/relays/connect`      | Connect to relay            |
-| POST   | `/api/v1/relays/disconnect`   | Disconnect from relay       |
-| GET    | `/api/v1/relays/status`       | Get relay connection status |
-| POST   | `/api/v1/publish`             | Publish Nostr event         |
-| GET    | `/api/v1/events/query`        | Query events with filters   |
-| GET    | `/api/v1/user/profile`        | Get user profile            |
-| GET    | `/api/v1/user/relays`         | Get user relay list         |
+| Method | Endpoint                             | Description                        |
+| ------ | ------------------------------------ | ---------------------------------- |
+| GET    | `/api/v1/session`                    | Get current session info           |
+| GET    | `/api/v1/cache`                      | Get cached user data               |
+| POST   | `/api/v1/cache/refresh`              | Refresh cache manually             |
+| POST   | `/api/v1/auth/login`                 | Login with public key              |
+| POST   | `/api/v1/auth/logout`                | Logout current session             |
+| GET    | `/api/v1/auth/amber-callback`        | Amber signer callback              |
+| GET    | `/api/v1/keys/generate`              | Generate new keypair               |
+| GET    | `/api/v1/keys/derive/{private_key}`  | Derive public key from private key |
+| GET    | `/api/v1/keys/convert/public/{key}`  | Convert between hex and npub       |
+| GET    | `/api/v1/keys/convert/private/{key}` | Convert between hex and nsec       |
+| GET    | `/api/v1/keys/validate/{key}`        | Validate any key type              |
+| GET    | `/api/v1/relay/ping`                 | Ping relay                         |
+| POST   | `/api/v1/relays/connect`             | Connect to relay                   |
+| POST   | `/api/v1/relays/disconnect`          | Disconnect from relay              |
+| GET    | `/api/v1/relays/status`              | Get relay connection status        |
+| POST   | `/api/v1/publish`                    | Publish Nostr event                |
+| GET    | `/api/v1/events/query`               | Query events with filters          |
+| GET    | `/api/v1/user/profile`               | Get user profile                   |
+| GET    | `/api/v1/user/relays`                | Get user relay list                |
 
 ### Relay Management API Endpoints
 
