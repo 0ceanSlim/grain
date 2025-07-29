@@ -16,6 +16,31 @@
         </p>
       </div>
 
+      <!-- Session Information -->
+      <div class="p-6 mb-8 bg-gray-800 rounded-lg">
+        <h2 class="mb-4 text-xl font-semibold text-white">
+          🔐 Session Information
+        </h2>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label class="block text-sm font-medium text-gray-400"
+              >Session Mode</label
+            >
+            <span id="session-mode" class="block mt-1 text-white"
+              >Loading...</span
+            >
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-400"
+              >Signing Method</label
+            >
+            <span id="signing-method" class="block mt-1 text-white"
+              >Loading...</span
+            >
+          </div>
+        </div>
+      </div>
+
       <!-- Relay Management -->
       <div class="p-6 mb-8 bg-gray-800 rounded-lg">
         <h2 class="mb-4 text-xl font-semibold text-white">
@@ -25,11 +50,11 @@
         <!-- Tab Navigation -->
         <div class="flex mb-6 border-b border-gray-600">
           <button
-            id="app-relays-tab"
+            id="client-relays-tab"
             class="px-4 py-2 text-sm font-medium text-blue-400 transition-colors border-b-2 border-blue-500"
-            onclick="switchRelayTab('app-relays')"
+            onclick="switchRelayTab('client-relays')"
           >
-            App Relays
+            Client Relays
           </button>
           <button
             id="mailboxes-tab"
@@ -40,14 +65,44 @@
           </button>
         </div>
 
-        <!-- Tab Content -->
-        <div id="app-relays-content" class="relay-tab-content">
+        <!-- Client Relays Tab Content -->
+        <div id="client-relays-content" class="relay-tab-content">
           <div class="flex items-center justify-between mb-4">
-            <p class="text-sm text-gray-400">Your configured App relays</p>
+            <p class="text-sm text-gray-400">Your configured client relays</p>
+            <div id="client-relay-buttons" class="space-x-2">
+              <button
+                id="edit-relays-btn"
+                onclick="toggleEditMode()"
+                class="px-4 py-2 text-sm text-white transition-colors bg-blue-600 rounded-lg hover:bg-blue-700"
+              >
+                Edit
+              </button>
+              <button
+                id="save-relays-btn"
+                onclick="saveRelayChanges()"
+                class="hidden px-4 py-2 text-sm text-white transition-colors bg-green-600 rounded-lg hover:bg-green-700"
+              >
+                Save
+              </button>
+              <button
+                id="import-mailboxes-btn"
+                onclick="importFromMailboxes()"
+                class="hidden px-4 py-2 text-sm text-white transition-colors bg-purple-600 rounded-lg hover:bg-purple-700"
+              >
+                Import from Mailboxes
+              </button>
+              <button
+                id="cancel-edit-btn"
+                onclick="cancelEdit()"
+                class="hidden px-4 py-2 text-sm text-white transition-colors bg-gray-600 rounded-lg hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
 
-          <!-- App Relays Table -->
-          <div class="overflow-x-auto">
+          <!-- View Mode: Client Relays Table -->
+          <div id="client-relays-view" class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead>
                 <tr class="border-b border-gray-600">
@@ -76,7 +131,7 @@
                   </th>
                 </tr>
               </thead>
-              <tbody id="app-relays-table">
+              <tbody id="client-relays-table">
                 <tr>
                   <td colspan="5" class="py-8 text-center text-gray-400">
                     <div
@@ -88,8 +143,27 @@
               </tbody>
             </table>
           </div>
+
+          <!-- Edit Mode: Client Relays Form -->
+          <div id="client-relays-edit" class="hidden space-y-4">
+            <div class="p-4 bg-gray-700 rounded-lg">
+              <h3 class="mb-4 text-lg font-medium text-white">
+                Edit Client Relays
+              </h3>
+              <div id="relay-form-list" class="space-y-3">
+                <!-- Dynamic relay form entries will be inserted here -->
+              </div>
+              <button
+                onclick="addNewRelayInput()"
+                class="px-4 py-2 mt-4 text-sm text-white transition-colors bg-blue-600 rounded-lg hover:bg-blue-700"
+              >
+                + Add Relay
+              </button>
+            </div>
+          </div>
         </div>
 
+        <!-- Mailboxes Tab Content -->
         <div id="mailboxes-content" class="hidden relay-tab-content">
           <div class="mb-4">
             <p class="text-sm text-gray-400">
@@ -142,42 +216,30 @@
         </div>
       </div>
 
-      <!-- Session Information -->
+      <!-- Key Information -->
       <div class="p-6 mb-8 bg-gray-800 rounded-lg">
         <h2 class="mb-4 text-xl font-semibold text-white">
-          🔐 Session Information
+          🔑 Key Information
         </h2>
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div>
-            <label class="block text-sm font-medium text-gray-400"
-              >Session Mode</label
+        <div class="space-y-4">
+          <div class="p-4 bg-gray-700 rounded-lg">
+            <p class="mb-1 text-sm text-gray-400">Public Key (Hex)</p>
+            <p
+              class="font-mono text-sm text-white break-all"
+              id="settings-pubkey"
             >
-            <span id="session-mode" class="block mt-1 text-white"
-              >Loading...</span
-            >
+              Loading...
+            </p>
           </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-400"
-              >Signing Method</label
+          <div class="p-4 bg-gray-700 rounded-lg">
+            <p class="mb-1 text-sm text-gray-400">Public Key (npub)</p>
+            <p
+              class="font-mono text-sm text-white break-all"
+              id="settings-npub"
             >
-            <span id="signing-method" class="block mt-1 text-white"
-              >Loading...</span
-            >
+              Loading...
+            </p>
           </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-400"
-              >Can Create Events</label
-            >
-            <span id="can-create-events" class="block mt-1 text-white"
-              >Loading...</span
-            >
-          </div>
-        </div>
-        <div class="mt-4">
-          <label class="block text-sm font-medium text-gray-400"
-            >Cache Age</label
-          >
-          <span id="cache-age" class="block mt-1 text-white">Loading...</span>
         </div>
       </div>
 
