@@ -538,7 +538,7 @@ async function saveRelayChanges() {
   }
 }
 
-// Updated ping functionality
+// Updated ping functionality for new domain-based endpoint
 async function pingSingleRelay(relayUrl) {
   const safeId = btoa(relayUrl).replace(/[^a-zA-Z0-9]/g, "");
   const pingButton = document.getElementById(`ping-${safeId}`);
@@ -552,7 +552,7 @@ async function pingSingleRelay(relayUrl) {
     const result = await pingRelay(relayUrl);
     if (pingButton) {
       if (result.success) {
-        pingButton.innerHTML = `<span class="text-green-400 font-mono">${result.responseTime}ms</span>`;
+        pingButton.innerHTML = `<span class="text-green-400 font-mono">${result.response_time}ms</span>`;
       } else {
         pingButton.innerHTML = `<span class="text-red-400">Error</span>`;
       }
@@ -577,7 +577,7 @@ async function pingAllRelays(relays) {
 
       if (pingElement) {
         if (pingResult.success) {
-          pingElement.innerHTML = `<span class="text-green-400 font-mono">${pingResult.responseTime}ms</span>`;
+          pingElement.innerHTML = `<span class="text-green-400 font-mono">${pingResult.response_time}ms</span>`;
           if (statusElement) {
             statusElement.innerHTML = `
               <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></span>
@@ -621,56 +621,58 @@ async function pingAllRelays(relays) {
   }
 }
 
+/**
+ * Extracts domain from WebSocket URL for the new ping endpoint
+ * @param {string} relayUrl - Full WebSocket URL (e.g., "wss://relay.damus.io/")
+ * @returns {string} - Clean domain (e.g., "relay.damus.io")
+ */
+function extractDomainFromRelayUrl(relayUrl) {
+  try {
+    // Remove protocol prefixes and trailing slashes
+    let domain = relayUrl.replace(/^wss?:\/\//, "").replace(/\/$/, "");
+
+    // Handle edge cases where domain might have path components
+    domain = domain.split("/")[0];
+
+    return domain;
+  } catch (error) {
+    console.error(`Failed to extract domain from ${relayUrl}:`, error);
+    return relayUrl; // Fallback to original if parsing fails
+  }
+}
+
 async function pingRelay(relayUrl) {
   try {
+    // Extract just the domain from the relay URL
+    const domain = extractDomainFromRelayUrl(relayUrl);
+    const pingEndpoint = `/api/v1/ping/${domain}`;
+
     console.log(
-      `Making ping request to: /api/v1/ping/?url=${encodeURIComponent(
-        relayUrl
-      )}`
+      `Making ping request to: ${pingEndpoint} for relay: ${relayUrl}`
     );
 
-    // Updated to use your ping endpoint
-    const response = await fetch(
-      `/api/v1/ping/?url=${encodeURIComponent(relayUrl)}`
-    );
+    const response = await fetch(pingEndpoint);
 
-    console.log(`Ping response status: ${response.status} for ${relayUrl}`);
+    console.log(`Ping response status: ${response.status} for ${domain}`);
 
     if (!response.ok) {
-      console.error(`HTTP ${response.status} for ${relayUrl}`);
-
-      // If endpoint doesn't exist, return a mock result for testing
-      if (response.status === 404) {
-        console.warn("Ping API endpoint not found - using mock data");
-        return {
-          success: true,
-          responseTime: Math.floor(Math.random() * 500) + 100,
-          relay: relayUrl,
-        };
-      }
-
+      console.error(`HTTP ${response.status} for ${domain}`);
       throw new Error(`HTTP ${response.status}`);
     }
 
     const result = await response.json();
-    console.log(`Ping result for ${relayUrl}:`, result);
+    console.log(`Ping result for ${domain}:`, result);
+
+    // The result uses response_time (not responseTime) and already has the correct format
     return result;
   } catch (error) {
     console.error(`Ping failed for ${relayUrl}:`, error);
-
-    // If network error, check if it's because endpoint doesn't exist
-    if (error.message.includes("fetch")) {
-      console.warn(
-        "Network error - possibly missing ping endpoint, using mock data"
-      );
-      return {
-        success: true,
-        responseTime: Math.floor(Math.random() * 500) + 100,
-        relay: relayUrl,
-      };
-    }
-
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: error.message,
+      response_time: 0,
+      relay: relayUrl,
+    };
   }
 }
 
@@ -793,6 +795,7 @@ function updateMailboxTable(data) {
   pingAllMailboxes(mailboxesData);
 }
 
+// Fixed pingAllMailboxes function to use response_time instead of responseTime
 async function pingAllMailboxes(mailboxes) {
   for (const [url] of Object.entries(mailboxes)) {
     try {
@@ -805,7 +808,8 @@ async function pingAllMailboxes(mailboxes) {
 
       if (pingElement) {
         if (pingResult.success) {
-          pingElement.innerHTML = `<span class="text-green-400 font-mono">${pingResult.responseTime}ms</span>`;
+          // Fixed: use response_time instead of responseTime
+          pingElement.innerHTML = `<span class="text-green-400 font-mono">${pingResult.response_time}ms</span>`;
           if (statusElement) {
             statusElement.innerHTML = `
               <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></span>
