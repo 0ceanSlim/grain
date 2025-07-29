@@ -157,3 +157,59 @@ func SetUserClientRelaysFromMailboxes(publicKey string) error {
 
 	return nil
 }
+
+// RemoveClientRelay removes a specific relay from user's client relay list
+func RemoveClientRelay(publicKey, relayURL string) error {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+
+	if cache.clientRelays == nil {
+		return fmt.Errorf("no client relays found for user")
+	}
+
+	relayStrings, exists := cache.clientRelays[publicKey]
+	if !exists || len(relayStrings) == 0 {
+		return fmt.Errorf("no client relays found for user %s", publicKey)
+	}
+
+	// Find and remove the relay
+	var updatedRelays []string
+	var removed bool
+
+	for _, relayString := range relayStrings {
+		var relayInfo ClientRelayConfig
+		if err := json.Unmarshal([]byte(relayString), &relayInfo); err != nil {
+			// Handle legacy format (plain URL strings)
+			if relayString != relayURL {
+				updatedRelays = append(updatedRelays, relayString)
+			} else {
+				removed = true
+			}
+		} else {
+			// Modern format with permissions
+			if relayInfo.URL != relayURL {
+				updatedRelays = append(updatedRelays, relayString)
+			} else {
+				removed = true
+			}
+		}
+	}
+
+	if !removed {
+		return fmt.Errorf("relay %s not found in user's relay list", relayURL)
+	}
+
+	// Update the cache
+	if len(updatedRelays) == 0 {
+		delete(cache.clientRelays, publicKey)
+	} else {
+		cache.clientRelays[publicKey] = updatedRelays
+	}
+
+	log.ClientCache().Info("Removed client relay",
+		"pubkey", publicKey,
+		"relay", relayURL,
+		"remaining_relays", len(updatedRelays))
+
+	return nil
+}

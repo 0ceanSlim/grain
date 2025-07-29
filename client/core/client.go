@@ -59,6 +59,45 @@ func (c *Client) ConnectToRelays(urls []string) error {
 	return nil
 }
 
+// DisconnectFromRelay closes a specific relay connection
+func (c *Client) DisconnectFromRelay(relayURL string) error {
+	log.ClientCore().Info("Disconnecting from relay", "relay", relayURL)
+
+	// Use the relay pool's existing CloseConnection method
+	if err := c.relayPool.CloseConnection(relayURL); err != nil {
+		log.ClientCore().Error("Failed to close relay connection", "relay", relayURL, "error", err)
+		return err
+	}
+
+	log.ClientCore().Info("Successfully disconnected from relay", "relay", relayURL)
+	return nil
+}
+
+// DisconnectFromRelays closes connections to multiple relays
+func (c *Client) DisconnectFromRelays(relayURLs []string) error {
+	var lastErr error
+	disconnected := 0
+
+	log.ClientCore().Info("Disconnecting from multiple relays", "relay_count", len(relayURLs))
+
+	for _, relayURL := range relayURLs {
+		if err := c.DisconnectFromRelay(relayURL); err != nil {
+			log.ClientCore().Warn("Failed to disconnect from relay", "relay", relayURL, "error", err)
+			lastErr = err
+		} else {
+			disconnected++
+		}
+	}
+
+	log.ClientCore().Info("Relay disconnection complete", "requested", len(relayURLs), "disconnected", disconnected)
+
+	if disconnected == 0 && lastErr != nil {
+		return fmt.Errorf("failed to disconnect from any relays: %w", lastErr)
+	}
+
+	return nil // Success if at least one disconnected
+}
+
 // Subscribe creates a new subscription with filters and relay hints
 func (c *Client) Subscribe(filters []nostr.Filter, relayHints []string) (*Subscription, error) {
 	subID := generateSubscriptionID()

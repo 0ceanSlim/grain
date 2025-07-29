@@ -2,15 +2,19 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
+	"github.com/0ceanslim/grain/client/cache"
+	"github.com/0ceanslim/grain/client/connection"
+	"github.com/0ceanslim/grain/client/core"
 	"github.com/0ceanslim/grain/client/session"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // ClientDisconnectHandler disconnects the client from a relay
+// Usage: POST /api/v1/client/disconnect/relay.damus.io
 func ClientDisconnectHandler(w http.ResponseWriter, r *http.Request) {
 	// Only allow POST requests
 	if r.Method != http.MethodPost {
@@ -34,73 +38,112 @@ func ClientDisconnectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract relay URL from path
+	// Extract relay domain from path
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/client/disconnect/")
-	relayURL := strings.TrimSpace(path)
+	relayDomain := strings.TrimSpace(path)
 
-	if relayURL == "" {
-		log.ClientAPI().Warn("Missing relay URL parameter",
+	if relayDomain == "" {
+		log.ClientAPI().Warn("Missing relay domain parameter",
 			"client_ip", r.RemoteAddr,
 			"user", userSession.PublicKey)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Relay URL parameter is required"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Relay domain is required in URL path"})
 		return
 	}
 
-	// URL decode the relay URL
-	decodedURL, err := url.QueryUnescape(relayURL)
-	if err != nil {
-		log.ClientAPI().Warn("Failed to decode relay URL",
-			"url", relayURL,
-			"error", err,
-			"client_ip", r.RemoteAddr,
-			"user", userSession.PublicKey)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid URL encoding"})
-		return
-	}
-
-	// Validate URL format
-	if !strings.HasPrefix(decodedURL, "ws://") && !strings.HasPrefix(decodedURL, "wss://") {
-		log.ClientAPI().Warn("Invalid relay URL format",
-			"url", decodedURL,
-			"client_ip", r.RemoteAddr,
-			"user", userSession.PublicKey)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid relay URL format (must start with ws:// or wss://)"})
-		return
-	}
-
-	// Validate URL can be parsed
-	_, err = url.Parse(decodedURL)
-	if err != nil {
-		log.ClientAPI().Warn("Invalid relay URL",
-			"url", decodedURL,
-			"error", err,
-			"client_ip", r.RemoteAddr,
-			"user", userSession.PublicKey)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid relay URL format"})
-		return
-	}
+	publicKey := userSession.PublicKey
 
 	log.ClientAPI().Debug("Disconnecting client from relay",
-		"relay_url", decodedURL,
+		"domain", relayDomain,
 		"client_ip", r.RemoteAddr,
-		"user", userSession.PublicKey)
+		"user", publicKey)
 
-	// TODO: Add actual relay disconnection logic here
-	// This might involve updating the client's relay list in memory/database
-	// and closing the actual WebSocket connection
+	// Find the relay URL in user's cached relays (could be ws:// or wss://)
+	cachedRelays, err := cache.GetUserClientRelays(publicKey)
+	if err != nil {
+		log.ClientAPI().Error("Failed to get cached relays",
+			"user", publicKey,
+			"error", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"relay":   relayDomain,
+			"error":   "Failed to get user's relay list",
+		})
+		return
+	}
 
-	// For now, just return success
+	// Clean domain for matching
+	cleanDomain := strings.TrimPrefix(relayDomain, "wss://")
+	cleanDomain = strings.TrimPrefix(cleanDomain, "ws://")
+	cleanDomain = strings.TrimSuffix(cleanDomain, "/")
+
+	var foundRelayURL string
+	for _, relay := range cachedRelays {
+		// Check if this relay matches the domain
+		if strings.Contains(relay.URL, cleanDomain) {
+			foundRelayURL = relay.URL
+			break
+		}
+	}
+
+	if foundRelayURL == "" {
+		log.ClientAPI().Warn("Relay not found in user's relay list",
+			"domain", relayDomain,
+			"user", publicKey)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"relay":   relayDomain,
+			"error":   "Relay not found in user's relay list",
+		})
+		return
+	}
+
+	// Disconnect from core client pool
+	coreClient := connection.GetCoreClient()
+	if coreClient != nil {
+		if err := disconnectRelayFromPool(coreClient, foundRelayURL); err != nil {
+			log.ClientAPI().Warn("Failed to disconnect from relay pool",
+				"relay", foundRelayURL,
+				"error", err,
+				"user", publicKey)
+			// Continue anyway to remove from cache
+		} else {
+			log.ClientAPI().Info("Successfully disconnected from relay pool",
+				"relay", foundRelayURL,
+				"user", publicKey)
+		}
+	}
+
+	// Remove from user's cached client relays
+	if err := cache.RemoveClientRelay(publicKey, foundRelayURL); err != nil {
+		log.ClientAPI().Error("Failed to remove relay from cache",
+			"relay", foundRelayURL,
+			"error", err,
+			"user", publicKey)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"relay":   foundRelayURL,
+			"error":   "Failed to remove relay from user's relay list",
+		})
+		return
+	}
+
+	log.ClientAPI().Info("Successfully disconnected and removed relay",
+		"user", publicKey,
+		"relay", foundRelayURL,
+		"domain", relayDomain)
+
+	// Return success response
 	response := map[string]interface{}{
 		"success":   true,
-		"relay":     decodedURL,
+		"relay":     foundRelayURL,
 		"message":   "Successfully disconnected from relay",
 		"connected": false,
 	}
@@ -109,15 +152,35 @@ func ClientDisconnectHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.ClientAPI().Error("Failed to encode disconnect response",
 			"error", err,
-			"relay_url", decodedURL,
+			"relay_url", foundRelayURL,
 			"client_ip", r.RemoteAddr,
-			"user", userSession.PublicKey)
+			"user", publicKey)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	log.ClientAPI().Info("Client disconnected from relay",
-		"relay_url", decodedURL,
+		"relay_url", foundRelayURL,
 		"client_ip", r.RemoteAddr,
-		"user", userSession.PublicKey)
+		"user", publicKey)
+}
+
+// disconnectRelayFromPool disconnects a relay from the core client pool
+func disconnectRelayFromPool(coreClient interface{}, relayURL string) error {
+	// Cast the interface to the actual core client type
+	client, ok := coreClient.(*core.Client)
+	if !ok {
+		return fmt.Errorf("invalid core client type")
+	}
+
+	log.ClientAPI().Info("Disconnecting relay from pool", "relay", relayURL)
+
+	// Use the core client's DisconnectFromRelay method
+	if err := client.DisconnectFromRelay(relayURL); err != nil {
+		log.ClientAPI().Error("Failed to disconnect relay from pool", "relay", relayURL, "error", err)
+		return err
+	}
+
+	log.ClientAPI().Info("Successfully disconnected relay from pool", "relay", relayURL)
+	return nil
 }

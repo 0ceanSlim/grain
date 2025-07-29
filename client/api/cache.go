@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/0ceanslim/grain/client/cache"
-	"github.com/0ceanslim/grain/client/core"
 	"github.com/0ceanslim/grain/client/core/tools"
 	"github.com/0ceanslim/grain/client/data"
 	"github.com/0ceanslim/grain/client/session"
@@ -19,35 +18,25 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 	userSession := session.SessionMgr.GetCurrentUser(r)
 	if userSession == nil {
 		http.Error(w, "User not logged in", http.StatusUnauthorized)
-		log.ClientAPI().Debug("No active session found for cache request")
 		return
 	}
 
 	publicKey := userSession.PublicKey
+	log.ClientAPI().Debug("Getting cached user data", "pubkey", publicKey)
+
+	// Get cached data
 	cachedData, found := cache.GetUserData(publicKey)
-
-	// If cache is missing, rebuild it from the user's session key
 	if !found {
-		log.ClientAPI().Info("Cache missing, rebuilding from user session", "pubkey", publicKey)
+		log.ClientAPI().Info("Cache miss, rebuilding from session key", "pubkey", publicKey)
 
-		// Fetch fresh data from Nostr network using session key
+		// Attempt to rebuild cache
 		if err := data.FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
 			log.ClientAPI().Error("Failed to rebuild cache", "pubkey", publicKey, "error", err)
-
-			// Return error response
-			response := map[string]interface{}{
-				"error":   "Failed to load user data",
-				"message": "Could not fetch data from Nostr network",
-				"pubkey":  publicKey,
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(response)
+			http.Error(w, "Failed to load user data", http.StatusInternalServerError)
 			return
 		}
 
-		// Get cached data after rebuild
+		// Try to get cache again after rebuild
 		cachedData, found = cache.GetUserData(publicKey)
 		if !found {
 			log.ClientAPI().Error("Cache still empty after rebuild", "pubkey", publicKey)
@@ -66,29 +55,15 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Parse mailboxes and create relay info
+	// Parse mailboxes (raw Nostr data)
 	var parsedMailboxes map[string]interface{}
-	var relays map[string]interface{}
 	if cachedData.Mailboxes != "" && cachedData.Mailboxes != "{}" {
 		if err := json.Unmarshal([]byte(cachedData.Mailboxes), &parsedMailboxes); err != nil {
 			log.ClientAPI().Warn("Failed to parse cached mailboxes", "pubkey", publicKey, "error", err)
-		} else {
-			// Create structured relay info from mailboxes
-			var mailboxes core.Mailboxes
-			if json.Unmarshal([]byte(cachedData.Mailboxes), &mailboxes) == nil {
-				userRelays := mailboxes.ToStringSlice()
-				relays = map[string]interface{}{
-					"userRelays": userRelays,
-					"relayCount": len(userRelays),
-					"read":       mailboxes.Read,
-					"write":      mailboxes.Write, // Include write relays
-					"both":       mailboxes.Both,
-				}
-			}
 		}
 	}
 
-	// Get user's client relays (managed relay list for this client)
+	// Get user's client relays (the managed relay list that the app actually uses)
 	var clientRelays map[string]interface{}
 	if userClientRelays, err := cache.GetUserClientRelays(publicKey); err == nil && len(userClientRelays) > 0 {
 		connected := 0
@@ -100,6 +75,8 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			relayList[i] = map[string]interface{}{
 				"url":       relay.URL,
+				"read":      relay.Read,
+				"write":     relay.Write,
 				"connected": relay.Connected,
 				"added_at":  relay.AddedAt,
 			}
@@ -120,13 +97,16 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create comprehensive cache response (no session data)
+	// Create comprehensive cache response
 	response := map[string]interface{}{
 		"publicKey":      publicKey,
 		"npub":           npub,
 		"cacheTimestamp": cachedData.Timestamp,
 		"cacheAge":       cachedData.Timestamp.Format("2006-01-02 15:04:05"),
 		"refreshed":      !found,
+		// Include session information
+		"sessionMode":   userSession.Mode,
+		"signingMethod": userSession.SigningMethod,
 	}
 
 	// Add metadata
@@ -136,19 +116,15 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 		response["metadataRaw"] = cachedData.Metadata
 	}
 
-	// Add mailboxes
+	// Add mailboxes (raw Nostr relay list data from kind 10002)
 	if parsedMailboxes != nil {
 		response["mailboxes"] = parsedMailboxes
 	} else if cachedData.Mailboxes != "" {
 		response["mailboxesRaw"] = cachedData.Mailboxes
 	}
 
-	// Add relays (from user's Nostr mailboxes)
-	if relays != nil {
-		response["relays"] = relays
-	}
-
-	// Add clientRelays (user's managed client relay list)
+	// Add clientRelays (the app's managed relay list derived from mailboxes)
+	// This is the ONLY relay field we need - it includes all the relay info the client needs
 	if clientRelays != nil {
 		response["clientRelays"] = clientRelays
 	}
@@ -158,6 +134,7 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 		"cache_age", cachedData.Timestamp.Format("15:04:05"))
 
 	w.Header().Set("Content-Type", "application/json")
+
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.ClientAPI().Error("Failed to encode cached data", "pubkey", publicKey, "error", err)
 		http.Error(w, "Failed to retrieve cached data", http.StatusInternalServerError)

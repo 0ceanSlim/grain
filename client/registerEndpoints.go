@@ -62,6 +62,7 @@ func RegisterEndpoints(mux *http.ServeMux) {
 
 	// Core Nostr client function endpoints
 	registerCoreClientEndpoints(mux)
+
 }
 
 // registerCoreClientEndpoints registers endpoints for core Nostr client functions

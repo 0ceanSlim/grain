@@ -27,7 +27,11 @@ Complete REST API reference for GRAIN relay operations.
       - [Ping Relay](#ping-relay)
       - [Connect to Relay](#connect-to-relay)
       - [Disconnect from Relay](#disconnect-from-relay)
-      - [Get Relay Status](#get-relay-status)
+      - [Get Client Relay Status](#get-client-relay-status)
+    - [Key Features](#key-features)
+      - [Protocol Detection](#protocol-detection)
+      - [Permission Control](#permission-control)
+      - [Authentication](#authentication-1)
     - [Event Operations](#event-operations)
       - [Publish Event](#publish-event)
       - [Query Events](#query-events)
@@ -394,64 +398,149 @@ Invalid key:
 #### Ping Relay
 
 ```http
-GET /api/v1/relay/ping
+GET /api/v1/ping/{domain}
 ```
 
-Checks if the local relay is responsive.
+Pings a relay and returns response time and connection status with automatic protocol detection.
+
+**Parameters:**
+
+- `{domain}` - Relay domain (e.g., `relay.damus.io`)
+
+**Examples:**
+
+```http
+GET /api/v1/ping/relay.damus.io
+GET /api/v1/ping/nos.lol
+GET /api/v1/ping/wheat.happytavern.co
+```
 
 **Response:**
 
 ```json
 {
-  "status": "pong",
-  "timestamp": "2024-01-15T12:00:00Z"
+  "success": true,
+  "response_time": 45,
+  "relay": "wss://relay.damus.io/"
+}
+```
+
+**Failed Response:**
+
+```json
+{
+  "success": false,
+  "response_time": 5000,
+  "relay": "relay.damus.io",
+  "error": "Unable to connect via ws:// or wss://"
 }
 ```
 
 #### Connect to Relay
 
 ```http
-POST /api/v1/relays/connect
-Content-Type: application/json
+POST /api/v1/client/connect/{domain}
+POST /api/v1/client/connect/{domain}?read=true&write=false
+```
 
-{
-  "url": "wss://relay.damus.io"
-}
+Connects to a relay with automatic protocol detection and configurable permissions.
+
+**Parameters:**
+
+- `{domain}` - Relay domain (e.g., `relay.damus.io`)
+- `read` (optional) - Read permission (default: `true`)
+- `write` (optional) - Write permission (default: `true`)
+
+**Examples:**
+
+```http
+POST /api/v1/client/connect/relay.damus.io
+POST /api/v1/client/connect/nos.lol?read=true&write=false
+POST /api/v1/client/connect/wheat.happytavern.co?read=false&write=true
 ```
 
 **Response:**
 
 ```json
 {
-  "status": "connected",
-  "relay": "wss://relay.damus.io"
+  "success": true,
+  "relay": "wss://relay.damus.io/",
+  "message": "Successfully connected to relay",
+  "connected": true,
+  "read": true,
+  "write": false
+}
+```
+
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "relay": "relay.damus.io",
+  "error": "Unable to connect via ws:// or wss://"
 }
 ```
 
 #### Disconnect from Relay
 
 ```http
-POST /api/v1/relays/disconnect
-Content-Type: application/json
+POST /api/v1/client/disconnect/{domain}
+```
 
-{
-  "url": "wss://relay.damus.io"
-}
+Disconnects from a relay and removes it from the user's relay list.
+
+**Parameters:**
+
+- `{domain}` - Relay domain (e.g., `relay.damus.io`)
+
+**Examples:**
+
+```http
+POST /api/v1/client/disconnect/relay.damus.io
+POST /api/v1/client/disconnect/nos.lol
+POST /api/v1/client/disconnect/offchain.pub
 ```
 
 **Response:**
 
 ```json
 {
-  "status": "disconnected",
-  "relay": "wss://relay.damus.io"
+  "success": true,
+  "relay": "wss://relay.damus.io/",
+  "message": "Successfully disconnected from relay",
+  "connected": false
 }
 ```
 
-#### Get Relay Status
+**Error Response:**
+
+```json
+{
+  "success": false,
+  "relay": "relay.damus.io",
+  "error": "Relay not found in user's relay list"
+}
+```
+
+#### Get Client Relay Status
 
 ```http
-GET /api/v1/relays/status
+GET /api/v1/client/relays
+GET /api/v1/client/relays?ping=true
+```
+
+Returns the status of the user's configured client relays with optional ping testing.
+
+**Parameters:**
+
+- `ping` (optional) - Include latency testing (default: `false`)
+
+**Examples:**
+
+```http
+GET /api/v1/client/relays
+GET /api/v1/client/relays?ping=true
 ```
 
 **Response:**
@@ -460,18 +549,60 @@ GET /api/v1/relays/status
 {
   "relays": [
     {
-      "url": "wss://relay.damus.io",
+      "url": "wss://relay.damus.io/",
+      "connected": true,
       "status": "connected",
-      "latency": 45
+      "latency": 45,
+      "last_checked": "2025-07-28T19:34:52Z",
+      "read": true,
+      "write": false,
+      "added_at": "2025-07-28T18:57:58Z"
     },
     {
-      "url": "wss://nos.lol",
-      "status": "connected",
-      "latency": 120
+      "url": "wss://nos.lol/",
+      "connected": false,
+      "status": "disconnected",
+      "last_checked": "2025-07-28T19:34:52Z",
+      "read": true,
+      "write": true,
+      "added_at": "2025-07-28T18:57:58Z"
     }
-  ]
+  ],
+  "count": 2
 }
 ```
+
+**Status Values:**
+
+- `"connected"` - Relay is actively connected via core client
+- `"disconnected"` - Relay not connected via core client
+- `"reachable"` - Not connected but ping successful (when `ping=true`)
+- `"unreachable"` - Not connected and ping failed (when `ping=true`)
+
+---
+
+### Key Features
+
+#### Protocol Detection
+
+All relay operations automatically detect and use the correct protocol:
+
+- Tries `wss://` (secure) first
+- Falls back to `ws://` if needed
+- Returns the working protocol in responses
+
+#### Permission Control
+
+Connect operations support granular permissions:
+
+- `read=true&write=true` - Full access (default)
+- `read=true&write=false` - Read-only access
+- `read=false&write=true` - Write-only access
+- Both `false` is rejected as invalid
+
+#### Authentication
+
+All client relay operations require user authentication via session cookies.
 
 ### Event Operations
 
