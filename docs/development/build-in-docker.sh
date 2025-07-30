@@ -22,12 +22,134 @@ PLATFORMS=(
     "windows/amd64"
 )
 
+# Dependency URLs and versions
+HTMX_VERSION="2.0.4"
+HYPERSCRIPT_VERSION="0.9.14"
+HTMX_URL="https://unpkg.com/htmx.org@${HTMX_VERSION}/dist/htmx.min.js"
+HYPERSCRIPT_URL="https://unpkg.com/hyperscript.org@${HYPERSCRIPT_VERSION}/dist/_hyperscript.min.js"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
+
+# Download frontend dependencies
+download_dependencies() {
+    echo -e "${YELLOW}Downloading frontend dependencies...${NC}"
+    
+    # Create directories for bundled assets - JS only, CSS stays in style
+    mkdir -p www/static/js
+    
+    # Download HTMX
+    echo -n "  Downloading HTMX ${HTMX_VERSION}... "
+    if wget -q -O www/static/js/htmx.min.js "$HTMX_URL"; then
+        echo -e "${GREEN}✓${NC}"
+    else
+        echo -e "${RED}✗${NC}"
+        echo -e "${RED}Failed to download HTMX from: $HTMX_URL${NC}"
+        exit 1
+    fi
+    
+    # Download Hyperscript
+    echo -n "  Downloading Hyperscript ${HYPERSCRIPT_VERSION}... "
+    if wget -q -O www/static/js/hyperscript.min.js "$HYPERSCRIPT_URL"; then
+        echo -e "${GREEN}✓${NC}"
+    else
+        echo -e "${RED}✗${NC}"
+        echo -e "${RED}Failed to download Hyperscript from: $HYPERSCRIPT_URL${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}Dependencies downloaded successfully${NC}"
+}
+
+# Build TailwindCSS from source
+build_css() {
+    echo -e "${YELLOW}Building TailwindCSS v4...${NC}"
+    
+    # Verify TailwindCSS CLI is available
+    echo -n "  Checking TailwindCSS CLI... "
+    if ! command -v tailwindcss &> /dev/null; then
+        echo -e "${RED}✗${NC}"
+        echo -e "${RED}TailwindCSS CLI not found${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓${NC}"
+    
+    # Verify input file exists
+    if [ ! -f "www/style/input.css" ]; then
+        echo -e "${RED}TailwindCSS source file not found (input.css)${NC}"
+        exit 1
+    fi
+    
+    # Build CSS - TailwindCSS v4 with auto content detection
+    echo -n "  Compiling TailwindCSS v4... "
+    if (cd www/style && tailwindcss -i input.css -o tailwind.min.css --minify); then
+        echo -e "${GREEN}✓${NC}"
+    else
+        echo -e "${RED}✗${NC}"
+        echo -e "${RED}Failed to build TailwindCSS${NC}"
+        exit 1
+    fi
+    
+    # Verify the output file 
+    echo -n "  Verifying CSS build... "
+    CSS_SIZE=$(wc -c < www/style/tailwind.min.css)
+    echo -e "${GREEN}✓ (${CSS_SIZE} bytes)${NC}"
+    
+    echo -e "${GREEN}TailwindCSS v4 built successfully${NC}"
+}
+
+# Replace CDN URLs with bundled assets in templates
+replace_cdn_with_bundled() {
+    echo -e "${YELLOW}Updating templates for bundled assets...${NC}"
+    
+    # Find and process layout.html template
+    LAYOUT_FILE="www/views/templates/layout.html"
+    if [ ! -f "$LAYOUT_FILE" ]; then
+        echo -e "${RED}Layout template not found: $LAYOUT_FILE${NC}"
+        exit 1
+    fi
+    
+    echo -n "  Replacing CDN URLs... "
+    
+    # Replace TailwindCSS CDN with bundled CSS
+    sed -i 's|<script src="https://cdn.tailwindcss.com"></script>|<link rel="stylesheet" href="/style/tailwind.min.css">|g' "$LAYOUT_FILE"
+    
+    # Replace Hyperscript CDN with bundled JS (simple single line pattern)
+    sed -i 's|<script src="https://unpkg.com/hyperscript.org@[^"]*"></script>|<script src="/static/js/hyperscript.min.js"></script>|g' "$LAYOUT_FILE"
+    
+    # Replace HTMX CDN with bundled JS (specific pattern for your multi-line script)
+    # Create a temporary file to work with
+    cp "$LAYOUT_FILE" "${LAYOUT_FILE}.tmp"
+    
+    # Use perl for more reliable multi-line replacement
+    perl -0pe 's|<script\s+src="https://unpkg\.com/htmx\.org@[^"]*"[^>]*>\s*</script>|<script src="/static/js/htmx.min.js"></script>|gs' "${LAYOUT_FILE}.tmp" > "$LAYOUT_FILE"
+    
+    # Clean up temp file
+    rm "${LAYOUT_FILE}.tmp"
+    
+    echo -e "${GREEN}✓${NC}"
+    echo -e "${GREEN}Templates updated for bundled assets${NC}"
+}
+
+# Bundle frontend assets for release
+bundle_assets() {
+    echo -e "${YELLOW}Bundling frontend assets...${NC}"
+    
+    # Download dependencies
+    download_dependencies
+    
+    # Build CSS
+    build_css
+    
+    # Update templates
+    replace_cdn_with_bundled
+    
+    echo -e "${GREEN}Frontend assets bundled successfully${NC}"
+}
 
 echo -e "${BLUE}GRAIN Docker Build${NC}"
 echo "Version: ${VERSION}"
@@ -44,6 +166,9 @@ fi
 # Create output directories
 mkdir -p /output/dist
 mkdir -p /tmp/build
+
+# Bundle frontend assets first
+bundle_assets
 
 echo -e "${YELLOW}Building for all platforms...${NC}"
 
@@ -77,7 +202,7 @@ for platform in "${PLATFORMS[@]}"; do
     ARCHIVE_DIR="/tmp/build/$ARCHIVE"
     mkdir -p "$ARCHIVE_DIR"
     
-    # Copy files to archive (only binary and www folder)
+    # Copy files to archive (binary and www folder with bundled assets)
     echo -n "    Packaging... "
     cp "/tmp/build/$BINARY" "$ARCHIVE_DIR/"
     cp -r www "$ARCHIVE_DIR/"

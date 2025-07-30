@@ -1,7 +1,7 @@
 # Build environment for GRAIN releases
 FROM golang:1.23-alpine
 
-# Install build dependencies
+# Install build dependencies including frontend build tools
 RUN apk add --no-cache \
     git \
     zip \
@@ -10,7 +10,23 @@ RUN apk add --no-cache \
     curl \
     bash \
     ca-certificates \
-    dos2unix
+    dos2unix \
+    wget \
+    libstdc++ \
+    libgcc \
+    perl
+
+# Install TailwindCSS CLI - use musl version for Alpine Linux
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then TAILWIND_ARCH="x64"; \
+    elif [ "$ARCH" = "aarch64" ]; then TAILWIND_ARCH="arm64"; \
+    else echo "Unsupported architecture: $ARCH" && exit 1; fi && \
+    echo "Downloading TailwindCSS musl binary for: $TAILWIND_ARCH" && \
+    wget -O /usr/local/bin/tailwindcss \
+    https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-${TAILWIND_ARCH}-musl && \
+    chmod +x /usr/local/bin/tailwindcss && \
+    echo "TailwindCSS CLI installed successfully:" && \
+    /usr/local/bin/tailwindcss --version
 
 # Set environment variables for cross-compilation
 ENV CGO_ENABLED=0
