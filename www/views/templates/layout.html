@@ -51,7 +51,8 @@
       href="/static/icons/icon-16x16.png"
     />
 
-    <!-- Load external libraries first -->
+    <!-- Load external libraries first. These will be replaced on build with local minified 
+     versions and the build step will replace the tailwind cdn and compile the full minified css -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script
       src="https://unpkg.com/htmx.org@2.0.4"

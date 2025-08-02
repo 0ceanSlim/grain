@@ -1,25 +1,57 @@
-# Information
+# GRAIN Styling
 
-This repository no longer includes a minified version of the custom css used to style the web client views with themes defined in the input.css. If you want to change anything about the configuration or the input, you will need to rebuild the custom minified css by using the [Tailwind standalone CLI Tool](https://github.com/tailwindlabs/tailwindcss/releases).
+This directory contains the TailwindCSS v4 configuration and source files for GRAIN's web interface styling. The repository no longer includes a pre-built minified CSS file - you must build it using the TailwindCSS CLI.
 
-For Tailwind to Rebuild the CSS, Tailwind must be run to compile the new styling.
+## Building CSS
 
-To do this run:
-
-```bash
-tailwindcss -i www/style/input.css -o www/style/custom.min.css --minify
-```
-
-## Development
-
-You can run a watcher while in development to automatically rebuild the `tailwind.min.css` whenever a file in the project directory is modified.
-
-To do this run:
+To rebuild the CSS after making changes to `input.css` or your templates, use the [TailwindCSS standalone CLI](https://github.com/tailwindlabs/tailwindcss/releases):
 
 ```bash
-tailwindcss -i www/style/input.css -o www/style/custom.min.css --watch --minify
+cd www/style
+tailwindcss -i input.css -o tailwind.min.css --minify
 ```
 
-### Dark Mode
+## Development Workflow
 
-Yes... This framework is designed with "Dark Mode" as the default theme. As all things should be.
+For active development, run the watcher to automatically rebuild CSS when files change:
+
+```bash
+cd www/style
+tailwindcss -i input.css -o tailwind.min.css --watch --minify
+```
+
+## TailwindCSS v4 Configuration
+
+This project uses **TailwindCSS v4** with CSS-first configuration:
+
+- **Source files**: Explicitly defined in `input.css` using `@source` directives
+- **Theme customization**: Done via `@theme` directive in CSS instead of JavaScript config
+- **Auto-detection**: Scans `../views/**/*.html` and `../static/**/*.js` for Tailwind classes
+- **No config file**: JavaScript configuration has been removed in favor of CSS-first approach
+
+## Theme System
+
+GRAIN uses a custom dark/light theme system:
+
+- **Default theme**: Dark mode (because all things should be dark)
+- **Theme switching**: CSS custom properties with `data-theme="light"` attribute
+- **Custom colors**: Defined in `@theme` directive with semantic naming (bgPrimary, textPrimary, etc.)
+
+## File Structure
+
+```
+www/style/
+├── input.css          # Source CSS with TailwindCSS v4 imports and custom theme
+├── tailwind.min.css   # Generated minified CSS (build artifact)
+└── readme.md          # This file
+```
+
+## Production Builds
+
+The Docker build process automatically:
+
+1. Downloads the TailwindCSS CLI
+2. Builds the minified CSS
+3. Bundles it with the application
+
+No manual CSS building is required for production releases.

@@ -1,26 +1,47 @@
-@config "tailwind.config.js";
+@import "tailwindcss";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@source "../views/**/*.html";
+@source "../static/**/*.js";
+
+@theme {
+  --color-bgPrimary: rgb(16, 16, 16);
+  --color-bgSecondary: rgb(40, 40, 40);
+  --color-bgInverted: rgb(225, 225, 225);
+  --color-textPrimary: rgb(255, 255, 255);
+  --color-textSecondary: rgb(235, 235, 235);
+  --color-textMuted: rgb(200, 200, 200);
+  --color-textInverted: rgb(16, 16, 16);
+
+  /* Light theme variables */
+  --color-bgPrimary-light: rgb(200, 200, 200);
+  --color-bgSecondary-light: rgb(230, 230, 230);
+  --color-bgInverted-light: rgb(80, 80, 80);
+  --color-textPrimary-light: rgb(0, 0, 0);
+  --color-textSecondary-light: rgb(20, 20, 20);
+  --color-textMuted-light: rgb(100, 100, 100);
+  --color-textInverted-light: rgb(255, 255, 255);
+}
 
 @layer base {
   :root {
-    --color-bgPrimary: rgb(16, 16, 16);
-    --color-bgSecondary: rgb(40, 40, 40);
-    --color-bgInverted: rgb(225, 225, 225);
-    --color-textPrimary: rgb(255, 255, 255);
-    --color-textSecondary: rgb(235, 235, 235);
-    --color-textMuted: rgb(200, 200, 200);
-    --color-textInverted: rgb(16, 16, 16);
+    /* Default (dark) theme */
+    --color-bgPrimary: var(--color-bgPrimary);
+    --color-bgSecondary: var(--color-bgSecondary);
+    --color-bgInverted: var(--color-bgInverted);
+    --color-textPrimary: var(--color-textPrimary);
+    --color-textSecondary: var(--color-textSecondary);
+    --color-textMuted: var(--color-textMuted);
+    --color-textInverted: var(--color-textInverted);
   }
+
   :root[data-theme="light"] {
-    --color-bgPrimary: rgb(200, 200, 200);
-    --color-bgSecondary: rgb(230, 230, 230);
-    --color-bgInverted: rgb(80, 80, 80);
-    --color-textPrimary: rgb(0, 0, 0);
-    --color-textSecondary: rgb(20, 20, 20);
-    --color-textMuted: rgb(100, 100, 100);
-    --color-textInverted: rgb(255, 255, 255);
+    /* Light theme override */
+    --color-bgPrimary: var(--color-bgPrimary-light);
+    --color-bgSecondary: var(--color-bgSecondary-light);
+    --color-bgInverted: var(--color-bgInverted-light);
+    --color-textPrimary: var(--color-textPrimary-light);
+    --color-textSecondary: var(--color-textSecondary-light);
+    --color-textMuted: var(--color-textMuted-light);
+    --color-textInverted: var(--color-textInverted-light);
   }
 }
