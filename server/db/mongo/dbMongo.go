@@ -76,6 +76,14 @@ func InitializeDatabase(cfg *cfgType.ServerConfig) (*mongo.Client, bool) {
 		}
 	}
 
+	// Set the global client when connection is successful
+	if err := SetGlobalClient(dbClient, cfg.MongoDB.Database); err != nil {
+		log.Mongo().Error("Failed to set global MongoDB client", "error", err)
+		// Clean up the client if we can't set it globally
+		DisconnectDB(dbClient)
+		return nil, false
+	}
+
 	log.Mongo().Info("Database connection established successfully")
 	return dbClient, true
 }
