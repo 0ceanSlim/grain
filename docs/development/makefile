@@ -10,16 +10,21 @@ BUILD_IMAGE := grain-builder
 # 1. Check for VERSION env var first
 # 2. Try to get from git tags
 # 3. Fall back to default
+# Windows-compatible version detection
+# Version Management - Windows Compatible
+# Version Management - Windows Compatible
 ifdef VERSION
     BUILD_VERSION := $(VERSION)
 else
-    GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
-    ifdef GIT_TAG
+    # Check if we're exactly on a tag
+    GIT_TAG := $(shell git describe --tags --exact-match 2>nul)
+    ifneq ($(GIT_TAG),)
         BUILD_VERSION := $(GIT_TAG)
     else
-        GIT_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null)
-        ifdef GIT_VERSION
-            GIT_COMMITS := $(shell git rev-list $(GIT_VERSION)..HEAD --count 2>/dev/null)
+        # Get the latest tag
+        GIT_VERSION := $(shell git describe --tags --abbrev=0 2>nul)
+        ifneq ($(GIT_VERSION),)
+            GIT_COMMITS := $(shell git rev-list $(GIT_VERSION)..HEAD --count 2>nul)
             ifneq ($(GIT_COMMITS),0)
                 BUILD_VERSION := $(GIT_VERSION)-dev.$(GIT_COMMITS)
             else
@@ -92,22 +97,32 @@ help: ## Show available targets
 version: ## Show version information
 	@echo "$(BLUE)Version Information$(NC)"
 	@echo "Build Version: $(BUILD_VERSION)"
-	@echo "Git Tag:       $(shell git describe --tags --exact-match 2>/dev/null || echo 'none')"
-	@echo "Latest Tag:    $(shell git describe --tags --abbrev=0 2>/dev/null || echo 'none')"
-	@echo "Git Commit:    $(shell git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
-	@echo "Git Status:    $(shell git status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted changes"
+	@echo "Git Tag:       (checking...)"
+	@git describe --tags --exact-match 2>nul || echo "Git Tag: none"
+	@echo "Latest Tag:    (checking...)"
+	@git describe --tags --abbrev=0 2>nul || echo "Latest Tag: none"
+	@echo "Git Commit:    (checking...)"
+	@git rev-parse --short HEAD 2>nul || echo "Git Commit: unknown"
+	@echo "Git Status:    (checking git status...)"
+	@git status --porcelain 2>nul && echo "Has uncommitted changes" || echo "Status unknown"
 
 clean: ## Clean build artifacts
 	@echo "$(YELLOW)Cleaning build artifacts...$(NC)"
+ifeq ($(OS),Windows_NT)
+	@if exist "$(PROJECT_ROOT)\build" rmdir /s /q "$(PROJECT_ROOT)\build"
+	@docker rm -f grain-build-temp 2>nul || echo >nul
+	@docker rmi $(BUILD_IMAGE) 2>nul || echo >nul
+else
 	@rm -rf $(PROJECT_ROOT)/build
 	@docker rm -f grain-build-temp 2>/dev/null || true
 	@docker rmi $(BUILD_IMAGE) 2>/dev/null || true
+endif
 	@echo "$(GREEN)Clean completed$(NC)"
 
 check-docker: ## Check if Docker is available
-	@docker --version >/dev/null 2>&1 || (echo "$(RED)Error: Docker not found. Please install Docker.$(NC)" && exit 1)
-	@docker info >/dev/null 2>&1 || (echo "$(RED)Error: Docker daemon not running.$(NC)" && exit 1)
-	@echo "$(GREEN)Docker is ready$(NC)"
+	@echo "$(YELLOW)Checking Docker...$(NC)"
+	@docker --version > temp.txt 2>&1 && docker info > temp.txt 2>&1 && echo "$(GREEN)Docker is ready$(NC)" || (echo "$(RED)Error: Docker not available.$(NC)" && exit 1)
+	@del temp.txt 2>nul || rm temp.txt 2>/dev/null || true
 
 build-image: check-docker ## Build the Docker build image
 	@echo "$(YELLOW)Building Docker build image...$(NC)"
@@ -162,13 +177,13 @@ release: version test build-image ## Build complete release using Docker (runs t
 dev-release: ## Quick release build for development (skip tests)
 	@echo "$(YELLOW)Development release (skipping tests)$(NC)"
 	@$(MAKE) build-image
-	@mkdir -p $(PROJECT_ROOT)/build/dist
-	@docker rm -f grain-build-temp 2>/dev/null || true
+	@mkdir -p $(PROJECT_ROOT)/build/dist 2>nul || mkdir "$(PROJECT_ROOT)\build\dist" 2>nul || echo "Directory exists"
+	@docker rm -f grain-build-temp 2>nul || docker rm -f grain-build-temp 2>/dev/null || echo "No temp container to remove"
 	@docker run --name grain-build-temp \
 		-e VERSION=$(BUILD_VERSION)-dev \
 		$(BUILD_IMAGE)
 	@docker cp grain-build-temp:/output/dist/. $(PROJECT_ROOT)/build/dist/
-	@docker rm grain-build-temp
+	@docker rm grain-build-temp 2>nul || docker rm grain-build-temp 2>/dev/null || echo "Container removed"
 	@echo "$(GREEN)Development build completed$(NC)"
 
 # Tag and release workflow
