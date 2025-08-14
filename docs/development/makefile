@@ -6,25 +6,40 @@ APP_NAME := grain
 PROJECT_ROOT := ../..
 BUILD_IMAGE := grain-builder
 
+# Cross-platform commands
+ifeq ($(OS),Windows_NT)
+    MKDIR_BUILD = if not exist "$(PROJECT_ROOT)\build\dist" mkdir "$(PROJECT_ROOT)\build\dist"
+    LS_ARTIFACTS = dir "$(PROJECT_ROOT)\build\dist" 2>nul || echo "No artifacts found"
+else
+    MKDIR_BUILD = mkdir -p $(PROJECT_ROOT)/build/dist
+    LS_ARTIFACTS = ls -la $(PROJECT_ROOT)/build/dist/ 2>/dev/null || echo "No artifacts found"
+endif
+
 # Version Management
-# 1. Check for VERSION env var first
-# 2. Try to get from git tags
-# 3. Fall back to default
-# Windows-compatible version detection
-# Version Management - Windows Compatible
-# Version Management - Windows Compatible
 ifdef VERSION
     BUILD_VERSION := $(VERSION)
 else
     # Check if we're exactly on a tag
+ifeq ($(OS),Windows_NT)
     GIT_TAG := $(shell git describe --tags --exact-match 2>nul)
+else
+    GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null)
+endif
     ifneq ($(GIT_TAG),)
         BUILD_VERSION := $(GIT_TAG)
     else
         # Get the latest tag
+ifeq ($(OS),Windows_NT)
         GIT_VERSION := $(shell git describe --tags --abbrev=0 2>nul)
+else
+        GIT_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null)
+endif
         ifneq ($(GIT_VERSION),)
+ifeq ($(OS),Windows_NT)
             GIT_COMMITS := $(shell git rev-list $(GIT_VERSION)..HEAD --count 2>nul)
+else
+            GIT_COMMITS := $(shell git rev-list $(GIT_VERSION)..HEAD --count 2>/dev/null)
+endif
             ifneq ($(GIT_COMMITS),0)
                 BUILD_VERSION := $(GIT_VERSION)-dev.$(GIT_COMMITS)
             else
@@ -98,6 +113,7 @@ version: ## Show version information
 	@echo "$(BLUE)Version Information$(NC)"
 	@echo "Build Version: $(BUILD_VERSION)"
 	@echo "Git Tag:       (checking...)"
+ifeq ($(OS),Windows_NT)
 	@git describe --tags --exact-match 2>nul || echo "Git Tag: none"
 	@echo "Latest Tag:    (checking...)"
 	@git describe --tags --abbrev=0 2>nul || echo "Latest Tag: none"
@@ -105,6 +121,15 @@ version: ## Show version information
 	@git rev-parse --short HEAD 2>nul || echo "Git Commit: unknown"
 	@echo "Git Status:    (checking git status...)"
 	@git status --porcelain 2>nul && echo "Has uncommitted changes" || echo "Status unknown"
+else
+	@git describe --tags --exact-match 2>/dev/null || echo "Git Tag: none"
+	@echo "Latest Tag:    (checking...)"
+	@git describe --tags --abbrev=0 2>/dev/null || echo "Latest Tag: none"
+	@echo "Git Commit:    (checking...)"
+	@git rev-parse --short HEAD 2>/dev/null || echo "Git Commit: unknown"
+	@echo "Git Status:    (checking git status...)"
+	@git status --porcelain 2>/dev/null && echo "Has uncommitted changes" || echo "Status unknown"
+endif
 
 clean: ## Clean build artifacts
 	@echo "$(YELLOW)Cleaning build artifacts...$(NC)"
@@ -121,8 +146,13 @@ endif
 
 check-docker: ## Check if Docker is available
 	@echo "$(YELLOW)Checking Docker...$(NC)"
+ifeq ($(OS),Windows_NT)
 	@docker --version > temp.txt 2>&1 && docker info > temp.txt 2>&1 && echo "$(GREEN)Docker is ready$(NC)" || (echo "$(RED)Error: Docker not available.$(NC)" && exit 1)
-	@del temp.txt 2>nul || rm temp.txt 2>/dev/null || true
+	@del temp.txt 2>nul || echo >nul
+else
+	@docker --version > temp.txt 2>&1 && docker info > temp.txt 2>&1 && echo "$(GREEN)Docker is ready$(NC)" || (echo "$(RED)Error: Docker not available.$(NC)" && exit 1)
+	@rm temp.txt 2>/dev/null || true
+endif
 
 build-image: check-docker ## Build the Docker build image
 	@echo "$(YELLOW)Building Docker build image...$(NC)"
@@ -156,9 +186,13 @@ release: version test build-image ## Build complete release using Docker (runs t
 	@echo "$(BLUE)Starting Docker-based release build$(NC)"
 	@echo "$(YELLOW)Building version: $(BUILD_VERSION)$(NC)"
 	@echo ""
-	@mkdir -p $(PROJECT_ROOT)/build/dist
+	@$(MKDIR_BUILD)
 	@echo "$(YELLOW)Cleaning up any existing build containers...$(NC)"
+ifeq ($(OS),Windows_NT)
+	@docker rm -f grain-build-temp 2>nul || echo >nul
+else
 	@docker rm -f grain-build-temp 2>/dev/null || true
+endif
 	@echo "$(YELLOW)Running build in container...$(NC)"
 	@docker run --name grain-build-temp \
 		-e VERSION=$(BUILD_VERSION) \
@@ -171,19 +205,27 @@ release: version test build-image ## Build complete release using Docker (runs t
 	@echo "$(YELLOW)Version: $(BUILD_VERSION)$(NC)"
 	@echo ""
 	@echo "$(BLUE)Artifacts in $(PROJECT_ROOT)/build/dist/:$(NC)"
-	@ls -la $(PROJECT_ROOT)/build/dist/ 2>/dev/null || echo "No artifacts found"
+	@$(LS_ARTIFACTS)
 
 # Development shortcuts
 dev-release: ## Quick release build for development (skip tests)
 	@echo "$(YELLOW)Development release (skipping tests)$(NC)"
 	@$(MAKE) build-image
-	@mkdir -p $(PROJECT_ROOT)/build/dist 2>nul || mkdir "$(PROJECT_ROOT)\build\dist" 2>nul || echo "Directory exists"
-	@docker rm -f grain-build-temp 2>nul || docker rm -f grain-build-temp 2>/dev/null || echo "No temp container to remove"
+	@$(MKDIR_BUILD)
+ifeq ($(OS),Windows_NT)
+	@docker rm -f grain-build-temp 2>nul || echo >nul
+else
+	@docker rm -f grain-build-temp 2>/dev/null || true
+endif
 	@docker run --name grain-build-temp \
 		-e VERSION=$(BUILD_VERSION)-dev \
 		$(BUILD_IMAGE)
 	@docker cp grain-build-temp:/output/dist/. $(PROJECT_ROOT)/build/dist/
-	@docker rm grain-build-temp 2>nul || docker rm grain-build-temp 2>/dev/null || echo "Container removed"
+ifeq ($(OS),Windows_NT)
+	@docker rm grain-build-temp 2>nul || echo >nul
+else
+	@docker rm grain-build-temp 2>/dev/null || echo >nul
+endif
 	@echo "$(GREEN)Development build completed$(NC)"
 
 # Tag and release workflow
@@ -203,17 +245,26 @@ info: ## Show build information
 	@echo "Build Version: $(BUILD_VERSION)"
 	@echo "Project Root:  $(PROJECT_ROOT)"
 	@echo "Build Image:   $(BUILD_IMAGE)"
+ifeq ($(OS),Windows_NT)
+	@echo "Docker:        $(shell docker --version 2>nul || echo 'Not installed')"
+	@echo "Git Status:    $(shell git status --porcelain 2>nul | find /c /v "" || echo 0) uncommitted changes"
+else
 	@echo "Docker:        $(shell docker --version 2>/dev/null || echo 'Not installed')"
 	@echo "Git Status:    $(shell git status --porcelain 2>/dev/null | wc -l | tr -d ' ') uncommitted changes"
+endif
 
 # Workflow helpers
 prepare-release: test ## Prepare for release (run tests, check git status)
 	@echo "$(BLUE)Preparing for release$(NC)"
+ifeq ($(OS),Windows_NT)
+	@git status --porcelain 2>nul | find /v "" && (echo "$(RED)Error: Working directory has uncommitted changes$(NC)" && git status --short && exit 1) || echo "$(GREEN)Ready for release$(NC)"
+else
 	@if [ "$$(git status --porcelain 2>/dev/null | wc -l)" -ne 0 ]; then \
 		echo "$(RED)Error: Working directory has uncommitted changes$(NC)"; \
 		git status --short; \
 		exit 1; \
 	fi
 	@echo "$(GREEN)Ready for release$(NC)"
+endif
 
 quick: dev-release ## Quick development build (alias for dev-release)
