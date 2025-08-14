@@ -1,0 +1,192 @@
+<!-- Profile Page Component -->
+<div class="max-w-4xl p-4 mx-auto profile-page">
+  <!-- Loading State -->
+  <div id="loading" class="py-12 text-center">
+    <div class="mx-auto spinner"></div>
+    <p class="mt-4 text-gray-400">Loading profile...</p>
+  </div>
+
+  <!-- Error State -->
+  <div
+    id="error"
+    class="hidden px-4 py-3 mb-6 text-red-100 bg-red-900 border border-red-600 rounded"
+  >
+    <div class="flex items-center">
+      <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+        <path
+          fill-rule="evenodd"
+          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+          clip-rule="evenodd"
+        ></path>
+      </svg>
+      <span id="error-message"></span>
+    </div>
+  </div>
+
+  <!-- Profile Content -->
+  <div id="profile-content" class="hidden">
+    <!-- Profile Header -->
+    <div class="p-6 mb-6 bg-gray-900 rounded-lg">
+      <!-- Banner Image (optional) -->
+      <div
+        id="profile-banner"
+        class="hidden h-32 mb-4 overflow-hidden rounded-lg sm:h-48 bg-gradient-to-r from-purple-600 to-purple-800"
+      >
+        <img
+          id="profile-banner-img"
+          alt="Profile banner"
+          class="object-cover w-full h-full"
+        />
+      </div>
+
+      <!-- Profile Info -->
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <!-- Avatar -->
+        <div class="flex-shrink-0">
+          <div
+            id="profile-avatar"
+            class="w-20 h-20 overflow-hidden bg-gray-700 border-4 border-gray-800 rounded-full sm:w-24 sm:h-24"
+          >
+            <img
+              id="profile-avatar-img"
+              alt="Profile picture"
+              class="hidden object-cover w-full h-full"
+            />
+            <div
+              id="profile-avatar-placeholder"
+              class="flex items-center justify-center w-full h-full text-2xl font-bold text-gray-400 sm:text-3xl"
+            >
+              ?
+            </div>
+          </div>
+        </div>
+
+        <!-- Profile Details -->
+        <div class="flex-1 min-w-0">
+          <h1
+            id="profile-name"
+            class="mb-2 text-2xl font-bold text-white sm:text-3xl"
+          >
+            Loading...
+          </h1>
+          <p id="profile-display-name" class="hidden mb-2 text-gray-400"></p>
+          <p id="profile-about" class="mb-4 text-gray-300">Loading bio...</p>
+
+          <!-- Metadata -->
+          <div class="space-y-2">
+            <div
+              id="profile-nip05-container"
+              class="flex items-center hidden text-sm"
+            >
+              <svg
+                class="w-4 h-4 mr-2 text-purple-400"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"
+                ></path>
+                <path
+                  d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"
+                ></path>
+              </svg>
+              <span id="profile-nip05" class="text-purple-400"></span>
+            </div>
+
+            <div
+              id="profile-website-container"
+              class="flex items-center hidden text-sm"
+            >
+              <svg
+                class="w-4 h-4 mr-2 text-purple-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.1a3 3 0 10-4.243-4.243l-1.1 1.102a4 4 0 105.656 5.656l4-4a4 4 0 00-5.656-5.656z"
+                ></path>
+              </svg>
+              <a
+                id="profile-website"
+                href=""
+                target="_blank"
+                class="text-purple-400 transition-colors hover:text-purple-300"
+              ></a>
+            </div>
+
+            <div
+              id="profile-lightning-container"
+              class="flex items-center hidden text-sm"
+            >
+              <svg
+                class="w-4 h-4 mr-2 text-yellow-400"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+                  clip-rule="evenodd"
+                ></path>
+              </svg>
+              <span id="profile-lightning" class="text-yellow-400"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile Actions -->
+    <div class="p-4 mb-6 bg-gray-900 rounded-lg">
+      <div class="flex flex-wrap gap-3">
+        <button
+          onclick="copyIdentifier()"
+          class="px-4 py-2 text-white transition-colors bg-purple-600 rounded hover:bg-purple-700"
+        >
+          Copy Profile ID
+        </button>
+        <button
+          onclick="copyPubkey()"
+          class="px-4 py-2 text-white transition-colors bg-gray-700 rounded hover:bg-gray-600"
+        >
+          Copy Pubkey
+        </button>
+        <button
+          onclick="refreshProfile()"
+          class="px-4 py-2 text-white transition-colors bg-gray-700 rounded hover:bg-gray-600"
+        >
+          🔄 Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Profile Data Info -->
+    <div class="p-4 bg-gray-900 rounded-lg">
+      <h3 class="mb-3 font-bold text-white">Profile Information</h3>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <span class="text-gray-400">Public Key:</span>
+          <span
+            id="profile-pubkey"
+            class="font-mono text-gray-300 break-all"
+          ></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-400">Identifier:</span>
+          <span
+            id="profile-identifier"
+            class="font-mono text-gray-300 break-all"
+          ></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Profile Page JavaScript -->
+<script></script>
+<script src="/static/js/profile-page.js"></script>

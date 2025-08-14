@@ -79,6 +79,20 @@ function handleRouteLoad() {
         });
       return; // Exit early since we're handling this asynchronously
     default:
+      // Check if this is a profile route (/p/<identifier>)
+      if (currentPath.startsWith("/p/")) {
+        const identifier = currentPath.replace("/p/", "");
+        if (identifier) {
+          console.log("[ROUTING] Loading profile for identifier:", identifier);
+          // Load profile component directly
+          htmx.ajax("GET", "/views/components/profile-page.html", {
+            target: "#main-content",
+          });
+          return; // Exit early
+        }
+      }
+
+      // Default to home for unrecognized routes
       targetView = "/views/home.html";
       window.history.replaceState({}, "", "/");
       break;
@@ -144,6 +158,23 @@ window.addEventListener("popstate", function (event) {
         });
       return; // Exit early since we're handling this asynchronously
     default:
+      // Check if this is a profile route (/p/<identifier>)
+      if (currentPath.startsWith("/p/")) {
+        const identifier = currentPath.replace("/p/", "");
+        if (identifier) {
+          console.log(
+            "[ROUTING] Popstate - Loading profile for identifier:",
+            identifier
+          );
+          // Load profile component directly
+          htmx.ajax("GET", "/views/components/profile-page.html", {
+            target: "#main-content",
+          });
+          return; // Exit early
+        }
+      }
+
+      // Default to home for unrecognized routes
       targetView = "/views/home.html";
       window.history.replaceState({}, "", "/");
       break;
