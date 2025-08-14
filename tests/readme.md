@@ -6,7 +6,7 @@ Integration test suite for GRAIN relay using Docker test environment.
 
 ## Quick Start
 
-Run the full test suite with interactive cleanup:
+Run the full test suite with automatic cleanup:
 
 ```bash
 make test
@@ -17,7 +17,15 @@ This will:
 1. Start Docker test environment (GRAIN + MongoDB)
 2. Wait for services to be ready
 3. Run all integration tests
-4. Prompt whether to stop environment and collect logs, or keep the test enviornment up
+4. **Automatically stop environment and collect logs**
+
+For development work where you want to keep the environment running:
+
+```bash
+make test-interactive
+```
+
+This provides the old behavior with prompts to keep the environment up.
 
 ## Manual Testing
 
@@ -54,26 +62,73 @@ tests/                     # Run all commands from this directory
 ├── docker/                # Test environment
 │   ├── Dockerfile         # Test container build
 │   └── docker-compose.yml # Test services
-└── integration/          # Integration tests
-    ├── relay_test.go      # Core relay functionality
-    ├── websocket_test.go  # WebSocket connection tests
-    └── api_test.go        # HTTP API tests
+├── integration/           # Integration tests
+│   ├── relay_test.go      # Core relay functionality
+│   ├── websocket_test.go  # WebSocket connection tests
+│   └── api_test.go        # HTTP API tests
+└── review/                # Code quality tests
+    └── codeQuality_test.go # Code review and standards
 ```
 
 ## Available Commands
 
-| Command                           | Description                                  |
-| --------------------------------- | -------------------------------------------- |
-| `make test`                       | Start environment, run tests, prompt cleanup |
-| `make test-start`                 | Start test environment only                  |
-| `make test-run`                   | Full automated cycle (start, test, stop)     |
-| `make test-single TEST=TestName`  | Run specific test function by name           |
-| `make test-file   TEST=file.go  ` | Run all tests in a single go file            |
-| `make test-stop`                  | Stop environment and collect logs            |
-| `make test-clean-logs`            | Remove all log files                         |
-| `make help`                       | Show all available commands                  |
+| Command                          | Description                                          |
+| -------------------------------- | ---------------------------------------------------- |
+| `make test`                      | **Complete test cycle** (start, test, stop, cleanup) |
+| `make test-interactive`          | Interactive mode (keeps environment running)         |
+| `make test-all`                  | Run integration + code review tests with cleanup     |
+| `make test-review`               | Run code quality review tests only                   |
+| `make test-start`                | Start test environment only                          |
+| `make test-run`                  | Run integration tests only                           |
+| `make test-single TEST=TestName` | Run specific test function by name                   |
+| `make test-file FILE=file.go`    | Run all tests in a single go file                    |
+| `make test-stop`                 | Stop environment and collect logs                    |
+| `make test-clean-logs`           | Remove all log files                                 |
+| `make help`                      | Show all available commands                          |
+
+### Test Modes
+
+**Production/CI Mode** (automatic cleanup):
+
+```bash
+make test      # Complete integration tests
+make test-all  # Integration + code review tests
+```
+
+**Development Mode** (interactive):
+
+```bash
+make test-interactive  # Keeps environment up for multiple test runs
+```
+
+**Manual Mode** (step-by-step):
+
+```bash
+make test-start        # Start environment
+make test-run          # Run tests
+make test-single TEST=TestName  # Run specific tests
+make test-stop         # Clean up when done
+```
 
 **Note on test names**: The `TEST=` parameter takes the actual Go test function name (e.g., `TestRelayBasics`, `TestWebSocketConnection`, `TestEventPublishing`).
+
+## Test Types
+
+### Integration Tests
+
+Located in `integration/` directory:
+
+- **relay_test.go** - Core relay functionality and connections
+- **websocket_test.go** - WebSocket protocol testing
+- **api_test.go** - HTTP API endpoint testing
+
+### Code Quality Tests
+
+Located in `review/` directory:
+
+- **codeQuality_test.go** - Code formatting, linting, and standards
+- Automatically run as part of `make test-all`
+- Can be run independently with `make test-review`
 
 ## Test Environment
 
@@ -90,6 +145,8 @@ Test results and logs are automatically saved to the `logs/` directory with time
 
 - `test-results-YYYYMMDD_HHMMSS.log` - Full test run output
 - `test-TestName-YYYYMMDD_HHMMSS.log` - Individual test output
+- `test-file-filename-YYYYMMDD_HHMMSS.log` - File-specific test output
+- `review-YYYYMMDD_HHMMSS.log` - Code review test results
 - `grain-YYYYMMDD_HHMMSS.log` - Container logs
 - `debug-YYYYMMDD_HHMMSS.log` - Application debug logs
 
@@ -109,7 +166,7 @@ cd docker && docker-compose logs -f grain
 cd docker && docker-compose logs -f mongo
 ```
 
-### Viewiing GRAIN debug.log
+### Viewing GRAIN debug.log
 
 GRAIN writes detailed logs to `debug.log` inside the container:
 
@@ -190,3 +247,13 @@ func TestBasicConnection(t *testing.T) {
 	t.Log("✅ Successfully connected to relay")
 }
 ```
+
+## Cross-Platform Compatibility
+
+This test suite works on:
+
+- **Windows** (PowerShell, Command Prompt, Git Bash)
+- **macOS** (Terminal, iTerm2)
+- **Linux** (Bash, Zsh)
+
+All Makefile commands are cross-platform compatible and handle path differences automatically.
