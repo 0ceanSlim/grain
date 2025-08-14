@@ -134,6 +134,9 @@
     // Update images
     updateProfileImages(profileContent);
 
+    // Update external identities from event tags (NIP-39)
+    updateExternalIdentities(profile);
+
     console.log("Profile component display complete");
   }
 
@@ -154,13 +157,23 @@
       showElement("profile-display-name");
     }
 
-    // Bio/about
-    setElementText("profile-about", profileContent.about || "No bio available");
+    // Bio/about - with clickable links
+    setElementHTML(
+      "profile-about",
+      linkifyText(profileContent.about || "No bio available")
+    );
 
-    // NIP-05 verification
+    // NIP-05 verification with validation
     if (profileContent.nip05) {
-      setElementText("profile-nip05", profileContent.nip05);
+      // Set initial loading state with spinner before the address
+      setElementHTML(
+        "profile-nip05",
+        `<span class="inline-block w-3 h-3 border border-gray-400 rounded-full animate-spin border-t-transparent mr-2"></span>${profileContent.nip05}`
+      );
       showElement("profile-nip05-container");
+
+      // Start verification
+      verifyNip05(profileContent.nip05, profileData.pubkey);
     }
 
     // Website
@@ -176,6 +189,175 @@
       setElementText("profile-lightning", profileContent.lud16);
       showElement("profile-lightning-container");
     }
+  }
+
+  // Verify NIP-05 identifier
+  async function verifyNip05(nip05, expectedPubkey) {
+    try {
+      console.log("Verifying NIP-05:", nip05, "for pubkey:", expectedPubkey);
+
+      // Parse the identifier
+      const parts = nip05.split("@");
+      if (parts.length !== 2) {
+        throw new Error("Invalid NIP-05 format");
+      }
+
+      const [localPart, domain] = parts;
+
+      // Make request to well-known endpoint
+      const url = `https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(
+        localPart
+      )}`;
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Check if the names object exists and contains our local part
+      if (!data.names || !data.names[localPart]) {
+        throw new Error("Name not found in response");
+      }
+
+      const foundPubkey = data.names[localPart];
+
+      // Compare pubkeys (normalize to lowercase)
+      const isValid =
+        foundPubkey.toLowerCase() === expectedPubkey.toLowerCase();
+
+      updateNip05VerificationResult(
+        isValid,
+        isValid ? "Verified" : "Pubkey mismatch"
+      );
+    } catch (error) {
+      console.warn("NIP-05 verification failed:", error);
+      updateNip05VerificationResult(false, error.message);
+    }
+  }
+
+  // Update the verification indicator with result
+  function updateNip05VerificationResult(isValid, message) {
+    const nip05Element = document.getElementById("profile-nip05");
+    if (!nip05Element) return;
+
+    // Get the original nip05 address (remove any existing verification indicator)
+    const originalText = nip05Element.textContent
+      .replace(/^[✅❌⏳]\s*/, "")
+      .trim();
+
+    if (isValid) {
+      nip05Element.innerHTML = `<span class="text-green-400 mr-2" title="NIP-05 verified">✅</span>${originalText}`;
+    } else {
+      nip05Element.innerHTML = `<span class="text-red-400 mr-2" title="NIP-05 verification failed: ${message}">❌</span>${originalText}`;
+    }
+  }
+
+  // Update external identities from NIP-39 i tags
+  function updateExternalIdentities(profile) {
+    if (!profile.tags) return;
+
+    // Find all 'i' tags
+    const iTags = profile.tags.filter(
+      (tag) => tag[0] === "i" && tag.length >= 3
+    );
+
+    if (iTags.length === 0) return;
+
+    console.log("Found i tags:", iTags);
+
+    // Process each supported platform
+    const supportedPlatforms = [
+      "github",
+      "twitter",
+      "x",
+      "mastodon",
+      "telegram",
+    ];
+
+    iTags.forEach((tag) => {
+      const [, platformIdentity, proof] = tag;
+      const [platform, identity] = platformIdentity.split(":");
+
+      if (supportedPlatforms.includes(platform.toLowerCase())) {
+        addExternalIdentityLink(platform.toLowerCase(), identity);
+      }
+    });
+  }
+
+  // Add external identity link to UI
+  function addExternalIdentityLink(platform, identity) {
+    const socialLinksContainer = document.querySelector(
+      ".flex.justify-center.gap-6.mb-8"
+    );
+    if (!socialLinksContainer) return;
+
+    // Platform configuration
+    const platformConfig = {
+      github: {
+        name: "GitHub",
+        icon: "https://github.githubassets.com/favicons/favicon-dark.png",
+        getUrl: (identity) => `https://github.com/${identity}`,
+      },
+      mastodon: {
+        name: "Mastodon",
+        icon: "https://mastodon.social/packs/assets/favicon-16x16-74JBPGmr.png",
+        getUrl: (identity) => `https://${identity}`,
+      },
+      x: {
+        name: "X",
+        icon: "https://abs.twimg.com/responsive-web/client-web/icon-svg.ea5ff4aa.svg",
+        getUrl: (identity) => `https://x.com/${identity}`,
+      },
+      twitter: {
+        name: "X",
+        icon: "https://abs.twimg.com/responsive-web/client-web/icon-svg.ea5ff4aa.svg",
+        getUrl: (identity) => `https://twitter.com/${identity}`,
+      },
+      telegram: {
+        name: "Telegram",
+        icon: "https://web.telegram.org/k/assets/img/favicon.ico",
+        getUrl: (identity) => `https://t.me/${identity}`,
+      },
+    };
+
+    const config = platformConfig[platform];
+    if (!config) return;
+
+    // Find or create platform element
+    let platformElement = socialLinksContainer.querySelector(
+      `[data-platform="${platform}"]`
+    );
+
+    if (!platformElement) {
+      // Create new platform element
+      platformElement = document.createElement("div");
+      platformElement.setAttribute("data-platform", platform);
+
+      // Replace the placeholder if it exists
+      const placeholder = Array.from(socialLinksContainer.children).find(
+        (child) => child.textContent.trim().toLowerCase() === platform
+      );
+
+      if (placeholder) {
+        socialLinksContainer.replaceChild(platformElement, placeholder);
+      } else {
+        socialLinksContainer.appendChild(platformElement);
+      }
+    }
+
+    // Create the link with icon and name
+    const profileUrl = config.getUrl(identity);
+    platformElement.innerHTML = `
+        <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" 
+           class="inline-flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
+           title="${config.name} profile">
+          <img src="${config.icon}" alt="${config.name}" class="w-4 h-4" />
+          <span>${config.name}</span>
+        </a>
+      `;
   }
 
   function updateProfileImages(profileContent) {
@@ -207,6 +389,23 @@
         console.warn("Failed to load profile banner:", profileContent.banner);
       };
     }
+  }
+
+  // Function to convert URLs in text to clickable links and preserve line breaks
+  function linkifyText(text) {
+    // First, convert newlines to <br> tags
+    let htmlText = text.replace(/\n/g, "<br>");
+
+    // Then convert URLs to clickable links - improved regex to stop at whitespace or line breaks
+    const urlRegex = /(https?:\/\/[^\s<]+)/g;
+
+    return htmlText.replace(urlRegex, function (url) {
+      // Remove trailing punctuation that might not be part of the URL
+      const cleanUrl = url.replace(/[.,;:!?]+$/, "");
+      const trailingPunc = url.substring(cleanUrl.length);
+
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${cleanUrl}</a>${trailingPunc}`;
+    });
   }
 
   // Action functions
@@ -257,6 +456,13 @@
     const element = document.getElementById(elementId);
     if (element) {
       element.textContent = text;
+    }
+  }
+
+  function setElementHTML(elementId, html) {
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.innerHTML = html;
     }
   }
 
