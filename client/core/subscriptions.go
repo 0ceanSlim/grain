@@ -2,7 +2,7 @@ package core
 
 import (
 	"sync"
-	"time"
+	//"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
@@ -10,28 +10,32 @@ import (
 
 // Subscription manages a Nostr subscription across multiple relays
 type Subscription struct {
-	ID      string
-	Filters []nostr.Filter
-	Relays  []string
-	Events  chan *nostr.Event
-	Errors  chan error
-	Done    chan struct{}
-	client  *Client
-	mu      sync.RWMutex
-	active  bool
+	ID         string
+	Filters    []nostr.Filter
+	Relays     []string
+	Events     chan *nostr.Event
+	Errors     chan error
+	Done       chan struct{}
+	EOSE       chan string // NEW: Channel for EOSE messages with relay URL
+	client     *Client
+	mu         sync.RWMutex
+	active     bool
+	eoseRelays map[string]bool // NEW: Track which relays sent EOSE
 }
 
 // NewSubscription creates a new subscription instance
 func NewSubscription(id string, filters []nostr.Filter, relays []string, client *Client) *Subscription {
 	return &Subscription{
-		ID:      id,
-		Filters: filters,
-		Relays:  relays,
-		Events:  make(chan *nostr.Event, 100), // Buffered channel
-		Errors:  make(chan error, 10),
-		Done:    make(chan struct{}),
-		client:  client,
-		active:  false,
+		ID:         id,
+		Filters:    filters,
+		Relays:     relays,
+		Events:     make(chan *nostr.Event, 100), // Buffered channel
+		Errors:     make(chan error, 10),
+		Done:       make(chan struct{}),
+		EOSE:       make(chan string, len(relays)), // NEW: Buffered for each relay
+		client:     client,
+		active:     false,
+		eoseRelays: make(map[string]bool), // NEW: Initialize map
 	}
 }
 
@@ -83,14 +87,13 @@ func (s *Subscription) Start() error {
 
 	s.active = true
 
-	// Start message processor
-	go s.processMessages()
+	// No need for processMessages goroutine - routing happens directly from readHandler
 
 	log.ClientCore().Info("Subscription started", "sub_id", s.ID, "sent_to", sent, "total_relays", len(s.Relays))
 	return nil
 }
 
-// Close terminates the subscription
+// Update Close to close the EOSE channel too:
 func (s *Subscription) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -124,6 +127,7 @@ func (s *Subscription) Close() error {
 	close(s.Done)
 	close(s.Events)
 	close(s.Errors)
+	close(s.EOSE) // NEW: Close EOSE channel
 
 	log.ClientCore().Debug("Subscription closed", "sub_id", s.ID)
 	return nil
@@ -208,24 +212,24 @@ func (s *Subscription) RemoveRelay(url string) error {
 }
 
 // processMessages handles incoming messages for this subscription
-func (s *Subscription) processMessages() {
-	// TODO: This will be implemented to process messages from relay read handlers
-	// For now, this is a placeholder that will be connected to relay message routing
-
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-s.Done:
-			log.ClientCore().Debug("Message processor stopped", "sub_id", s.ID)
-			return
-		case <-ticker.C:
-			// Periodic heartbeat - could be used for subscription health checks
-			log.ClientCore().Debug("Subscription heartbeat", "sub_id", s.ID)
-		}
-	}
-}
+//func (s *Subscription) processMessages() {
+//	// TODO: This will be implemented to process messages from relay read handlers
+//	// For now, this is a placeholder that will be connected to relay message routing
+//
+//	ticker := time.NewTicker(30 * time.Second)
+//	defer ticker.Stop()
+//
+//	for {
+//		select {
+//		case <-s.Done:
+//			log.ClientCore().Debug("Message processor stopped", "sub_id", s.ID)
+//			return
+//		case <-ticker.C:
+//			// Periodic heartbeat - could be used for subscription health checks
+//			log.ClientCore().Debug("Subscription heartbeat", "sub_id", s.ID)
+//		}
+//	}
+//}
 
 // IsActive returns whether the subscription is currently active
 func (s *Subscription) IsActive() bool {

@@ -3,6 +3,7 @@ package session
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/0ceanslim/grain/client/cache"
 	"github.com/0ceanslim/grain/client/connection"
@@ -90,8 +91,11 @@ func switchCoreClientToUserRelays(publicKey string) error {
 	// Get user's cached client relays
 	clientRelays, err := cache.GetUserClientRelays(publicKey)
 	if err != nil || len(clientRelays) == 0 {
-		log.ClientSession().Warn("No user client relays found, keeping default connections", "pubkey", publicKey)
-		return fmt.Errorf("no user client relays found")
+		log.ClientSession().Warn("No user client relays found, keeping default connections",
+			"pubkey", publicKey,
+			"error", err)
+		// Don't switch if no user relays - keep defaults
+		return nil
 	}
 
 	// Get core client
@@ -100,27 +104,80 @@ func switchCoreClientToUserRelays(publicKey string) error {
 		return fmt.Errorf("core client not available")
 	}
 
+	// Log what relays we're switching to
+	relayURLs := []string{}
+	for _, relay := range clientRelays {
+		relayURLs = append(relayURLs, relay.URL)
+	}
+	log.ClientSession().Info("User relays to connect",
+		"pubkey", publicKey,
+		"relay_count", len(clientRelays),
+		"relay_urls", relayURLs)
+
 	// Convert cached relays to RelayConfig format
 	var relayConfigs []core.RelayConfig
 	for _, relay := range clientRelays {
+		// Validate relay URL
+		if relay.URL == "" {
+			log.ClientSession().Warn("Skipping empty relay URL", "pubkey", publicKey)
+			continue
+		}
+
+		// Ensure proper URL format
+		url := relay.URL
+		if !strings.HasPrefix(url, "ws://") && !strings.HasPrefix(url, "wss://") {
+			// Try to fix common issues
+			if strings.Contains(url, "://") {
+				log.ClientSession().Warn("Invalid relay URL protocol",
+					"pubkey", publicKey,
+					"url", url)
+				continue
+			}
+			// Assume wss:// if no protocol
+			url = "wss://" + url
+			log.ClientSession().Debug("Added wss:// prefix to relay URL",
+				"original", relay.URL,
+				"fixed", url)
+		}
+
 		relayConfigs = append(relayConfigs, core.RelayConfig{
-			URL:   relay.URL,
+			URL:   url,
 			Read:  relay.Read,
 			Write: relay.Write,
 		})
 	}
 
+	if len(relayConfigs) == 0 {
+		log.ClientSession().Warn("No valid relay configs after validation, keeping defaults",
+			"pubkey", publicKey,
+			"original_count", len(clientRelays))
+		return nil
+	}
+
 	// Switch the core client to user's relays
 	if err := coreClient.SwitchToUserRelays(relayConfigs); err != nil {
-		log.ClientSession().Error("Failed to switch core client to user relays", "pubkey", publicKey, "error", err)
+		log.ClientSession().Error("Failed to switch core client to user relays",
+			"pubkey", publicKey,
+			"error", err)
 		return err
 	}
 
+	// Verify the switch worked
 	connectedCount := len(coreClient.GetConnectedRelays())
 	log.ClientSession().Info("Successfully switched core client to user relays",
 		"pubkey", publicKey,
 		"relay_count", len(relayConfigs),
 		"connected_count", connectedCount)
+
+	if connectedCount == 0 {
+		log.ClientSession().Error("No relays connected after switch, attempting fallback to defaults",
+			"pubkey", publicKey)
+		// Try to restore default relays
+		if err := connection.SwitchToDefaultRelays(); err != nil {
+			log.ClientSession().Error("Failed to restore default relays", "error", err)
+		}
+		return fmt.Errorf("failed to connect to any user relays")
+	}
 
 	return nil
 }

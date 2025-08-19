@@ -71,12 +71,13 @@ func (mr *MessageRouter) UnregisterSubscription(subID string) {
 }
 
 // RouteMessage routes a message to the appropriate subscription
-func (mr *MessageRouter) RouteMessage(subID string, messageType string, data interface{}) {
+func (mr *MessageRouter) RouteMessage(subID string, messageType string, data interface{}, relayURL string) {
 	mr.mu.RLock()
 	sub, exists := mr.subscriptions[subID]
 	mr.mu.RUnlock()
 
 	if !exists {
+		log.ClientCore().Debug("No subscription found for message", "sub_id", subID, "message_type", messageType)
 		return
 	}
 
@@ -93,11 +94,20 @@ func (mr *MessageRouter) RouteMessage(subID string, messageType string, data int
 			}
 		}
 	case "EOSE":
+		// Send relay URL to EOSE channel
 		select {
-		case sub.Done <- struct{}{}:
-			log.ClientCore().Debug("EOSE routed to subscription", "sub_id", subID)
+		case sub.EOSE <- relayURL:
+			log.ClientCore().Debug("EOSE routed to subscription", "sub_id", subID, "relay", relayURL)
 		default:
-			// EOSE already sent or channel closed
+			log.ClientCore().Debug("EOSE channel full or closed", "sub_id", subID, "relay", relayURL)
+		}
+	case "CLOSED":
+		// Handle subscription closed by relay
+		select {
+		case sub.Errors <- fmt.Errorf("subscription closed by relay %s", relayURL):
+			log.ClientCore().Debug("CLOSED message routed to subscription", "sub_id", subID, "relay", relayURL)
+		default:
+			log.ClientCore().Debug("Could not send CLOSED error to subscription", "sub_id", subID)
 		}
 	}
 }
@@ -392,7 +402,7 @@ func (rc *RelayConnection) close() error {
 	return nil
 }
 
-// processMessage handles incoming messages from the relay
+// Also update processMessage in relays.go to pass relay URL:
 func (rc *RelayConnection) processMessage(message string) error {
 	log.ClientCore().Debug("Processing message from relay", "relay", rc.URL, "message_length", len(message))
 
@@ -425,7 +435,7 @@ func (rc *RelayConnection) processMessage(message string) error {
 			}
 
 			log.ClientCore().Debug("Received EVENT message", "relay", rc.URL, "sub_id", subID)
-			rc.messageRouter.RouteMessage(subID, "EVENT", eventData)
+			rc.messageRouter.RouteMessage(subID, "EVENT", eventData, rc.URL) // Pass relay URL
 		}
 	case "EOSE":
 		if len(messageArray) >= 2 {
@@ -435,7 +445,7 @@ func (rc *RelayConnection) processMessage(message string) error {
 			}
 
 			log.ClientCore().Debug("Received EOSE message", "relay", rc.URL, "sub_id", subID)
-			rc.messageRouter.RouteMessage(subID, "EOSE", nil)
+			rc.messageRouter.RouteMessage(subID, "EOSE", nil, rc.URL) // Pass relay URL
 		}
 	case "CLOSED":
 		if len(messageArray) >= 2 {
@@ -445,7 +455,7 @@ func (rc *RelayConnection) processMessage(message string) error {
 			}
 
 			log.ClientCore().Debug("Received CLOSED message", "relay", rc.URL, "sub_id", subID)
-			rc.messageRouter.RouteMessage(subID, "CLOSED", nil)
+			rc.messageRouter.RouteMessage(subID, "CLOSED", nil, rc.URL) // Pass relay URL
 		}
 	case "NOTICE":
 		if len(messageArray) >= 2 {

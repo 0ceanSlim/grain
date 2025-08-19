@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,28 +34,57 @@ func NewClient(config *Config) *Client {
 
 // ConnectToRelays establishes connections to multiple relay URLs
 func (c *Client) ConnectToRelays(urls []string) error {
-	log.ClientCore().Info("Connecting to relays", "relay_count", len(urls))
+	log.ClientCore().Info("Connecting to relays", "relay_count", len(urls), "relays", urls)
+
+	if len(urls) == 0 {
+		return fmt.Errorf("no relay URLs provided")
+	}
 
 	var lastErr error
 	connected := 0
+	failed := []string{}
 
 	for _, url := range urls {
+		// Validate URL format
+		if url == "" || (!strings.HasPrefix(url, "ws://") && !strings.HasPrefix(url, "wss://")) {
+			log.ClientCore().Warn("Invalid relay URL format", "relay", url)
+			failed = append(failed, url)
+			lastErr = fmt.Errorf("invalid URL format: %s", url)
+			continue
+		}
+
 		if err := c.relayPool.Connect(url); err != nil {
 			log.ClientCore().Warn("Failed to connect to relay", "relay", url, "error", err)
+			failed = append(failed, url)
 			lastErr = err
 			continue
 		}
 		connected++
+		log.ClientCore().Debug("Successfully connected to relay", "relay", url)
 	}
 
 	if connected == 0 && lastErr != nil {
+		log.ClientCore().Error("Failed to connect to any relays",
+			"attempted", len(urls),
+			"failed_relays", failed,
+			"last_error", lastErr)
 		return fmt.Errorf("failed to connect to any relays: %w", lastErr)
 	}
 
-	log.ClientCore().Info("Connected to relays", "connected", connected, "total", len(urls))
+	log.ClientCore().Info("Connected to relays",
+		"connected", connected,
+		"failed", len(failed),
+		"total", len(urls))
 
 	// Wait a moment for connections to stabilize
 	time.Sleep(500 * time.Millisecond)
+
+	// Verify connections are actually established
+	actuallyConnected := c.GetConnectedRelays()
+	log.ClientCore().Info("Relay connection verification",
+		"reported_connected", connected,
+		"actually_connected", len(actuallyConnected),
+		"connected_relays", actuallyConnected)
 
 	return nil
 }
@@ -192,8 +222,9 @@ func (c *Client) ConnectToRelaysWithRetry(urls []string, maxRetries int) error {
 
 	return fmt.Errorf("failed to connect after %d attempts: %w", maxRetries, lastErr)
 }
+
 func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Event, error) {
-	log.ClientCore().Debug("Fetching user profile", "pubkey", pubkey)
+	log.ClientCore().Debug("Fetching user profile", "pubkey", pubkey, "relay_hints", relayHints)
 
 	// Create filter for metadata (kind 0)
 	filter := nostr.Filter{
@@ -202,26 +233,87 @@ func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Even
 		Limit:   &[]int{1}[0], // Get latest only
 	}
 
-	// Subscribe with timeout
-	sub, err := c.Subscribe([]nostr.Filter{filter}, relayHints)
+	// Use relay hints if provided, otherwise use connected relays
+	targetRelays := relayHints
+	if len(targetRelays) == 0 {
+		targetRelays = c.GetConnectedRelays()
+		log.ClientCore().Debug("No relay hints provided, using connected relays",
+			"pubkey", pubkey,
+			"connected_relays", targetRelays)
+	}
+
+	// Subscribe with the specific relays
+	sub, err := c.Subscribe([]nostr.Filter{filter}, targetRelays)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create subscription: %w", err)
 	}
 	defer sub.Close()
 
 	// Wait for events with timeout
 	timeout := time.After(5 * time.Second)
 
-	select {
-	case event := <-sub.Events:
-		log.ClientCore().Debug("Received user profile", "pubkey", pubkey, "event_id", event.ID)
-		return event, nil
-	case err := <-sub.Errors:
-		return nil, err
-	case <-timeout:
-		return nil, &ClientError{Message: "timeout waiting for profile"}
-	case <-sub.Done:
-		return nil, &ClientError{Message: "subscription closed before profile received"}
+	// Track which relays have sent EOSE
+	eoseRelays := make(map[string]bool)
+	totalRelays := len(targetRelays)
+
+	// We might receive multiple events, keep the latest
+	var latestEvent *nostr.Event
+
+	for {
+		select {
+		case event := <-sub.Events:
+			log.ClientCore().Debug("Received profile event",
+				"pubkey", pubkey,
+				"event_id", event.ID,
+				"created_at", event.CreatedAt)
+			// Keep the latest event (highest created_at)
+			if latestEvent == nil || event.CreatedAt > latestEvent.CreatedAt {
+				latestEvent = event
+			}
+
+		case relayURL := <-sub.EOSE:
+			// Track EOSE from this relay
+			eoseRelays[relayURL] = true
+			log.ClientCore().Debug("EOSE received from relay",
+				"pubkey", pubkey,
+				"relay", relayURL,
+				"eose_count", len(eoseRelays),
+				"total_relays", totalRelays)
+
+			// If we have an event and at least one EOSE, we can return early
+			if latestEvent != nil {
+				log.ClientCore().Debug("Returning profile after EOSE",
+					"pubkey", pubkey,
+					"event_id", latestEvent.ID,
+					"eose_count", len(eoseRelays))
+				return latestEvent, nil
+			}
+
+			// If all relays have sent EOSE and no event found
+			if len(eoseRelays) >= totalRelays {
+				log.ClientCore().Debug("All relays sent EOSE, no profile found",
+					"pubkey", pubkey)
+				return nil, &ClientError{Message: "profile not found"}
+			}
+
+			// Continue waiting for events from other relays
+
+		case err := <-sub.Errors:
+			log.ClientCore().Error("Subscription error", "pubkey", pubkey, "error", err)
+			// Don't fail immediately on error, other relays might succeed
+
+		case <-timeout:
+			log.ClientCore().Warn("Timeout waiting for profile",
+				"pubkey", pubkey,
+				"eose_count", len(eoseRelays),
+				"total_relays", totalRelays,
+				"has_event", latestEvent != nil)
+			// If we got any event before timeout, return it
+			if latestEvent != nil {
+				return latestEvent, nil
+			}
+			return nil, &ClientError{Message: "timeout waiting for profile"}
+		}
 	}
 }
 
@@ -249,20 +341,50 @@ func (c *Client) GetUserRelays(pubkey string) (*Mailboxes, error) {
 
 	timeout := time.After(5 * time.Second)
 
-	select {
-	case event := <-sub.Events:
-		mailboxes := parseMailboxEvent(event)
-		log.ClientCore().Debug("Received user relays", "pubkey", pubkey,
-			"read_count", len(mailboxes.Read),
-			"write_count", len(mailboxes.Write),
-			"both_count", len(mailboxes.Both))
-		return mailboxes, nil
-	case err := <-sub.Errors:
-		return nil, err
-	case <-timeout:
-		return nil, &ClientError{Message: "timeout waiting for relay list"}
-	case <-sub.Done:
-		return nil, &ClientError{Message: "subscription completed without receiving relay list"}
+	// Keep track of the latest relay list event
+	var latestEvent *nostr.Event
+
+	for {
+		select {
+		case event := <-sub.Events:
+			log.ClientCore().Debug("Received relay list event",
+				"pubkey", pubkey,
+				"event_id", event.ID,
+				"created_at", event.CreatedAt)
+			// Keep the latest event (highest created_at)
+			if latestEvent == nil || event.CreatedAt > latestEvent.CreatedAt {
+				latestEvent = event
+			}
+
+		case <-sub.Done:
+			// EOSE received - all stored events have been sent
+			log.ClientCore().Debug("EOSE received for relay list request", "pubkey", pubkey)
+			if latestEvent != nil {
+				mailboxes := parseMailboxEvent(latestEvent)
+				log.ClientCore().Debug("Parsed user relays", "pubkey", pubkey,
+					"read_count", len(mailboxes.Read),
+					"write_count", len(mailboxes.Write),
+					"both_count", len(mailboxes.Both))
+				return mailboxes, nil
+			}
+			// No relay list found (user might not have published one)
+			log.ClientCore().Debug("No relay list found for user", "pubkey", pubkey)
+			return &Mailboxes{}, nil
+
+		case err := <-sub.Errors:
+			log.ClientCore().Error("Subscription error", "pubkey", pubkey, "error", err)
+			return nil, err
+
+		case <-timeout:
+			log.ClientCore().Warn("Timeout waiting for relay list", "pubkey", pubkey)
+			// If we got any event before timeout, use it
+			if latestEvent != nil {
+				mailboxes := parseMailboxEvent(latestEvent)
+				return mailboxes, nil
+			}
+			// Return empty mailboxes on timeout (not an error - user might not have relay list)
+			return &Mailboxes{}, nil
+		}
 	}
 }
 
@@ -381,18 +503,7 @@ type RelayConfig struct {
 
 // ReplaceRelayConnections replaces current relay connections with a new set
 func (c *Client) ReplaceRelayConnections(newRelays []RelayConfig) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	log.ClientCore().Info("Replacing relay connections", "new_relay_count", len(newRelays))
-
-	// Close existing connections
-	if err := c.relayPool.Close(); err != nil {
-		log.ClientCore().Warn("Error closing existing relay pool", "error", err)
-	}
-
-	// Create new relay pool with current config
-	c.relayPool = NewRelayPool(c.config)
 
 	// Extract URLs for connection
 	var relayURLs []string
@@ -400,8 +511,32 @@ func (c *Client) ReplaceRelayConnections(newRelays []RelayConfig) error {
 		relayURLs = append(relayURLs, relay.URL)
 	}
 
-	// Connect to new relays
+	// Close existing connections (need to do this with lock)
+	c.mu.Lock()
+	if err := c.relayPool.Close(); err != nil {
+		log.ClientCore().Warn("Error closing existing relay pool", "error", err)
+	}
+
+	// Create new relay pool with current config
+	c.relayPool = NewRelayPool(c.config)
+	c.mu.Unlock() // IMPORTANT: Unlock before trying to connect to avoid deadlock
+
+	// Connect to new relays (this needs to happen without the lock)
 	if err := c.ConnectToRelaysWithRetry(relayURLs, 2); err != nil {
+		log.ClientCore().Error("Failed to connect to new relay set", "error", err)
+		// Try to recover by connecting to default relays
+		c.mu.Lock()
+		c.relayPool = NewRelayPool(c.config)
+		c.mu.Unlock()
+
+		// Try default relays as fallback
+		if len(c.config.DefaultRelays) > 0 {
+			log.ClientCore().Info("Attempting to reconnect to default relays as fallback")
+			if fallbackErr := c.ConnectToRelaysWithRetry(c.config.DefaultRelays, 1); fallbackErr != nil {
+				log.ClientCore().Error("Failed to connect to default relays as fallback", "error", fallbackErr)
+			}
+		}
+
 		return fmt.Errorf("failed to connect to new relay set: %w", err)
 	}
 
@@ -419,8 +554,11 @@ func (c *Client) ReplaceRelayConnections(newRelays []RelayConfig) error {
 			"permissions", permissions)
 	}
 
+	connectedRelays := c.GetConnectedRelays()
 	log.ClientCore().Info("Successfully replaced relay connections",
-		"connected_count", len(c.GetConnectedRelays()))
+		"requested_count", len(newRelays),
+		"connected_count", len(connectedRelays),
+		"connected_relays", connectedRelays)
 
 	return nil
 }
