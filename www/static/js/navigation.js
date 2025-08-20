@@ -47,6 +47,58 @@ window.forceNavigationUpdate = function () {
     });
 };
 
+// Navigate to current user's profile using npub
+window.navigateToUserProfile = async function () {
+  console.log("🔄 navigateToUserProfile called");
+
+  try {
+    // Get current session to get pubkey
+    const sessionResponse = await fetch("/api/v1/session");
+    if (!sessionResponse.ok) {
+      throw new Error("Not logged in");
+    }
+
+    const sessionData = await sessionResponse.json();
+    const pubkey = sessionData.publicKey;
+
+    if (!pubkey) {
+      throw new Error("No public key in session");
+    }
+
+    console.log("🔄 Converting pubkey to npub", { pubkey });
+
+    // Convert pubkey to npub using the correct endpoint
+    const convertResponse = await fetch(
+      `/api/v1/keys/convert/public/${pubkey}`
+    );
+
+    if (!convertResponse.ok) {
+      throw new Error("Failed to convert pubkey to npub");
+    }
+
+    const convertData = await convertResponse.json();
+
+    if (convertData.error) {
+      throw new Error(convertData.error);
+    }
+
+    const npub = convertData.npub;
+    console.log("🔄 Successfully converted to npub", { npub });
+
+    // Navigate to profile page
+    const profileUrl = `/p/${npub}`;
+    htmx.ajax("GET", "/views/components/profile-page.html", "#main-content");
+    window.history.pushState({}, "", profileUrl);
+
+    console.log("🔄 Navigated to user profile", { profileUrl });
+  } catch (error) {
+    console.error("🔄 Failed to navigate to user profile:", error);
+    // Fallback to old profile page if something goes wrong
+    htmx.ajax("GET", "/views/profile.html", "#main-content");
+    window.history.pushState({}, "", "/profile");
+  }
+};
+
 // Update navigation to logged in state
 function updateNavToLoggedIn() {
   console.log("🔄 updateNavToLoggedIn called");

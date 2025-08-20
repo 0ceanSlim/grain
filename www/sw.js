@@ -3,7 +3,6 @@ const STATIC_CACHE_URLS = [
   "/",
   "/static/js/navigation.js",
   "/static/js/routing.js",
-  "/static/js/profile.js",
   "/static/js/settings.js",
   "/static/js/dropdown.js",
   // Note: Auth scripts are deliberately excluded from caching

@@ -35,11 +35,9 @@
       </button>
 
       <button
+        id="profile-nav-button"
         class="flex w-full px-4 py-2 text-sm text-left text-gray-300 transition-colors hover:bg-gray-600 hover:text-white"
-        hx-get="/views/profile.html"
-        hx-target="#main-content"
-        hx-push-url="/profile"
-        onclick="closeUserDropdown()"
+        onclick="navigateToUserProfile(); closeUserDropdown();"
       >
         <span class="mr-2">👤</span>
         Profile
