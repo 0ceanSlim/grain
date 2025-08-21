@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -222,9 +223,14 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.ClientAPI().Debug("Query request",
+		"filters", len(filters),
+		"client_ip", r.RemoteAddr)
+
 	// Get core client
 	coreClient := connection.GetCoreClient()
 	if coreClient == nil {
+		log.ClientAPI().Error("Core client not available")
 		http.Error(w, "Client not available", http.StatusInternalServerError)
 		return
 	}
@@ -238,31 +244,106 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer sub.Close()
 
-	// Collect events with timeout
-	events := make([]*nostr.Event, 0)
-	timeout := time.After(10 * time.Second)
+	// Use map for deduplication by event ID
+	eventMap := make(map[string]*nostr.Event)
+	timeout := time.After(8 * time.Second)
+
+	// Get the limit from the first filter (if any)
+	var requestedLimit int
+	if len(filters) > 0 && filters[0].Limit != nil {
+		requestedLimit = *filters[0].Limit
+		log.ClientAPI().Debug("Query limit set", "limit", requestedLimit)
+	} else {
+		requestedLimit = 500 // Default max
+		log.ClientAPI().Debug("No limit specified, using default", "limit", requestedLimit)
+	}
+
+	log.ClientAPI().Debug("Starting event collection with deduplication",
+		"timeout_seconds", 8,
+		"requested_limit", requestedLimit)
 
 	for {
 		select {
 		case event := <-sub.Events:
-			events = append(events, event)
+			// Only add if we haven't seen this event ID before
+			if _, exists := eventMap[event.ID]; !exists {
+				eventMap[event.ID] = event
+				log.ClientAPI().Debug("Added unique event",
+					"event_id", event.ID,
+					"kind", event.Kind,
+					"unique_count", len(eventMap))
+
+				// Stop collecting if we have enough unique events
+				if len(eventMap) >= requestedLimit {
+					log.ClientAPI().Debug("Reached requested limit", "unique_count", len(eventMap))
+					goto sendResponse
+				}
+			} else {
+				log.ClientAPI().Debug("Skipped duplicate event",
+					"event_id", event.ID,
+					"unique_count", len(eventMap))
+			}
+
 		case <-sub.Done:
-			// Subscription completed (EOSE received)
+			// Subscription completed (EOSE received from all relays)
+			log.ClientAPI().Debug("Subscription completed (EOSE)", "unique_count", len(eventMap))
 			goto sendResponse
+
 		case <-timeout:
-			log.ClientAPI().Debug("Query timeout reached", "event_count", len(events))
+			log.ClientAPI().Debug("Query timeout reached", "unique_count", len(eventMap))
 			goto sendResponse
 		}
 	}
 
 sendResponse:
+	// Convert map to slice
+	events := make([]*nostr.Event, 0, len(eventMap))
+	for _, event := range eventMap {
+		events = append(events, event)
+	}
+
+	// Sort events by created_at (newest first) and then by ID for deterministic ordering
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].CreatedAt == events[j].CreatedAt {
+			// If timestamps are equal, sort by ID (lexicographically)
+			return events[i].ID < events[j].ID
+		}
+		// Sort by timestamp, newest first
+		return events[i].CreatedAt > events[j].CreatedAt
+	})
+
+	// Apply limit after sorting (in case we collected more than needed)
+	if len(events) > requestedLimit {
+		events = events[:requestedLimit]
+		log.ClientAPI().Debug("Trimmed events to limit",
+			"trimmed_to", len(events),
+			"requested_limit", requestedLimit)
+	}
+
+	log.ClientAPI().Info("Query completed",
+		"unique_events", len(events),
+		"requested_limit", requestedLimit,
+		"client_ip", r.RemoteAddr)
+
+	// Check if this is a single event query by ID and handle 404
+	if len(filters) == 1 && len(filters[0].IDs) == 1 && len(events) == 0 {
+		// Single event query that returned no results
+		log.ClientAPI().Debug("Single event not found", "event_id", filters[0].IDs[0])
+		http.Error(w, "Event not found", http.StatusNotFound)
+		return
+	}
+
+	// Set headers and send response
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+
+	response := map[string]interface{}{
 		"events": events,
 		"count":  len(events),
-	}); err != nil {
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.ClientAPI().Error("Failed to encode query response", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
 }
 
@@ -275,6 +356,7 @@ func parseFiltersFromQuery(r *http.Request) ([]nostr.Filter, error) {
 	// Parse authors
 	if authors := query["authors"]; len(authors) > 0 {
 		filter.Authors = authors
+		log.ClientAPI().Debug("Parsed authors", "authors", authors)
 	}
 
 	// Parse kinds
@@ -283,10 +365,13 @@ func parseFiltersFromQuery(r *http.Request) ([]nostr.Filter, error) {
 		for _, kindStr := range kindStrs {
 			if kind, err := strconv.Atoi(kindStr); err == nil {
 				kinds = append(kinds, kind)
+			} else {
+				log.ClientAPI().Warn("Invalid kind parameter", "kind", kindStr)
 			}
 		}
 		if len(kinds) > 0 {
 			filter.Kinds = kinds
+			log.ClientAPI().Debug("Parsed kinds", "kinds", kinds)
 		}
 	}
 
@@ -294,13 +379,47 @@ func parseFiltersFromQuery(r *http.Request) ([]nostr.Filter, error) {
 	if limitStr := query.Get("limit"); limitStr != "" {
 		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
 			filter.Limit = &limit
+			log.ClientAPI().Debug("Parsed limit", "limit", limit)
+		} else {
+			log.ClientAPI().Warn("Invalid limit parameter", "limit", limitStr)
 		}
 	}
 
 	// Parse IDs
 	if ids := query["ids"]; len(ids) > 0 {
 		filter.IDs = ids
+		log.ClientAPI().Debug("Parsed IDs", "ids", ids)
 	}
+
+	// Parse since timestamp
+	if sinceStr := query.Get("since"); sinceStr != "" {
+		if since, err := strconv.ParseInt(sinceStr, 10, 64); err == nil {
+			sinceTime := time.Unix(since, 0)
+			filter.Since = &sinceTime
+			log.ClientAPI().Debug("Parsed since", "since", since, "time", sinceTime.Format(time.RFC3339))
+		} else {
+			log.ClientAPI().Warn("Invalid since parameter", "since", sinceStr)
+		}
+	}
+
+	// Parse until timestamp
+	if untilStr := query.Get("until"); untilStr != "" {
+		if until, err := strconv.ParseInt(untilStr, 10, 64); err == nil {
+			untilTime := time.Unix(until, 0)
+			filter.Until = &untilTime
+			log.ClientAPI().Debug("Parsed until", "until", until, "time", untilTime.Format(time.RFC3339))
+		} else {
+			log.ClientAPI().Warn("Invalid until parameter", "until", untilStr)
+		}
+	}
+
+	log.ClientAPI().Debug("Created filter",
+		"authors_count", len(filter.Authors),
+		"kinds_count", len(filter.Kinds),
+		"ids_count", len(filter.IDs),
+		"has_limit", filter.Limit != nil,
+		"has_since", filter.Since != nil,
+		"has_until", filter.Until != nil)
 
 	return []nostr.Filter{filter}, nil
 }
