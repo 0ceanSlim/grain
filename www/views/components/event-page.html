@@ -1,0 +1,149 @@
+<!-- Event Page Component -->
+<div class="container max-w-4xl px-4 py-8 mx-auto">
+  <!-- Loading State -->
+  <div id="loading" class="text-center">
+    <div
+      class="inline-block w-8 h-8 border-2 border-white rounded-full animate-spin border-t-transparent"
+    ></div>
+    <p class="mt-2 text-gray-400">Loading event...</p>
+  </div>
+
+  <!-- Error State -->
+  <div id="error" class="hidden text-center">
+    <div
+      class="max-w-md p-6 mx-auto bg-red-900 border border-red-700 rounded-lg"
+    >
+      <h2 class="mb-2 text-xl font-bold text-red-200">❌ Event Error</h2>
+      <p id="error-message" class="mb-4 text-red-300">Failed to load event</p>
+      <button
+        onclick="retryLoadEvent()"
+        class="px-4 py-2 text-white transition-colors bg-red-700 rounded hover:bg-red-600"
+      >
+        Retry
+      </button>
+    </div>
+  </div>
+
+  <!-- Event Content -->
+  <div id="event-content" class="hidden">
+    <!-- Event Header -->
+    <div class="mb-6 text-center">
+      <h1 class="mb-2 text-3xl font-bold text-white">Event</h1>
+      <!-- Event ID with copy button -->
+      <div class="flex items-center justify-center gap-2 mb-4">
+        <span id="event-id" class="font-mono text-sm text-gray-400"
+          >Loading...</span
+        >
+        <button
+          onclick="copyEventId()"
+          class="text-gray-400 transition-colors hover:text-white"
+          title="Copy Event ID"
+        >
+          📋
+        </button>
+      </div>
+    </div>
+
+    <!-- Event Kind Display -->
+    <div id="event-kind-display" class="mb-6">
+      <div class="p-6 bg-gray-800 rounded-lg">
+        <h3 class="mb-4 text-xl font-semibold text-white">
+          Event Kind <span id="event-kind" class="text-blue-400">0</span>
+        </h3>
+
+        <!-- Kind-specific content will be rendered here -->
+        <div id="kind-specific-content">
+          <!-- Default: Raw JSON display -->
+          <div class="p-4 bg-gray-900 rounded-lg">
+            <h4 class="mb-2 text-sm font-medium text-gray-400">
+              Raw Event JSON
+            </h4>
+            <pre
+              id="raw-event-json"
+              class="text-sm text-gray-300 break-all whitespace-pre-wrap"
+            >
+Loading...</pre
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Event Metadata -->
+    <div class="grid grid-cols-1 gap-4 mb-6 md:grid-cols-2">
+      <!-- Author -->
+      <div class="p-4 bg-gray-800 rounded-lg">
+        <h4 class="mb-2 text-sm font-medium text-gray-400">Author</h4>
+        <div class="flex items-center gap-2">
+          <span
+            id="event-author"
+            class="font-mono text-sm text-blue-400 break-all"
+            >Loading...</span
+          >
+          <button
+            onclick="copyAuthor()"
+            class="text-gray-400 transition-colors hover:text-white"
+            title="Copy Author"
+          >
+            📋
+          </button>
+        </div>
+      </div>
+
+      <!-- Created At -->
+      <div class="p-4 bg-gray-800 rounded-lg">
+        <h4 class="mb-2 text-sm font-medium text-gray-400">Created</h4>
+        <span id="event-created" class="text-gray-300">Loading...</span>
+      </div>
+    </div>
+
+    <!-- Event Tags (if any) -->
+    <div id="event-tags-container" class="hidden mb-6">
+      <div class="p-4 bg-gray-800 rounded-lg">
+        <h4 class="mb-2 text-sm font-medium text-gray-400">Tags</h4>
+        <div id="event-tags" class="space-y-2">
+          <!-- Tags will be populated here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex justify-center gap-4">
+      <button
+        onclick="toggleEventJson()"
+        id="toggle-json-btn"
+        class="px-6 py-3 text-white transition-colors bg-gray-700 rounded-lg hover:bg-gray-600"
+      >
+        Show Event JSON
+      </button>
+
+      <button
+        onclick="viewAuthorProfile()"
+        class="px-6 py-3 text-white transition-colors bg-blue-700 rounded-lg hover:bg-blue-600"
+      >
+        View Author Profile
+      </button>
+    </div>
+
+    <!-- JSON Toggle Container (hidden by default) -->
+    <div id="json-container" class="hidden mt-6">
+      <div class="p-4 bg-gray-900 rounded-lg">
+        <h4 class="mb-2 text-sm font-medium text-gray-400">
+          Complete Event JSON
+        </h4>
+        <pre
+          id="complete-event-json"
+          class="overflow-x-auto text-sm text-gray-300 break-all whitespace-pre-wrap"
+        >
+Loading...</pre
+        >
+      </div>
+    </div>
+
+    <!-- Debug Info (hidden elements for JavaScript) -->
+    <div class="hidden">
+      <span id="event-author-hex"></span>
+    </div>
+  </div>
+</div>
+<script src="/static/js/event-page.js"></script>

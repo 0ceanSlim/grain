@@ -92,6 +92,19 @@ function handleRouteLoad() {
         }
       }
 
+      // Check if this is an event route (/e/<eventID>)
+      if (currentPath.startsWith("/e/")) {
+        const eventId = currentPath.replace("/e/", "");
+        if (eventId) {
+          console.log("[ROUTING] Loading event for ID:", eventId);
+          // Load event component directly
+          htmx.ajax("GET", "/views/components/event-page.html", {
+            target: "#main-content",
+          });
+          return; // Exit early
+        }
+      }
+
       // Default to home for unrecognized routes
       targetView = "/views/home.html";
       window.history.replaceState({}, "", "/");
