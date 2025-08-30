@@ -93,9 +93,9 @@ window.navigateToUserProfile = async function () {
     console.log("🔄 Navigated to user profile", { profileUrl });
   } catch (error) {
     console.error("🔄 Failed to navigate to user profile:", error);
-    // Fallback to old profile page if something goes wrong
-    htmx.ajax("GET", "/views/profile.html", "#main-content");
-    window.history.pushState({}, "", "/profile");
+    // Redirect to home on error instead of deprecated profile route
+    htmx.ajax("GET", "/views/home.html", "#main-content");
+    window.history.pushState({}, "", "/");
   }
 };
 

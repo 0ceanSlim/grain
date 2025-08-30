@@ -18,36 +18,6 @@ function handleRouteLoad() {
     case "/":
       targetView = "/views/home.html";
       break;
-    case "/profile":
-      // Check if user has session before loading profile
-      fetch("/api/v1/session")
-        .then((response) => {
-          if (response.ok) {
-            targetView = "/views/profile.html";
-          } else {
-            // No session, redirect to home and show login modal
-            targetView = "/views/home.html";
-            window.history.pushState({}, "", "/");
-
-            // Show login modal after home loads
-            setTimeout(() => {
-              const loginModal = document.getElementById("login-modal");
-              if (loginModal) {
-                loginModal.classList.remove("hidden");
-              }
-            }, 100);
-          }
-          console.log("[ROUTING] Loading view:", targetView);
-          htmx.ajax("GET", targetView, { target: "#main-content" });
-        })
-        .catch(() => {
-          // Error checking session, go to home and show login modal
-          targetView = "/views/home.html";
-          window.history.pushState({}, "", "/");
-          console.log("[ROUTING] Loading view:", targetView);
-          htmx.ajax("GET", targetView, { target: "#main-content" });
-        });
-      return; // Exit early since we're handling this asynchronously
     case "/settings":
       // Check if user has session before loading settings
       fetch("/api/v1/session")
@@ -126,28 +96,6 @@ window.addEventListener("popstate", function (event) {
     case "/":
       targetView = "/views/home.html";
       break;
-    case "/profile":
-      // Check if user has valid session for profile route
-      fetch("/api/v1/session")
-        .then((response) => {
-          if (response.ok) {
-            targetView = "/views/profile.html";
-          } else {
-            // No session, redirect to home
-            targetView = "/views/home.html";
-            window.history.replaceState({}, "", "/");
-          }
-          console.log("[ROUTING] Loading view via popstate:", targetView);
-          htmx.ajax("GET", targetView, { target: "#main-content" });
-        })
-        .catch(() => {
-          // Error checking session, go to home
-          targetView = "/views/home.html";
-          window.history.replaceState({}, "", "/");
-          console.log("[ROUTING] Loading view via popstate:", targetView);
-          htmx.ajax("GET", targetView, { target: "#main-content" });
-        });
-      return; // Exit early since we're handling this asynchronously
     case "/settings":
       // Check if user has valid session for settings route
       fetch("/api/v1/session")

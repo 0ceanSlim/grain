@@ -70,7 +70,7 @@ const dashboardManager = {
     const picture = profile.picture || null;
 
     return `
-    <div class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
+    <div onclick="navigateToProfileFromPubkey('${pubkey}')" class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
       <div class="w-16 h-16 mx-auto mb-2">
         ${
           picture
@@ -673,7 +673,7 @@ const dashboardManager = {
       const npub = await this.convertPubkeyToNpub(pubkey);
 
       profileContainer.innerHTML = `
-      <div class="w-12 h-12 rounded-full overflow-hidden bg-gray-600 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" onclick="window.open('https://njump.me/${npub}', '_blank')">
+      <div class="w-12 h-12 rounded-full overflow-hidden bg-gray-600 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" onclick="navigateToProfile('${npub}')">
         ${
           picture
             ? `<img src="${picture}" alt="${name}" class="w-full h-full object-cover">`
@@ -1743,7 +1743,7 @@ const dashboardManager = {
       const picture = profile.picture || null;
 
       authorCards.push(`
-        <div class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${authorPubkey}">
+        <div onclick="navigateToProfileFromPubkey('${authorPubkey}')" class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${authorPubkey}">
           <div class="w-12 h-12 mx-auto mb-1">
             ${
               picture
@@ -1879,7 +1879,7 @@ const dashboardManager = {
     }
 
     return `
-      <div class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
+      <div onclick="navigateToProfileFromPubkey('${pubkey}')" class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
         <div class="w-16 h-16 mx-auto mb-2">
           ${
             picture
@@ -1996,6 +1996,29 @@ document.addEventListener("htmx:afterSwap", function (event) {
     setTimeout(updateRelayStatus, 100); // Small delay to ensure elements are ready
   }
 });
+
+window.navigateToProfile = function (npub) {
+  const profileUrl = `/p/${npub}`;
+  htmx.ajax("GET", "/views/components/profile-page.html", "#main-content");
+  window.history.pushState({}, "", profileUrl);
+};
+
+window.navigateToProfileFromPubkey = async function (pubkey) {
+  try {
+    const response = await fetch(
+      `/api/v1/keys/convert/public/${encodeURIComponent(pubkey)}`
+    );
+    if (response.ok) {
+      const data = await response.json();
+      const npub = data.npub || pubkey;
+      navigateToProfile(npub);
+    } else {
+      console.error("Failed to convert pubkey to npub");
+    }
+  } catch (error) {
+    console.error("Error converting pubkey:", error);
+  }
+};
 
 // Also try calling it after a short delay in case of timing issues
 setTimeout(updateRelayStatus, 1000);
