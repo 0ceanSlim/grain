@@ -12,6 +12,166 @@
     🌾 grain
   </h1>
 
+  <!-- Enhanced Search Bar Section -->
+  <div id="search-container" class="relative flex-1 max-w-md mx-8">
+    <div class="relative w-full">
+      <!-- Main Search Input -->
+      <input
+        type="text"
+        id="search-input"
+        placeholder="Search profiles and events - click ? for help"
+        class="w-full px-4 py-2 pr-20 text-sm text-white transition-all duration-200 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        autocomplete="off"
+        spellcheck="false"
+      />
+
+      <!-- Help Button -->
+      <button
+        id="search-help-button"
+        class="absolute top-0 h-full px-2 text-gray-400 transition-colors duration-200 right-10 hover:text-white focus:outline-none"
+        type="button"
+        title="Search help"
+      >
+        <svg
+          class="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          ></path>
+        </svg>
+      </button>
+
+      <!-- Search Button -->
+      <button
+        id="search-button"
+        class="absolute top-0 right-0 h-full px-3 text-gray-400 transition-colors duration-200 hover:text-white focus:outline-none"
+        type="button"
+      >
+        <svg
+          class="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          ></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Search Results Dropdown -->
+    <div
+      id="search-results"
+      class="absolute left-0 right-0 z-50 hidden mt-1 overflow-y-auto bg-gray-800 border border-gray-600 rounded-lg shadow-lg top-full max-h-64"
+    >
+      <!-- Results will be dynamically populated here -->
+    </div>
+
+    <!-- Search Help Panel -->
+    <div
+      id="search-help-panel"
+      class="absolute left-0 right-0 z-50 hidden p-4 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-lg top-full"
+    >
+      <div class="space-y-3">
+        <!-- Header -->
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-white">Search Help</h3>
+          <button id="close-help" class="text-gray-400 hover:text-white">
+            <svg
+              class="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Supported Formats -->
+        <div>
+          <h4 class="mb-2 text-xs font-medium text-gray-300">
+            Supported Formats:
+          </h4>
+          <div class="space-y-1 text-xs">
+            <div class="flex items-center space-x-2">
+              <span class="text-blue-400">👤</span>
+              <span class="font-mono text-white">npub1...</span>
+              <span class="text-gray-400">- Profile (public key)</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="text-green-400">📝</span>
+              <span class="font-mono text-white">note1...</span>
+              <span class="text-gray-400">- Event (note ID)</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="text-purple-400">👤+</span>
+              <span class="font-mono text-white">nprofile1...</span>
+              <span class="text-gray-400">- Profile with relay hints</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="text-orange-400">📝+</span>
+              <span class="font-mono text-white">nevent1...</span>
+              <span class="text-gray-400">- Event with relay hints</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="text-cyan-400">🔗</span>
+              <span class="font-mono text-white">naddr1...</span>
+              <span class="text-gray-400">- Replaceable event</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="text-yellow-400">🔑</span>
+              <span class="font-mono text-white">64 hex chars</span>
+              <span class="text-gray-400">- Raw event ID</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Examples -->
+        <div>
+          <h4 class="mb-2 text-xs font-medium text-gray-300">Examples:</h4>
+          <div class="space-y-1 text-xs">
+            <div class="text-gray-400">
+              <span class="text-blue-400">Profile:</span>
+              <code class="px-1 bg-gray-900 rounded"
+                >npub180cvv07tjdrrgpa0j7j7...</code
+              >
+            </div>
+            <div class="text-gray-400">
+              <span class="text-green-400">Event:</span>
+              <code class="px-1 bg-gray-900 rounded"
+                >note1qqsqtgp6yl8stlfj0znzw4d...</code
+              >
+            </div>
+          </div>
+        </div>
+
+        <!-- Tips -->
+        <div class="pt-2 border-t border-gray-700">
+          <p class="text-xs text-gray-400">
+            💡 <span class="text-gray-300">Tip:</span> Paste any nostr
+            identifier to search for profiles or events
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <nav class="flex items-center space-x-4">
     <div id="profile-nav">{{template "login-button"}}</div>
   </nav>

@@ -59,6 +59,7 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/keys/validate/", api.KeyValidationHandler) // Validate any key type
 
 	mux.HandleFunc("/api/v1/ping/", api.PingHandler)
+	mux.HandleFunc("/api/v1/keys/decode/nip19/", api.Nip19DecodeHandler) // Decode NIP-19 entities
 
 	// Core Nostr client function endpoints
 	registerCoreClientEndpoints(mux)

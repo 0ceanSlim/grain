@@ -156,7 +156,10 @@
               console.log("✅ Routing.js loaded");
 
               // Load other scripts
-              const otherScripts = ["/static/js/dropdown.js"];
+              const otherScripts = [
+                "/static/js/dropdown.js",
+                "/static/js/search.js",
+              ];
               otherScripts.forEach((src) => {
                 const script = document.createElement("script");
                 script.src = src;
