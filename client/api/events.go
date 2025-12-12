@@ -162,6 +162,13 @@ func GetUserProfileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ensure relay connections are established before querying
+	if err := connection.EnsureRelayConnections(); err != nil {
+		log.ClientAPI().Error("Failed to ensure relay connections", "error", err)
+		http.Error(w, "No relay connections available", http.StatusServiceUnavailable)
+		return
+	}
+
 	// Fetch profile
 	profile, err := coreClient.GetUserProfile(pubkey, nil)
 	if err != nil {
@@ -195,6 +202,13 @@ func GetUserRelaysHandler(w http.ResponseWriter, r *http.Request) {
 	coreClient := connection.GetCoreClient()
 	if coreClient == nil {
 		http.Error(w, "Client not available", http.StatusInternalServerError)
+		return
+	}
+
+	// Ensure relay connections are established before querying
+	if err := connection.EnsureRelayConnections(); err != nil {
+		log.ClientAPI().Error("Failed to ensure relay connections", "error", err)
+		http.Error(w, "No relay connections available", http.StatusServiceUnavailable)
 		return
 	}
 
