@@ -235,6 +235,13 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ensure relay connections are established before querying
+	if err := connection.EnsureRelayConnections(); err != nil {
+		log.ClientAPI().Error("Failed to ensure relay connections", "error", err)
+		http.Error(w, "No relay connections available", http.StatusServiceUnavailable)
+		return
+	}
+
 	// Create subscription to fetch events
 	sub, err := coreClient.Subscribe(filters, nil)
 	if err != nil {
