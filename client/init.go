@@ -43,6 +43,9 @@ func InitializeClient(serverCfg *cfgType.ServerConfig) error {
 	// Start cache cleanup
 	cache.StartCacheCleanup()
 
+	// Start relay connection health check (check every 5 minutes)
+	connection.StartRelayHealthCheck(5 * time.Minute)
+
 	log.ClientMain().Info("Client package initialized successfully")
 	return nil
 }

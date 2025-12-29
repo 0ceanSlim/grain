@@ -127,9 +127,18 @@ func (rp *RelayPool) Connect(url string) error {
 	defer rp.mu.Unlock()
 
 	// Check if already connected
-	if conn, exists := rp.connections[url]; exists && conn.Status == StatusConnected {
-		log.ClientCore().Debug("Already connected to relay", "relay", url)
-		return nil
+	if conn, exists := rp.connections[url]; exists {
+		if conn.Status == StatusConnected {
+			log.ClientCore().Debug("Already connected to relay", "relay", url)
+			return nil
+		}
+		// Close existing dead connection before reconnecting
+		log.ClientCore().Debug("Closing existing dead connection before reconnecting", "relay", url, "status", conn.Status)
+		if err := conn.close(); err != nil {
+			log.ClientCore().Warn("Error closing dead connection", "relay", url, "error", err)
+		}
+		// Remove from map
+		delete(rp.connections, url)
 	}
 
 	log.ClientCore().Debug("Connecting to relay", "relay", url)
