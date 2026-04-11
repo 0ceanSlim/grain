@@ -13,6 +13,88 @@ type Filter struct {
 	Limit   *int                `json:"limit,omitempty"`
 }
 
+// MatchesEvent returns true if the event satisfies all filter criteria per NIP-01.
+// An empty/zero field means "match all" for that field.
+func (f Filter) MatchesEvent(evt Event) bool {
+	// Check IDs (prefix match per NIP-01)
+	if len(f.IDs) > 0 {
+		matched := false
+		for _, prefix := range f.IDs {
+			if len(evt.ID) >= len(prefix) && evt.ID[:len(prefix)] == prefix {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	// Check Authors (prefix match per NIP-01)
+	if len(f.Authors) > 0 {
+		matched := false
+		for _, prefix := range f.Authors {
+			if len(evt.PubKey) >= len(prefix) && evt.PubKey[:len(prefix)] == prefix {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	// Check Kinds
+	if len(f.Kinds) > 0 {
+		matched := false
+		for _, k := range f.Kinds {
+			if evt.Kind == k {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	// Check time range
+	evtTime := time.Unix(evt.CreatedAt, 0)
+	if f.Since != nil && evtTime.Before(*f.Since) {
+		return false
+	}
+	if f.Until != nil && evtTime.After(*f.Until) {
+		return false
+	}
+
+	// Check tag filters (e.g. Tags["e"] = ["abc..."] means #e tag must contain "abc...")
+	for tagName, filterValues := range f.Tags {
+		if len(filterValues) == 0 {
+			continue
+		}
+		// Collect all values for this tag from the event
+		eventTagValues := make(map[string]struct{})
+		for _, tag := range evt.Tags {
+			if len(tag) >= 2 && tag[0] == tagName {
+				eventTagValues[tag[1]] = struct{}{}
+			}
+		}
+		// At least one filter value must be present in event tags
+		matched := false
+		for _, fv := range filterValues {
+			if _, ok := eventTagValues[fv]; ok {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	return true
+}
+
 // ToSubscriptionFilter converts Filter to a relay-compatible format
 func (f Filter) ToSubscriptionFilter() map[string]interface{} {
 	filter := make(map[string]interface{})

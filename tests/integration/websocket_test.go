@@ -8,55 +8,79 @@ import (
 	"github.com/0ceanslim/grain/tests"
 )
 
-func TestWebSocketTimeout(t *testing.T) {
+func TestInvalidMessage(t *testing.T) {
 	client := tests.NewTestClient(t)
 	defer client.Close()
 
-	// Send invalid message and expect connection to handle it gracefully
+	// Send invalid message type
 	client.SendMessage([]interface{}{"INVALID_MESSAGE_TYPE"})
 
-	// Should still be able to send valid messages
-	client.SendMessage([]interface{}{"REQ", "test", map[string]interface{}{"kinds": []int{1}}})
-
-	response := client.ReadMessage(5 * time.Second)
-	if response[0] == "EOSE" {
-		t.Log("✅ Relay handled invalid message gracefully")
-	}
+	// Should still be able to send valid messages after
+	subID := tests.RandomSubID()
+	client.Subscribe(subID, map[string]interface{}{"kinds": []int{1}, "limit": 1})
+	client.ExpectEOSE(subID, 5*time.Second)
+	t.Log("Relay handled invalid message gracefully")
 }
 
 func TestMultipleClients(t *testing.T) {
-	// Test multiple concurrent connections
 	clients := make([]*tests.TestClient, 3)
-
 	for i := 0; i < 3; i++ {
 		clients[i] = tests.NewTestClient(t)
 		defer clients[i].Close()
 	}
 
-	// Add delay between subscriptions
+	// Each client subscribes
 	for i, client := range clients {
-		subID := fmt.Sprintf("multi-test-%d", i)
-		client.SendMessage([]interface{}{"REQ", subID, map[string]interface{}{"kinds": []int{1}}})
-		time.Sleep(50 * time.Millisecond) // Prevent rate limiting
+		subID := fmt.Sprintf("multi-%d", i)
+		client.Subscribe(subID, map[string]interface{}{"kinds": []int{1}, "limit": 1})
+		time.Sleep(50 * time.Millisecond) // avoid rate limiting
 	}
 
-	// All clients subscribe
+	// All should get EOSE
 	for i, client := range clients {
-		subID := fmt.Sprintf("multi-test-%d", i)
-		client.SendMessage([]interface{}{"REQ", subID, map[string]interface{}{"kinds": []int{1}}})
+		subID := fmt.Sprintf("multi-%d", i)
+		client.ExpectEOSE(subID, 5*time.Second)
+		t.Logf("Client %d subscription successful", i)
+	}
+}
+
+func TestLiveSubscription(t *testing.T) {
+	kp := tests.NewTestKeypair()
+
+	// Client 1 subscribes to this author's events
+	subscriber := tests.NewTestClient(t)
+	defer subscriber.Close()
+
+	subID := tests.RandomSubID()
+	subscriber.Subscribe(subID, map[string]interface{}{
+		"authors": []string{kp.PubKey},
+		"kinds":   []int{1},
+	})
+	subscriber.ExpectEOSE(subID, 5*time.Second)
+
+	// Client 2 publishes an event
+	publisher := tests.NewTestClient(t)
+	defer publisher.Close()
+
+	evt := kp.SignEvent(1, "live subscription test", nil)
+	publisher.SendEvent(evt)
+	accepted, reason := publisher.ExpectOK(evt.ID, 5*time.Second)
+	if !accepted {
+		t.Fatalf("Event rejected: %s", reason)
 	}
 
-	for i, client := range clients {
-		response := client.ReadMessage(5 * time.Second)
-		if len(response) > 0 {
-			switch response[0] {
-			case "CLOSED":
-				t.Errorf("❌ Client %d subscription was closed: %v", i, response)
-			case "EOSE":
-				t.Logf("✅ Client %d subscription successful", i)
-			default:
-				t.Logf("⚠️ Client %d received unexpected response: %v", i, response[0])
-			}
+	// Subscriber should receive the event in real-time
+	msg := subscriber.ReadMessage(5 * time.Second)
+	if len(msg) < 3 {
+		t.Fatalf("Expected EVENT message, got: %v", msg)
+	}
+	if msg[0] != "EVENT" {
+		t.Fatalf("Expected EVENT, got %v", msg[0])
+	}
+	if evtMap, ok := msg[2].(map[string]interface{}); ok {
+		if evtMap["id"] != evt.ID {
+			t.Fatalf("Received wrong event: %v != %s", evtMap["id"], evt.ID)
 		}
 	}
+	t.Log("Live subscription received event in real-time")
 }

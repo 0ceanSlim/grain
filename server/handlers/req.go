@@ -21,8 +21,6 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		return
 	}
 
-	subscriptions := client.GetSubscriptions()
-
 	subID, ok := message[1].(string)
 	if !ok || len(subID) == 0 || len(subID) > 64 {
 		log.Req().Error("Invalid subscription ID format or length",
@@ -69,6 +67,7 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 	}
 
 	// Check if this is a duplicate subscription (same filters)
+	subscriptions := client.GetSubscriptions()
 	if existingFilters, exists := subscriptions[subID]; exists {
 		if areFiltersIdentical(existingFilters, filters) {
 			log.Req().Debug("Duplicate subscription detected, ignoring",
@@ -86,28 +85,25 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 	}
 
 	// Remove oldest subscription if needed
-	if len(subscriptions) >= config.GetConfig().Server.MaxSubscriptionsPerClient {
-		var oldestSubID string
+	subCount := client.SubscriptionCount()
+	if subCount >= config.GetConfig().Server.MaxSubscriptionsPerClient {
 		for id := range subscriptions {
-			if id != subID { // Don't remove the current subscription
-				oldestSubID = id
+			if id != subID {
+				client.DeleteSubscription(id)
+				log.Req().Info("Dropped oldest subscription",
+					"old_sub_id", id,
+					"current_count", subCount-1)
 				break
 			}
 		}
-		if oldestSubID != "" {
-			delete(subscriptions, oldestSubID)
-			log.Req().Info("Dropped oldest subscription",
-				"old_sub_id", oldestSubID,
-				"current_count", len(subscriptions))
-		}
 	}
 
-	// Add/update subscription - THIS IS CRUCIAL: subscription stays active after EOSE
-	subscriptions[subID] = filters
+	// Add/update subscription - stays active after EOSE
+	client.SetSubscription(subID, filters)
 	log.Req().Info("Subscription created/updated",
 		"sub_id", subID,
 		"filter_count", len(filters),
-		"total_subscriptions", len(subscriptions))
+		"total_subscriptions", client.SubscriptionCount())
 
 	// Query database for historical events
 	db := nostrdb.GetDB()

@@ -14,7 +14,6 @@ else
 endif
 
 CONTAINER_NAME = grain-test-relay
-MONGO_CONTAINER = grain-test-mongo
 
 .PHONY: help test test-start test-run-all test-run test-single test-stop test-clean-logs
 

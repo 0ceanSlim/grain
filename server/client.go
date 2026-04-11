@@ -41,6 +41,9 @@ type Client struct {
 	// Write mutex to prevent concurrent writes
 	writeMu sync.Mutex
 
+	// Subscription mutex to protect concurrent subscription access
+	subMu sync.RWMutex
+
 	// Debugging Information
 	id          string
 	ip          string
@@ -326,12 +329,45 @@ func (c *Client) ClientInfo() string {
 		c.userAgent,
 		c.origin,
 		c.connectedAt.Format(time.RFC3339),
-		len(c.subscriptions),
+		c.SubscriptionCount(),
 	)
 }
 
 func (c *Client) GetSubscriptions() map[string][]nostr.Filter {
-	return c.subscriptions
+	c.subMu.RLock()
+	defer c.subMu.RUnlock()
+	// Return a shallow copy so callers can't mutate the map without the lock
+	cp := make(map[string][]nostr.Filter, len(c.subscriptions))
+	for k, v := range c.subscriptions {
+		cp[k] = v
+	}
+	return cp
+}
+
+func (c *Client) SetSubscription(subID string, filters []nostr.Filter) {
+	c.subMu.Lock()
+	defer c.subMu.Unlock()
+	c.subscriptions[subID] = filters
+}
+
+func (c *Client) DeleteSubscription(subID string) {
+	c.subMu.Lock()
+	defer c.subMu.Unlock()
+	delete(c.subscriptions, subID)
+}
+
+func (c *Client) SubscriptionCount() int {
+	c.subMu.RLock()
+	defer c.subMu.RUnlock()
+	return len(c.subscriptions)
+}
+
+func (c *Client) ForEachSubscription(fn func(subID string, filters []nostr.Filter)) {
+	c.subMu.RLock()
+	defer c.subMu.RUnlock()
+	for subID, filters := range c.subscriptions {
+		fn(subID, filters)
+	}
 }
 
 // CloseClient closes the client connection and cleans up resources
@@ -357,9 +393,11 @@ func (c *Client) CloseClient() {
 	connManager.RemoveConnection(c)
 
 	// Clear all subscriptions
+	c.subMu.Lock()
 	for subID := range c.subscriptions {
 		delete(c.subscriptions, subID)
 	}
+	c.subMu.Unlock()
 
 	// Close WebSocket connection
 	if c.ws != nil {
@@ -573,6 +611,32 @@ func handleReadError(err error, client *Client) {
 func isValidJSON(s string) bool {
 	var js interface{}
 	return json.Unmarshal([]byte(s), &js) == nil
+}
+
+// BroadcastEvent sends an event to all connected clients whose active
+// subscriptions match the event. This is the real-time delivery mechanism
+// required by NIP-01: after EOSE, new matching events are pushed to subscribers.
+func BroadcastEvent(evt nostr.Event) {
+	clientsMu.Lock()
+	snapshot := make([]*Client, 0, len(clients))
+	for _, c := range clients {
+		snapshot = append(snapshot, c)
+	}
+	clientsMu.Unlock()
+
+	for _, c := range snapshot {
+		if !c.IsConnected() {
+			continue
+		}
+		c.ForEachSubscription(func(subID string, filters []nostr.Filter) {
+			for _, f := range filters {
+				if f.MatchesEvent(evt) {
+					c.SendMessage([]interface{}{"EVENT", subID, evt})
+					break
+				}
+			}
+		})
+	}
 }
 
 // Start stats monitoring

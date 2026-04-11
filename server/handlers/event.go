@@ -15,6 +15,10 @@ import (
 	"github.com/0ceanslim/grain/server/validation"
 )
 
+// OnEventStored is called after an event is successfully stored.
+// Set by the server package to broadcast events to active subscribers.
+var OnEventStored func(evt nostr.Event)
+
 // HandleEvent processes an "EVENT" message
 func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	if len(message) != 2 {
@@ -141,6 +145,11 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 		"event_id", evt.ID,
 		"kind", evt.Kind,
 		"pubkey", evt.PubKey)
+
+	// Broadcast to active subscribers
+	if OnEventStored != nil {
+		OnEventStored(evt)
+	}
 
 	// Send to backup relay
 	if cfg.BackupRelay.Enabled {

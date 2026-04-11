@@ -189,11 +189,17 @@ func buildNDBFilters(filters []nostr.Filter) ([]C.struct_ndb_filter, error) {
 // buildSingleNDBFilter converts a single Go Filter to a C ndb_filter.
 // Uses ndb_filter_from_json for simplicity and correctness.
 func buildSingleNDBFilter(nf *C.struct_ndb_filter, filter nostr.Filter) error {
+	// Initialize the filter's internal buffers before parsing
+	if C.ndb_filter_init(nf) == 0 {
+		return fmt.Errorf("ndb_filter_init failed")
+	}
+
 	// Serialize the filter to JSON, then let nostrdb parse it.
 	// This is the most robust approach since nostrdb handles all the
 	// filter field semantics internally.
 	filterJSON, err := filterToJSON(filter)
 	if err != nil {
+		C.ndb_filter_destroy(nf)
 		return fmt.Errorf("failed to serialize filter: %w", err)
 	}
 
@@ -207,6 +213,7 @@ func buildSingleNDBFilter(nf *C.struct_ndb_filter, filter nostr.Filter) error {
 
 	rc := C.ndb_filter_from_json(cJSON, C.int(len(filterJSON)), nf, buf, C.int(bufSize))
 	if rc == 0 {
+		C.ndb_filter_destroy(nf)
 		return fmt.Errorf("ndb_filter_from_json failed for: %s", filterJSON)
 	}
 

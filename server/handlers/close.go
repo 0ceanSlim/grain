@@ -39,18 +39,13 @@ func HandleClose(client nostr.ClientInterface, message []interface{}) {
 		return
 	}
 
-	// Get the client's subscription map
-	subscriptions := client.GetSubscriptions()
-
 	// Check if subscription exists before removing
+	subscriptions := client.GetSubscriptions()
 	if _, exists := subscriptions[subID]; !exists {
-		// Use DEBUG since this can happen in normal operation
-		// (e.g., client sends duplicate CLOSE, network issues, race conditions)
 		log.Close().Debug("Attempted to close non-existent subscription",
 			"subscription_id", subID,
-			"active_subscriptions", len(subscriptions),
+			"active_subscriptions", client.SubscriptionCount(),
 			"client_connected", client.IsConnected())
-		// Only send response if client is still connected
 		if client.IsConnected() {
 			response.SendClosed(client, subID, "subscription was not active")
 		}
@@ -58,10 +53,10 @@ func HandleClose(client nostr.ClientInterface, message []interface{}) {
 	}
 
 	// Remove the subscription
-	delete(subscriptions, subID)
+	client.DeleteSubscription(subID)
 	log.Close().Info("Subscription closed by client request",
 		"subscription_id", subID,
-		"remaining_subscriptions", len(subscriptions),
+		"remaining_subscriptions", client.SubscriptionCount(),
 		"client_connected", client.IsConnected())
 
 	// Only send CLOSED response if client is still connected

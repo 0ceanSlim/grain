@@ -15,6 +15,7 @@ import (
 	"github.com/0ceanslim/grain/config"
 	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/db/nostrdb"
+	"github.com/0ceanslim/grain/server/handlers"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 	"github.com/0ceanslim/grain/server/utils/userSync"
@@ -213,6 +214,9 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 
 	// Initialize pubkey cache system
 	config.InitializePubkeyCache()
+
+	// Wire up real-time event broadcasting to active subscribers
+	handlers.OnEventStored = BroadcastEvent
 
 	// Initialize client package with server configuration
 	if err := client.InitializeClient(cfg); err != nil {
