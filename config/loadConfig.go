@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"sync"
 
 	cfgType "github.com/0ceanslim/grain/config/types"
@@ -18,7 +19,19 @@ var (
 	whitelistOnce sync.Once
 	blacklistOnce sync.Once
 	mu            sync.Mutex
+	dataDir       string
 )
+
+// SetDataDir sets the resolved data directory path for the application.
+func SetDataDir(dir string) { dataDir = dir }
+
+// GetDataDir returns the resolved data directory path.
+func GetDataDir() string { return dataDir }
+
+// ConfigPath returns the full path for a file within the data directory.
+func ConfigPath(filename string) string {
+	return filepath.Join(dataDir, filename)
+}
 
 // GetConfig returns the server configuration.
 func GetConfig() *cfgType.ServerConfig {
@@ -66,12 +79,12 @@ func ResetBlacklistConfig() {
 func applyEnvironmentOverrides(config *cfgType.ServerConfig) {
 	log.Config().Debug("Checking for environment variable overrides")
 
-	// MongoDB URI override
-	if mongoURI := os.Getenv("MONGO_URI"); mongoURI != "" {
-		log.Config().Info("Overriding MongoDB URI from environment variable",
-			"original", config.MongoDB.URI,
-			"override", mongoURI)
-		config.MongoDB.URI = mongoURI
+	// Database path override
+	if dbPath := os.Getenv("NDB_PATH"); dbPath != "" {
+		log.Config().Info("Overriding database path from environment variable",
+			"original", config.Database.Path,
+			"override", dbPath)
+		config.Database.Path = dbPath
 	}
 
 	// Server port override

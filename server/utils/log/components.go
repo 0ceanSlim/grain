@@ -4,7 +4,7 @@ import "log/slog"
 
 // All logging components defined in one place
 func Startup() *slog.Logger          { return GetLogger("startup") }
-func Mongo() *slog.Logger            { return GetLogger("mongo") }
+func DB() *slog.Logger               { return GetLogger("db") }
 func RelayClient() *slog.Logger      { return GetLogger("relay-client") }
 func RelayConnection() *slog.Logger  { return GetLogger("relay-connection") }
 func RelayAPI() *slog.Logger         { return GetLogger("relay-api") }
@@ -13,9 +13,9 @@ func Config() *slog.Logger           { return GetLogger("config") }
 func Util() *slog.Logger             { return GetLogger("util") }
 func Validation() *slog.Logger       { return GetLogger("event-validation") }
 func UserSync() *slog.Logger         { return GetLogger("user-sync") }
-func MongoQuery() *slog.Logger       { return GetLogger("mongo-query") }
-func MongoStore() *slog.Logger       { return GetLogger("mongo-store") }
-func MongoPurge() *slog.Logger       { return GetLogger("mongo-purge") }
+func DBQuery() *slog.Logger          { return GetLogger("db-query") }
+func DBStore() *slog.Logger          { return GetLogger("db-store") }
+func DBPurge() *slog.Logger          { return GetLogger("db-purge") }
 func EventStore() *slog.Logger       { return GetLogger("event-store") }
 func Event() *slog.Logger            { return GetLogger("event-handler") }
 func Req() *slog.Logger              { return GetLogger("req-handler") }
@@ -34,7 +34,7 @@ func ClientCache() *slog.Logger      { return GetLogger("client-cache") }
 func GetAllComponents() []string {
 	return []string{
 		"startup",           // Startup()
-		"mongo",             // Mongo()
+		"db",                // DB()
 		"relay-client",      // RelayClient()
 		"relay-connection",  // RelayConnection()
 		"relay-api",         // RelayAPI()
@@ -43,9 +43,9 @@ func GetAllComponents() []string {
 		"util",              // Util()
 		"event-validation",  // Validation()
 		"user-sync",         // UserSync()
-		"mongo-query",       // MongoQuery()
-		"mongo-store",       // MongoStore()
-		"mongo-purge",       // MongoPurge()
+		"db-query",          // DBQuery()
+		"db-store",          // DBStore()
+		"db-purge",          // DBPurge()
 		"event-store",       // EventStore()
 		"event-handler",     // Event()
 		"req-handler",       // Req()

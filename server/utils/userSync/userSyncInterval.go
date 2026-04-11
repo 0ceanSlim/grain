@@ -5,7 +5,7 @@ import (
 
 	"github.com/0ceanslim/grain/config"
 	cfgType "github.com/0ceanslim/grain/config/types"
-	"github.com/0ceanslim/grain/server/db/mongo"
+	"github.com/0ceanslim/grain/server/db/nostrdb"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -45,7 +45,12 @@ func StartPeriodicUserSync(cfg *cfgType.ServerConfig) {
 func runUserSync(cfg *cfgType.ServerConfig) {
 	log.UserSync().Info("Starting periodic user sync run")
 
-	authors := mongo.GetAllAuthorsFromRelay(cfg)
+	db := nostrdb.GetDB()
+	if db == nil {
+		log.UserSync().Warn("Database not available, skipping user sync")
+		return
+	}
+	authors := db.GetAllAuthors()
 	log.UserSync().Debug("Retrieved authors from relay", "total_authors", len(authors))
 
 	// Filter authors if required using cache (ignores enabled state for sync operations)

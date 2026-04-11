@@ -36,7 +36,6 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/relay/config/rate_limit", relay.GetRateLimitConfig)
 	mux.HandleFunc("/api/v1/relay/config/event_purge", relay.GetEventPurgeConfig)
 	mux.HandleFunc("/api/v1/relay/config/logging", relay.GetLoggingConfig)
-	mux.HandleFunc("/api/v1/relay/config/mongodb", relay.GetMongoDBConfig)
 	mux.HandleFunc("/api/v1/relay/config/resource_limits", relay.GetResourceLimitsConfig)
 	mux.HandleFunc("/api/v1/relay/config/auth", relay.GetAuthConfig)
 	mux.HandleFunc("/api/v1/relay/config/event_time_constraints", relay.GetEventTimeConstraintsConfig)

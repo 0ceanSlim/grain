@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/0ceanslim/grain/config"
-	"github.com/0ceanslim/grain/server/db/mongo"
+	"github.com/0ceanslim/grain/server/db/nostrdb"
 	"github.com/0ceanslim/grain/server/handlers/response"
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
@@ -110,12 +110,23 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		"total_subscriptions", len(subscriptions))
 
 	// Query database for historical events
-	dbName := config.GetConfig().MongoDB.Database
-	queriedEvents, err := mongo.QueryEvents(filters, mongo.GetClient(), dbName)
+	db := nostrdb.GetDB()
+	if db == nil {
+		log.Req().Error("Database not available", "sub_id", subID)
+		response.SendClosed(client, subID, "error: database not available")
+		return
+	}
+
+	// Determine effective limit from config
+	effectiveLimit := 1000
+	if cfg := config.GetConfig(); cfg != nil && cfg.Server.ImplicitReqLimit > 0 {
+		effectiveLimit = cfg.Server.ImplicitReqLimit
+	}
+
+	queriedEvents, err := db.Query(filters, effectiveLimit)
 	if err != nil {
 		log.Req().Error("Error querying events",
 			"sub_id", subID,
-			"database", dbName,
 			"error", err)
 		response.SendClosed(client, subID, "error: could not query events")
 		return

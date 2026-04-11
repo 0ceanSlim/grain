@@ -13,13 +13,15 @@ GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 # Build flags
 LDFLAGS="-w -s -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}"
 
-# Target platforms
+# With CGO enabled (required for nostrdb), we build for the native platform only.
+# Cross-compilation with CGO requires per-target C cross-compilers.
+# For multi-platform releases, build in platform-specific containers using:
+#   docker buildx build --platform linux/amd64 ...
+#   docker buildx build --platform linux/arm64 ...
+NATIVE_OS=$(go env GOOS)
+NATIVE_ARCH=$(go env GOARCH)
 PLATFORMS=(
-    "linux/amd64"
-    "linux/arm64" 
-    "darwin/amd64"
-    "darwin/arm64"
-    "windows/amd64"
+    "${NATIVE_OS}/${NATIVE_ARCH}"
 )
 
 # Dependency URLs and versions
@@ -202,10 +204,9 @@ for platform in "${PLATFORMS[@]}"; do
     ARCHIVE_DIR="/tmp/build/$ARCHIVE"
     mkdir -p "$ARCHIVE_DIR"
     
-    # Copy files to archive (binary and www folder with bundled assets)
+    # Copy binary to archive (www/ assets are embedded in the binary)
     echo -n "    Packaging... "
     cp "/tmp/build/$BINARY" "$ARCHIVE_DIR/"
-    cp -r www "$ARCHIVE_DIR/"
     
     # Create archive
     cd /tmp/build

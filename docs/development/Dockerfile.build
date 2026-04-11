@@ -1,7 +1,7 @@
-# Build environment for GRAIN releases
+# Build environment for GRAIN releases (CGO-enabled for nostrdb)
 FROM golang:1.23-alpine
 
-# Install build dependencies including frontend build tools
+# Install build dependencies including C toolchain and frontend build tools
 RUN apk add --no-cache \
     git \
     zip \
@@ -14,7 +14,14 @@ RUN apk add --no-cache \
     wget \
     libstdc++ \
     libgcc \
-    perl
+    perl \
+    # C toolchain for nostrdb CGO build
+    gcc \
+    musl-dev \
+    make \
+    autoconf \
+    automake \
+    libtool
 
 # Install TailwindCSS CLI - use musl version for Alpine Linux
 RUN ARCH=$(uname -m) && \
@@ -28,8 +35,8 @@ RUN ARCH=$(uname -m) && \
     echo "TailwindCSS CLI installed successfully:" && \
     /usr/local/bin/tailwindcss --version
 
-# Set environment variables for cross-compilation
-ENV CGO_ENABLED=0
+# CGO enabled for nostrdb
+ENV CGO_ENABLED=1
 
 # Set working directory
 WORKDIR /app
@@ -43,6 +50,15 @@ RUN dos2unix /usr/local/bin/build-script && \
 
 # Copy the entire project (excluding items in .dockerignore)
 COPY . .
+
+# Fix CRLF line endings in all C dependency source/build files.
+# Windows git checks out with CRLF which breaks shell scripts and autotools.
+# Use sed as it handles large files reliably; dos2unix -q may skip some.
+RUN find server/db/nostrdb -type f \! -name '*.o' \! -name '*.a' \! -name '*.png' \! -name '*.pdf' \
+        -exec sed -i 's/\r$//' {} +
+
+# Build the nostrdb C library
+RUN cd server/db/nostrdb && bash build.sh
 
 # Entry point is the build script
 ENTRYPOINT ["/usr/local/bin/build-script"]

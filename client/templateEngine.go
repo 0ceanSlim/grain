@@ -2,8 +2,9 @@ package client
 
 import (
 	"html/template"
+	"io/fs"
 	"net/http"
-	"path/filepath"
+	"path"
 )
 
 type PageData struct {
@@ -11,37 +12,43 @@ type PageData struct {
 	Theme string
 }
 
-// Define the base directories for views and templates
+// Define the base directories for views and templates within the embedded FS
 const (
-	viewsDir     = "www/views/"
-	templatesDir = "www/views/templates/"
+	viewsDir     = "www/views"
+	templatesDir = "www/views/templates"
 )
 
-// Define the common layout templates filenames
+// Define the common layout template filenames
 var templateFiles = []string{
 	"layout.html",
 	"header.html",
 	"footer.html",
 }
 
-// Initialize the common templates with full paths
-var layout = PrependDir(templatesDir, templateFiles)
+// layoutPatterns returns the full embedded FS paths for layout templates
+func layoutPatterns() []string {
+	var paths []string
+	for _, file := range templateFiles {
+		paths = append(paths, path.Join(templatesDir, file))
+	}
+	return paths
+}
 
-// RenderTemplate renders a template with the standard layout
+// RenderTemplate renders a template with the standard layout using the embedded FS
 func RenderTemplate(w http.ResponseWriter, data PageData, view string) {
+	viewTemplate := path.Join(viewsDir, view)
+	componentPattern := path.Join(viewsDir, "components", "*.html")
 
-	viewTemplate := filepath.Join(viewsDir, view)
-	componentPattern := filepath.Join(viewsDir, "components", "*.html")
-	componentTemplates, err := filepath.Glob(componentPattern)
+	componentTemplates, err := fs.Glob(wwwFS, componentPattern)
 	if err != nil {
 		http.Error(w, "Error loading component templates: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	templates := append(layout, viewTemplate)
-	templates = append(templates, componentTemplates...)
+	patterns := append(layoutPatterns(), viewTemplate)
+	patterns = append(patterns, componentTemplates...)
 
-	tmpl, err := template.New("").Funcs(template.FuncMap{}).ParseFiles(templates...)
+	tmpl, err := template.New("").Funcs(template.FuncMap{}).ParseFS(wwwFS, patterns...)
 	if err != nil {
 		http.Error(w, "Error parsing templates: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -51,13 +58,4 @@ func RenderTemplate(w http.ResponseWriter, data PageData, view string) {
 	if err != nil {
 		http.Error(w, "Error executing template: "+err.Error(), http.StatusInternalServerError)
 	}
-}
-
-// Helper function to prepend a directory path to a list of filenames
-func PrependDir(dir string, files []string) []string {
-	var fullPaths []string
-	for _, file := range files {
-		fullPaths = append(fullPaths, dir+file)
-	}
-	return fullPaths
 }

@@ -12,8 +12,8 @@ logging:
   suppress_components: # Suppress INFO/DEBUG logs (WARN/ERROR still shown)
     - "util"
     - "log"
-    - "mongo-query"
-    - "mongo-store"
+    - "db-query"
+    - "db-store"
     - "event-store"
     - "relay-client"
     - "relay-connection"
@@ -29,9 +29,9 @@ logging:
 
 # See docs/configuration.md for full component list
 
-mongodb:
-  uri: mongodb://localhost:27017/ # MongoDB connection string
-  database: grain # Name your database
+database:
+  path: "data"       # Directory for nostrdb data files (relative to data dir)
+  map_size_mb: 4096  # Maximum database size in MB (4GB default)
 
 # Client configuration for the built-in Nostr client
 client:

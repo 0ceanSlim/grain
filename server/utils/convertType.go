@@ -86,7 +86,7 @@ func ToTime(data interface{}) *time.Time {
 	if data == nil {
 		return nil
 	}
-	// Ensure data is a float64 which MongoDB uses for numbers
+	// Ensure data is a float64 (standard JSON number representation)
 	timestamp, ok := data.(float64)
 	if !ok {
 		log.Util().Warn("Invalid timestamp format", "value_type", fmt.Sprintf("%T", data))

@@ -3,8 +3,8 @@ FROM golang:1.23-alpine
 # Add label to identify test images
 LABEL test-image=grain
 
-# Install basic tools for testing
-RUN apk add --no-cache git ca-certificates
+# Install tools for testing and C toolchain for nostrdb
+RUN apk add --no-cache git ca-certificates gcc musl-dev make autoconf automake libtool bash
 
 WORKDIR /app
 
@@ -15,12 +15,16 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the binary
-RUN CGO_ENABLED=0 go build -buildvcs=false -o grain .
+# Initialize submodules and build nostrdb C library
+RUN git init 2>/dev/null || true && \
+    git submodule update --init --recursive 2>/dev/null || true && \
+    cd server/db/nostrdb && bash build.sh
 
-# Copy example configs and modify for Docker
-RUN sed -i 's/localhost:27017/mongo:27017/g' config.yml && \
-    sed -i 's/:8181/:8182/g' config.yml
+# Build the binary with CGO enabled for nostrdb
+RUN CGO_ENABLED=1 go build -buildvcs=false -o grain .
+
+# Modify config for test environment
+RUN sed -i 's/:8181/:8182/g' config.yml
 
 EXPOSE 8182
 

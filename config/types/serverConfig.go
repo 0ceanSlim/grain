@@ -22,11 +22,11 @@ type UserSyncConfig struct {
 }
 
 type ServerConfig struct {
-	Logging LogConfig `yaml:"logging"`
-	MongoDB struct {
-		URI      string `yaml:"uri"`
-		Database string `yaml:"database"`
-	} `yaml:"mongodb"`
+	Logging  LogConfig `yaml:"logging"`
+	Database struct {
+		Path      string `yaml:"path"`        // Directory for nostrdb data files (default: ./data)
+		MapSizeMB int    `yaml:"map_size_mb"` // Max database size in MB (default: 4096 = 4GB)
+	} `yaml:"database"`
 	Server struct {
 		Port                      string `yaml:"port"`
 		ReadTimeout               int    `yaml:"read_timeout"`

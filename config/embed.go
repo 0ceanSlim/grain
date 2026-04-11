@@ -87,12 +87,14 @@ func extractEmbeddedFile(embeddedPath, targetPath string) error {
 	return nil
 }
 
-// EnsureAllConfigFiles creates all default config files from embedded examples if they don't exist
+// EnsureAllConfigFiles creates all default config files from embedded examples if they don't exist.
+// Files are created in the resolved data directory.
 func EnsureAllConfigFiles() error {
 	log.Config().Debug("Ensuring all config files exist")
 
 	for targetFile := range exampleFileMap {
-		if err := ensureConfigFile(targetFile); err != nil {
+		fullPath := ConfigPath(targetFile)
+		if err := ensureConfigFile(fullPath); err != nil {
 			return err
 		}
 	}

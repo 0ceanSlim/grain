@@ -1,24 +1,14 @@
 services:
-  mongo:
-    image: mongo:7.0
-    container_name: grain-mongo
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    restart: unless-stopped
-
   grain:
-    build: . # Uses the new Dockerfile in current directory
+    build: . # Uses the Dockerfile in current directory
     container_name: grain-relay
     ports:
       - "8181:8181"
-    depends_on:
-      - mongo
     environment:
       - GRAIN_ENV=production
-      - MONGO_URI=mongodb://mongo:27017/grain
+    volumes:
+      - grain_data:/app/data
     restart: unless-stopped
 
 volumes:
-  mongo_data:
+  grain_data:

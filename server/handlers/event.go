@@ -3,9 +3,10 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/0ceanslim/grain/config"
-	"github.com/0ceanslim/grain/server/db/mongo"
+	"github.com/0ceanslim/grain/server/db/nostrdb"
 	"github.com/0ceanslim/grain/server/handlers/response"
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
@@ -91,8 +92,16 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 		return
 	}
 
+	// Check database availability
+	db := nostrdb.GetDB()
+	if db == nil {
+		log.Event().Error("Database not available", "event_id", evt.ID)
+		response.SendOK(client, evt.ID, false, "error: database not available")
+		return
+	}
+
 	// Duplicate event check
-	isDuplicate, err := mongo.CheckDuplicateEvent(context.TODO(), evt)
+	isDuplicate, err := db.CheckDuplicateEvent(evt)
 	if err != nil {
 		log.Event().Error("Error checking for duplicate event",
 			"event_id", evt.ID,
@@ -110,8 +119,24 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	// Trigger UserSyncCheck sync
 	go userSync.UserSyncCheckCached(evt, cfg)
 
-	// Store event in MongoDB
-	mongo.StoreMongoEvent(context.TODO(), evt, client)
+	// Store event in nostrdb
+	var storeErr error
+	if evt.Kind == 5 {
+		storeErr = db.ProcessDeletion(context.TODO(), evt)
+	} else {
+		storeErr = db.StoreEvent(context.TODO(), evt)
+	}
+
+	if storeErr != nil {
+		log.Event().Error("Failed to store event",
+			"event_id", evt.ID,
+			"kind", evt.Kind,
+			"error", storeErr)
+		response.SendOK(client, evt.ID, false, fmt.Sprintf("error: %v", storeErr))
+		return
+	}
+
+	response.SendOK(client, evt.ID, true, "")
 	log.Event().Info("Event stored successfully",
 		"event_id", evt.ID,
 		"kind", evt.Kind,

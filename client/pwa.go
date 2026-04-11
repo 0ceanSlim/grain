@@ -2,8 +2,8 @@ package client
 
 import (
 	"encoding/json"
+	"io/fs"
 	"net/http"
-	"path/filepath"
 
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -80,15 +80,20 @@ func manifestHandler(w http.ResponseWriter, r *http.Request) {
 	log.ClientMain().Debug("Served PWA manifest", "client_ip", r.RemoteAddr)
 }
 
-// serviceWorkerHandler serves the service worker JavaScript file
+// serviceWorkerHandler serves the service worker JavaScript file from the embedded FS
 func serviceWorkerHandler(w http.ResponseWriter, r *http.Request) {
-	swPath := filepath.Join("www", "sw.js")
+	data, err := fs.ReadFile(wwwFS, "www/sw.js")
+	if err != nil {
+		log.ClientMain().Error("Failed to read embedded service worker", "error", err)
+		http.Error(w, "Service worker not found", http.StatusNotFound)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate") // SW should not be cached
 	w.Header().Set("Service-Worker-Allowed", "/")                          // Allow SW to control entire origin
 
-	http.ServeFile(w, r, swPath)
+	w.Write(data)
 
 	log.ClientMain().Debug("Served service worker", "client_ip", r.RemoteAddr)
 }

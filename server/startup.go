@@ -2,9 +2,11 @@ package server
 
 import (
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -12,7 +14,7 @@ import (
 	"github.com/0ceanslim/grain/client"
 	"github.com/0ceanslim/grain/config"
 	cfgType "github.com/0ceanslim/grain/config/types"
-	"github.com/0ceanslim/grain/server/db/mongo"
+	"github.com/0ceanslim/grain/server/db/nostrdb"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 	"github.com/0ceanslim/grain/server/utils/userSync"
@@ -28,7 +30,7 @@ func Run() error {
 	}
 
 	// Load initial configuration and setup logging
-	cfg, err := config.LoadConfig("config.yml")
+	cfg, err := config.LoadConfig(config.ConfigPath("config.yml"))
 	if err != nil {
 		return fmt.Errorf("failed to load initial config: %w", err)
 	}
@@ -87,7 +89,7 @@ func startConfigWatchers(restartChan chan<- struct{}) {
 	}
 
 	for _, file := range watchFiles {
-		go config.WatchConfigFile(file, restartChan)
+		go config.WatchConfigFile(config.ConfigPath(file), restartChan)
 	}
 }
 
@@ -100,11 +102,35 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 		return
 	}
 
-	// Initialize database connection with graceful degradation
-	dbClient, dbAvailable := mongo.InitializeDatabase(cfg)
+	// Initialize nostrdb database
+	dbPath := cfg.Database.Path
+	if dbPath == "" {
+		dbPath = "data"
+	}
+	if !filepath.IsAbs(dbPath) {
+		dbPath = filepath.Join(config.GetDataDir(), dbPath)
+	}
+	mapSizeMB := cfg.Database.MapSizeMB
+	if mapSizeMB <= 0 {
+		mapSizeMB = 4096 // 4GB default
+	}
+
+	// Ensure data directory exists
+	if err := os.MkdirAll(dbPath, 0755); err != nil {
+		log.Startup().Error("Failed to create database directory", "path", dbPath, "error", err)
+		return
+	}
+
+	db, err := nostrdb.Open(dbPath, mapSizeMB, 4)
+	dbAvailable := err == nil
+	if err != nil {
+		log.Startup().Error("Failed to open nostrdb", "path", dbPath, "error", err)
+	} else {
+		nostrdb.SetGlobalDB(db)
+	}
 	defer func() {
-		if dbClient != nil {
-			mongo.DisconnectDB(dbClient)
+		if db != nil {
+			db.Close()
 		}
 	}()
 
@@ -124,11 +150,6 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 	// Start background services (pass DB availability status)
 	startBackgroundServices(cfg, dbAvailable)
 
-	// Start MongoDB health monitoring if DB was initially unavailable
-	if !dbAvailable {
-		go mongo.StartMongoHealthMonitor(cfg)
-	}
-
 	log.Startup().Info("Server instance started successfully",
 		"database_available", dbAvailable,
 		"port", cfg.Server.Port)
@@ -147,16 +168,16 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 
 // loadAllConfigs loads all configuration files with error handling
 func loadAllConfigs() (*cfgType.ServerConfig, error) {
-	cfg, err := config.LoadConfig("config.yml")
+	cfg, err := config.LoadConfig(config.ConfigPath("config.yml"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load server config: %w", err)
 	}
 
-	if _, err := config.LoadWhitelistConfig("whitelist.yml"); err != nil {
+	if _, err := config.LoadWhitelistConfig(config.ConfigPath("whitelist.yml")); err != nil {
 		log.Startup().Error("Failed to load whitelist config", "error", err, "file", "whitelist.yml")
 	}
 
-	if _, err := config.LoadBlacklistConfig("blacklist.yml"); err != nil {
+	if _, err := config.LoadBlacklistConfig(config.ConfigPath("blacklist.yml")); err != nil {
 		log.Startup().Error("Failed to load blacklist config", "error", err, "file", "blacklist.yml")
 	}
 
@@ -166,6 +187,11 @@ func loadAllConfigs() (*cfgType.ServerConfig, error) {
 // initializeSubsystems sets up all server subsystems
 func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 	log.Startup().Debug("Initializing server subsystems")
+
+	// Resolve log file path relative to data directory
+	if !filepath.IsAbs(cfg.Logging.File) {
+		cfg.Logging.File = filepath.Join(config.GetDataDir(), cfg.Logging.File)
+	}
 
 	// Re-initialize logger with current configuration
 	log.InitializeLoggers(cfg)
@@ -181,7 +207,7 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 	config.ClearTemporaryBans()
 
 	// Load relay metadata
-	if err := utils.LoadRelayMetadataJSON(); err != nil {
+	if err := utils.LoadRelayMetadata(config.ConfigPath("relay_metadata.json")); err != nil {
 		log.Startup().Error("Failed to load relay metadata", "error", err, "file", "relay_metadata.json")
 	}
 
@@ -238,14 +264,20 @@ func startBackgroundServices(cfg *cfgType.ServerConfig, dbAvailable bool) {
 	// Only start DB-dependent services if database is available
 	if dbAvailable {
 		// Start event purging service
-		go mongo.ScheduleEventPurgingOptimized(cfg)
+		db := nostrdb.GetDB()
+		if db != nil {
+			go db.ScheduleEventPurging(cfg, func() []string {
+				pubkeyCache := config.GetPubkeyCache()
+				return pubkeyCache.GetWhitelistedPubkeys()
+			})
+		}
 
 		// Start periodic user sync service
 		go userSync.StartPeriodicUserSync(cfg)
 
 		log.Startup().Info("All background services started")
 	} else {
-		log.Startup().Warn("Database-dependent services disabled due to MongoDB unavailability",
+		log.Startup().Warn("Database-dependent services disabled",
 			"disabled_services", "event_purging, user_sync")
 		log.Startup().Info("Non-database background services started")
 	}
@@ -302,8 +334,9 @@ func initRoot(w http.ResponseWriter, r *http.Request) {
 		// Let API and auth endpoints fall through to be handled by registered endpoints
 		http.NotFound(w, r)
 	case strings.HasPrefix(r.URL.Path, "/views/") || strings.HasPrefix(r.URL.Path, "/static/") || strings.HasPrefix(r.URL.Path, "/style/"):
-		// Serve actual static files (CSS, JS, view templates, etc.)
-		fileServer := http.FileServer(http.Dir("www"))
+		// Serve actual static files from embedded FS (CSS, JS, view templates, etc.)
+		subFS, _ := fs.Sub(client.GetEmbeddedWWW(), "www")
+		fileServer := http.FileServer(http.FS(subFS))
 		http.StripPrefix("/", fileServer).ServeHTTP(w, r)
 	default:
 		// All other routes: serve main app template for frontend routing
