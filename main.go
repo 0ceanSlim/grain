@@ -45,6 +45,15 @@ func main() {
 	config.SetEmbeddedExamples(embeddedExamples)
 	client.SetEmbeddedWWW(embeddedWWW)
 
+	// Handle --import flag: import events from JSONL file and exit
+	if importFile := parseImportFlag(); importFile != "" {
+		if err := server.ImportEvents(importFile); err != nil {
+			fmt.Printf("Import failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	// Start the server
 	if err := server.Run(); err != nil {
 		fmt.Printf("Application failed: %v\n", err)
@@ -56,6 +65,16 @@ func main() {
 func parseDataDirFlag() string {
 	for i, arg := range os.Args {
 		if arg == "--data-dir" && i+1 < len(os.Args) {
+			return os.Args[i+1]
+		}
+	}
+	return ""
+}
+
+// parseImportFlag extracts --import value from os.Args, if present.
+func parseImportFlag() string {
+	for i, arg := range os.Args {
+		if arg == "--import" && i+1 < len(os.Args) {
 			return os.Args[i+1]
 		}
 	}

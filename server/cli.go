@@ -39,6 +39,9 @@ func HandleArgs() bool {
 	case "--data-dir":
 		// Handled in main.go parseDataDirFlag(); skip here
 		return false
+	case "--import":
+		// Handled in main.go parseImportFlag(); skip here
+		return false
 	default:
 		// Check for unknown flags
 		if len(os.Args[1]) > 0 && os.Args[1][0] == '-' {
@@ -72,7 +75,8 @@ func printHelp() {
 	fmt.Printf("  --version, -v        Show version information\n")
 	fmt.Printf("  --help, -h           Show this help message\n")
 	fmt.Printf("  --config-help        Show configuration file information\n")
-	fmt.Printf("  --data-dir <path>    Set the data directory (configs, database, logs)\n\n")
+	fmt.Printf("  --data-dir <path>    Set the data directory (configs, database, logs)\n")
+	fmt.Printf("  --import <file>      Import events from a JSONL file into nostrdb and exit\n\n")
 	fmt.Printf("Environment Variables:\n")
 	fmt.Printf("  GRAIN_DATA_DIR      Override default data directory path\n")
 	fmt.Printf("  NDB_PATH            Override nostrdb data directory path\n")

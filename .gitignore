@@ -13,3 +13,6 @@ docs/status/status.json
 docs/status/uptime.json
 docs/status/history/
 .claude
+# Built tool binaries
+tools/migrate-mongo/migrate-mongo
+tools/migrate-mongo/migrate-mongo.exe

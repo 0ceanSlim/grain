@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -123,7 +124,25 @@ func LoadConfig(filename string) (*cfgType.ServerConfig, error) {
 		return nil, err
 	}
 
-	// Apply environment variable overrides
+	// Detect outdated config format (e.g., old mongodb section)
+	if err := CheckAndMigrateConfig(filename); err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: config migration check failed: %v\n", err)
+	}
+
+	// Validate config and apply defaults for missing fields
+	warnings, validationErr := ValidateAndApplyDefaults(&config)
+	if len(warnings) > 0 {
+		fmt.Fprintln(os.Stderr, "Config validation — defaults applied:")
+		for _, w := range warnings {
+			fmt.Fprintf(os.Stderr, "  - %s\n", w)
+		}
+		fmt.Fprintln(os.Stderr, "")
+	}
+	if validationErr != nil {
+		return nil, fmt.Errorf("config validation error: %w", validationErr)
+	}
+
+	// Apply environment variable overrides (after defaults, so env vars win)
 	applyEnvironmentOverrides(&config)
 
 	once.Do(func() {
