@@ -12,7 +12,7 @@ client:
 
 database:
   path: "data"
-  map_size_mb: 512
+  map_size_mb: 32
 
 server:
   port: :8182
