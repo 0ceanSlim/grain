@@ -21,31 +21,37 @@ import (
 
 // Default (legacy) endpoints — used by the happy-path tests in
 // relay_test.go, api_test.go, websocket_test.go.
+//
+// We use 127.0.0.1 instead of "localhost" on purpose: docker-compose's
+// port publishing on Linux binds to IPv4 0.0.0.0 only, but Go's resolver
+// on some hosts (notably GitHub Actions ubuntu runners) returns ::1 for
+// "localhost" first, producing intermittent "connection refused" errors
+// as the test harness dials an IPv6 address docker never bound.
 const (
-	TestRelayURL = "ws://localhost:8182"
-	TestHTTPURL  = "http://localhost:8182"
+	TestRelayURL = "ws://127.0.0.1:8182"
+	TestHTTPURL  = "http://127.0.0.1:8182"
 )
 
 // Per-scenario relay endpoints. Each URL targets a dedicated docker-compose
 // service backed by a config fixture in tests/docker/configs/.
 const (
-	DefaultRelayURL    = "ws://localhost:8182"
-	RateLimitRelayURL  = "ws://localhost:8183"
-	BlacklistRelayURL  = "ws://localhost:8184"
-	WhitelistRelayURL  = "ws://localhost:8185"
-	AuthRelayURL       = "ws://localhost:8186"
-	TimeCheckRelayURL  = "ws://localhost:8187"
-	EventPurgeRelayURL = "ws://localhost:8188"
-	HotReloadRelayURL  = "ws://localhost:8189"
+	DefaultRelayURL    = "ws://127.0.0.1:8182"
+	RateLimitRelayURL  = "ws://127.0.0.1:8183"
+	BlacklistRelayURL  = "ws://127.0.0.1:8184"
+	WhitelistRelayURL  = "ws://127.0.0.1:8185"
+	AuthRelayURL       = "ws://127.0.0.1:8186"
+	TimeCheckRelayURL  = "ws://127.0.0.1:8187"
+	EventPurgeRelayURL = "ws://127.0.0.1:8188"
+	HotReloadRelayURL  = "ws://127.0.0.1:8189"
 
-	DefaultHTTPURL    = "http://localhost:8182"
-	RateLimitHTTPURL  = "http://localhost:8183"
-	BlacklistHTTPURL  = "http://localhost:8184"
-	WhitelistHTTPURL  = "http://localhost:8185"
-	AuthHTTPURL       = "http://localhost:8186"
-	TimeCheckHTTPURL  = "http://localhost:8187"
-	EventPurgeHTTPURL = "http://localhost:8188"
-	HotReloadHTTPURL  = "http://localhost:8189"
+	DefaultHTTPURL    = "http://127.0.0.1:8182"
+	RateLimitHTTPURL  = "http://127.0.0.1:8183"
+	BlacklistHTTPURL  = "http://127.0.0.1:8184"
+	WhitelistHTTPURL  = "http://127.0.0.1:8185"
+	AuthHTTPURL       = "http://127.0.0.1:8186"
+	TimeCheckHTTPURL  = "http://127.0.0.1:8187"
+	EventPurgeHTTPURL = "http://127.0.0.1:8188"
+	HotReloadHTTPURL  = "http://127.0.0.1:8189"
 )
 
 // AllRelayHTTPURLs is used by TestMain readiness checks.
