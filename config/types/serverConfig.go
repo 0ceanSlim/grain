@@ -10,17 +10,6 @@ type LogConfig struct {
 	SuppressComponents []string `yaml:"suppress_components"` // Components to suppress INFO/DEBUG logs from
 }
 
-type UserSyncConfig struct {
-	UserSync              bool     `yaml:"user_sync"`               // Enable/disable syncing
-	DisableAtStartup      bool     `yaml:"disable_at_startup"`      // New field
-	InitialSyncRelays     []string `yaml:"initial_sync_relays"`     // Relays for initial kind10002 fetch
-	Kinds                 []int    `yaml:"kinds"`                   // Kinds to sync
-	Categories            string   `yaml:"categories"`              // Categories to sync
-	Limit                 *int     `yaml:"limit"`                   // Limit per kind
-	ExcludeNonWhitelisted bool     `yaml:"exclude_non_whitelisted"` // Sync only whitelisted users
-	Interval              int      `yaml:"interval"`                // Resync interval in hours
-}
-
 type ServerConfig struct {
 	Logging  LogConfig `yaml:"logging"`
 	Database struct {
@@ -46,5 +35,4 @@ type ServerConfig struct {
 		Enabled bool   `yaml:"enabled"`
 		URL     string `yaml:"url"`
 	} `yaml:"backup_relay"`
-	UserSync UserSyncConfig `yaml:"UserSync"`
 }

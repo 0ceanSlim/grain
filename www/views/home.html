@@ -224,70 +224,10 @@
     </div>
   </div>
 
-  <!-- 4. User Sync (Experimental) Section - Collapsible -->
-  <div
-    class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
-  >
-    <div
-      class="px-6 py-4 transition-colors border-b border-gray-700 cursor-pointer bg-gray-750 hover:bg-gray-700"
-      onclick="toggleUserSyncSection()"
-    >
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 class="text-xl font-semibold text-white">
-            🔄 User Sync
-            <span class="text-sm font-normal text-orange-400"
-              >(Experimental)</span
-            >
-          </h2>
-          <p class="text-sm text-gray-400">
-            User data synchronization settings
-          </p>
-        </div>
-        <svg
-          id="user-sync-chevron"
-          class="w-5 h-5 text-gray-400 transition-transform duration-200 transform"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9 5l7 7-7 7"
-          />
-        </svg>
-      </div>
-    </div>
-    <div id="user-sync-content" class="hidden p-6">
-      <div class="space-y-3">
-        <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-        <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-        <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- Hyperscript for simple interactions -->
 <div></div>
-
-<script>
-  // Toggle User Sync section visibility
-  function toggleUserSyncSection() {
-    const content = document.getElementById("user-sync-content");
-    const chevron = document.getElementById("user-sync-chevron");
-
-    if (content.classList.contains("hidden")) {
-      content.classList.remove("hidden");
-      chevron.style.transform = "rotate(90deg)";
-    } else {
-      content.classList.add("hidden");
-      chevron.style.transform = "rotate(0deg)";
-    }
-  }
-</script>
 
 <style>
   /* Fix initial width issues by setting explicit container width */

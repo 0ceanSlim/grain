@@ -1,11 +1,108 @@
 services:
-  grain:
+  grain-default:
     build:
-      context: ../../ # Build from project root
+      context: ../../
       dockerfile: tests/docker/Dockerfile
+    image: grain-test:latest
     container_name: grain-test-relay
     ports:
-      - "8182:8182" # Use 8182 to match your test helpers
+      - "8182:8182"
     environment:
       - GRAIN_ENV=test
+    volumes:
+      - ../docker/configs/default.yml:/app/testdata/config.yml:ro
+    restart: "no"
+
+  grain-ratelimit:
+    image: grain-test:latest
+    depends_on:
+      - grain-default
+    container_name: grain-test-ratelimit
+    ports:
+      - "8183:8183"
+    environment:
+      - GRAIN_ENV=test
+    volumes:
+      - ../docker/configs/ratelimit.yml:/app/testdata/config.yml:ro
+    restart: "no"
+
+  grain-blacklist:
+    image: grain-test:latest
+    depends_on:
+      - grain-default
+    container_name: grain-test-blacklist
+    ports:
+      - "8184:8184"
+    environment:
+      - GRAIN_ENV=test
+    volumes:
+      - ../docker/configs/blacklist.yml:/app/testdata/config.yml:ro
+      - ../docker/configs/blacklist-rules.yml:/app/testdata/blacklist.yml:ro
+    restart: "no"
+
+  grain-whitelist:
+    image: grain-test:latest
+    depends_on:
+      - grain-default
+    container_name: grain-test-whitelist
+    ports:
+      - "8185:8185"
+    environment:
+      - GRAIN_ENV=test
+    volumes:
+      - ../docker/configs/whitelist.yml:/app/testdata/config.yml:ro
+      - ../docker/configs/whitelist-rules.yml:/app/testdata/whitelist.yml:ro
+    restart: "no"
+
+  grain-auth:
+    image: grain-test:latest
+    depends_on:
+      - grain-default
+    container_name: grain-test-auth
+    ports:
+      - "8186:8186"
+    environment:
+      - GRAIN_ENV=test
+    volumes:
+      - ../docker/configs/auth.yml:/app/testdata/config.yml:ro
+    restart: "no"
+
+  grain-timecheck:
+    image: grain-test:latest
+    depends_on:
+      - grain-default
+    container_name: grain-test-timecheck
+    ports:
+      - "8187:8187"
+    environment:
+      - GRAIN_ENV=test
+    volumes:
+      - ../docker/configs/timecheck.yml:/app/testdata/config.yml:ro
+    restart: "no"
+
+  grain-eventpurge:
+    image: grain-test:latest
+    depends_on:
+      - grain-default
+    container_name: grain-test-eventpurge
+    ports:
+      - "8188:8188"
+    environment:
+      - GRAIN_ENV=test
+    volumes:
+      - ../docker/configs/eventpurge.yml:/app/testdata/config.yml:ro
+    restart: "no"
+
+  grain-hotreload:
+    image: grain-test:latest
+    depends_on:
+      - grain-default
+    container_name: grain-test-hotreload
+    ports:
+      - "8189:8189"
+    environment:
+      - GRAIN_ENV=test
+    volumes:
+      # Read-write mount so the test can rewrite the file mid-run.
+      - ../docker/configs/hotreload.yml:/app/testdata/config.yml
     restart: "no"

@@ -40,7 +40,6 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/relay/config/auth", relay.GetAuthConfig)
 	mux.HandleFunc("/api/v1/relay/config/event_time_constraints", relay.GetEventTimeConstraintsConfig)
 	mux.HandleFunc("/api/v1/relay/config/backup_relay", relay.GetBackupRelayConfig)
-	mux.HandleFunc("/api/v1/relay/config/user_sync", relay.GetUserSyncConfig)
 	mux.HandleFunc("/api/v1/relay/config/whitelist", relay.GetWhitelistConfig)
 	mux.HandleFunc("/api/v1/relay/config/blacklist", relay.GetBlacklistConfig)
 

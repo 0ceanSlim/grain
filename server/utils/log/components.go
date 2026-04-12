@@ -12,7 +12,6 @@ func Log() *slog.Logger              { return GetLogger("log") }
 func Config() *slog.Logger           { return GetLogger("config") }
 func Util() *slog.Logger             { return GetLogger("util") }
 func Validation() *slog.Logger       { return GetLogger("event-validation") }
-func UserSync() *slog.Logger         { return GetLogger("user-sync") }
 func DBQuery() *slog.Logger          { return GetLogger("db-query") }
 func DBStore() *slog.Logger          { return GetLogger("db-store") }
 func DBPurge() *slog.Logger          { return GetLogger("db-purge") }
@@ -42,7 +41,6 @@ func GetAllComponents() []string {
 		"config",            // Config()
 		"util",              // Util()
 		"event-validation",  // Validation()
-		"user-sync",         // UserSync()
 		"db-query",          // DBQuery()
 		"db-store",          // DBStore()
 		"db-purge",          // DBPurge()

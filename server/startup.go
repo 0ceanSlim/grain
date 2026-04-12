@@ -18,7 +18,6 @@ import (
 	"github.com/0ceanslim/grain/server/handlers"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
-	"github.com/0ceanslim/grain/server/utils/userSync"
 
 	"golang.org/x/net/websocket"
 )
@@ -276,13 +275,10 @@ func startBackgroundServices(cfg *cfgType.ServerConfig, dbAvailable bool) {
 			})
 		}
 
-		// Start periodic user sync service
-		go userSync.StartPeriodicUserSync(cfg)
-
 		log.Startup().Info("All background services started")
 	} else {
 		log.Startup().Warn("Database-dependent services disabled",
-			"disabled_services", "event_purging, user_sync")
+			"disabled_services", "event_purging")
 		log.Startup().Info("Non-database background services started")
 	}
 }

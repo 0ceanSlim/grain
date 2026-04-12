@@ -60,6 +60,8 @@ endif
 
 # Start environment
 test-start:
+	@echo "Generating dynamic config fixtures..."
+	@go run ./genconfigs
 	@echo "Starting test environment..."
 	@$(MKDIR)
 	@$(DOCKER_COMPOSE) up -d --build

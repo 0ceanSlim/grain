@@ -14,7 +14,6 @@ const dashboardManager = {
     eventPurge: "/api/v1/relay/config/event_purge",
     auth: "/api/v1/relay/config/auth",
     backupRelay: "/api/v1/relay/config/backup_relay",
-    userSync: "/api/v1/relay/config/user_sync",
     whitelistKeys: "/api/v1/relay/keys/whitelist",
     blacklistKeys: "/api/v1/relay/keys/blacklist",
     whitelistConfig: "/api/v1/relay/config/whitelist",
@@ -218,7 +217,6 @@ const dashboardManager = {
       this.loadRelayOverview(),
       this.loadPolicyLimits(),
       this.loadEventPurgeConfig(),
-      this.loadUserSyncConfig(),
     ];
 
     try {
@@ -1312,54 +1310,6 @@ const dashboardManager = {
   `;
 
     console.log("✅ Event purge configuration loaded successfully");
-  },
-
-  // 4. Load User Sync Configuration (experimental section)
-  async loadUserSyncConfig() {
-    const data = await this.fetchConfig(
-      this.endpoints.userSync,
-      "user-sync-content"
-    );
-    if (!data) return;
-
-    const container = document.getElementById("user-sync-content");
-    if (!container) return;
-
-    container.innerHTML = `
-    <div class="space-y-4">
-      <div class="bg-orange-900/20 border border-orange-700 rounded p-4">
-        <div class="flex items-center space-x-2 mb-2">
-          <span class="text-orange-400">⚠️</span>
-          <span class="text-orange-300 font-medium">Experimental Feature</span>
-        </div>
-        <p class="text-sm text-orange-200">User sync is in development and may not function as expected.</p>
-      </div>
-      <div class="flex justify-between items-center">
-        <span class="text-gray-300">Sync Enabled</span>
-        <span class="inline-flex px-2 py-1 text-xs font-medium ${
-          data.enabled
-            ? "bg-green-100 text-green-800"
-            : "bg-gray-100 text-gray-800"
-        } rounded-full">
-          ${data.enabled ? "Yes" : "No"}
-        </span>
-      </div>
-      ${
-        data.enabled
-          ? `
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Sync Interval</span>
-          <span class="text-white font-medium">${data.interval_hours} hours</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-gray-300">Batch Size</span>
-          <span class="text-white font-medium">${data.batch_size} users</span>
-        </div>
-      `
-          : ""
-      }
-    </div>
-  `;
   },
 
   // 6. Load Enhanced Whitelist Data with Profiles

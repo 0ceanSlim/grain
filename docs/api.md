@@ -55,7 +55,6 @@ Complete REST API reference for GRAIN relay operations.
     - [Get Auth Configuration](#get-auth-configuration)
     - [Get Event Time Constraints Configuration](#get-event-time-constraints-configuration)
     - [Get Backup Relay Configuration](#get-backup-relay-configuration)
-    - [Get User Sync Configuration](#get-user-sync-configuration)
     - [Get Whitelist Configuration](#get-whitelist-configuration)
     - [Get Blacklist Configuration](#get-blacklist-configuration)
   - [WebSocket \& Protocol Endpoints](#websocket--protocol-endpoints)
@@ -1251,22 +1250,6 @@ GET /api/v1/relay/config/backup_relay
 }
 ```
 
-#### Get User Sync Configuration
-
-```http
-GET /api/v1/relay/config/user_sync
-```
-
-**Response:**
-
-```json
-{
-  "enabled": true,
-  "interval_hours": 6,
-  "batch_size": 100
-}
-```
-
 #### Get Whitelist Configuration
 
 ```http
@@ -1436,7 +1419,6 @@ Returns the service worker JavaScript for offline functionality.
 | GET    | `/api/v1/relay/config/auth`                   | Get auth configuration        |
 | GET    | `/api/v1/relay/config/event_time_constraints` | Get time constraints          |
 | GET    | `/api/v1/relay/config/backup_relay`           | Get backup relay config       |
-| GET    | `/api/v1/relay/config/user_sync`              | Get user sync config          |
 | GET    | `/api/v1/relay/config/whitelist`              | Get complete whitelist config |
 | GET    | `/api/v1/relay/config/blacklist`              | Get complete blacklist config |
 

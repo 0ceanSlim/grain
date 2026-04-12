@@ -11,7 +11,6 @@ import (
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
-	"github.com/0ceanslim/grain/server/utils/userSync"
 	"github.com/0ceanslim/grain/server/validation"
 )
 
@@ -119,9 +118,6 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 		response.SendOK(client, evt.ID, false, "blocked: the database already contains this event")
 		return
 	}
-
-	// Trigger UserSyncCheck sync
-	go userSync.UserSyncCheckCached(evt, cfg)
 
 	// Store event in nostrdb
 	var storeErr error

@@ -142,15 +142,3 @@ rate_limit:
     - kind: 1
       limit: 5
       burst: 12
-
-user_sync: # EXPERIMENTAL FEATURE, (structured logging not implemented yet)
-  user_sync: false
-  disable_at_startup: true
-  initial_sync_relays:
-    - "wss://purplepag.es"
-    - "wss://nos.lol"
-    - "wss://relay.damus.io"
-  kinds: [] # If kinds is left empty, no kind is applied to the filter and any event is retrieved
-  limit: 100 # If limit is left empty, no limit will be applied to the filter
-  exclude_non_whitelisted: true # if set to true, only pubkeys on the whitelist will be synced.
-  interval: 360 # in minutes

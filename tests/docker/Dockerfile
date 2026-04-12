@@ -25,9 +25,8 @@ RUN cd server/db/nostrdb && bash build.sh
 # Build the binary with CGO enabled for nostrdb
 RUN CGO_ENABLED=1 go build -buildvcs=false -o grain .
 
-# Modify config for test environment
-RUN sed -i 's/:8181/:8182/g' config.yml
+# Each service bind-mounts its config into /app/testdata/config.yml
+# (plus sibling blacklist.yml / whitelist.yml where applicable).
+RUN mkdir -p /app/testdata
 
-EXPOSE 8182
-
-CMD ["./grain", "--data-dir", "/app"]
+ENTRYPOINT ["./grain", "--data-dir", "/app/testdata"]

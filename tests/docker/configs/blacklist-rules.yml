@@ -1,0 +1,18 @@
+enabled: true
+
+permanent_ban_words:
+  - "permaword"
+
+temp_ban_words:
+  - "tempword"
+
+max_temp_bans: 2
+temp_ban_duration: 3
+
+# Direct pubkey banning is covered by temp-ban escalation tests.
+permanent_blacklist_pubkeys: []
+
+permanent_blacklist_npubs: []
+
+mutelist_authors: []
+mutelist_cache_refresh_minutes: 60

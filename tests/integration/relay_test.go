@@ -8,8 +8,8 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	// Wait for relay to be ready before running tests
-	tests.WaitForRelayReady(&testing.T{}, 30)
+	// Wait for every per-scenario relay to be ready before running tests.
+	tests.WaitForAllRelaysReady(&testing.T{}, 60)
 	m.Run()
 }
 

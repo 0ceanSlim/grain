@@ -33,9 +33,6 @@ Comprehensive documentation for configuring your GRAIN relay server.
     - [Authentication (NIP-42)](#authentication-nip-42)
       - [Authentication Flow](#authentication-flow)
       - [Use Cases](#use-cases)
-    - [User Synchronization (Experimental)](#user-synchronization-experimental)
-      - [Sync Process](#sync-process)
-      - [Performance Impact](#performance-impact)
     - [Backup Relay](#backup-relay)
       - [Backup Strategy](#backup-strategy)
     - [Event Purging](#event-purging)
@@ -202,9 +199,6 @@ Available components for `suppress_components`:
 | `client-connection`   | Client connection management  | ✅ Can be verbose           |
 | `client-session`      | Client session management     | ✅ Can be verbose           |
 | `client-cache`        | Client caching operations     | ✅ Can be verbose           |
-| **Other Components**  |                               |                             |
-| `user-sync`           | User synchronization          | ❌ Keep for sync monitoring |
-
 **Note**: Suppression only affects INFO and DEBUG log levels. WARN and ERROR messages are always shown regardless of suppression settings.
 
 ### MongoDB Configuration
@@ -460,37 +454,6 @@ When enabled, clients must authenticate before publishing events:
 - **Private relays** - Restrict access to known users
 - **Paid relays** - Verify subscription status
 - **Moderated communities** - Control posting privileges
-
-### User Synchronization (Experimental)
-
-**⚠️ Experimental Feature** - May contain bugs and performance issues.
-
-```yaml
-UserSync:
-  user_sync: false # Enable/disable user sync
-  disable_at_startup: true # Skip sync on startup
-  initial_sync_relays: # Relays for outbox discovery
-    - "wss://purplepag.es"
-    - "wss://nos.lol"
-    - "wss://relay.damus.io"
-  kinds: [1, 0, 7] # Event kinds to sync
-  limit: 100 # Events per sync operation
-  exclude_non_whitelisted: true # Only sync whitelisted users
-  interval: 360 # Sync interval (minutes)
-```
-
-#### Sync Process
-
-1. User posts to your relay for the first time
-2. GRAIN queries `initial_sync_relays` for user's relay list (kind 10002)
-3. Fetches recent events from user's preferred "outbox" relays
-4. Stores missing events locally
-
-#### Performance Impact
-
-- **Network intensive** - Multiple relay connections per user
-- **Storage impact** - Significant database growth
-- **CPU usage** - Event processing and validation overhead
 
 ### Backup Relay
 
