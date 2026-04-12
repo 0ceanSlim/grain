@@ -11,6 +11,9 @@ else
     TIMESTAMP := $(shell date +%Y%m%d_%H%M%S)
     MKDIR = mkdir -p $(TEST_LOG_DIR)
     RM = rm -f
+    # bash, not /bin/sh — dash has no `set -o pipefail`, which we need so
+    # `go test ... | tee` doesn't mask test failures as exit 0.
+    SHELL := /bin/bash
 endif
 
 CONTAINER_NAME = grain-test-relay
@@ -78,10 +81,12 @@ test-run-windows:
 	@go test -v ./... > $(TEST_LOG_DIR)\test-results-$(TIMESTAMP).log 2>&1
 	@type $(TEST_LOG_DIR)\test-results-$(TIMESTAMP).log
 
-# Unix-specific test runner
+# Unix-specific test runner.
+# `set -o pipefail` is required — otherwise `go test ... | tee` always
+# exits 0 (tee's status) and masks test failures from make.
 test-run-unix:
 	@echo "Running all tests..."
-	@go test -v ./... 2>&1 | tee $(TEST_LOG_DIR)/test-results-$(TIMESTAMP).log
+	@set -o pipefail; go test -v ./... 2>&1 | tee $(TEST_LOG_DIR)/test-results-$(TIMESTAMP).log
 
 # Simplified test-run target that delegates to platform-specific version
 test-run:
@@ -141,16 +146,21 @@ test-file:
 	fi
 endif
 
-# Stop environment and collect logs
+# Stop environment and collect logs.
+# Uses `-` prefix on commands that legitimately fail (containers already
+# exited, no images to remove) so make keeps going and we always get as
+# much diagnostic output as possible.
 test-stop:
-	@echo "Collecting logs..."
+	@echo "Collecting logs from all services..."
 	@$(MKDIR)
-	@$(DOCKER_COMPOSE) logs -t grain > $(TEST_LOG_DIR)/grain-$(TIMESTAMP).log 2>nul || echo "Failed to get grain logs"
-	@docker exec $(CONTAINER_NAME) sh -c "cat /app/debug.log 2>/dev/null || echo debug.log not found" > $(TEST_LOG_DIR)/debug-$(TIMESTAMP).log
+	-@$(DOCKER_COMPOSE) ps -a > $(TEST_LOG_DIR)/ps-$(TIMESTAMP).log 2>&1
+	-@$(DOCKER_COMPOSE) logs -t --no-color > $(TEST_LOG_DIR)/grain-$(TIMESTAMP).log 2>&1
+	@echo "--- container status ---"
+	-@$(DOCKER_COMPOSE) ps -a
+	@echo "--- recent logs (last 80 lines per service) ---"
+	-@$(DOCKER_COMPOSE) logs -t --no-color --tail=80
 	@echo "Stopping test environment..."
-	@$(DOCKER_COMPOSE) down -v --remove-orphans
-	@echo "Removing test images..."
-	@docker rmi -f $(shell docker images -q --filter "label=test-image=grain") 2>nul || echo "No test images to remove"
+	-@$(DOCKER_COMPOSE) down -v --remove-orphans
 	@echo "Logs saved in $(TEST_LOG_DIR)/"
 
 # Clean all logs

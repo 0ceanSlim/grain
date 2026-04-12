@@ -282,8 +282,9 @@ func TestGoReportCardCompliance(t *testing.T) {
 		// For now, we'll just ensure all .go files compile
 		cmd := exec.Command("go", "build", "./...")
 		cmd.Dir = projectRoot
-		if err := cmd.Run(); err != nil {
-			t.Errorf("❌ Project does not compile cleanly: %v", err)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Errorf("❌ Project does not compile cleanly: %v\n%s", err, out)
 		}
 	})
 
