@@ -118,9 +118,31 @@ jobs:
         with:
           go-version: '1.23'
           cache: true
-      - name: Run integration test suite
+      - name: Install nostrdb build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential autoconf automake libtool
+      # Order matches ci.yml: docker build FIRST (clean tree), then host
+      # nostrdb build (which dirties secp256k1 autotools output with absolute
+      # paths), then review tests. Otherwise docker COPY pulls the dirty
+      # tree and the in-container build fails.
+      - name: Start test environment (docker compose)
         working-directory: tests
-        run: make test
+        run: make test-start
+      - name: Run integration tests
+        working-directory: tests
+        run: make test-run
+      - name: Build nostrdb C library for host-side go build
+        run: |
+          cd server/db/nostrdb
+          bash build.sh
+      - name: Run review tests
+        working-directory: tests
+        run: make test-review
+      - name: Stop test environment + collect logs
+        if: always()
+        working-directory: tests
+        run: make test-stop
       - name: Upload test logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
