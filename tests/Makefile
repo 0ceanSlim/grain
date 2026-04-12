@@ -1,4 +1,4 @@
-DOCKER_COMPOSE = docker-compose -f docker/docker-compose.yml
+DOCKER_COMPOSE ?= docker compose -f docker/docker-compose.yml
 TEST_LOG_DIR = logs
 
 # Cross-platform timestamp generation

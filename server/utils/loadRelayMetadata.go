@@ -39,6 +39,19 @@ type RelayMetadata struct {
 
 var relayMetadata RelayMetadata
 
+// Version is set at startup from the main package's build-time ldflags
+// (via server.SetVersionInfo -> utils.SetVersion). When non-empty, it
+// overrides whatever `version` field is in relay_metadata.json so the
+// NIP-11 info document always reflects the running binary.
+var buildVersion string
+
+// SetVersion records the build-time version string. Called from
+// server.SetVersionInfo during startup; kept in this leaf package to
+// avoid a server -> server/utils import cycle.
+func SetVersion(v string) {
+	buildVersion = v
+}
+
 func LoadRelayMetadataJSON() error {
 	return LoadRelayMetadata("relay_metadata.json")
 }
@@ -96,7 +109,15 @@ func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Access-Control-Allow-Methods", "GET")
 
-	err := json.NewEncoder(w).Encode(relayMetadata)
+	// Override the version field with the build-time version so the NIP-11
+	// info document always matches the running binary, regardless of what
+	// the on-disk relay_metadata.json says.
+	response := relayMetadata
+	if buildVersion != "" {
+		response.Version = buildVersion
+	}
+
+	err := json.NewEncoder(w).Encode(response)
 	if err != nil {
 		log.Util().Error("Failed to encode relay metadata",
 			"client_ip", clientIP,
@@ -107,6 +128,6 @@ func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Util().Info("Relay info served successfully",
 		"client_ip", clientIP,
-		"relay_name", relayMetadata.Name,
-		"version", relayMetadata.Version)
+		"relay_name", response.Name,
+		"version", response.Version)
 }

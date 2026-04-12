@@ -1,0 +1,376 @@
+name: Release
+
+# Manually dispatched from the Actions UI. Computes the next version from
+# the latest tag, runs the full test suite, builds native binaries on each
+# target platform, and publishes a GitHub release.
+#
+# Inputs:
+#   bump       patch (default) | minor | major — which component of the
+#              latest full-release tag to bump.
+#   prerelease true (default) | false — when true the computed version is
+#              suffixed with the next free -rcN and the release is marked
+#              as a prerelease. When false the bare version is used and a
+#              full release is published.
+#
+# The tag is only created once the build matrix succeeds, so a failed run
+# does not leave a dangling tag behind.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version component to bump from the latest full release
+        type: choice
+        required: true
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+      prerelease:
+        description: Mark as release candidate (-rcN) instead of full release
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  compute:
+    name: Compute next version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - name: Checkout (full history for tag discovery)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine next version
+        id: version
+        shell: bash
+        env:
+          BUMP: ${{ inputs.bump }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          # Find the latest full-release tag (ignore -rc* tags). Falls back
+          # to v0.0.0 if there are no full releases yet.
+          LATEST_FULL=$(git tag -l 'v*.*.*' --sort=-v:refname | grep -v -- '-rc' | head -n1 || true)
+          if [ -z "${LATEST_FULL}" ]; then
+            LATEST_FULL="v0.0.0"
+          fi
+          echo "Latest full release: ${LATEST_FULL}"
+
+          # Parse X.Y.Z
+          BASE="${LATEST_FULL#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<<"${BASE}"
+
+          case "${BUMP}" in
+            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH+1)) ;;
+            *) echo "Invalid bump: ${BUMP}" >&2; exit 1 ;;
+          esac
+
+          NEW_BASE="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "Target base: ${NEW_BASE}"
+
+          if [ "${PRERELEASE}" = "true" ]; then
+            # Find the next free rc number for this base.
+            RC=1
+            while git rev-parse "${NEW_BASE}-rc${RC}" >/dev/null 2>&1; do
+              RC=$((RC+1))
+            done
+            TAG="${NEW_BASE}-rc${RC}"
+          else
+            TAG="${NEW_BASE}"
+            # Refuse to overwrite an existing full release tag.
+            if git rev-parse "${TAG}" >/dev/null 2>&1; then
+              echo "Tag ${TAG} already exists — bump a different component" >&2
+              exit 1
+            fi
+          fi
+
+          echo "Computed tag: ${TAG}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "prerelease=${PRERELEASE}" >> "${GITHUB_OUTPUT}"
+
+  test:
+    name: Integration tests
+    needs: compute
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+      - name: Run integration test suite
+        working-directory: tests
+        run: make test
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-logs
+          path: tests/logs/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  assets:
+    name: Bundle frontend assets
+    needs: compute
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download HTMX + Hyperscript and build Tailwind
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTMX_VERSION=2.0.4
+          HYPERSCRIPT_VERSION=0.9.14
+
+          mkdir -p www/static/js
+          curl -fsSL -o www/static/js/htmx.min.js \
+            "https://unpkg.com/htmx.org@${HTMX_VERSION}/dist/htmx.min.js"
+          curl -fsSL -o www/static/js/hyperscript.min.js \
+            "https://unpkg.com/hyperscript.org@${HYPERSCRIPT_VERSION}/dist/_hyperscript.min.js"
+
+          curl -fsSL -o /tmp/tailwindcss \
+            https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
+          chmod +x /tmp/tailwindcss
+          (cd www/style && /tmp/tailwindcss -i input.css -o tailwind.min.css --minify)
+
+          # Rewrite layout template to use bundled assets instead of CDNs.
+          LAYOUT=www/views/templates/layout.html
+          sed -i 's|<script src="https://cdn.tailwindcss.com"></script>|<link rel="stylesheet" href="/style/tailwind.min.css">|g' "${LAYOUT}"
+          sed -i 's|<script src="https://unpkg.com/hyperscript.org@[^"]*"></script>|<script src="/static/js/hyperscript.min.js"></script>|g' "${LAYOUT}"
+          perl -0pi -e 's|<script\s+src="https://unpkg\.com/htmx\.org@[^"]*"[^>]*>\s*</script>|<script src="/static/js/htmx.min.js"></script>|gs' "${LAYOUT}"
+
+      - name: Upload bundled www/
+        uses: actions/upload-artifact@v4
+        with:
+          name: www-bundled
+          path: www/
+          retention-days: 1
+          include-hidden-files: false
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: [compute, test, assets]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            ext: tar.gz
+            binary: grain
+          - name: linux-arm64
+            os: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+            ext: tar.gz
+            binary: grain
+          - name: darwin-arm64
+            os: macos-latest
+            goos: darwin
+            goarch: arm64
+            ext: tar.gz
+            binary: grain
+          - name: darwin-amd64
+            os: macos-13
+            goos: darwin
+            goarch: amd64
+            ext: tar.gz
+            binary: grain
+          - name: windows-amd64
+            os: windows-latest
+            goos: windows
+            goarch: amd64
+            ext: zip
+            binary: grain.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download bundled www/
+        uses: actions/download-artifact@v4
+        with:
+          name: www-bundled
+          path: www/
+
+      # Linux build dependencies (autotools + gcc for nostrdb C library)
+      - name: Install build deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential autoconf automake libtool
+
+      # macOS build dependencies
+      - name: Install build deps (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install autoconf automake libtool
+
+      # Windows: MSYS2 provides mingw64 gcc + autotools + bash for build.sh
+      - name: Set up MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-go
+            mingw-w64-x86_64-pkgconf
+            autoconf
+            automake
+            libtool
+            make
+            zip
+
+      - name: Set up Go (non-Windows)
+        if: runner.os != 'Windows'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Build nostrdb C library (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cd server/db/nostrdb
+          bash build.sh
+
+      - name: Build nostrdb C library (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cd server/db/nostrdb
+          # Strip CRLF from C sources — Windows git checkout gives CRLF
+          # which breaks autotools and nostrdb's bundled shell scripts.
+          find . -type f \! -name '*.o' \! -name '*.a' \! -name '*.png' \! -name '*.pdf' \
+            -exec sed -i 's/\r$//' {} +
+          bash build.sh
+
+      - name: Build grain binary (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          CGO_ENABLED: "1"
+          VERSION: ${{ needs.compute.outputs.tag }}
+        run: |
+          set -euo pipefail
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          go build -buildvcs=false \
+            -ldflags "-w -s -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
+            -o "${{ matrix.binary }}" .
+
+      - name: Build grain binary (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          CGO_ENABLED: "1"
+          VERSION: ${{ needs.compute.outputs.tag }}
+        run: |
+          set -euo pipefail
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          go build -buildvcs=false \
+            -ldflags "-w -s -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
+            -o "${{ matrix.binary }}" .
+
+      - name: Package (tar.gz)
+        if: matrix.ext == 'tar.gz'
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAME="grain-${{ matrix.goos }}-${{ matrix.goarch }}"
+          mkdir -p "dist/${NAME}"
+          cp "${{ matrix.binary }}" "dist/${NAME}/"
+          (cd dist && tar -czf "${NAME}.tar.gz" "${NAME}")
+
+      - name: Package (zip)
+        if: matrix.ext == 'zip'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          NAME="grain-${{ matrix.goos }}-${{ matrix.goarch }}"
+          mkdir -p "dist/${NAME}"
+          cp "${{ matrix.binary }}" "dist/${NAME}/"
+          (cd dist && zip -rq "${NAME}.zip" "${NAME}")
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grain-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/grain-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.ext }}
+          retention-days: 7
+
+  release:
+    name: Publish GitHub release
+    needs: [compute, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          pattern: grain-*
+          merge-multiple: true
+
+      - name: Generate checksums.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd artifacts
+          sha256sum *.tar.gz *.zip > checksums.txt
+          cat checksums.txt
+
+      - name: Create and push tag
+        shell: bash
+        env:
+          TAG: ${{ needs.compute.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "Release ${TAG}"
+          git push origin "${TAG}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.compute.outputs.tag }}
+          PRERELEASE: ${{ needs.compute.outputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          FLAGS=(--generate-notes --title "${TAG}")
+          if [ "${PRERELEASE}" = "true" ]; then
+            FLAGS+=(--prerelease)
+          fi
+          gh release create "${TAG}" "${FLAGS[@]}" artifacts/*.tar.gz artifacts/*.zip artifacts/checksums.txt

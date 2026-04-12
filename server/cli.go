@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+
+	"github.com/0ceanslim/grain/server/utils"
 )
 
 // Version information - these will be set during build via main package
@@ -13,11 +15,14 @@ var (
 	GitCommit = "unknown"
 )
 
-// SetVersionInfo allows main package to set version information
+// SetVersionInfo allows main package to set version information. The
+// version is also forwarded to server/utils so the NIP-11 relay info
+// document always advertises the running binary's version.
 func SetVersionInfo(version, buildTime, gitCommit string) {
 	Version = version
 	BuildTime = buildTime
 	GitCommit = gitCommit
+	utils.SetVersion(version)
 }
 
 // HandleArgs processes command-line arguments and returns true if the program should exit
