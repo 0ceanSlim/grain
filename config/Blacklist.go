@@ -190,6 +190,13 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig cfgType.BlacklistCon
 		}
 		// Successfully added to permanent blacklist
 		log.Config().Info("Successfully moved pubkey to permanent blacklist", "pubkey", pubkey)
+
+		// Trigger an async pubkey-cache refresh so subsequent events from
+		// this pubkey are actually rejected by CheckBlacklistCached — the
+		// wordlist path (line ~57) does this; the escalation path was
+		// missing it, leaving the pubkey newly in the file/slice but not
+		// yet in the cache the validator actually reads.
+		go GetPubkeyCache().RefreshBlacklist()
 	}
 
 	return nil

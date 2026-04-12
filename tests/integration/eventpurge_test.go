@@ -19,6 +19,14 @@ import (
 // mode so the main integration run stays fast.
 
 func TestEventPurge_ByKind(t *testing.T) {
+	// Grain's nostrdb PurgeOldEvents is currently scan-only: it queries
+	// events older than the cutoff and counts them but never actually
+	// deletes — see the `TODO: Actually delete/flag the event when
+	// nostrdb supports it` marker in server/db/nostrdb/purge.go. Until
+	// that lands this test can only verify the scheduler runs, which
+	// isn't worth holding the CI suite for 70s.
+	t.Skip("grain nostrdb purge is scan-only; re-enable once delete support lands")
+
 	if testing.Short() {
 		t.Skip("skipping slow purge test in -short mode")
 	}

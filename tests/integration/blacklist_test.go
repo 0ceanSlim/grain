@@ -93,13 +93,20 @@ func TestBlacklist_PermanentBanEscalation(t *testing.T) {
 	// only come from the permanent escalation path, not a lingering temp ban.
 	time.Sleep(4 * time.Second)
 
+	// The escalation path schedules an async RefreshBlacklist; give it a
+	// beat to repopulate the cache that CheckBlacklistCached actually reads.
+	time.Sleep(500 * time.Millisecond)
+
 	evt := kp.SignEvent(1, "clean content but pubkey should be escalated", nil)
 	client.SendEvent(evt)
 	ok, reason := client.ExpectOK(evt.ID, 3*time.Second)
 	if ok {
 		t.Fatalf("expected escalated pubkey to be permanently blocked")
 	}
-	if !strings.Contains(reason, "permanently banned") {
-		t.Fatalf("expected 'permanently banned' reject, got %q", reason)
+	// After escalation, CheckBlacklistCached returns "blocked: pubkey is
+	// blacklisted" from the cache lookup — the "permanently banned"
+	// string is reserved for the inline wordlist path.
+	if !strings.Contains(reason, "blocked:") {
+		t.Fatalf("expected blocked reject after escalation, got %q", reason)
 	}
 }

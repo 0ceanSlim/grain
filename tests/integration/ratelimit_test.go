@@ -108,6 +108,12 @@ func TestRateLimit_Kind(t *testing.T) {
 }
 
 func TestRateLimit_GlobalEventSize(t *testing.T) {
+	// The global event_limit=3/sec bucket is a singleton shared across
+	// every client on this scenario container. The preceding rate tests
+	// drain it; wait for it to refill so the size check fires first
+	// rather than the rate check.
+	time.Sleep(2 * time.Second)
+
 	kp := tests.NewTestKeypair()
 	client := tests.NewTestClientAt(t, tests.RateLimitRelayURL)
 	defer client.Close()
@@ -127,6 +133,10 @@ func TestRateLimit_GlobalEventSize(t *testing.T) {
 }
 
 func TestRateLimit_KindSize(t *testing.T) {
+	// See note in TestRateLimit_GlobalEventSize — refill the shared
+	// global event bucket before running a single-event size check.
+	time.Sleep(2 * time.Second)
+
 	kp := tests.NewTestKeypair()
 	client := tests.NewTestClientAt(t, tests.RateLimitRelayURL)
 	defer client.Close()
