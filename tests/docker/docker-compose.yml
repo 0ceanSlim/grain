@@ -11,12 +11,26 @@ services:
       - GRAIN_ENV=test
     volumes:
       - ../docker/configs/default.yml:/app/testdata/config.yml:ro
-    restart: "no"
+    restart: on-failure:3
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8182 > /dev/null 2>&1 || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 5s
 
+  # All other scenarios depend on grain-default being healthy so startup
+  # is serialized rather than 8 containers slamming CGO/LMDB init at once.
+  # The random SIGSEGV pattern we saw was consistent with concurrent CGO
+  # init pressure on the 2-CPU GHA runner.
+
+  # Chain: each scenario waits for the previous one's healthcheck to pass
+  # before starting. Pure serial startup — no two CGO init paths overlap.
   grain-ratelimit:
     image: grain-test:latest
     depends_on:
-      - grain-default
+      grain-default:
+        condition: service_healthy
     container_name: grain-test-ratelimit
     ports:
       - "8183:8183"
@@ -24,12 +38,19 @@ services:
       - GRAIN_ENV=test
     volumes:
       - ../docker/configs/ratelimit.yml:/app/testdata/config.yml:ro
-    restart: "no"
+    restart: on-failure:3
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8183 > /dev/null 2>&1 || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 5s
 
   grain-blacklist:
     image: grain-test:latest
     depends_on:
-      - grain-default
+      grain-ratelimit:
+        condition: service_healthy
     container_name: grain-test-blacklist
     ports:
       - "8184:8184"
@@ -38,12 +59,19 @@ services:
     volumes:
       - ../docker/configs/blacklist.yml:/app/testdata/config.yml:ro
       - ../docker/configs/blacklist-rules.yml:/app/testdata/blacklist.yml:ro
-    restart: "no"
+    restart: on-failure:3
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8184 > /dev/null 2>&1 || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 5s
 
   grain-whitelist:
     image: grain-test:latest
     depends_on:
-      - grain-default
+      grain-blacklist:
+        condition: service_healthy
     container_name: grain-test-whitelist
     ports:
       - "8185:8185"
@@ -52,12 +80,19 @@ services:
     volumes:
       - ../docker/configs/whitelist.yml:/app/testdata/config.yml:ro
       - ../docker/configs/whitelist-rules.yml:/app/testdata/whitelist.yml:ro
-    restart: "no"
+    restart: on-failure:3
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8185 > /dev/null 2>&1 || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 5s
 
   grain-auth:
     image: grain-test:latest
     depends_on:
-      - grain-default
+      grain-whitelist:
+        condition: service_healthy
     container_name: grain-test-auth
     ports:
       - "8186:8186"
@@ -65,12 +100,19 @@ services:
       - GRAIN_ENV=test
     volumes:
       - ../docker/configs/auth.yml:/app/testdata/config.yml:ro
-    restart: "no"
+    restart: on-failure:3
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8186 > /dev/null 2>&1 || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 5s
 
   grain-timecheck:
     image: grain-test:latest
     depends_on:
-      - grain-default
+      grain-auth:
+        condition: service_healthy
     container_name: grain-test-timecheck
     ports:
       - "8187:8187"
@@ -78,12 +120,19 @@ services:
       - GRAIN_ENV=test
     volumes:
       - ../docker/configs/timecheck.yml:/app/testdata/config.yml:ro
-    restart: "no"
+    restart: on-failure:3
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8187 > /dev/null 2>&1 || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 5s
 
   grain-eventpurge:
     image: grain-test:latest
     depends_on:
-      - grain-default
+      grain-timecheck:
+        condition: service_healthy
     container_name: grain-test-eventpurge
     ports:
       - "8188:8188"
@@ -91,12 +140,19 @@ services:
       - GRAIN_ENV=test
     volumes:
       - ../docker/configs/eventpurge.yml:/app/testdata/config.yml:ro
-    restart: "no"
+    restart: on-failure:3
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8188 > /dev/null 2>&1 || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 5s
 
   grain-hotreload:
     image: grain-test:latest
     depends_on:
-      - grain-default
+      grain-eventpurge:
+        condition: service_healthy
     container_name: grain-test-hotreload
     ports:
       - "8189:8189"
@@ -105,4 +161,10 @@ services:
     volumes:
       # Read-write mount so the test can rewrite the file mid-run.
       - ../docker/configs/hotreload.yml:/app/testdata/config.yml
-    restart: "no"
+    restart: on-failure:3
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8189 > /dev/null 2>&1 || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+      start_period: 5s

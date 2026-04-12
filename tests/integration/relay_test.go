@@ -13,7 +13,7 @@ func TestMain(m *testing.M) {
 	// Wait for every per-scenario relay to be ready before running tests.
 	// We can't use *testing.T here (TestMain has no real T), so surface
 	// readiness failures via log.Fatalf before m.Run().
-	if err := tests.WaitForAllRelaysReady(60); err != nil {
+	if err := tests.WaitForAllRelaysReady(120); err != nil {
 		log.Fatalf("relay readiness check failed: %v", err)
 	}
 	os.Exit(m.Run())
