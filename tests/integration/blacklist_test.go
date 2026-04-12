@@ -69,18 +69,31 @@ func TestBlacklist_PermanentBanEscalation(t *testing.T) {
 	client := tests.NewTestClientAt(t, tests.BlacklistRelayURL)
 	defer client.Close()
 
-	// max_temp_bans = 2: need 3 temp-ban-word events to escalate.
+	// max_temp_bans = 2: we need the tempban counter to reach 3 to escalate.
+	// Grain short-circuits events from a pubkey that's *currently* temp-
+	// banned before it reaches the wordlist check, so repeated tempword
+	// events within a single ban window do not increment the counter.
+	// Each tempword event must arrive *after* the previous temp ban
+	// (3s) has expired. We therefore send 3 tempword events spaced past
+	// temp_ban_duration so each one re-triggers AddToTemporaryBlacklist
+	// and increments count → count=3 > max_temp_bans=2 → permanent.
 	for i := 0; i < 3; i++ {
 		evt := kp.SignEvent(1, "tempword trigger", nil)
 		client.SendEvent(evt)
 		client.ExpectOK(evt.ID, 3*time.Second)
+		// Wait past temp_ban_duration so the next tempword event is
+		// evaluated against the wordlist rather than the active ban.
+		// Skip the sleep on the last iteration.
+		if i < 2 {
+			time.Sleep(4 * time.Second)
+		}
 	}
 
-	// Wait past temp_ban_duration so we know the next rejection is coming
-	// from the permanent escalation path, not lingering temp state.
+	// Wait past temp_ban_duration one more time so the next rejection can
+	// only come from the permanent escalation path, not a lingering temp ban.
 	time.Sleep(4 * time.Second)
 
-	evt := kp.SignEvent(1, "even clean content is blocked after escalation", nil)
+	evt := kp.SignEvent(1, "clean content but pubkey should be escalated", nil)
 	client.SendEvent(evt)
 	ok, reason := client.ExpectOK(evt.ID, 3*time.Second)
 	if ok {

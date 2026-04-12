@@ -24,22 +24,27 @@ func TestEventPurge_ByKind(t *testing.T) {
 	}
 
 	kp := tests.NewTestKeypair()
-	client := tests.NewTestClientAt(t, tests.EventPurgeRelayURL)
-	defer client.Close()
+	pub := tests.NewTestClientAt(t, tests.EventPurgeRelayURL)
 
 	// Publish a kind-1 event (flagged for purging).
 	evt := kp.SignEvent(1, "should be purged", nil)
-	client.SendEvent(evt)
-	ok, reason := client.ExpectOK(evt.ID, 5*time.Second)
+	pub.SendEvent(evt)
+	ok, reason := pub.ExpectOK(evt.ID, 5*time.Second)
 	if !ok {
+		pub.Close()
 		t.Fatalf("initial publish rejected: %q", reason)
 	}
+	pub.Close()
 
-	// Wait past one purge interval.
+	// Wait past one purge interval. The relay's read_timeout is 60s so we
+	// can't hold the publish connection open across the sleep — close it
+	// and reconnect for the query.
 	t.Log("waiting 70s for purge sweep…")
 	time.Sleep(70 * time.Second)
 
 	// Query the event back — it should be gone.
+	client := tests.NewTestClientAt(t, tests.EventPurgeRelayURL)
+	defer client.Close()
 	sub := tests.RandomSubID()
 	client.Subscribe(sub, map[string]interface{}{"ids": []string{evt.ID}})
 	events := client.ExpectEOSE(sub, 5*time.Second)

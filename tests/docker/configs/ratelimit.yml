@@ -48,10 +48,15 @@ event_time_constraints:
   min_created_at: 1577836800
   max_created_at_string: now+5m
 
-# Tight limits for rate limit testing
+# Tight limits for rate limit testing.
+# ws_limit stays permissive — the test suite does not exercise it, and the
+# ws limiter is a *global* rate.Limiter shared across all test clients on
+# this port, so cramping it causes unrelated tests on the same scenario
+# container (e.g. size-limit tests) to hit NOTICE+close and read EOF
+# instead of the OK-false they expect.
 rate_limit:
-  ws_limit: 5          # 5 ws msgs/sec
-  ws_burst: 5          # no headroom
+  ws_limit: 500
+  ws_burst: 1000
   event_limit: 3       # 3 events/sec global
   event_burst: 3
   req_limit: 2         # 2 REQs/sec

@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -13,7 +14,7 @@ import (
 // limits.
 //
 // Configured values (must stay in sync with the YAML):
-//   ws_limit/burst:            5 / 5
+//   ws_limit/burst:            500 / 1000 (intentionally permissive — shared limiter)
 //   event_limit/burst:         3 / 3
 //   req_limit/burst:           2 / 2
 //   max_event_size:            1024 B
@@ -28,9 +29,12 @@ func TestRateLimit_GlobalEvent(t *testing.T) {
 
 	// Use kind 3 (replaceable category limit is 10) so the first rejection we
 	// hit is the *global* event_limit rather than the regular category.
+	// Unique content per iteration — SignEvent uses time.Now().Unix() at
+	// second granularity, so identical content in a tight loop produces
+	// identical event IDs and the dedup check fires before the rate limiter.
 	var rejectMsg string
 	for i := 0; i < 20; i++ {
-		evt := kp.SignEvent(3, "rl-global", nil)
+		evt := kp.SignEvent(3, fmt.Sprintf("rl-global-%d", i), nil)
 		client.SendEvent(evt)
 		ok, reason := client.ExpectOK(evt.ID, 3*time.Second)
 		if !ok {
