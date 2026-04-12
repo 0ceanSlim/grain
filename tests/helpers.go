@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -286,24 +287,67 @@ func WaitForRelayReady(t *testing.T, maxAttempts int) {
 	WaitForRelayReadyAt(t, DefaultHTTPURL, maxAttempts)
 }
 
+// readyClient has a short per-request timeout so a container that accepts
+// TCP but never completes an HTTP response cannot hang the test process.
+var readyClient = &http.Client{Timeout: 2 * time.Second}
+
 // WaitForRelayReadyAt waits for a specific relay endpoint to be ready.
+// Returns an error (rather than t.Fatalf) so callers in TestMain — where
+// no real *testing.T exists — can handle the failure themselves.
 func WaitForRelayReadyAt(t *testing.T, httpURL string, maxAttempts int) {
+	if err := waitForRelayReady(httpURL, maxAttempts); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func waitForRelayReady(httpURL string, maxAttempts int) error {
+	var lastErr error
 	for i := 0; i < maxAttempts; i++ {
-		resp, err := http.Get(httpURL)
-		if err == nil && resp.StatusCode == 200 {
+		resp, err := readyClient.Get(httpURL)
+		if err == nil {
 			resp.Body.Close()
-			return
+			if resp.StatusCode == 200 {
+				return nil
+			}
+			lastErr = fmt.Errorf("status %d", resp.StatusCode)
+		} else {
+			lastErr = err
 		}
 		time.Sleep(1 * time.Second)
 	}
-	t.Fatalf("Relay %s not ready after %d attempts", httpURL, maxAttempts)
+	return fmt.Errorf("relay %s not ready after %d attempts: %v", httpURL, maxAttempts, lastErr)
 }
 
-// WaitForAllRelaysReady pings every per-scenario relay endpoint.
-func WaitForAllRelaysReady(t *testing.T, maxAttempts int) {
-	for _, url := range AllRelayHTTPURLs {
-		WaitForRelayReadyAt(t, url, maxAttempts)
+// WaitForAllRelaysReady pings every per-scenario relay endpoint in
+// parallel so one slow-starting container can't block the others.
+// Progress is logged to stderr for CI visibility.
+func WaitForAllRelaysReady(maxAttempts int) error {
+	type result struct {
+		url string
+		err error
 	}
+	results := make(chan result, len(AllRelayHTTPURLs))
+	for _, url := range AllRelayHTTPURLs {
+		url := url
+		go func() {
+			fmt.Fprintf(os.Stderr, "waiting for %s...\n", url)
+			err := waitForRelayReady(url, maxAttempts)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "  FAIL %s: %v\n", url, err)
+			} else {
+				fmt.Fprintf(os.Stderr, "  ok   %s\n", url)
+			}
+			results <- result{url, err}
+		}()
+	}
+	var firstErr error
+	for range AllRelayHTTPURLs {
+		r := <-results
+		if r.err != nil && firstErr == nil {
+			firstErr = r.err
+		}
+	}
+	return firstErr
 }
 
 // ExpectNotice reads messages until a NOTICE is received, then returns its

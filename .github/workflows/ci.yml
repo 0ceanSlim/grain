@@ -28,14 +28,28 @@ jobs:
           go-version: '1.23'
           cache: true
 
+      - name: Install nostrdb build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential autoconf automake libtool
+
+      - name: Build nostrdb C library for host-side go build
+        # The review tests (tests/review) shell out to `go build ./...` on the
+        # CI host to catch dead code and link errors. That needs the nostrdb
+        # static library, which is otherwise only built inside the test
+        # containers. Build it once here so host-side compilation works.
+        run: |
+          cd server/db/nostrdb
+          bash build.sh
+
       - name: Show Docker + Compose versions
         run: |
           docker --version
           docker compose version
 
-      - name: Run integration test suite
+      - name: Run integration + review test suite
         working-directory: tests
-        run: make test
+        run: make test-all
 
       - name: Upload test logs on failure
         if: failure()
