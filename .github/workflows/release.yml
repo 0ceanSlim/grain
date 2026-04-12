@@ -124,21 +124,19 @@ jobs:
           sudo apt-get install -y build-essential autoconf automake libtool
       # Order matches ci.yml: docker build FIRST (clean tree), then host
       # nostrdb build (which dirties secp256k1 autotools output with absolute
-      # paths), then review tests. Otherwise docker COPY pulls the dirty
-      # tree and the in-container build fails.
+      # paths — but docker image is already built by then). `make test-run`
+      # runs both integration and review tests, so the host lib must exist
+      # before it.
       - name: Start test environment (docker compose)
         working-directory: tests
         run: make test-start
-      - name: Run integration tests
-        working-directory: tests
-        run: make test-run
       - name: Build nostrdb C library for host-side go build
         run: |
           cd server/db/nostrdb
           bash build.sh
-      - name: Run review tests
+      - name: Run tests (integration + review)
         working-directory: tests
-        run: make test-review
+        run: make test-run
       - name: Stop test environment + collect logs
         if: always()
         working-directory: tests

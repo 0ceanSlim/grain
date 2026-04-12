@@ -45,21 +45,19 @@ jobs:
         working-directory: tests
         run: make test-start
 
-      - name: Run integration tests
-        working-directory: tests
-        run: make test-run
-
-      # Host-side nostrdb build. Needed for the review tests, which shell
-      # out to `go build ./...` on the host to catch dead code and link
-      # errors. Safe to run now — docker images are already built.
+      # Host-side nostrdb build. Needed by `make test-run` because
+      # `go test ./...` also runs tests/review, which shells out to
+      # `go build ./...` on the host. Safe to run now — the docker image
+      # was already built in the previous step, so dirtying secp256k1's
+      # autotools tree on the host no longer affects the container build.
       - name: Build nostrdb C library for host-side go build
         run: |
           cd server/db/nostrdb
           bash build.sh
 
-      - name: Run review tests
+      - name: Run tests (integration + review)
         working-directory: tests
-        run: make test-review
+        run: make test-run
 
       - name: Stop test environment + collect logs
         if: always()
