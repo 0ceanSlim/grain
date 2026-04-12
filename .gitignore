@@ -3,6 +3,9 @@ config.yml
 whitelist.yml
 blacklist.yml
 relay_metadata.json
+# Test fixtures in tests/docker/configs/ must stay tracked even though
+# they share names with the runtime data-dir files ignored above.
+!tests/docker/configs/*.yml
 grain.exe
 /build
 */logs
