@@ -2,6 +2,7 @@ package connection
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/utils/log"
@@ -77,4 +78,44 @@ func ReinitializeCoreClient() error {
 
 	// Reinitialize with current configuration
 	return InitializeCoreClient(serverCfg)
+}
+
+// StartRelayHealthCheck starts a background goroutine to maintain relay connections
+func StartRelayHealthCheck(interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		log.ClientConnection().Info("Relay health check started", "interval", interval)
+
+		for range ticker.C {
+			if coreClient == nil {
+				log.ClientConnection().Debug("Core client not initialized, skipping health check")
+				continue
+			}
+
+			// Check current connections
+			connectedRelays := coreClient.GetConnectedRelays()
+			expectedCount := len(clientRelays)
+			connectedCount := len(connectedRelays)
+
+			log.ClientConnection().Debug("Relay health check",
+				"connected", connectedCount,
+				"expected", expectedCount)
+
+			// If we have fewer connections than expected, try to reconnect
+			if connectedCount < expectedCount {
+				log.ClientConnection().Warn("Relay connection deficit detected, attempting reconnection",
+					"connected", connectedCount,
+					"expected", expectedCount)
+
+				if err := EnsureRelayConnections(); err != nil {
+					log.ClientConnection().Error("Health check reconnection failed", "error", err)
+				} else {
+					log.ClientConnection().Info("Health check reconnection successful",
+						"connected", len(coreClient.GetConnectedRelays()))
+				}
+			}
+		}
+	}()
 }
