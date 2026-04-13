@@ -45,9 +45,11 @@ event_purge:
     replaceable: false
     addressable: false
     deprecated: true
-  purge_by_kind_enabled: true
-  kinds_to_purge:
-    - 1
+  # purge_by_kind_enabled intentionally off: rely on purge_by_category
+  # alone so the category gate is actually exercised (kind-0 replaceable
+  # must survive while kind-1 regular is purged).
+  purge_by_kind_enabled: false
+  kinds_to_purge: []
   exclude_whitelisted: true
 
 event_time_constraints:
