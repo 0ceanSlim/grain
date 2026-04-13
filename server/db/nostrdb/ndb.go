@@ -88,6 +88,35 @@ func (db *NDB) ProcessEvent(json string) error {
 	return nil
 }
 
+// DeleteNoteByID enqueues a real delete of an event from nostrdb by its raw
+// 32-byte ID. The delete is applied by the nostrdb writer thread in FIFO order
+// with ingests — a delete of an in-flight ingest of the same ID is committed
+// atomically in the same batch and cannot race.
+//
+// This is grain's one and only physical-delete primitive. All three deletion
+// audiences (NIP-09 author deletes, operator retention / PurgeOldEvents,
+// replaceable/addressable supersede, and admin --delete CLI) call through
+// here. Authorization is the caller's responsibility: this function performs
+// no checks beyond "is the DB open and is the writer queue accepting work".
+//
+// Returns an error only if the DB is closed or the writer inbox is full.
+// "Not found" is not an error at this layer — it's logged at C level and the
+// call is a no-op.
+func (db *NDB) DeleteNoteByID(id [32]byte) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.ndb == nil {
+		return fmt.Errorf("nostrdb is closed")
+	}
+
+	rc := C.ndb_request_delete_note(db.ndb, (*C.uchar)(unsafe.Pointer(&id[0])))
+	if rc == 0 {
+		return fmt.Errorf("ndb_request_delete_note: writer queue full")
+	}
+	return nil
+}
+
 // ProcessEvents ingests multiple newline-delimited JSON events.
 func (db *NDB) ProcessEvents(ldjson string) error {
 	db.mu.RLock()

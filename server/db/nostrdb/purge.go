@@ -13,9 +13,10 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// PurgeOldEvents removes events older than the configured interval.
-// Since nostrdb doesn't support direct deletion, this queries for old events
-// and logs what would be purged. True purging requires nostrdb delete support.
+// PurgeOldEvents removes events older than the configured retention window.
+// Whitelisted pubkeys (configured members) are excluded when
+// ExcludeWhitelisted is set — this is the "non-member cleanup" knob that
+// keeps member content forever while aging out drive-by events.
 func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys []string) int {
 	if !cfg.Enabled {
 		log.GetLogger("db-purge").Debug("Event purging is disabled")
@@ -57,18 +58,35 @@ func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys 
 	}
 
 	purgeCount := 0
+	failCount := 0
 	for _, evt := range events {
-		// Skip whitelisted pubkeys
+		// Skip whitelisted ("member") pubkeys.
 		if cfg.ExcludeWhitelisted && whitelistSet[evt.PubKey] {
 			continue
 		}
-		// TODO: Actually delete/flag the event when nostrdb supports it
+
+		idBytes, err := hexToBytes32(evt.ID)
+		if err != nil {
+			log.GetLogger("db-purge").Warn("Skipping malformed event id",
+				"event_id", evt.ID, "error", err)
+			failCount++
+			continue
+		}
+		var id32 [32]byte
+		copy(id32[:], idBytes)
+		if err := db.DeleteNoteByID(id32); err != nil {
+			log.GetLogger("db-purge").Error("Delete failed during purge",
+				"event_id", evt.ID, "error", err)
+			failCount++
+			continue
+		}
 		purgeCount++
 	}
 
-	log.GetLogger("db-purge").Info("Purge scan completed",
-		"events_found", len(events),
-		"eligible_for_purge", purgeCount)
+	log.GetLogger("db-purge").Info("Purge completed",
+		"events_scanned", len(events),
+		"deleted", purgeCount,
+		"failed", failCount)
 
 	return purgeCount
 }

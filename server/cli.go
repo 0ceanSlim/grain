@@ -47,6 +47,9 @@ func HandleArgs() bool {
 	case "--import":
 		// Handled in main.go parseImportFlag(); skip here
 		return false
+	case "--delete", "--delete-file":
+		// Handled in main.go parseDeleteFlags(); skip here
+		return false
 	default:
 		// Check for unknown flags
 		if len(os.Args[1]) > 0 && os.Args[1][0] == '-' {
@@ -81,7 +84,9 @@ func printHelp() {
 	fmt.Printf("  --help, -h           Show this help message\n")
 	fmt.Printf("  --config-help        Show configuration file information\n")
 	fmt.Printf("  --data-dir <path>    Set the data directory (configs, database, logs)\n")
-	fmt.Printf("  --import <file>      Import events from a JSONL file into nostrdb and exit\n\n")
+	fmt.Printf("  --import <file>      Import events from a JSONL file into nostrdb and exit\n")
+	fmt.Printf("  --delete <id>        Physically delete an event by hex id (may repeat)\n")
+	fmt.Printf("  --delete-file <path> Delete every hex id listed in the file (one per line)\n\n")
 	fmt.Printf("Environment Variables:\n")
 	fmt.Printf("  GRAIN_DATA_DIR      Override default data directory path\n")
 	fmt.Printf("  NDB_PATH            Override nostrdb data directory path\n")

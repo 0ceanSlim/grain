@@ -99,10 +99,14 @@ func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event) error {
 				"event_id", evt.ID, "existing_id", old.ID, "kind", evt.Kind)
 			return fmt.Errorf("blocked: relay already has a newer event of the same kind with this pubkey")
 		}
-		// TODO: nostrdb doesn't have a direct delete API.
-		// The old event will be superseded by the new one in query results
-		// since queries return by created_at desc. For true replacement,
-		// we'd need nostrdb to support note deletion or flagging.
+		// New event wins — physically remove the superseded version so
+		// queries with limits, until-cursors, or history walks don't see
+		// stale kinds. Delete BEFORE ingest so a power loss mid-op leaves
+		// the old version in place (worst case) rather than neither.
+		if err := db.deleteByHexID(old.ID); err != nil {
+			log.GetLogger("db-store").Warn("Failed to remove superseded replaceable",
+				"old_id", old.ID, "new_id", evt.ID, "kind", evt.Kind, "error", err)
+		}
 	}
 
 	return db.ingestEvent(evt)
@@ -153,9 +157,28 @@ func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event) error {
 				"kind", evt.Kind, "d_tag", dTag)
 			return fmt.Errorf("blocked: relay already has a newer event for this pubkey and dTag")
 		}
+		// Physically remove the superseded addressable version — see the
+		// comment in storeReplaceable for the ordering rationale.
+		if err := db.deleteByHexID(old.ID); err != nil {
+			log.GetLogger("db-store").Warn("Failed to remove superseded addressable",
+				"old_id", old.ID, "new_id", evt.ID,
+				"kind", evt.Kind, "d_tag", dTag, "error", err)
+		}
 	}
 
 	return db.ingestEvent(evt)
+}
+
+// deleteByHexID is a small helper used by the supersede paths: decode the
+// hex id, dispatch to DeleteNoteByID.
+func (db *NDB) deleteByHexID(hexID string) error {
+	idBytes, err := hexToBytes32(hexID)
+	if err != nil {
+		return fmt.Errorf("invalid hex id: %w", err)
+	}
+	var id32 [32]byte
+	copy(id32[:], idBytes)
+	return db.DeleteNoteByID(id32)
 }
 
 // isReplaceable returns true for NIP-01 replaceable event kinds.

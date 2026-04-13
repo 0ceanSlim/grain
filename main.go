@@ -54,6 +54,17 @@ func main() {
 		return
 	}
 
+	// Handle --delete / --delete-file flags: physically remove events and exit.
+	// No signature check — shell access is the authorization boundary, same
+	// trust model as --import.
+	if ids := parseDeleteFlags(); len(ids) > 0 {
+		if err := server.DeleteEvents(ids); err != nil {
+			fmt.Printf("Delete failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	// Start the server
 	if err := server.Run(); err != nil {
 		fmt.Printf("Application failed: %v\n", err)
@@ -79,4 +90,29 @@ func parseImportFlag() string {
 		}
 	}
 	return ""
+}
+
+// parseDeleteFlags collects ids from --delete <id> (may be repeated) and
+// --delete-file <path> (one hex id per line, # comments). Returns nil if
+// neither flag is present.
+func parseDeleteFlags() []string {
+	var ids []string
+	for i, arg := range os.Args {
+		switch arg {
+		case "--delete":
+			if i+1 < len(os.Args) {
+				ids = append(ids, os.Args[i+1])
+			}
+		case "--delete-file":
+			if i+1 < len(os.Args) {
+				fileIDs, err := server.ReadDeleteFile(os.Args[i+1])
+				if err != nil {
+					fmt.Printf("Failed to read delete file: %v\n", err)
+					os.Exit(1)
+				}
+				ids = append(ids, fileIDs...)
+			}
+		}
+	}
+	return ids
 }
