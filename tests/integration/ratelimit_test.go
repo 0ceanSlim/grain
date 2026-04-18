@@ -23,17 +23,17 @@ import (
 //   kind 7 lim:                1 / 1
 
 func TestRateLimit_GlobalEvent(t *testing.T) {
-	kp := tests.NewTestKeypair()
 	client := tests.NewTestClientAt(t, tests.RateLimitRelayURL)
 	defer client.Close()
 
-	// Use kind 3 (replaceable category limit is 10) so the first rejection we
-	// hit is the *global* event_limit rather than the regular category.
-	// Unique content per iteration — SignEvent uses time.Now().Unix() at
-	// second granularity, so identical content in a tight loop produces
-	// identical event IDs and the dedup check fires before the rate limiter.
+	// Use kind 3 (replaceable category limit is 10/20) so the first rejection
+	// we hit is the *global* event_limit (3/3) rather than the regular category.
+	// Each iteration uses a fresh keypair: kind 3 is replaceable, so sending
+	// multiple kind-3 events from the same pubkey triggers the replaceable
+	// dedup check before the rate limiter ever fires.
 	var rejectMsg string
 	for i := 0; i < 20; i++ {
+		kp := tests.NewTestKeypair()
 		evt := kp.SignEvent(3, fmt.Sprintf("rl-global-%d", i), nil)
 		client.SendEvent(evt)
 		ok, reason := client.ExpectOK(evt.ID, 3*time.Second)
@@ -59,7 +59,7 @@ func TestRateLimit_Category(t *testing.T) {
 	// category should trip before global on the 3rd rapid send.
 	var rejectMsg string
 	for i := 0; i < 10; i++ {
-		evt := kp.SignEvent(1, "rl-cat", nil)
+		evt := kp.SignEvent(1, fmt.Sprintf("rl-cat-%d", i), nil)
 		client.SendEvent(evt)
 		ok, reason := client.ExpectOK(evt.ID, 3*time.Second)
 		if !ok {
@@ -87,7 +87,7 @@ func TestRateLimit_Kind(t *testing.T) {
 	// by the kind limiter (category "regular" has 2/2 so kind fires first).
 	var rejectMsg string
 	for i := 0; i < 5; i++ {
-		evt := kp.SignEvent(7, "rl-kind", nil)
+		evt := kp.SignEvent(7, fmt.Sprintf("rl-kind-%d", i), nil)
 		client.SendEvent(evt)
 		ok, reason := client.ExpectOK(evt.ID, 3*time.Second)
 		if !ok {
