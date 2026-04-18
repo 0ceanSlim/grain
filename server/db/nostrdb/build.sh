@@ -64,7 +64,7 @@ cd "$NDB_DIR"
 
 # 4. Build nostrdb object files
 echo "--- Building nostrdb ---"
-CFLAGS="${EXTRA_CFLAGS:-} -Wall -Wno-misleading-indentation -Wno-unused-function -O2 -Isrc -Ideps/secp256k1/include -Ideps/lmdb -Ideps/flatcc/include -Isrc/bolt11/ -Iccan/ -Ideps/libsodium/src/libsodium/include/ -DCCAN_TAL_NEVER_RETURN_NULL=1 -fPIC"
+CFLAGS="${EXTRA_CFLAGS:-} -Wall -Wno-misleading-indentation -Wno-unused-function -O2 -Isrc -Ideps/secp256k1/include -Ideps/lmdb -Ideps/flatcc/include -Isrc/bolt11/ -Iccan/ -Ideps/libsodium/src/libsodium/include/ -DCCAN_TAL_NEVER_RETURN_NULL=1 -DSECP256K1_STATIC -fPIC"
 
 SRCS="
 src/base64.c
