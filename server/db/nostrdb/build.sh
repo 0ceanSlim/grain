@@ -16,6 +16,10 @@ INCLUDE_DIR="$SCRIPT_DIR/include"
 
 CC="${CC:-cc}"
 
+# Ensure a writable temp directory exists (MinGW ar.exe needs it on Windows)
+export TMPDIR="${TMPDIR:-/tmp}"
+mkdir -p "$TMPDIR" 2>/dev/null || true
+
 mkdir -p "$BUILD_DIR" "$INCLUDE_DIR"
 
 echo "=== Building nostrdb dependencies ==="
