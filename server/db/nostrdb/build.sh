@@ -15,10 +15,17 @@ BUILD_DIR="$SCRIPT_DIR/lib"
 INCLUDE_DIR="$SCRIPT_DIR/include"
 
 CC="${CC:-cc}"
+AR="${AR:-ar}"
 
-# Ensure a writable temp directory exists (MinGW ar.exe needs it on Windows)
-export TMPDIR="${TMPDIR:-/tmp}"
-mkdir -p "$TMPDIR" 2>/dev/null || true
+# On MSYS2/MinGW, the MinGW ar.exe is a native Windows executable that can't
+# create temp files when POSIX temp dirs aren't mapped. Use MSYS2's ar instead.
+case "$(uname -s)" in
+    MINGW*|MSYS*)
+        if [ -x /usr/bin/ar ]; then
+            AR=/usr/bin/ar
+        fi
+        ;;
+esac
 
 mkdir -p "$BUILD_DIR" "$INCLUDE_DIR"
 
@@ -101,7 +108,7 @@ done
 echo "--- Creating combined static library ---"
 
 # First create nostrdb archive from our objects
-ar rcs libnostrdb.a $OBJS
+$AR rcs libnostrdb.a $OBJS
 
 # Combine all static libraries into one.
 # macOS ar doesn't support MRI scripts, so use libtool -static there.
@@ -123,7 +130,7 @@ addlib $NDB_DIR/deps/libsodium/src/libsodium/.libs/libsodium.a
 save
 end
 EOF
-        ar -M < "$BUILD_DIR/combine.mri"
+        $AR -M < "$BUILD_DIR/combine.mri"
         ;;
 esac
 
