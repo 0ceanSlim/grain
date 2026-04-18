@@ -2,8 +2,9 @@ package nostrdb
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/include
+#cgo windows CFLAGS: -DSECP256K1_STATIC
 #cgo LDFLAGS: -L${SRCDIR}/lib -lnostrdb_full -lpthread -lm
-#cgo windows LDFLAGS: -lws2_32
+#cgo windows LDFLAGS: -lws2_32 -lbcrypt
 
 #include "nostrdb.h"
 #include <stdlib.h>
