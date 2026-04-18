@@ -24,16 +24,33 @@ type NDB struct {
 	mu  sync.RWMutex // protects close
 }
 
+// NDB open flags. These map 1:1 onto nostrdb.h NDB_FLAG_* bits.
+const (
+	// FlagSkipNoteVerify makes the ingester skip signature verification.
+	// Safe for imports from a trusted source (e.g. a previous grain/mongo
+	// export) where events were already validated at original ingest time.
+	FlagSkipNoteVerify = 1 << 1
+)
+
 // Open initializes a new nostrdb database at the given directory path.
 // mapSizeMB sets the maximum database size in megabytes (LMDB map size).
 // ingestThreads controls how many threads nostrdb uses to process incoming events.
 func Open(dbDir string, mapSizeMB int, ingestThreads int) (*NDB, error) {
+	return OpenWithFlags(dbDir, mapSizeMB, ingestThreads, 0)
+}
+
+// OpenWithFlags is like Open but forwards an ndb_config_set_flags bitmask to
+// nostrdb. Use FlagSkipNoteVerify for trusted-source bulk imports.
+func OpenWithFlags(dbDir string, mapSizeMB int, ingestThreads int, flags int) (*NDB, error) {
 	var cfg C.struct_ndb_config
 	C.ndb_default_config(&cfg)
 	C.ndb_config_set_mapsize(&cfg, C.size_t(mapSizeMB*1024*1024))
 
 	if ingestThreads > 0 {
 		C.ndb_config_set_ingest_threads(&cfg, C.int(ingestThreads))
+	}
+	if flags != 0 {
+		C.ndb_config_set_flags(&cfg, C.int(flags))
 	}
 
 	cDir := C.CString(dbDir)

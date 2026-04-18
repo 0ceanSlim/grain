@@ -2,6 +2,10 @@
 # Build nostrdb and all dependencies into a single static library for CGO linking.
 # Run this from the server/db/nostrdb/ directory.
 # Requires: gcc, make, autotools (autoconf, automake, libtool)
+#
+# Environment variables:
+#   CC           — C compiler (default: cc)
+#   EXTRA_CFLAGS — extra flags prepended to CFLAGS (e.g. "-arch x86_64")
 
 set -e
 
@@ -9,6 +13,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NDB_DIR="$SCRIPT_DIR/c/nostrdb"
 BUILD_DIR="$SCRIPT_DIR/lib"
 INCLUDE_DIR="$SCRIPT_DIR/include"
+
+CC="${CC:-cc}"
 
 mkdir -p "$BUILD_DIR" "$INCLUDE_DIR"
 
@@ -18,7 +24,7 @@ cd "$NDB_DIR"
 
 # 1. Build LMDB
 echo "--- Building LMDB ---"
-make -C deps/lmdb liblmdb.a
+make CC="${CC}" -C deps/lmdb liblmdb.a
 
 # 2. Build secp256k1
 echo "--- Building secp256k1 ---"
@@ -29,7 +35,7 @@ if [ ! -f deps/secp256k1/configure ]; then
 fi
 if [ ! -f deps/secp256k1/config.log ]; then
     cd deps/secp256k1
-    ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys
+    CC="${CC}" ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys
     cd "$NDB_DIR"
 fi
 make -C deps/secp256k1 -j libsecp256k1.la
@@ -38,7 +44,7 @@ make -C deps/secp256k1 -j libsecp256k1.la
 echo "--- Building libsodium ---"
 if [ ! -f deps/libsodium/config.log ]; then
     cd deps/libsodium
-    ./configure --disable-shared --enable-minimal
+    CC="${CC}" ./configure --disable-shared --enable-minimal
     cd "$NDB_DIR"
 fi
 cd deps/libsodium/src/libsodium
@@ -47,7 +53,7 @@ cd "$NDB_DIR"
 
 # 4. Build nostrdb object files
 echo "--- Building nostrdb ---"
-CFLAGS="-Wall -Wno-misleading-indentation -Wno-unused-function -O2 -Isrc -Ideps/secp256k1/include -Ideps/lmdb -Ideps/flatcc/include -Isrc/bolt11/ -Iccan/ -Ideps/libsodium/src/libsodium/include/ -DCCAN_TAL_NEVER_RETURN_NULL=1 -fPIC"
+CFLAGS="${EXTRA_CFLAGS:-} -Wall -Wno-misleading-indentation -Wno-unused-function -O2 -Isrc -Ideps/secp256k1/include -Ideps/lmdb -Ideps/flatcc/include -Isrc/bolt11/ -Iccan/ -Ideps/libsodium/src/libsodium/include/ -DCCAN_TAL_NEVER_RETURN_NULL=1 -fPIC"
 
 SRCS="
 src/base64.c
@@ -83,7 +89,7 @@ OBJS=""
 for src in $SRCS; do
     obj="${src%.c}.o"
     echo "  CC $src"
-    gcc $CFLAGS -c -o "$obj" "$src"
+    ${CC} $CFLAGS -c -o "$obj" "$src"
     OBJS="$OBJS $obj"
 done
 
@@ -93,8 +99,18 @@ echo "--- Creating combined static library ---"
 # First create nostrdb archive from our objects
 ar rcs libnostrdb.a $OBJS
 
-# Now create a combined archive with all dependencies using MRI script
-cat > "$BUILD_DIR/combine.mri" << EOF
+# Combine all static libraries into one.
+# macOS ar doesn't support MRI scripts, so use libtool -static there.
+case "$(uname -s)" in
+    Darwin)
+        libtool -static -o "$BUILD_DIR/libnostrdb_full.a" \
+            "$NDB_DIR/libnostrdb.a" \
+            "$NDB_DIR/deps/lmdb/liblmdb.a" \
+            "$NDB_DIR/deps/secp256k1/.libs/libsecp256k1.a" \
+            "$NDB_DIR/deps/libsodium/src/libsodium/.libs/libsodium.a"
+        ;;
+    *)
+        cat > "$BUILD_DIR/combine.mri" << EOF
 create $BUILD_DIR/libnostrdb_full.a
 addlib $NDB_DIR/libnostrdb.a
 addlib $NDB_DIR/deps/lmdb/liblmdb.a
@@ -103,7 +119,9 @@ addlib $NDB_DIR/deps/libsodium/src/libsodium/.libs/libsodium.a
 save
 end
 EOF
-ar -M < "$BUILD_DIR/combine.mri"
+        ar -M < "$BUILD_DIR/combine.mri"
+        ;;
+esac
 
 echo "=== Static library built: $BUILD_DIR/libnostrdb_full.a ==="
 

@@ -40,6 +40,9 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   compute:
     name: Compute next version
@@ -215,9 +218,10 @@ jobs:
             ext: tar.gz
             binary: grain
           - name: darwin-amd64
-            os: macos-13
+            os: macos-latest
             goos: darwin
             goarch: amd64
+            cross_cc: "cc -arch x86_64"
             ext: tar.gz
             binary: grain
           - name: windows-amd64
@@ -280,6 +284,8 @@ jobs:
       - name: Build nostrdb C library (Unix)
         if: runner.os != 'Windows'
         shell: bash
+        env:
+          CC: ${{ matrix.cross_cc || 'cc' }}
         run: |
           cd server/db/nostrdb
           bash build.sh
@@ -299,7 +305,9 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         env:
+          CC: ${{ matrix.cross_cc || 'cc' }}
           CGO_ENABLED: "1"
+          GOARCH: ${{ matrix.goarch }}
           VERSION: ${{ needs.compute.outputs.tag }}
         run: |
           set -euo pipefail
@@ -350,9 +358,60 @@ jobs:
           path: dist/grain-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.ext }}
           retention-days: 7
 
+  build-migrate:
+    name: Build migration tools
+    needs: [compute]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: tools/migrate-mongo/go.sum
+
+      - name: Build all platforms
+        working-directory: tools/migrate-mongo
+        shell: bash
+        run: |
+          set -euo pipefail
+          for target in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64 windows/amd64; do
+            GOOS="${target%/*}"
+            GOARCH="${target#*/}"
+            EXT=""
+            [ "$GOOS" = "windows" ] && EXT=".exe"
+            echo "=== Building grain-migrate-mongo ${GOOS}/${GOARCH} ==="
+            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+              go build -ldflags "-w -s" \
+              -o "../../dist/grain-migrate-mongo-${GOOS}-${GOARCH}/grain-migrate-mongo${EXT}" .
+          done
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          for dir in grain-migrate-mongo-*/; do
+            name="${dir%/}"
+            if [[ "$name" == *windows* ]]; then
+              zip -rq "${name}.zip" "$name"
+            else
+              tar -czf "${name}.tar.gz" "$name"
+            fi
+          done
+
+      - name: Upload migration tool artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: grain-migrate-mongo-all
+          path: |
+            dist/grain-migrate-mongo-*.tar.gz
+            dist/grain-migrate-mongo-*.zip
+          retention-days: 7
+
   release:
     name: Publish GitHub release
-    needs: [compute, build]
+    needs: [compute, build, build-migrate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
