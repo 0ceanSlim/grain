@@ -150,8 +150,10 @@ cp deps/secp256k1/include/secp256k1.h "$INCLUDE_DIR/"
 # Copy config.h needed by ccan headers
 cp src/config.h "$INCLUDE_DIR/"
 
-# Copy ccan headers referenced by cursor.h and other nostrdb headers
-cp -r ccan/ccan "$INCLUDE_DIR/ccan"
+# Copy ccan headers referenced by cursor.h and other nostrdb headers.
+# Use -L to dereference symlinks (LICENSE files) — Windows can't create symlinks
+# without elevated privileges, and we only need the header content anyway.
+cp -rL ccan/ccan "$INCLUDE_DIR/ccan"
 
 # Copy flatcc headers referenced by nostrdb.h
 cp -r deps/flatcc/include/flatcc "$INCLUDE_DIR/flatcc"
