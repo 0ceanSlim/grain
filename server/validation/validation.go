@@ -34,13 +34,13 @@ func CheckBlacklistAndWhitelistCached(evt noatr.Event) Result {
 	return Result{Valid: true}
 }
 
-// CheckRateAndSizeLimits checks if an event passes rate and size limits
-func CheckRateAndSizeLimits(evt noatr.Event, eventSize int) Result {
-	rateLimiter := config.GetRateLimiter()
+// CheckRateAndSizeLimits checks if an event passes per-client rate limits
+// and global size limits.
+func CheckRateAndSizeLimits(client noatr.ClientInterface, evt noatr.Event, eventSize int) Result {
 	sizeLimiter := config.GetSizeLimiter()
 	category := utils.DetermineEventCategory(evt.Kind)
 
-	if allowed, msg := rateLimiter.AllowEvent(evt.Kind, category); !allowed {
+	if allowed, msg := client.AllowEvent(evt.Kind, category); !allowed {
 		log.Validation().Info("Event rejected by rate limiter",
 			"event_id", evt.ID,
 			"kind", evt.Kind,

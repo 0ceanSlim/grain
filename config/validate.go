@@ -38,6 +38,10 @@ func ValidateAndApplyDefaults(cfg *cfgType.ServerConfig) (warnings []string, err
 		cfg.Server.IdleTimeout = 300
 		warnings = append(warnings, "server.idle_timeout was 0, defaulting to 300")
 	}
+	if cfg.Server.MaxConnections == 0 {
+		cfg.Server.MaxConnections = 1000
+		warnings = append(warnings, "server.max_connections was 0, defaulting to 1000")
+	}
 	if cfg.Server.MaxSubscriptionsPerClient == 0 {
 		cfg.Server.MaxSubscriptionsPerClient = 10
 		warnings = append(warnings, "server.max_subscriptions_per_client was 0, defaulting to 10")

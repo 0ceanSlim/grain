@@ -30,16 +30,13 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		return
 	}
 
-	// Add REQ rate limiting check
-	rateLimiter := config.GetRateLimiter()
-	if rateLimiter != nil {
-		if allowed, msg := rateLimiter.AllowReq(); !allowed {
-			log.Req().Warn("REQ rate limit exceeded",
-				"sub_id", subID,
-				"reason", msg)
-			response.SendClosed(client, subID, "rate-limited: "+msg)
-			return
-		}
+	// Per-client REQ rate limiting
+	if allowed, msg := client.AllowReq(); !allowed {
+		log.Req().Warn("REQ rate limit exceeded",
+			"sub_id", subID,
+			"reason", msg)
+		response.SendClosed(client, subID, "rate-limited: "+msg)
+		return
 	}
 
 	// Parse and validate filters

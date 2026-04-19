@@ -14,6 +14,7 @@ type ServerConfigResponse struct {
 	ReadTimeout               int `json:"read_timeout"`
 	WriteTimeout              int `json:"write_timeout"`
 	IdleTimeout               int `json:"idle_timeout"`
+	MaxConnections            int `json:"max_connections"`
 	MaxSubscriptionsPerClient int `json:"max_subscriptions_per_client"`
 	ImplicitReqLimit          int `json:"implicit_req_limit"`
 }
@@ -38,6 +39,7 @@ func GetServerConfig(w http.ResponseWriter, r *http.Request) {
 		ReadTimeout:               cfg.Server.ReadTimeout,
 		WriteTimeout:              cfg.Server.WriteTimeout,
 		IdleTimeout:               cfg.Server.IdleTimeout,
+		MaxConnections:            cfg.Server.MaxConnections,
 		MaxSubscriptionsPerClient: cfg.Server.MaxSubscriptionsPerClient,
 		ImplicitReqLimit:          cfg.Server.ImplicitReqLimit,
 	}

@@ -83,8 +83,8 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 		return
 	}
 
-	// Rate and size limit checks
-	result = validation.CheckRateAndSizeLimits(evt, eventSize)
+	// Per-client rate and size limit checks
+	result = validation.CheckRateAndSizeLimits(client, evt, eventSize)
 	if !result.Valid {
 		log.Event().Info("Event rejected by rate/size limits",
 			"event_id", evt.ID,

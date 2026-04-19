@@ -92,6 +92,21 @@ func PrintStats() {
 func ClientHandler(ws *websocket.Conn) {
 	cfg := config.GetConfig()
 
+	// Enforce max connections
+	if maxConn := cfg.Server.MaxConnections; maxConn > 0 {
+		mu.Lock()
+		if currentConnections >= maxConn {
+			mu.Unlock()
+			log.RelayClient().Warn("Max connections reached, rejecting",
+				"max", maxConn,
+				"current", currentConnections)
+			websocket.Message.Send(ws, `["NOTICE","error: server at max capacity, try again later"]`)
+			ws.Close()
+			return
+		}
+		mu.Unlock()
+	}
+
 	// Create context for this client connection
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -104,7 +119,7 @@ func ClientHandler(ws *websocket.Conn) {
 	client := &Client{
 		ws:            ws,
 		subscriptions: make(map[string][]nostr.Filter),
-		rateLimiter:   config.GetRateLimiter(),
+		rateLimiter:   config.NewClientRateLimiter(),
 		messageBuffer: strings.Builder{},
 
 		// Configure timeouts from config
@@ -370,6 +385,22 @@ func (c *Client) ForEachSubscription(fn func(subID string, filters []nostr.Filte
 	}
 }
 
+// AllowReq checks this client's per-connection REQ rate limiter.
+func (c *Client) AllowReq() (bool, string) {
+	if c.rateLimiter == nil {
+		return true, ""
+	}
+	return c.rateLimiter.AllowReq()
+}
+
+// AllowEvent checks this client's per-connection event rate limiter.
+func (c *Client) AllowEvent(kind int, category string) (bool, string) {
+	if c.rateLimiter == nil {
+		return true, ""
+	}
+	return c.rateLimiter.AllowEvent(kind, category)
+}
+
 // CloseClient closes the client connection and cleans up resources
 func (c *Client) CloseClient() {
 	// Cancel context first to stop all goroutines
@@ -472,9 +503,8 @@ func clientReader(client *Client) {
 			return
 		}
 
-		rateLimiter := config.GetRateLimiter()
-		if rateLimiter != nil {
-			if allowed, msg := rateLimiter.AllowWs(); !allowed {
+		if client.rateLimiter != nil {
+			if allowed, msg := client.rateLimiter.AllowWs(); !allowed {
 				log.RelayClient().Warn("WebSocket rate limit exceeded",
 					"client_id", client.id,
 					"reason", msg)

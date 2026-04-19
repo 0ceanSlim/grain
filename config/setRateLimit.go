@@ -22,6 +22,8 @@ type CategoryLimiter struct {
 	Burst   int
 }
 
+// RateLimiter holds per-client rate limiters. Each connected client gets its
+// own instance so limits are enforced independently.
 type RateLimiter struct {
 	wsLimiter        *rate.Limiter
 	eventLimiter     *rate.Limiter
@@ -31,55 +33,69 @@ type RateLimiter struct {
 	mu               sync.RWMutex
 }
 
-var rateLimiterInstance *RateLimiter
-var rateOnce sync.Once
+// rateLimitCfg stores the parsed config so new per-client limiters can be
+// created on each connection without re-reading the YAML.
+var (
+	rateLimitCfg   *cfgType.RateLimitConfig
+	rateLimitCfgMu sync.RWMutex
+)
 
+// SetRateLimit stores the rate limit configuration for later per-client use.
 func SetRateLimit(cfg *cfgType.ServerConfig) {
-	rateLimiter := NewRateLimiter(
-		rate.Limit(cfg.RateLimit.WsLimit),
-		cfg.RateLimit.WsBurst,
-		rate.Limit(cfg.RateLimit.EventLimit),
-		cfg.RateLimit.EventBurst,
-		rate.Limit(cfg.RateLimit.ReqLimit),
-		cfg.RateLimit.ReqBurst,
-	)
+	rateLimitCfgMu.Lock()
+	rateLimitCfg = &cfg.RateLimit
+	rateLimitCfgMu.Unlock()
 
-	log.Config().Info("Rate limiters configured",
+	log.Config().Info("Rate limiters configured (per-client)",
 		"ws_limit", cfg.RateLimit.WsLimit,
 		"event_limit", cfg.RateLimit.EventLimit,
 		"req_limit", cfg.RateLimit.ReqLimit)
 
 	for _, kindLimit := range cfg.RateLimit.KindLimits {
-		rateLimiter.AddKindLimit(kindLimit.Kind, rate.Limit(kindLimit.Limit), kindLimit.Burst)
-		log.Config().Debug("Kind rate limiter added", "kind", kindLimit.Kind, "limit", kindLimit.Limit, "burst", kindLimit.Burst)
+		log.Config().Debug("Kind rate limiter configured", "kind", kindLimit.Kind, "limit", kindLimit.Limit, "burst", kindLimit.Burst)
 	}
 
 	for category, categoryLimit := range cfg.RateLimit.CategoryLimits {
-		rateLimiter.AddCategoryLimit(category, rate.Limit(categoryLimit.Limit), categoryLimit.Burst)
-		log.Config().Debug("Category rate limiter added", "category", category, "limit", categoryLimit.Limit, "burst", categoryLimit.Burst)
+		log.Config().Debug("Category rate limiter configured", "category", category, "limit", categoryLimit.Limit, "burst", categoryLimit.Burst)
+	}
+}
+
+// NewClientRateLimiter creates a fresh RateLimiter from the stored config.
+// Called once per new client connection.
+func NewClientRateLimiter() *RateLimiter {
+	rateLimitCfgMu.RLock()
+	cfg := rateLimitCfg
+	rateLimitCfgMu.RUnlock()
+
+	if cfg == nil {
+		return nil
 	}
 
-	SetRateLimiter(rateLimiter)
-}
-
-func SetRateLimiter(rl *RateLimiter) {
-	rateOnce.Do(func() {
-		rateLimiterInstance = rl
-	})
-}
-
-func GetRateLimiter() *RateLimiter {
-	return rateLimiterInstance
-}
-
-func NewRateLimiter(wsLimit rate.Limit, wsBurst int, eventLimit rate.Limit, eventBurst int, reqLimit rate.Limit, reqBurst int) *RateLimiter {
-	return &RateLimiter{
-		wsLimiter:        rate.NewLimiter(wsLimit, wsBurst),
-		eventLimiter:     rate.NewLimiter(eventLimit, eventBurst),
-		reqLimiter:       rate.NewLimiter(reqLimit, reqBurst),
+	rl := &RateLimiter{
+		wsLimiter:        rate.NewLimiter(rate.Limit(cfg.WsLimit), cfg.WsBurst),
+		eventLimiter:     rate.NewLimiter(rate.Limit(cfg.EventLimit), cfg.EventBurst),
+		reqLimiter:       rate.NewLimiter(rate.Limit(cfg.ReqLimit), cfg.ReqBurst),
 		categoryLimiters: make(map[string]*CategoryLimiter),
 		kindLimiters:     make(map[int]*KindLimiter),
 	}
+
+	for _, kindLimit := range cfg.KindLimits {
+		rl.kindLimiters[kindLimit.Kind] = &KindLimiter{
+			Limiter: rate.NewLimiter(rate.Limit(kindLimit.Limit), kindLimit.Burst),
+			Limit:   rate.Limit(kindLimit.Limit),
+			Burst:   kindLimit.Burst,
+		}
+	}
+
+	for category, categoryLimit := range cfg.CategoryLimits {
+		rl.categoryLimiters[category] = &CategoryLimiter{
+			Limiter: rate.NewLimiter(rate.Limit(categoryLimit.Limit), categoryLimit.Burst),
+			Limit:   rate.Limit(categoryLimit.Limit),
+			Burst:   categoryLimit.Burst,
+		}
+	}
+
+	return rl
 }
 
 func (rl *RateLimiter) AllowWs() (bool, string) {
