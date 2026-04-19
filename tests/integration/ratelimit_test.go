@@ -18,7 +18,7 @@ import (
 //   event_limit/burst:         3 / 3
 //   req_limit/burst:           2 / 2
 //   max_event_size:            1024 B
-//   kind 1 max_size:           256  B
+//   kind 1 max_size:           512  B
 //   category "regular" lim:    2 / 2
 //   kind 7 lim:                1 / 1
 
@@ -141,8 +141,8 @@ func TestRateLimit_KindSize(t *testing.T) {
 	client := tests.NewTestClientAt(t, tests.RateLimitRelayURL)
 	defer client.Close()
 
-	// Kind 1 capped at 256 B. 400 B content is under the 1KB global cap but
-	// over the kind cap.
+	// Kind 1 capped at 512 B. 400 B content + ~300 B event overhead is under
+	// the 1KB global cap but over the kind cap.
 	content := strings.Repeat("y", 400)
 	evt := kp.SignEvent(1, content, nil)
 	client.SendEvent(evt)

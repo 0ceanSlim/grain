@@ -63,10 +63,12 @@ rate_limit:
   req_burst: 2
   max_event_size: 1024 # 1KB global cap
 
-  # Per-kind size cap (kind 1 = 256 bytes)
+  # Per-kind size cap (kind 1 = 512 bytes).
+  # A minimal signed event is ~300 bytes (id + pubkey + sig), so the cap
+  # must be above that for rate-limit tests to fire before the size check.
   kind_size_limits:
     - kind: 1
-      max_size: 256
+      max_size: 512
 
   # Category caps (regular covers kind 1)
   category_limits:
