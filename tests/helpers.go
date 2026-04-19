@@ -207,6 +207,26 @@ func (c *TestClient) Subscribe(subID string, filters ...map[string]interface{}) 
 	c.SendMessage(msg)
 }
 
+// TryReadMessage reads a message from the relay, returning nil and the error
+// if the read times out or fails. Unlike ReadMessage it does not call t.Fatalf.
+func (c *TestClient) TryReadMessage(timeout time.Duration) ([]interface{}, error) {
+	c.conn.SetReadDeadline(time.Now().Add(timeout))
+
+	msgBytes := make([]byte, 65536)
+	n, err := c.conn.Read(msgBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	var msg []interface{}
+	err = json.Unmarshal(msgBytes[:n], &msg)
+	if err != nil {
+		return nil, err
+	}
+
+	return msg, nil
+}
+
 // ReadMessage reads a message from the relay with timeout
 func (c *TestClient) ReadMessage(timeout time.Duration) []interface{} {
 	c.conn.SetReadDeadline(time.Now().Add(timeout))
