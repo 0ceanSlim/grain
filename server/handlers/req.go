@@ -55,10 +55,20 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		f.IDs = utils.ToStringArray(filterData["ids"])
 		f.Authors = utils.ToStringArray(filterData["authors"])
 		f.Kinds = utils.ToIntArray(filterData["kinds"])
-		f.Tags = utils.ToTagsMap(filterData["tags"])
 		f.Since = utils.ToTime(filterData["since"])
 		f.Until = utils.ToTime(filterData["until"])
 		f.Limit = utils.ToInt(filterData["limit"])
+
+		// NIP-01: tag filters are top-level keys like "#e", "#p", "#a".
+		f.Tags = make(map[string][]string)
+		for k, v := range filterData {
+			if len(k) >= 2 && k[0] == '#' {
+				tagName := k[1:]
+				if vals := utils.ToStringArray(v); len(vals) > 0 {
+					f.Tags[tagName] = vals
+				}
+			}
+		}
 
 		filters[i] = f
 	}

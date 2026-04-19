@@ -42,6 +42,11 @@ func noteToEvent(note *C.struct_ndb_note) (nostr.Event, error) {
 		return nostr.Event{}, fmt.Errorf("failed to unmarshal note JSON: %w", err)
 	}
 
+	// Ensure tags is never nil — NIP-01 requires an array, not null.
+	if evt.Tags == nil {
+		evt.Tags = [][]string{}
+	}
+
 	return evt, nil
 }
 
@@ -55,6 +60,7 @@ func noteToEventDirect(note *C.struct_ndb_note) nostr.Event {
 		Kind:      int(C.ndb_note_kind(note)),
 		Content:   C.GoString(C.ndb_note_content(note)),
 		Sig:       hex.EncodeToString(C.GoBytes(unsafe.Pointer(C.ndb_note_sig(note)), 64)),
+		Tags:      [][]string{},
 	}
 
 	// Extract tags
