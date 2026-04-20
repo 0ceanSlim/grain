@@ -76,9 +76,7 @@ func (txn *Txn) Query(filters []nostr.Filter, limit int) ([]nostr.Event, error) 
 		"results", int(count),
 		"limit", limit)
 
-	// Convert results to Go events using the JSON-based converter.
-	// noteToEvent uses nostrdb's canonical ndb_note_json serializer which
-	// correctly handles all packed string types (noteToEventDirect does not).
+	// Convert results to Go events
 	events := make([]nostr.Event, 0, int(count))
 	for i := 0; i < int(count); i++ {
 		result := results[i]
@@ -86,12 +84,7 @@ func (txn *Txn) Query(filters []nostr.Filter, limit int) ([]nostr.Event, error) 
 			continue
 		}
 
-		evt, err := noteToEvent(result.note)
-		if err != nil {
-			log.GetLogger("db-query").Warn("Failed to convert note, skipping",
-				"index", i, "error", err)
-			continue
-		}
+		evt := noteToEventDirect(result.note)
 		events = append(events, evt)
 	}
 
@@ -119,10 +112,7 @@ func (txn *Txn) GetNoteByID(hexID string) (*nostr.Event, error) {
 		return nil, nil // not found
 	}
 
-	evt, err := noteToEvent(note)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert note: %w", err)
-	}
+	evt := noteToEventDirect(note)
 	return &evt, nil
 }
 
@@ -225,26 +215,15 @@ func buildSingleNDBFilter(nf *C.struct_ndb_filter, filter nostr.Filter) error {
 	cJSON := C.CString(filterJSON)
 	defer C.free(unsafe.Pointer(cJSON))
 
-	// ndb_filter_from_json needs a scratch buffer for token parsing and ID
-	// decoding. Size it proportional to the JSON: at minimum 64KB, or 4x the
-	// JSON length — whichever is larger. This handles filters with hundreds
-	// of author prefixes or large tag value arrays without silent truncation.
-	bufSize := len(filterJSON) * 4
-	if bufSize < 1024*64 {
-		bufSize = 1024 * 64
-	}
+	// ndb_filter_from_json needs a scratch buffer for IDs/strings
+	bufSize := 1024 * 16 // 16KB scratch
 	buf := (*C.uchar)(C.malloc(C.size_t(bufSize)))
 	defer C.free(unsafe.Pointer(buf))
 
 	rc := C.ndb_filter_from_json(cJSON, C.int(len(filterJSON)), nf, buf, C.int(bufSize))
 	if rc == 0 {
 		C.ndb_filter_destroy(nf)
-		// Truncate logged filter to avoid flooding logs with huge arrays
-		logJSON := filterJSON
-		if len(logJSON) > 256 {
-			logJSON = logJSON[:256] + "...(truncated)"
-		}
-		return fmt.Errorf("ndb_filter_from_json failed for: %s", logJSON)
+		return fmt.Errorf("ndb_filter_from_json failed for: %s", filterJSON)
 	}
 
 	return nil
