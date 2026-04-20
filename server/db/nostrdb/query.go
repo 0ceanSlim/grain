@@ -76,7 +76,9 @@ func (txn *Txn) Query(filters []nostr.Filter, limit int) ([]nostr.Event, error) 
 		"results", int(count),
 		"limit", limit)
 
-	// Convert results to Go events
+	// Convert results to Go events using the JSON-based converter.
+	// noteToEvent uses nostrdb's canonical ndb_note_json serializer which
+	// correctly handles all packed string types (noteToEventDirect does not).
 	events := make([]nostr.Event, 0, int(count))
 	for i := 0; i < int(count); i++ {
 		result := results[i]
@@ -84,7 +86,12 @@ func (txn *Txn) Query(filters []nostr.Filter, limit int) ([]nostr.Event, error) 
 			continue
 		}
 
-		evt := noteToEventDirect(result.note)
+		evt, err := noteToEvent(result.note)
+		if err != nil {
+			log.GetLogger("db-query").Warn("Failed to convert note, skipping",
+				"index", i, "error", err)
+			continue
+		}
 		events = append(events, evt)
 	}
 
@@ -112,11 +119,15 @@ func (txn *Txn) GetNoteByID(hexID string) (*nostr.Event, error) {
 		return nil, nil // not found
 	}
 
-	evt := noteToEventDirect(note)
+	evt, err := noteToEvent(note)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert note: %w", err)
+	}
 	return &evt, nil
 }
 
 // CheckDuplicateEvent checks if an event with the given ID already exists.
+// Uses a lightweight pointer check — no deserialization needed.
 func (db *NDB) CheckDuplicateEvent(evt nostr.Event) (bool, error) {
 	txn, err := db.BeginQuery()
 	if err != nil {
@@ -127,14 +138,22 @@ func (db *NDB) CheckDuplicateEvent(evt nostr.Event) (bool, error) {
 	}
 	defer txn.EndQuery()
 
-	existing, err := txn.GetNoteByID(evt.ID)
+	idBytes, err := hexToBytes32(evt.ID)
 	if err != nil {
-		log.GetLogger("db").Warn("Error during duplicate check, allowing event",
-			"event_id", evt.ID, "error", err)
 		return false, nil
 	}
 
-	if existing != nil {
+	var noteSize C.uint64_t
+	var noteKey C.uint64_t
+
+	note := C.ndb_get_note_by_id(
+		&txn.txn,
+		(*C.uchar)(unsafe.Pointer(&idBytes[0])),
+		(*C.size_t)(unsafe.Pointer(&noteSize)),
+		&noteKey,
+	)
+
+	if note != nil {
 		log.GetLogger("db").Info("Duplicate event found",
 			"event_id", evt.ID, "kind", evt.Kind, "pubkey", evt.PubKey)
 		return true, nil
@@ -206,15 +225,26 @@ func buildSingleNDBFilter(nf *C.struct_ndb_filter, filter nostr.Filter) error {
 	cJSON := C.CString(filterJSON)
 	defer C.free(unsafe.Pointer(cJSON))
 
-	// ndb_filter_from_json needs a scratch buffer for IDs/strings
-	bufSize := 1024 * 16 // 16KB scratch
+	// ndb_filter_from_json needs a scratch buffer for token parsing and ID
+	// decoding. Size it proportional to the JSON: at minimum 64KB, or 4x the
+	// JSON length — whichever is larger. This handles filters with hundreds
+	// of author prefixes or large tag value arrays without silent truncation.
+	bufSize := len(filterJSON) * 4
+	if bufSize < 1024*64 {
+		bufSize = 1024 * 64
+	}
 	buf := (*C.uchar)(C.malloc(C.size_t(bufSize)))
 	defer C.free(unsafe.Pointer(buf))
 
 	rc := C.ndb_filter_from_json(cJSON, C.int(len(filterJSON)), nf, buf, C.int(bufSize))
 	if rc == 0 {
 		C.ndb_filter_destroy(nf)
-		return fmt.Errorf("ndb_filter_from_json failed for: %s", filterJSON)
+		// Truncate logged filter to avoid flooding logs with huge arrays
+		logJSON := filterJSON
+		if len(logJSON) > 256 {
+			logJSON = logJSON[:256] + "...(truncated)"
+		}
+		return fmt.Errorf("ndb_filter_from_json failed for: %s", logJSON)
 	}
 
 	return nil

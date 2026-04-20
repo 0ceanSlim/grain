@@ -3,20 +3,12 @@ package nostrdb
 /*
 #include "nostrdb.h"
 #include <stdlib.h>
-#include <string.h>
-
-// CGO helper: extract the string pointer from ndb_str's anonymous union
-static inline const char *ndb_str_str(struct ndb_str *s) { return s->str; }
-
-// CGO helper: extract the id pointer from ndb_str's anonymous union
-static inline unsigned char *ndb_str_id(struct ndb_str *s) { return s->id; }
 */
 import "C"
 import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"unsafe"
 
 	nostr "github.com/0ceanslim/grain/server/types"
 )
@@ -25,17 +17,28 @@ import (
 // The note must be accessed within a valid read transaction.
 func noteToEvent(note *C.struct_ndb_note) (nostr.Event, error) {
 	// Use ndb_note_json to serialize the note, then unmarshal into our Event type.
-	// This is the safest approach since it handles all the FlatBuffer field access correctly.
-	bufSize := 1024 * 64 // 64KB should be enough for most events
+	// This is the safest approach since it handles all the FlatBuffer field access
+	// correctly, including all packed string types that noteToEventDirect misses.
+	//
+	// Try 64KB first (sufficient for most events), retry with 1MB for large ones.
+	bufSize := 1024 * 64
 	buf := C.malloc(C.size_t(bufSize))
-	defer C.free(buf)
 
 	rc := C.ndb_note_json(note, (*C.char)(buf), C.int(bufSize))
 	if rc == 0 {
-		return nostr.Event{}, fmt.Errorf("ndb_note_json failed (note too large?)")
+		// Buffer too small — retry with 1MB
+		C.free(buf)
+		bufSize = 1024 * 1024
+		buf = C.malloc(C.size_t(bufSize))
+		rc = C.ndb_note_json(note, (*C.char)(buf), C.int(bufSize))
+		if rc == 0 {
+			C.free(buf)
+			return nostr.Event{}, fmt.Errorf("ndb_note_json failed (note exceeds 1MB)")
+		}
 	}
 
 	jsonBytes := C.GoBytes(buf, rc)
+	C.free(buf)
 
 	var evt nostr.Event
 	if err := json.Unmarshal(jsonBytes, &evt); err != nil {
@@ -48,44 +51,6 @@ func noteToEvent(note *C.struct_ndb_note) (nostr.Event, error) {
 	}
 
 	return evt, nil
-}
-
-// noteToEventDirect converts a nostrdb note to Event by reading fields directly.
-// This avoids JSON round-tripping for better performance when needed.
-func noteToEventDirect(note *C.struct_ndb_note) nostr.Event {
-	evt := nostr.Event{
-		ID:        hex.EncodeToString(C.GoBytes(unsafe.Pointer(C.ndb_note_id(note)), 32)),
-		PubKey:    hex.EncodeToString(C.GoBytes(unsafe.Pointer(C.ndb_note_pubkey(note)), 32)),
-		CreatedAt: int64(C.ndb_note_created_at(note)),
-		Kind:      int(C.ndb_note_kind(note)),
-		Content:   C.GoString(C.ndb_note_content(note)),
-		Sig:       hex.EncodeToString(C.GoBytes(unsafe.Pointer(C.ndb_note_sig(note)), 64)),
-		Tags:      [][]string{},
-	}
-
-	// Extract tags
-	var iter C.struct_ndb_iterator
-	C.ndb_tags_iterate_start(note, &iter)
-
-	for C.ndb_tags_iterate_next(&iter) != 0 {
-		tagCount := int(C.ndb_tag_count(iter.tag))
-		if tagCount == 0 {
-			continue
-		}
-
-		tag := make([]string, tagCount)
-		for i := 0; i < tagCount; i++ {
-			nstr := C.ndb_iter_tag_str(&iter, C.int(i))
-			if nstr.flag == C.NDB_PACKED_STR {
-				tag[i] = C.GoString(C.ndb_str_str(&nstr))
-			} else if nstr.flag == C.NDB_PACKED_ID {
-				tag[i] = hex.EncodeToString(C.GoBytes(unsafe.Pointer(C.ndb_str_id(&nstr)), 32))
-			}
-		}
-		evt.Tags = append(evt.Tags, tag)
-	}
-
-	return evt
 }
 
 // eventToJSON serializes a Go Event to JSON for feeding into ndb_process_event.
