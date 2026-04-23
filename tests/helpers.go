@@ -159,8 +159,9 @@ func (kp *TestKeypair) SignEvent(kind int, content string, tags [][]string) nost
 
 // TestClient wraps a WebSocket connection for testing
 type TestClient struct {
-	conn *websocket.Conn
-	t    *testing.T
+	conn             *websocket.Conn
+	t                *testing.T
+	initialChallenge string // AUTH challenge captured on connect (NIP-42 proactive push)
 }
 
 // NewTestClient creates a new WebSocket connection to the default test relay.
@@ -175,7 +176,26 @@ func NewTestClientAt(t *testing.T, url string) *TestClient {
 	if err != nil {
 		t.Fatalf("Failed to connect to relay %s: %v", url, err)
 	}
-	return &TestClient{conn: conn, t: t}
+	c := &TestClient{conn: conn, t: t}
+
+	// GRAIN proactively sends a NIP-42 AUTH challenge on connect. Drain it so
+	// per-test reads see subsequent frames (OK, EVENT, EOSE, etc.) directly.
+	c.conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 65536)
+	if n, err := c.conn.Read(buf); err == nil {
+		var msg []interface{}
+		if json.Unmarshal(buf[:n], &msg) == nil && len(msg) >= 2 {
+			if verb, ok := msg[0].(string); ok && verb == "AUTH" {
+				if s, ok := msg[1].(string); ok {
+					c.initialChallenge = s
+				}
+			}
+		}
+	}
+	var zero time.Time
+	c.conn.SetReadDeadline(zero)
+
+	return c
 }
 
 // SendMessage sends a message to the relay
@@ -408,9 +428,15 @@ func (c *TestClient) ExpectClosed(subID string, timeout time.Duration) string {
 	return ""
 }
 
-// ExpectAuthChallenge reads messages until an AUTH challenge frame arrives and
-// returns the challenge string.
+// ExpectAuthChallenge returns the NIP-42 AUTH challenge. GRAIN sends the
+// challenge proactively on connect, which NewTestClientAt captures into
+// initialChallenge; this method returns that captured value. If none was
+// captured (older relays or a reconnect), it falls back to reading frames
+// until an AUTH arrives.
 func (c *TestClient) ExpectAuthChallenge(timeout time.Duration) string {
+	if c.initialChallenge != "" {
+		return c.initialChallenge
+	}
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		msg := c.ReadMessage(time.Until(deadline))
