@@ -17,17 +17,11 @@ import (
 var authMu sync.Mutex
 
 // Maps to track authentication sessions
-var challenges = make(map[string]string)
+var challenges = make(map[nostr.ClientInterface]string)
 var authSessions = make(map[nostr.ClientInterface]bool)
 
 // HandleAuth processes the "AUTH" message type as defined in NIP-42
 func HandleAuth(client nostr.ClientInterface, message []interface{}) {
-	if !config.GetConfig().Auth.Enabled {
-		log.Auth().Debug("AUTH is disabled in configuration")
-		response.SendNotice(client, "", "AUTH is disabled")
-		return
-	}
-
 	if len(message) != 2 {
 		log.Auth().Debug("Invalid AUTH message format")
 		response.SendNotice(client, "", "Invalid AUTH message format")
@@ -56,7 +50,7 @@ func HandleAuth(client nostr.ClientInterface, message []interface{}) {
 		return
 	}
 
-	err = VerifyAuthEvent(authEvent)
+	err = VerifyAuthEvent(client, authEvent)
 	if err != nil {
 		log.Auth().Info("Auth verification failed", "event_id", authEvent.ID, "pubkey", authEvent.PubKey, "error", err)
 		response.SendOK(client, authEvent.ID, false, err.Error())
@@ -65,12 +59,14 @@ func HandleAuth(client nostr.ClientInterface, message []interface{}) {
 
 	// Mark the session as authenticated after successful verification
 	SetAuthenticated(client)
+	ClearChallengeForConnection(client) // Clear used challenge
+
 	log.Auth().Info("Authentication successful", "pubkey", authEvent.PubKey)
 	response.SendOK(client, authEvent.ID, true, "")
 }
 
 // VerifyAuthEvent verifies the authentication event according to NIP-42
-func VerifyAuthEvent(evt nostr.Event) error {
+func VerifyAuthEvent(client nostr.ClientInterface, evt nostr.Event) error {
 	if evt.Kind != 22242 {
 		return errors.New("invalid: event kind must be 22242")
 	}
@@ -89,9 +85,9 @@ func VerifyAuthEvent(evt nostr.Event) error {
 		return errors.New("invalid: relay tag missing")
 	}
 
-	expectedChallenge := GetChallengeForConnection(evt.PubKey)
-	if challenge != expectedChallenge {
-		return errors.New("invalid: challenge does not match")
+	expectedChallenge := GetChallengeForConnection(client)
+	if challenge == "" || challenge != expectedChallenge {
+		return errors.New("invalid: challenge does not match or is missing")
 	}
 
 	if relayURL != config.GetConfig().Auth.RelayURL {
@@ -116,18 +112,25 @@ func extractTag(tags [][]string, key string) (string, error) {
 }
 
 // GetChallengeForConnection retrieves the challenge string for a given connection
-func GetChallengeForConnection(pubKey string) string {
+func GetChallengeForConnection(client nostr.ClientInterface) string {
 	authMu.Lock()
 	defer authMu.Unlock()
-	return challenges[pubKey]
+	return challenges[client]
 }
 
 // SetChallengeForConnection sets the challenge string for a given connection
-func SetChallengeForConnection(pubKey, challenge string) {
+func SetChallengeForConnection(client nostr.ClientInterface, challenge string) {
 	authMu.Lock()
 	defer authMu.Unlock()
-	log.Auth().Debug("Setting challenge for connection", "pubkey", pubKey)
-	challenges[pubKey] = challenge
+	log.Auth().Debug("Setting challenge for connection", "client", client)
+	challenges[client] = challenge
+}
+
+// ClearChallengeForConnection removes the challenge for a connection
+func ClearChallengeForConnection(client nostr.ClientInterface) {
+	authMu.Lock()
+	defer authMu.Unlock()
+	delete(challenges, client)
 }
 
 // SetAuthenticated marks a connection as authenticated

@@ -50,6 +50,16 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 
 	// Load config
 	cfg := config.GetConfig()
+
+	// Enforce NIP-42 authentication if required
+	if cfg.Auth.Required {
+		if !IsAuthenticated(client) {
+			log.Event().Info("EVENT rejected: authentication required", "event_id", evt.ID)
+			response.SendOK(client, evt.ID, false, "auth-required: authentication is required to use this relay")
+			return
+		}
+	}
+
 	if cfg == nil {
 		log.Event().Error("Failed to get server configuration")
 		response.SendOK(client, evt.ID, false, "error: internal server error")

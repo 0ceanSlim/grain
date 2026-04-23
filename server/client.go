@@ -155,6 +155,11 @@ func ClientHandler(ws *websocket.Conn) {
 		"idle_timeout_sec", cfg.Server.IdleTimeout,
 		"connections", currentConnections)
 
+	// Always send NIP-42 AUTH challenge
+	challenge := utils.GenerateChallenge(32)
+	handlers.SetChallengeForConnection(client, challenge)
+	client.SendMessage([]interface{}{"AUTH", challenge})
+
 	// Start idle timeout monitor if configured
 	if client.idleTimeout > 0 {
 		go client.monitorIdleTimeout()
@@ -588,14 +593,9 @@ func clientReader(client *Client) {
 				"sub_id", subID)
 			handlers.HandleClose(client, message)
 		case "AUTH":
-			if config.GetConfig().Auth.Enabled {
-				log.RelayClient().Debug("Processing AUTH message",
-					"client_id", client.id)
-				handlers.HandleAuth(client, message)
-			} else {
-				log.RelayClient().Warn("Received AUTH message, but AUTH is disabled",
-					"client_id", client.id)
-			}
+			log.RelayClient().Debug("Processing AUTH message",
+				"client_id", client.id)
+			handlers.HandleAuth(client, message)
 		case "EVENT":
 			log.RelayClient().Debug("Processing EVENT message",
 				"client_id", client.id,

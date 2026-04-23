@@ -39,12 +39,12 @@ GRAIN acts as one of these relays - storing events, serving them to clients, and
 - Supports all Nostr event categories: regular, replaceable, addressable, ephemeral & deletion events
 - Automatic event deletion handling (kind 5 events) with proper cascade cleanup
 - Intelligent event purging with category-based retention policies
-- MongoDB storage optimized for Nostr's event structure
+- nostrdb storage (LMDB-based) optimized for Nostr's event structure
 
 #### **Performance Focused**
 
-- Unified cross-collection database queries for efficient event retrieval
-- Per-kind MongoDB collections with automatic indexing
+- Unified high-performance database queries for efficient event retrieval
+- Zero-dependency embedded storage via nostrdb
 - Configurable event size limits to prevent abuse
 - Connection pooling and timeout management
 
@@ -123,37 +123,29 @@ Wheat is a public nostr relay that anyone can write to and read from. Wheat will
 ### Quick Start (Recommended)
 
 1. **Download the latest release** for your system from the [releases page](https://github.com/0ceanslim/grain/releases)
-2. **Extract the archive** and ensure both the binary and `www` folder are in the same directory:
+2. **Run GRAIN** - `./grain` (Linux) or `grain.exe` (Windows)
 
-   ```
-   grain/
-   ├── grain (or grain.exe on Windows)
-   └── www/
-   ```
+GRAIN is a zero-dependency, single-binary application. All assets (including the web interface) are embedded in the binary. On first run, it will automatically create default configuration files and a local database in the platform-appropriate data directory:
 
-3. **Install MongoDB** for your system:
+- **Linux**: `~/.grain/`
+- **macOS**: `~/Library/Application Support/grain/`
+- **Windows**: `%APPDATA%\grain\`
 
-   - <img src="https://www.mongodb.com//assets/images/global/favicon.ico" width="20"/> _[MongoDB Community Server Install Guide](https://www.mongodb.com/docs/manual/administration/install-community/)_
-
-4. **Run GRAIN** - `./grain` (Linux) or `grain.exe` (Windows)
-
-GRAIN will automatically create default configuration files on first run and start serving on port `:8181`.
+You can override the data directory using the `--data-dir <path>` CLI flag or the `GRAIN_DATA_DIR` environment variable.
 
 ### Alternative Installation Methods
 
 **Docker Installation**
 
-- <img src="https://www.docker.com/app/uploads/2024/02/cropped-docker-logo-favicon-32x32.png" width="20"/> _[Docker Setup Guide](docs/docker/readme.md)_ (includes MongoDB)
+- <img src="https://www.docker.com/app/uploads/2024/02/cropped-docker-logo-favicon-32x32.png" width="20"/> _[Docker Setup Guide](docs/docker/readme.md)_
 
 **Build from Source**
 
-- **Requirements**: <img src="https://go.dev/images/favicon-gopher.svg" width="16"/> _[Go 1.21+](https://go.dev/)_ + MongoDB
+- **Requirements**: <img src="https://go.dev/images/favicon-gopher.svg" width="16"/> _[Go 1.23+](https://go.dev/)_
 
 **Complete Installation Guide**
 
 - _[Full Installation Documentation](docs/installation.md)_ - includes system service setup for Linux (systemd) and Windows (NSSM)
-
-> **Note**: Docker installations include MongoDB automatically. For other methods, you'll need to install MongoDB separately.
 
 ## Configuration
 

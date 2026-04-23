@@ -8,6 +8,10 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
+// AuthRequiredProvider is set by higher-level packages to report the current
+// auth requirement without introducing an import cycle into config.
+var AuthRequiredProvider func() bool
+
 type RelayMetadata struct {
 	Name           string `json:"name"`
 	Description    string `json:"description"`
@@ -115,6 +119,10 @@ func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
 	response := relayMetadata
 	if buildVersion != "" {
 		response.Version = buildVersion
+	}
+
+	if AuthRequiredProvider != nil {
+		response.Limitation.AuthRequired = AuthRequiredProvider()
 	}
 
 	err := json.NewEncoder(w).Encode(response)

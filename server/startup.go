@@ -36,6 +36,13 @@ func Run() error {
 	}
 	log.InitializeLoggers(cfg)
 
+	utils.AuthRequiredProvider = func() bool {
+		if c := config.GetConfig(); c != nil {
+			return c.Auth.Required
+		}
+		return false
+	}
+
 	// Setup configuration file watchers and signal handlers
 	restartChan := make(chan struct{}, 1) // Buffered channel to prevent blocking
 	signalChan := make(chan os.Signal, 1)

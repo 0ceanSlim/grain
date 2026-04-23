@@ -8,25 +8,24 @@ import (
 	"github.com/0ceanslim/grain/tests"
 )
 
-// Tests run against grain-auth (port 8186) with auth.enabled = true and
-// auth.relay_url = "ws://localhost:8186".
-//
-// NOTE: the current grain server does not push a proactive AUTH challenge
-// frame on connect — it only *validates* AUTH messages that clients send.
-// GetChallengeForConnection returns "" for any unknown pubkey, so an AUTH
-// event with an empty challenge tag will match. These tests exercise the
-// relay-URL and kind checks in VerifyAuthEvent, which are the parts that
-// matter for NIP-42 correctness.
+// Tests run against grain-auth (port 8186), which is configured with
+// auth.required = false and auth.relay_url = "ws://localhost:8186".
+// The relay proactively sends an AUTH challenge on connect; tests read
+// that challenge and use it to construct their AUTH events.
 
 func TestAuth_ValidAuthAccepted(t *testing.T) {
 	kp := tests.NewTestKeypair()
 	client := tests.NewTestClientAt(t, tests.AuthRelayURL)
 	defer client.Close()
 
-	// Empty-string challenge matches the map default, relay URL matches.
+	challenge := client.ExpectAuthChallenge(3 * time.Second)
+	if challenge == "" {
+		t.Fatal("did not receive AUTH challenge on connect")
+	}
+
 	tags := [][]string{
 		{"relay", "ws://localhost:8186"},
-		{"challenge", ""},
+		{"challenge", challenge},
 	}
 	evt := kp.SignEvent(22242, "", tags)
 	client.SendMessage([]interface{}{"AUTH", evt})
@@ -41,9 +40,14 @@ func TestAuth_WrongRelayURL(t *testing.T) {
 	client := tests.NewTestClientAt(t, tests.AuthRelayURL)
 	defer client.Close()
 
+	challenge := client.ExpectAuthChallenge(3 * time.Second)
+	if challenge == "" {
+		t.Fatal("did not receive AUTH challenge on connect")
+	}
+
 	tags := [][]string{
 		{"relay", "ws://wrong-relay.example.com"},
-		{"challenge", ""},
+		{"challenge", challenge},
 	}
 	evt := kp.SignEvent(22242, "", tags)
 	client.SendMessage([]interface{}{"AUTH", evt})
@@ -61,10 +65,15 @@ func TestAuth_WrongKind(t *testing.T) {
 	client := tests.NewTestClientAt(t, tests.AuthRelayURL)
 	defer client.Close()
 
+	challenge := client.ExpectAuthChallenge(3 * time.Second)
+	if challenge == "" {
+		t.Fatal("did not receive AUTH challenge on connect")
+	}
+
 	// Kind 1 is not 22242; AUTH must reject.
 	tags := [][]string{
 		{"relay", "ws://localhost:8186"},
-		{"challenge", ""},
+		{"challenge", challenge},
 	}
 	evt := kp.SignEvent(1, "", tags)
 	client.SendMessage([]interface{}{"AUTH", evt})

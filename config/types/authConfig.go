@@ -1,6 +1,6 @@
 package config
 
 type AuthConfig struct {
-	Enabled  bool   `yaml:"enabled"`
+	Required bool   `yaml:"required"`
 	RelayURL string `yaml:"relay_url"`
 }

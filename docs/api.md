@@ -1215,7 +1215,7 @@ GET /api/v1/relay/config/auth
 
 ```json
 {
-  "enabled": true,
+  "required": true,
   "relay_url": "wss://auth.relay.com"
 }
 ```

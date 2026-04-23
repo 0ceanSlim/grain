@@ -6,7 +6,7 @@ Documentation directory for GRAIN Nostr relay.
 
 **[installation.md](installation.md)** - Complete installation guide for all platforms
 
-- Binary releases, building from source, MongoDB setup
+- Binary releases, building from source, Embedded storage setup (nostrdb)
 - System service configuration, troubleshooting
 - **[docker/readme.md](docker/readme.md)** - Docker deployment and container setup
 

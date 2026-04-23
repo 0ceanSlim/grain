@@ -435,13 +435,15 @@ Optional client authentication using Nostr's NIP-42 standard.
 
 ```yaml
 auth:
-  enabled: false # Enable/disable authentication
-  relay_url: "wss://relay.example.com/" # Relay URL for challenge
+  required: false # If true, clients MUST authenticate to read or write
+  relay_url: "wss://relay.example.com/" # MUST match the URL clients connect to
 ```
+
+AUTH challenges are always sent on connection regardless of `required`. Setting `required: true` enforces authentication for `EVENT` and `REQ`, and is reflected in NIP-11's `limitation.auth_required`.
 
 #### Authentication Flow
 
-When enabled, clients must authenticate before publishing events:
+When `required: true`, clients must authenticate before publishing events or making subscriptions:
 
 1. Client connects to relay
 2. Relay sends `AUTH` challenge
@@ -971,7 +973,7 @@ pubkey_whitelist:
 
 # config.yml
 auth:
-  enabled: true # Require authentication
+  required: true # Require authentication for EVENT/REQ
 
 rate_limit:
   ws_limit: 100 # Higher limits for trusted users

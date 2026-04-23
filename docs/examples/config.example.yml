@@ -69,8 +69,8 @@ resource_limits:
   heap_size_mb: 512 # Set a limit on the Go garbage collector's heap size in MB
 
 auth:
-  enabled: false # Enable or disable AUTH handling
-  relay_url: "wss://relay.example.com/" # Specify the relay URL
+  required: false # If true, clients MUST authenticate to read or write
+  relay_url: "wss://relay.example.com/" # MUST match the URL clients connect to
 
 backup_relay:
   enabled: false # Set to true to enable sending events to the backup relay

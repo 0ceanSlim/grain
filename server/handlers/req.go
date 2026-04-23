@@ -22,6 +22,17 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 	}
 
 	subID, ok := message[1].(string)
+
+	// Enforce NIP-42 authentication if required
+	cfg := config.GetConfig()
+	if cfg.Auth.Required {
+		if !IsAuthenticated(client) {
+			log.Req().Info("REQ rejected: authentication required", "sub_id", subID)
+			response.SendClosed(client, subID, "auth-required: authentication is required to use this relay")
+			return
+		}
+	}
+
 	if !ok || len(subID) == 0 || len(subID) > 64 {
 		log.Req().Error("Invalid subscription ID format or length",
 			"sub_id", subID,

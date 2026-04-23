@@ -11,7 +11,7 @@ import (
 
 // AuthConfigResponse represents the authentication configuration response
 type AuthConfigResponse struct {
-	Enabled  bool   `json:"enabled"`
+	Required bool   `json:"required"`
 	RelayURL string `json:"relay_url"`
 }
 
@@ -32,7 +32,7 @@ func GetAuthConfig(w http.ResponseWriter, r *http.Request) {
 
 	// Prepare response with authentication configuration
 	response := AuthConfigResponse{
-		Enabled:  cfg.Auth.Enabled,
+		Required: cfg.Auth.Required,
 		RelayURL: cfg.Auth.RelayURL,
 	}
 
