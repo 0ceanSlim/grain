@@ -15,8 +15,7 @@ Comprehensive documentation for configuring your GRAIN relay server.
       - [Log Levels](#log-levels)
       - [Structured vs Pretty Logging](#structured-vs-pretty-logging)
       - [Component Suppression](#component-suppression)
-    - [MongoDB Configuration](#mongodb-configuration)
-      - [Connection String Options](#connection-string-options)
+    - [Database Configuration](#database-configuration)
     - [Client Configuration](#client-configuration)
       - [Default Relays](#default-relays)
       - [Connection Management](#connection-management)
@@ -131,8 +130,8 @@ logging:
   backup_count: 2 # Number of backup files to keep
   suppress_components: # Component log suppression (INFO/DEBUG only)
     - "util" # Utility operations
-    - "mongo-query" # Database query operations
-    - "mongo-store" # Event storage operations
+    - "db-query" # Database query operations
+    - "db-store" # Event storage operations
     - "relay-client" # Relay client connections
     - "close-handler" # Subscription close operations
 ```
@@ -174,10 +173,9 @@ Available components for `suppress_components`:
 | `util`                | Utility functions             | ✅ Low importance           |
 | `log`                 | Logging system operations     | ✅ Meta-logging noise       |
 | **Database**          |                               |                             |
-| `mongo`               | MongoDB connection            | ❌ Keep for debugging       |
-| `mongo-query`         | Query operations              | ✅ Can be very verbose      |
-| `mongo-store`         | Storage operations            | ✅ High frequency           |
-| `mongo-purge`         | Event purging                 | ❌ Keep for maintenance     |
+| `db-query`            | nostrdb query operations      | ✅ Can be very verbose      |
+| `db-store`            | nostrdb storage operations    | ✅ High frequency           |
+| `db-purge`            | Event purging                 | ❌ Keep for maintenance     |
 | **Event Processing**  |                               |                             |
 | `event-handler`       | Event processing coordination | ❌ Keep for monitoring      |
 | `event-validation`    | Event signature validation    | ❌ Keep for security        |
@@ -201,34 +199,25 @@ Available components for `suppress_components`:
 | `client-cache`        | Client caching operations     | ✅ Can be verbose           |
 **Note**: Suppression only affects INFO and DEBUG log levels. WARN and ERROR messages are always shown regardless of suppression settings.
 
-### MongoDB Configuration
+### Database Configuration
 
-Database connection and settings.
-
-```yaml
-mongodb:
-  uri: "mongodb://localhost:27017/" # MongoDB connection string
-  database: "grain" # Database name
-```
-
-#### Connection String Options
+As of v0.5.0, GRAIN uses an embedded [nostrdb](https://github.com/damus-io/nostrdb) (LMDB-based) store — no external database service is required.
 
 ```yaml
-# Basic local connection
-uri: "mongodb://localhost:27017/"
-
-# Authenticated connection
-uri: "mongodb://username:password@localhost:27017/"
-
-# Replica set connection
-uri: "mongodb://host1:27017,host2:27017/grain?replicaSet=rs0"
-
-# MongoDB Atlas connection
-uri: "mongodb+srv://user:pass@cluster.mongodb.net/"
-
-# Connection with options
-uri: "mongodb://localhost:27017/?maxPoolSize=20&retryWrites=true"
+database:
+  path: "data"      # Directory for nostrdb data files, relative to the GRAIN data dir
+  map_size_mb: 4096 # Maximum database size in MB (LMDB memory map; 4GB default)
 ```
+
+The data directory is platform-native by default:
+
+- **Linux**: `~/.grain/`
+- **macOS**: `~/Library/Application Support/grain/`
+- **Windows**: `%APPDATA%\grain\`
+
+Override with the `--data-dir <path>` CLI flag or `GRAIN_DATA_DIR` environment variable.
+
+`map_size_mb` sets the LMDB map size ceiling — it is a reservation of address space, not a pre-allocation on disk. Raise it before the database fills up; the process must restart to pick up a new value. Migrating from a v0.4.x MongoDB deployment? Use the `--import` CLI flag to bulk-load legacy exports into nostrdb.
 
 ### Client Configuration
 
@@ -1034,20 +1023,20 @@ Configuration best practices for secure relay operation.
 
 Common configuration issues and solutions.
 
-### Database Connection Issues
+### Database Issues
 
-**Problem**: MongoDB connection failures
+**Problem**: nostrdb fails to open or writes are rejected with "map full"
 
 ```
-[ERROR] [mongo] Failed to connect to MongoDB: connection timeout
+[ERROR] [db-store] failed to open nostrdb: MDB_MAP_FULL
 ```
 
 **Solutions**:
 
-1. Verify MongoDB is running: `systemctl status mongod`
-2. Check connection string format in `config.yml`
-3. Test connectivity: `mongosh "mongodb://localhost:27017/grain"`
-4. Check firewall settings and network access
+1. Confirm the data directory exists and is writable by the GRAIN process (`--data-dir` or `GRAIN_DATA_DIR`)
+2. Check free disk space on the volume holding the data directory
+3. Raise `database.map_size_mb` in `config.yml` if the store is approaching the configured ceiling, then restart GRAIN
+4. If the database appears corrupt after a crash, back up the `data/` directory before attempting recovery
 
 ### Rate Limiting Too Strict
 
