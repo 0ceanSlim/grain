@@ -9,7 +9,7 @@ import (
 )
 
 // Tests run against grain-auth (port 8186), which is configured with
-// auth.required = false and auth.relay_url = "ws://localhost:8186".
+// auth.required = false and auth.relay_url = "ws://127.0.0.1:8186".
 // The relay proactively sends an AUTH challenge on connect; tests read
 // that challenge and use it to construct their AUTH events.
 
@@ -24,7 +24,7 @@ func TestAuth_ValidAuthAccepted(t *testing.T) {
 	}
 
 	tags := [][]string{
-		{"relay", "ws://localhost:8186"},
+		{"relay", "ws://127.0.0.1:8186"},
 		{"challenge", challenge},
 	}
 	evt := kp.SignEvent(22242, "", tags)
@@ -72,7 +72,7 @@ func TestAuth_WrongKind(t *testing.T) {
 
 	// Kind 1 is not 22242; AUTH must reject.
 	tags := [][]string{
-		{"relay", "ws://localhost:8186"},
+		{"relay", "ws://127.0.0.1:8186"},
 		{"challenge", challenge},
 	}
 	evt := kp.SignEvent(1, "", tags)
