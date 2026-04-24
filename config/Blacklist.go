@@ -322,16 +322,23 @@ func FetchGroupedMuteListPubkeys(authors []string) (map[string][]string, error) 
 		return result, nil
 	}
 
+	withPubkeys := 0
 	for _, author := range authors {
+		// Always record the author in the result, even when zero public
+		// pubkeys were extracted — the dashboard otherwise loses sight of
+		// configured authors whose mute lists are encrypted or unreachable.
+		// Callers that count contributed pubkeys should iterate the values,
+		// not the keys.
 		pubkeys := fetchAuthorMuteListPubkeys(client, author)
+		result[author] = pubkeys
 		if len(pubkeys) > 0 {
-			result[author] = pubkeys
+			withPubkeys++
 		}
 	}
 
 	log.Config().Debug("Grouped mutelist fetch complete",
 		"authors_configured", len(authors),
-		"authors_with_pubkeys", len(result))
+		"authors_with_pubkeys", withPubkeys)
 	return result, nil
 }
 
