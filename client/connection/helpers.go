@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -58,26 +57,6 @@ func GetCoreClientStatus() map[string]interface{} {
 		"connected_count":  len(connectedRelays),
 		"client_relays":    clientRelays,
 	}
-}
-
-// ReinitializeCoreClient reinitializes the core client (for recovery)
-func ReinitializeCoreClient() error {
-	log.ClientConnection().Warn("Reinitializing core client")
-
-	// Close existing client if any
-	if coreClient != nil {
-		coreClient.Close()
-	}
-
-	// Get current server configuration for reinitialization
-	serverCfg := config.GetConfig()
-	if serverCfg == nil {
-		// Fallback to last known config if current config unavailable
-		serverCfg = lastServerConfig
-	}
-
-	// Reinitialize with current configuration
-	return InitializeCoreClient(serverCfg)
 }
 
 // StartRelayHealthCheck starts a background goroutine to maintain relay connections

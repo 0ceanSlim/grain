@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/0ceanslim/grain/client/core/tools"
@@ -50,25 +49,18 @@ func GetAllBlacklistedPubkeys(w http.ResponseWriter, r *http.Request) {
 	// Get temporary blacklisted pubkeys with expiration times
 	temporary := config.GetTemporaryBlacklist()
 
-	// For mutelist structure, fetch grouped data (same as live for consistency)
-	var mutelist map[string][]string
+	// Fetch grouped mutelist data via the client library (same as live for
+	// consistency). The fetch path is author outbox relays, falling back to
+	// default client relays — see FetchGroupedMuteListPubkeys.
+	mutelist := make(map[string][]string)
 	if len(blacklistConfig.MuteListAuthors) > 0 {
-		cfg := config.GetConfig()
-		if cfg != nil {
-			localRelayURL := fmt.Sprintf("ws://localhost%s", cfg.Server.Port)
-
-			var err error
-			mutelist, err = config.FetchGroupedMuteListPubkeys(localRelayURL, blacklistConfig.MuteListAuthors)
-			if err != nil {
-				log.RelayAPI().Error("Failed to fetch grouped mutelist for cached endpoint",
-					"error", err)
-				mutelist = make(map[string][]string) // Empty map on error
-			}
+		grouped, err := config.FetchGroupedMuteListPubkeys(blacklistConfig.MuteListAuthors)
+		if err != nil {
+			log.RelayAPI().Error("Failed to fetch grouped mutelist for cached endpoint",
+				"error", err)
 		} else {
-			mutelist = make(map[string][]string)
+			mutelist = grouped
 		}
-	} else {
-		mutelist = make(map[string][]string)
 	}
 
 	// Prepare response

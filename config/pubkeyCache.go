@@ -298,21 +298,35 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 		npubCount++
 	}
 
-	// Always fetch mutelist pubkeys (regardless of enabled state)
+	// Always fetch mutelist pubkeys (regardless of enabled state). Fetch
+	// goes out via the client library to each author's NIP-65 outbox relays
+	// (falling back to configured default relays). Only public `p`-tag
+	// entries from kind:10000 and kind:30000 `d:"mute"` are applied —
+	// encrypted `.content` entries cannot be read by the relay.
 	mutelistCount := 0
 	if len(blacklistCfg.MuteListAuthors) > 0 {
-		serverCfg := GetConfig()
-		if serverCfg != nil {
-			localRelayURL := fmt.Sprintf("ws://localhost%s", serverCfg.Server.Port)
-			mutelistPubkeys, err := FetchPubkeysFromLocalMuteList(localRelayURL, blacklistCfg.MuteListAuthors)
-			if err != nil {
-				log.Config().Error("Failed to fetch mutelist pubkeys", "error", err)
-			} else {
-				for _, pubkey := range mutelistPubkeys {
-					newBlacklist[pubkey] = true
-					mutelistCount++
+		grouped, err := FetchGroupedMuteListPubkeys(blacklistCfg.MuteListAuthors)
+		if err != nil {
+			log.Config().Error("Failed to fetch mutelist pubkeys", "error", err)
+		} else {
+			for _, pubkeys := range grouped {
+				for _, pubkey := range pubkeys {
+					if !newBlacklist[pubkey] {
+						newBlacklist[pubkey] = true
+						mutelistCount++
+					}
 				}
 			}
+		}
+
+		if mutelistCount == 0 {
+			log.Config().Warn("mutelist_authors configured but zero pubkeys extracted — "+
+				"authors may have no reachable public mute list, or their mute lists "+
+				"are fully encrypted (private NIP-51 entries cannot be read by the relay; "+
+				"only public tag entries are applied)",
+				"author_count", len(blacklistCfg.MuteListAuthors))
+			log.Config().Debug("Configured mutelist authors with no extractable pubkeys",
+				"authors", blacklistCfg.MuteListAuthors)
 		}
 	}
 

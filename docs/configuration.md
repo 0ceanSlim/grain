@@ -61,6 +61,7 @@ Comprehensive documentation for configuring your GRAIN relay server.
     - [Permanent Blacklist](#permanent-blacklist)
     - [Mute List Integration](#mute-list-integration)
       - [Mute List Process](#mute-list-process)
+      - [Mute List Limitations](#mute-list-limitations)
       - [Mute List Benefits](#mute-list-benefits)
   - [Relay Metadata (`relay_metadata.json`)](#relay-metadata-relay_metadatajson)
   - [Configuration Validation](#configuration-validation)
@@ -812,7 +813,7 @@ permanent_blacklist_npubs: # Bech32 encoded keys
 
 ### Mute List Integration
 
-Import blacklists from Nostr mute list events (kind 10000).
+Import blacklists from Nostr [NIP-51](https://github.com/nostr-protocol/nips/blob/master/51.md) mute list events authored by trusted moderators.
 
 ```yaml
 mutelist_authors: # Pubkeys of mute list authors
@@ -822,10 +823,22 @@ mutelist_cache_refresh_minutes: 30 # Refresh frequency
 
 #### Mute List Process
 
-1. GRAIN queries local relay for kind 10000 events from specified authors
-2. Extracts `p` tags (muted pubkeys) from these events
-3. Adds extracted pubkeys to blacklist cache
-4. Refreshes periodically to stay current
+For each configured author:
+
+1. GRAIN looks up the author's NIP-65 relay list (kind:10002) via its configured default client relays.
+2. It connects to the author's outbox relays (write + both). If the author has no reachable NIP-65 list, GRAIN falls back to its own configured default client relays.
+3. It subscribes for two mute list kinds from that author:
+   - **kind:10000** — the standard replaceable Mute list.
+   - **kind:30000** with `d:"mute"` — the addressable Categorized people list under the "mute" category. Other `d` values (e.g. `"family"`) are ignored.
+4. For each `(kind, d-tag)`, only the latest event by `created_at` contributes (NIP-01 replaceable/addressable semantics).
+5. Public `p` tags from the winning events are merged into the blacklist pubkey cache.
+6. The cache refreshes every `mutelist_cache_refresh_minutes`.
+
+#### Mute List Limitations
+
+- **Public entries only.** Per NIP-51, mute list events carry public entries in the tag array and private entries in the NIP-44 (or NIP-04 fallback) encrypted `.content` field. GRAIN does not hold the author's private key, so it cannot decrypt `.content` — only public `p` tags are applied. Most Nostr clients mute privately by default, so `mutelist_authors` will often yield fewer pubkeys than the admin expects; a warning is logged at each refresh when the configured authors produce zero public entries.
+- **No kind-scoped muting.** Both consulted kinds contribute blanket pubkey blacklist entries. If you need to drop a specific kind entirely (e.g. reactions only), use `rate_limit.kind_limits` with a rate of 0 for that kind instead.
+- **NIP-51 kind:30007** (Kind mute sets — per-kind muting) is intentionally not consulted; the same effect is achievable via the kind-limit rate control above.
 
 #### Mute List Benefits
 

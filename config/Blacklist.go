@@ -1,20 +1,18 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/0ceanslim/grain/client/connection"
+	"github.com/0ceanslim/grain/client/core"
 	"github.com/0ceanslim/grain/client/core/tools"
 	cfgType "github.com/0ceanslim/grain/config/types"
+	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 
-	"golang.org/x/net/websocket"
 	"gopkg.in/yaml.v3"
 )
 
@@ -91,14 +89,12 @@ func isPubKeyTemporarilyBlacklisted(pubkey string) bool {
 
 	entry, exists := tempBannedPubkeys[pubkey]
 	if !exists {
-		// Pubkey not found in temporary blacklist
 		log.Config().Debug("Pubkey not in temporary blacklist", "pubkey", pubkey)
 		return false
 	}
 
 	now := time.Now()
 	if now.After(entry.unbanTime) {
-		// Temporary ban expired
 		log.Config().Info("Temporary ban expired",
 			"pubkey", pubkey,
 			"count", entry.count,
@@ -106,7 +102,6 @@ func isPubKeyTemporarilyBlacklisted(pubkey string) bool {
 		return false
 	}
 
-	// Pubkey currently blacklisted
 	log.Config().Warn("Pubkey currently temporarily blacklisted",
 		"pubkey", pubkey,
 		"count", entry.count,
@@ -137,7 +132,6 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig cfgType.BlacklistCon
 
 	entry, exists := tempBannedPubkeys[pubkey]
 	if !exists {
-		// Creating a new temp ban entry
 		log.Config().Info("Creating new temporary ban entry", "pubkey", pubkey)
 		entry = &tempBanEntry{
 			count:     0,
@@ -145,7 +139,6 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig cfgType.BlacklistCon
 		}
 		tempBannedPubkeys[pubkey] = entry
 	} else {
-		// Updating an existing temp ban entry
 		log.Config().Info("Updating existing temporary ban entry",
 			"pubkey", pubkey,
 			"current_count", entry.count)
@@ -157,11 +150,9 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig cfgType.BlacklistCon
 		}
 	}
 
-	// Increment the count
 	entry.count++
 	entry.unbanTime = time.Now().Add(time.Duration(blacklistConfig.TempBanDuration) * time.Second)
 
-	// Updating temp ban count
 	log.Config().Debug("Updated temporary ban",
 		"pubkey", pubkey,
 		"count", entry.count,
@@ -169,33 +160,29 @@ func AddToTemporaryBlacklist(pubkey string, blacklistConfig cfgType.BlacklistCon
 		"unban_time", entry.unbanTime.Format(time.RFC3339))
 
 	if entry.count > blacklistConfig.MaxTempBans {
-		// Attempting to move to permanent blacklist
 		log.Config().Warn("Max temporary bans exceeded, moving to permanent blacklist",
 			"pubkey", pubkey,
 			"count", entry.count)
 
 		delete(tempBannedPubkeys, pubkey)
 
-		// Release the lock before calling AddToPermanentBlacklist
 		mu.Unlock()
 		err := AddToPermanentBlacklist(pubkey)
-		mu.Lock() // Re-acquire the lock
+		mu.Lock()
 
 		if err != nil {
-			// Error adding to permanent blacklist
 			log.Config().Error("Failed to move pubkey to permanent blacklist",
 				"pubkey", pubkey,
 				"error", err)
 			return err
 		}
-		// Successfully added to permanent blacklist
 		log.Config().Info("Successfully moved pubkey to permanent blacklist", "pubkey", pubkey)
 
 		// Trigger an async pubkey-cache refresh so subsequent events from
 		// this pubkey are actually rejected by CheckBlacklistCached — the
-		// wordlist path (line ~57) does this; the escalation path was
-		// missing it, leaving the pubkey newly in the file/slice but not
-		// yet in the cache the validator actually reads.
+		// wordlist path does this; the escalation path was missing it,
+		// leaving the pubkey newly in the file/slice but not yet in the
+		// cache the validator actually reads.
 		go GetPubkeyCache().RefreshBlacklist()
 	}
 
@@ -213,15 +200,12 @@ func GetTemporaryBlacklist() []map[string]interface{} {
 	expired := 0
 
 	for pubkey, entry := range tempBannedPubkeys {
-		// Check if the temp ban is still active
 		if now.Before(entry.unbanTime) {
 			tempBans = append(tempBans, map[string]interface{}{
 				"pubkey":     pubkey,
-				"expires_at": entry.unbanTime.Unix(), // Convert expiration time to Unix timestamp
+				"expires_at": entry.unbanTime.Unix(),
 			})
 		} else {
-			// If the ban has expired, log.Config() and remove it
-			// Removing expired temp ban
 			log.Config().Info("Removing expired temp ban", "pubkey", pubkey)
 			delete(tempBannedPubkeys, pubkey)
 		}
@@ -239,14 +223,12 @@ func isPubKeyPermanentlyBlacklisted(pubKey string, blacklistConfig *cfgType.Blac
 		return false
 	}
 
-	// Check pubkeys.
 	for _, blacklistedKey := range blacklistConfig.PermanentBlacklistPubkeys {
 		if pubKey == blacklistedKey {
 			return true
 		}
 	}
 
-	// Check npubs.
 	for _, npub := range blacklistConfig.PermanentBlacklistNpubs {
 		decodedPubKey, err := tools.DecodeNpub(npub)
 		if err != nil {
@@ -267,18 +249,15 @@ func AddToPermanentBlacklist(pubkey string) error {
 		return fmt.Errorf("blacklist configuration is not loaded")
 	}
 
-	// Check if already blacklisted.
 	if isPubKeyPermanentlyBlacklisted(pubkey, blacklistConfig) {
 		log.Config().Debug("Pubkey already in permanent blacklist", "pubkey", pubkey)
 		return fmt.Errorf("pubkey %s is already in the permanent blacklist", pubkey)
 	}
 
-	// Add pubkey to the permanent blacklist.
 	blacklistConfig.PermanentBlacklistPubkeys = append(blacklistConfig.PermanentBlacklistPubkeys, pubkey)
 
 	log.Config().Info("Added pubkey to permanent blacklist", "pubkey", pubkey)
 
-	// Persist changes to blacklist.yml.
 	err := saveBlacklistConfig(*blacklistConfig)
 	if err != nil {
 		log.Config().Error("Failed to save blacklist configuration", "error", err)
@@ -303,283 +282,216 @@ func saveBlacklistConfig(blacklistConfig cfgType.BlacklistConfig) error {
 	return nil
 }
 
-// FetchPubkeysFromLocalMuteList sends a REQ to the local relay for mute list events.
-func FetchPubkeysFromLocalMuteList(localRelayURL string, muteListAuthors []string) ([]string, error) {
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	var allPubkeys []string
-	results := make(chan []string, 1)
+// muteListKinds are the NIP-51 list kinds consulted as blacklist sources:
+//   - 10000: standard Mute list (replaceable)
+//   - 30000: Categorized people list (addressable). By convention, `d:"mute"`
+//     identifies a mute list; other `d` values (e.g. "family") are ignored.
+var muteListKinds = []int{10000, 30000}
 
-	// Parse WebSocket URL
-	wsURL, err := url.Parse(localRelayURL)
-	if err != nil {
-		// Invalid WebSocket URL
-		log.Config().Error("Invalid WebSocket URL", "url", localRelayURL, "error", err)
-		return nil, err
-	}
+// muteListFetchTimeout bounds how long we wait per-author for mute list
+// events to arrive after sending the REQ.
+const muteListFetchTimeout = 8 * time.Second
 
-	// Construct WebSocket origin (required by `x/net/websocket`)
-	origin := "http://" + wsURL.Host
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		// Dial WebSocket connection
-		conn, err := websocket.Dial(localRelayURL, "", origin)
-		if err != nil {
-			// Failed to connect to the local relay
-			log.Config().Error("Failed to connect to local relay", "url", localRelayURL, "error", err)
-			return
-		}
-		defer conn.Close()
-
-		subscriptionID := "mutelist-fetch"
-
-		// Create the REQ message to fetch the mute list events by IDs.
-		req := []interface{}{"REQ", subscriptionID, map[string]interface{}{
-			"authors": muteListAuthors,
-			"kinds":   []int{10000}, // Mute list events kind.
-		}}
-
-		reqJSON, err := json.Marshal(req)
-		if err != nil {
-			// Failed to marshal WebSocket request
-			log.Config().Error("Failed to marshal request", "error", err)
-			return
-		}
-
-		log.Config().Debug("Fetching mutelist from local relay",
-			"url", localRelayURL,
-			"authors", len(muteListAuthors))
-
-		// Send the message
-		if _, err := conn.Write(reqJSON); err != nil {
-			// Failed to send request to the local relay
-			log.Config().Error("Failed to send request to local relay", "url", localRelayURL, "error", err)
-			return
-		}
-
-		// Listen for messages
-		for {
-			message := make([]byte, 4096)
-			n, err := conn.Read(message)
-			if err != nil {
-				if err == io.EOF {
-					// Connection closed by the server
-					log.Config().Debug("Connection closed by server")
-					break
-				}
-				// Error reading message from relay
-				log.Config().Error("Error reading from local relay", "url", localRelayURL, "error", err)
-
-				break
-			}
-
-			// Trim message to actual length
-			message = message[:n]
-			// Received raw WebSocket message
-			log.Config().Debug("Received WebSocket message", "size", n)
-
-			var response []interface{}
-			err = json.Unmarshal(message, &response)
-			if err != nil || len(response) < 2 {
-				// Invalid WebSocket message format
-				log.Config().Error("Invalid message format", "error", err)
-				continue
-			}
-
-			if len(response) > 0 {
-				eventType, ok := response[0].(string)
-				if !ok {
-					log.Config().Warn("Unexpected event type", "type", response[0])
-					continue
-				}
-
-				// Handle "EVENT"
-				if eventType == "EVENT" && len(response) >= 3 {
-					eventData, ok := response[2].(map[string]interface{})
-					if !ok {
-						log.Config().Warn("Unexpected event data format", "data", response[2])
-						continue
-					}
-
-					pubkeys := extractPubkeysFromMuteListEvent(eventData)
-					log.Config().Debug("Extracted pubkeys from mutelist event", "count", len(pubkeys))
-					results <- pubkeys
-				}
-
-				// Handle "EOSE"
-				if eventType == "EOSE" {
-					closeReq := []interface{}{"CLOSE", subscriptionID}
-					closeReqJSON, _ := json.Marshal(closeReq)
-					_, _ = conn.Write(closeReqJSON)
-					log.Config().Debug("Sent CLOSE request to end subscription")
-					break
-				}
-
-			}
-		}
-	}()
-
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	// Collect results
-	for pubkeys := range results {
-		mu.Lock()
-		allPubkeys = append(allPubkeys, pubkeys...)
-		mu.Unlock()
-	}
-
-	log.Config().Debug("Total pubkeys fetched from mutelist", "count", len(allPubkeys))
-	return allPubkeys, nil
-}
-
-// extractPubkeysFromMuteListEvent extracts pubkeys from a mute list event.
-func extractPubkeysFromMuteListEvent(eventData map[string]interface{}) []string {
-	var pubkeys []string
-
-	tags, ok := eventData["tags"].([]interface{})
-	if !ok {
-		log.Config().Warn("Tags field missing or invalid in mutelist event")
-		return pubkeys
-	}
-
-	for _, tag := range tags {
-		tagArray, ok := tag.([]interface{})
-		if ok && len(tagArray) > 1 && tagArray[0] == "p" {
-			pubkey, ok := tagArray[1].(string)
-			if ok {
-				pubkeys = append(pubkeys, pubkey)
-			}
-		}
-	}
-
-	// Extracted pubkeys from mute list event
-	log.Config().Debug("Extracted pubkeys from mute list event", "count", len(pubkeys))
-	return pubkeys
-}
-
-// FetchGroupedMuteListPubkeys fetches mutelist pubkeys grouped by author
-func FetchGroupedMuteListPubkeys(localRelayURL string, muteListAuthors []string) (map[string][]string, error) {
+// FetchGroupedMuteListPubkeys returns public `p`-tag pubkeys from each configured
+// author's NIP-51 mute list events, grouped by author pubkey.
+//
+// For each author, the fetch path is:
+//  1. Look up the author's NIP-65 mailbox list (kind:10002) via the client
+//     library's connected default relays.
+//  2. Target their outbox relays (write + both). If none are published or
+//     reachable, fall back to the relay's configured default client relays.
+//  3. Subscribe for kinds 10000 and 30000 from that author.
+//  4. Keep only the latest event per (kind, d-tag) — replaceable/addressable
+//     semantics — and for kind 30000 require `d:"mute"` (filtered here
+//     because the client library's Filter type does not currently serialize
+//     NIP-01 `#<tag>` tag filters in the REQ wire format).
+//  5. Extract public `p`-tag pubkeys from the winning events.
+//
+// Encrypted `.content` entries (NIP-44 primarily, NIP-04 fallback per NIP-51)
+// are not decrypted by the relay — only public tag entries are applied.
+func FetchGroupedMuteListPubkeys(authors []string) (map[string][]string, error) {
 	result := make(map[string][]string)
-
-	if len(muteListAuthors) == 0 {
+	if len(authors) == 0 {
 		return result, nil
 	}
 
-	// Parse WebSocket URL
-	wsURL, err := url.Parse(localRelayURL)
-	if err != nil {
-		log.Config().Error("Invalid WebSocket URL", "url", localRelayURL, "error", err)
-		return nil, err
+	client := connection.GetCoreClient()
+	if client == nil {
+		log.Config().Warn("Core client not initialized — mutelist fetch skipped",
+			"author_count", len(authors))
+		return result, nil
 	}
 
-	// Construct WebSocket origin
-	origin := "http://" + wsURL.Host
-
-	// Dial WebSocket connection
-	conn, err := websocket.Dial(localRelayURL, "", origin)
-	if err != nil {
-		log.Config().Error("Failed to connect to local relay", "url", localRelayURL, "error", err)
-		return nil, err
-	}
-	defer conn.Close()
-
-	subscriptionID := "grouped-mutelist-fetch"
-
-	// Create the REQ message to fetch the mute list events
-	req := []interface{}{"REQ", subscriptionID, map[string]interface{}{
-		"authors": muteListAuthors,
-		"kinds":   []int{10000}, // Mute list events kind
-	}}
-
-	reqJSON, err := json.Marshal(req)
-	if err != nil {
-		log.Config().Error("Failed to marshal request", "error", err)
-		return nil, err
-	}
-
-	log.Config().Debug("Fetching grouped mutelist from local relay",
-		"url", localRelayURL,
-		"authors", muteListAuthors)
-
-	// Send the message
-	if _, err := conn.Write(reqJSON); err != nil {
-		log.Config().Error("Failed to send request to local relay", "url", localRelayURL, "error", err)
-		return nil, err
-	}
-
-	// Listen for messages
-	for {
-		message := make([]byte, 4096)
-		n, err := conn.Read(message)
-		if err != nil {
-			if err == io.EOF {
-				log.Config().Debug("Connection closed by server")
-				break
-			}
-			log.Config().Error("Error reading from local relay", "url", localRelayURL, "error", err)
-			break
+	for _, author := range authors {
+		pubkeys := fetchAuthorMuteListPubkeys(client, author)
+		if len(pubkeys) > 0 {
+			result[author] = pubkeys
 		}
+	}
 
-		// Trim message to actual length
-		message = message[:n]
-		log.Config().Debug("Received WebSocket message", "size", n)
+	log.Config().Debug("Grouped mutelist fetch complete",
+		"authors_configured", len(authors),
+		"authors_with_pubkeys", len(result))
+	return result, nil
+}
 
-		var response []interface{}
-		err = json.Unmarshal(message, &response)
-		if err != nil || len(response) < 2 {
-			log.Config().Error("Invalid message format", "error", err)
+// fetchAuthorMuteListPubkeys runs the per-author outbox lookup + mute list
+// subscription described in FetchGroupedMuteListPubkeys.
+func fetchAuthorMuteListPubkeys(client *core.Client, author string) []string {
+	targets := resolveMuteListRelays(client, author)
+	if len(targets) == 0 {
+		log.Config().Warn("No relays available for mutelist author",
+			"author", author)
+		return nil
+	}
+
+	// Connect to any targets the pool doesn't already hold. Errors here just
+	// mean some targets were unreachable; Subscribe will skip those and use
+	// the rest.
+	_ = client.ConnectToRelays(targets)
+
+	filter := nostr.Filter{
+		Authors: []string{author},
+		Kinds:   muteListKinds,
+	}
+	sub, err := client.Subscribe([]nostr.Filter{filter}, targets)
+	if err != nil {
+		log.Config().Error("Failed to subscribe for mute list",
+			"author", author, "error", err)
+		return nil
+	}
+	defer sub.Close()
+
+	events := collectMuteListEvents(sub, targets, muteListFetchTimeout)
+	winners := latestMuteListEventsPerKindD(events)
+	return extractMuteListPubkeys(winners, author)
+}
+
+// resolveMuteListRelays returns the relay set to query for the given author's
+// mute list events: their NIP-65 outbox relays if available, otherwise the
+// relay's configured default client relays as a fallback.
+func resolveMuteListRelays(client *core.Client, author string) []string {
+	mailboxes, err := client.GetUserRelays(author)
+	if err == nil && mailboxes != nil {
+		var out []string
+		out = append(out, mailboxes.Write...)
+		out = append(out, mailboxes.Both...)
+		if len(out) > 0 {
+			log.Config().Debug("Using author outbox relays for mutelist fetch",
+				"author", author, "relay_count", len(out))
+			return out
+		}
+	}
+	if err != nil {
+		log.Config().Debug("NIP-65 lookup failed for mutelist author — falling back to default relays",
+			"author", author, "error", err)
+	}
+	defaults := connection.GetClientRelays()
+	log.Config().Debug("Falling back to default relays for mutelist fetch",
+		"author", author, "relay_count", len(defaults))
+	return defaults
+}
+
+// collectMuteListEvents drains the subscription's Events channel, returning
+// when every target relay has sent EOSE or the timeout fires.
+func collectMuteListEvents(sub *core.Subscription, relays []string, timeout time.Duration) []*nostr.Event {
+	var events []*nostr.Event
+	eose := make(map[string]bool)
+	deadline := time.After(timeout)
+	for {
+		select {
+		case ev, ok := <-sub.Events:
+			if !ok {
+				return events
+			}
+			if ev != nil {
+				events = append(events, ev)
+			}
+		case relayURL, ok := <-sub.EOSE:
+			if !ok {
+				return events
+			}
+			eose[relayURL] = true
+			if len(eose) >= len(relays) {
+				return events
+			}
+		case <-deadline:
+			log.Config().Debug("Mute list subscription timed out",
+				"events_received", len(events),
+				"eose_received", len(eose),
+				"relays", len(relays))
+			return events
+		}
+	}
+}
+
+// latestMuteListEventsPerKindD implements NIP-01 replaceable/addressable
+// semantics: for each (kind, d-tag) tuple, only the highest `created_at`
+// wins. kind:30000 events without `d:"mute"` are discarded here — only the
+// "mute" category counts as a blacklist source.
+func latestMuteListEventsPerKindD(events []*nostr.Event) []*nostr.Event {
+	type key struct {
+		kind int
+		d    string
+	}
+	latest := make(map[key]*nostr.Event)
+	for _, ev := range events {
+		if ev == nil {
 			continue
 		}
-
-		if len(response) > 0 {
-			eventType, ok := response[0].(string)
-			if !ok {
-				log.Config().Warn("Unexpected event type", "type", response[0])
-				continue
-			}
-
-			// Handle "EVENT"
-			if eventType == "EVENT" && len(response) >= 3 {
-				eventData, ok := response[2].(map[string]interface{})
-				if !ok {
-					log.Config().Warn("Unexpected event data format", "data", response[2])
-					continue
-				}
-
-				// Get the author pubkey from this event
-				authorPubkey, ok := eventData["pubkey"].(string)
-				if !ok {
-					log.Config().Warn("No pubkey found in event data")
-					continue
-				}
-
-				// Extract pubkeys from this specific author's mute list
-				pubkeys := extractPubkeysFromMuteListEvent(eventData)
-				if len(pubkeys) > 0 {
-					result[authorPubkey] = pubkeys
-					log.Config().Debug("Extracted pubkeys from mutelist event",
-						"author", authorPubkey,
-						"count", len(pubkeys))
-				}
-			}
-
-			// Handle "EOSE"
-			if eventType == "EOSE" {
-				closeReq := []interface{}{"CLOSE", subscriptionID}
-				closeReqJSON, _ := json.Marshal(closeReq)
-				_, _ = conn.Write(closeReqJSON)
-				log.Config().Debug("Sent CLOSE request to end subscription")
-				break
-			}
+		d := firstTagValue(ev.Tags, "d")
+		if ev.Kind == 30000 && d != "mute" {
+			continue
+		}
+		k := key{kind: ev.Kind, d: d}
+		if cur, ok := latest[k]; !ok || ev.CreatedAt > cur.CreatedAt {
+			latest[k] = ev
 		}
 	}
+	out := make([]*nostr.Event, 0, len(latest))
+	for _, ev := range latest {
+		out = append(out, ev)
+	}
+	return out
+}
 
-	log.Config().Debug("Total authors with mutelists", "count", len(result))
-	return result, nil
+// extractMuteListPubkeys returns deduplicated public `p`-tag pubkeys from the
+// winning mute list events. Entries encrypted inside `.content` are not
+// decrypted; a debug log flags their presence so operators can see that some
+// mutes exist but are unreachable.
+func extractMuteListPubkeys(events []*nostr.Event, author string) []string {
+	seen := make(map[string]bool)
+	var pubkeys []string
+	for _, ev := range events {
+		if ev == nil {
+			continue
+		}
+		if ev.Content != "" {
+			log.Config().Debug("Mute list event has encrypted content the relay cannot decrypt",
+				"author", author, "kind", ev.Kind, "event_id", ev.ID)
+		}
+		for _, tag := range ev.Tags {
+			if len(tag) < 2 || tag[0] != "p" {
+				continue
+			}
+			pk := tag[1]
+			if pk == "" || seen[pk] {
+				continue
+			}
+			seen[pk] = true
+			pubkeys = append(pubkeys, pk)
+		}
+	}
+	return pubkeys
+}
+
+// firstTagValue returns the value of the first tag with the given name, or
+// "" if none. Only tag[1] is inspected (the NIP-01 value slot).
+func firstTagValue(tags [][]string, name string) string {
+	for _, tag := range tags {
+		if len(tag) >= 2 && tag[0] == name {
+			return tag[1]
+		}
+	}
+	return ""
 }
