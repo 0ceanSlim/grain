@@ -35,11 +35,15 @@ database:
 
 # Client configuration for the built-in Nostr client
 client:
-  # Default relays for the web client (matches installation docs)
-  default_relays:
-    - "wss://relay.damus.io"
-    - "wss://nos.lol"
-    - "wss://relay.nostr.band"
+  # Index relays — seed/discovery set the client library connects to first.
+  # Queried to resolve a user's NIP-65 mailbox list and profile metadata
+  # when no per-user relay set is known.
+  index_relays:
+    - "wss://profiles.nostr1.com"
+    - "wss://directory.yabu.me"
+    - "wss://user.kindpag.es"
+    - "wss://indexer.coracle.social"
+    - "wss://purplepag.es"
 
   # Connection settings (in seconds)
   connection_timeout: 10 # Time to wait for relay connection

@@ -9,8 +9,11 @@ import (
 // Global core client instance
 var coreClient *core.Client
 
-// Application relays for initial discovery
-var clientRelays []string
+// Index relays — seed/discovery set used to resolve NIP-65 mailbox lists
+// and profile metadata for arbitrary users. Per-user relay sets (a user's
+// own outbox/inbox/DM relays) live in the per-session cache, separate from
+// this app-level set.
+var indexRelays []string
 
 // Store reference to server config for reinitialization
 var lastServerConfig *cfgType.ServerConfig
@@ -32,23 +35,23 @@ func InitializeCoreClient(serverCfg *cfgType.ServerConfig) error {
 	coreClient = core.NewClient(config)
 
 	// Store relays for later use
-	clientRelays = config.DefaultRelays
+	indexRelays = config.IndexRelays
 
-	// Connect to default relays asynchronously. Relay startup must never
-	// block on outbound network — when defaults are unreachable, the
+	// Connect to index relays asynchronously. Relay startup must never
+	// block on outbound network — when index relays are unreachable, the
 	// retry loop can take 30+ seconds and leave the HTTP server unable
 	// to accept connections. Subsystems that need a connection (mutelist
 	// fetch, dashboard profile fetch) tolerate the empty pool: they fall
 	// back gracefully or simply return empty results until connections
 	// establish in the background.
 	go func() {
-		if err := coreClient.ConnectToRelaysWithRetry(config.DefaultRelays, config.RetryAttempts); err != nil {
-			log.ClientConnection().Warn("Failed to connect to relays during initialization - relay will operate in offline mode",
+		if err := coreClient.ConnectToRelaysWithRetry(config.IndexRelays, config.RetryAttempts); err != nil {
+			log.ClientConnection().Warn("Failed to connect to index relays during initialization - relay will operate in offline mode",
 				"error", err,
-				"relay_count", len(config.DefaultRelays))
+				"relay_count", len(config.IndexRelays))
 		} else {
-			log.ClientConnection().Info("Core client connected to default relays",
-				"relay_count", len(config.DefaultRelays))
+			log.ClientConnection().Info("Core client connected to index relays",
+				"relay_count", len(config.IndexRelays))
 		}
 	}()
 
@@ -73,15 +76,15 @@ func CloseCoreClient() error {
 	return nil
 }
 
-// SetClientRelays sets the application relays for initial discovery
-func SetClientRelays(relays []string) {
-	clientRelays = relays
-	log.ClientConnection().Debug("App relays set", "relay_count", len(relays))
+// SetIndexRelays sets the index/seed relays used for discovery
+func SetIndexRelays(relays []string) {
+	indexRelays = relays
+	log.ClientConnection().Debug("Index relays set", "relay_count", len(relays))
 }
 
-// GetClientRelays returns the configured application relays
-func GetClientRelays() []string {
-	return clientRelays
+// GetIndexRelays returns the configured index/seed relays
+func GetIndexRelays() []string {
+	return indexRelays
 }
 
 // IsCoreClientInitialized checks if the core client is properly initialized

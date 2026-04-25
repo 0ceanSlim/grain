@@ -297,7 +297,7 @@ const muteListFetchTimeout = 8 * time.Second
 //
 // For each author, the fetch path is:
 //  1. Look up the author's NIP-65 mailbox list (kind:10002) via the client
-//     library's connected default relays.
+//     library's connected index relays.
 //  2. Target their outbox relays (write + both). If none are published or
 //     reachable, fall back to the relay's configured default client relays.
 //  3. Subscribe for kinds 10000 and 30000 from that author.
@@ -408,12 +408,12 @@ func resolveMuteListRelays(client *core.Client, author string) []string {
 	}
 	outboxCount := len(out)
 
-	add(connection.GetClientRelays())
+	add(connection.GetIndexRelays())
 
 	log.Config().Debug("Resolved mutelist relays",
 		"author", author,
 		"outbox_relays", outboxCount,
-		"default_relays_added", len(out)-outboxCount,
+		"index_relays_added", len(out)-outboxCount,
 		"total", len(out))
 	return out
 }

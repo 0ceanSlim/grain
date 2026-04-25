@@ -113,8 +113,8 @@ func BroadcastToUserRelays(event *nostr.Event, pubkey string, client *Client) []
 	// Get user's relay list
 	mailboxes, err := client.GetUserRelays(pubkey)
 	if err != nil {
-		log.ClientCore().Warn("Failed to get user relays, using default relays", "pubkey", pubkey, "error", err)
-		return BroadcastEvent(event, client.config.DefaultRelays, client.relayPool)
+		log.ClientCore().Warn("Failed to get user relays, using index relays", "pubkey", pubkey, "error", err)
+		return BroadcastEvent(event, client.config.IndexRelays, client.relayPool)
 	}
 
 	// Use write relays for broadcasting
@@ -125,9 +125,9 @@ func BroadcastToUserRelays(event *nostr.Event, pubkey string, client *Client) []
 	}
 
 	if len(relays) == 0 {
-		// Fall back to default relays if user has no relay preferences
-		log.ClientCore().Warn("User has no relay preferences, using default relays", "pubkey", pubkey)
-		relays = client.config.DefaultRelays
+		// Fall back to index relays if user has no relay preferences
+		log.ClientCore().Warn("User has no relay preferences, using index relays", "pubkey", pubkey)
+		relays = client.config.IndexRelays
 	}
 
 	log.ClientCore().Info("Broadcasting to user relays", "pubkey", pubkey, "relay_count", len(relays))
@@ -239,9 +239,9 @@ func PublishEvent(client *Client, signer *EventSigner, eventBuilder *EventBuilde
 			}
 		}
 
-		// Final fallback to default relays
+		// Final fallback to index relays
 		if len(relays) == 0 {
-			relays = client.config.DefaultRelays
+			relays = client.config.IndexRelays
 		}
 	}
 
@@ -291,9 +291,9 @@ func PublishEventWithRetry(client *Client, signer *EventSigner, eventBuilder *Ev
 			}
 		}
 
-		// Final fallback to default relays
+		// Final fallback to index relays
 		if len(relays) == 0 {
-			relays = client.config.DefaultRelays
+			relays = client.config.IndexRelays
 		}
 	}
 

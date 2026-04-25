@@ -7,7 +7,7 @@ logging:
   backup_count: 2
 
 client:
-  default_relays:
+  index_relays:
     - "wss://relay.damus.io"
 
 database:

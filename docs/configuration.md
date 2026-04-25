@@ -226,10 +226,12 @@ Built-in Nostr client settings for the web interface and relay connections.
 
 ```yaml
 client:
-  default_relays:
-    - "wss://relay.damus.io"
-    - "wss://nos.lol"
-    - "wss://relay.nostr.band"
+  index_relays:
+    - "wss://profiles.nostr1.com"
+    - "wss://directory.yabu.me"
+    - "wss://user.kindpag.es"
+    - "wss://indexer.coracle.social"
+    - "wss://purplepag.es"
   connection_timeout: 10
   read_timeout: 30
   write_timeout: 10
@@ -240,14 +242,14 @@ client:
   user_agent: "grain-client/1.0"
 ```
 
-#### Default Relays
+#### Index Relays
 
-**Default Relays (`default_relays`)**
+**Index Relays (`index_relays`)**
 
-- Purpose: Initial relay connections for the web client
-- Default: Damus, nos.lol, and Nostr Band relays
-- Behavior: Web clients connect to these relays automatically
-- Tuning: Use relays with good uptime and low latency for your users
+- Purpose: Seed/discovery relays the client library connects to first. Used to resolve a user's NIP-65 mailbox list and profile metadata when no per-user relay set is known. As outbox-model routing lands ([#56](https://github.com/0ceanSlim/grain/issues/56)), these become the bootstrap layer per-user mailbox/inbox sets are resolved through, rather than the relay set used for every operation.
+- Default: A curated set of indexer relays (`profiles.nostr1.com`, `directory.yabu.me`, `user.kindpag.es`, `indexer.coracle.social`, `purplepag.es`) chosen for the indexer-relay role: hosting metadata and relay lists for the broad Nostr population.
+- Behavior: The client library connects on startup (asynchronously — startup never blocks on outbound network) and queries them when discovering an unknown user's mailboxes.
+- Tuning: Add/remove based on which indexers cover the users your relay interacts with. Only relays that aggregate cross-user metadata (kind:0, kind:10002) belong here — for general-purpose relays, use a different mechanism.
 
 #### Connection Management
 
@@ -320,9 +322,9 @@ The client configuration supports **offline and localhost operation**:
 
 ```yaml
 client:
-  default_relays:
+  index_relays:
     - "ws://localhost:8181" # Connect to your own GRAIN relay
-    - "wss://relay.damus.io" # Fallback external relay
+    - "wss://purplepag.es" # Fallback indexer relay
 ```
 
 - **Self-Contained**: Events published to the web client are stored locally and accessible immediately

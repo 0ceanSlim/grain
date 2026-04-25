@@ -179,7 +179,7 @@ func (c *Client) GetRelayStatus() map[string]string {
 	}
 
 	// Add configured relays that aren't connected
-	for _, relay := range c.config.DefaultRelays {
+	for _, relay := range c.config.IndexRelays {
 		if _, exists := status[relay]; !exists {
 			status[relay] = "disconnected"
 		}
@@ -524,16 +524,16 @@ func (c *Client) ReplaceRelayConnections(newRelays []RelayConfig) error {
 	// Connect to new relays (this needs to happen without the lock)
 	if err := c.ConnectToRelaysWithRetry(relayURLs, 2); err != nil {
 		log.ClientCore().Error("Failed to connect to new relay set", "error", err)
-		// Try to recover by connecting to default relays
+		// Try to recover by connecting to index relays
 		c.mu.Lock()
 		c.relayPool = NewRelayPool(c.config)
 		c.mu.Unlock()
 
-		// Try default relays as fallback
-		if len(c.config.DefaultRelays) > 0 {
-			log.ClientCore().Info("Attempting to reconnect to default relays as fallback")
-			if fallbackErr := c.ConnectToRelaysWithRetry(c.config.DefaultRelays, 1); fallbackErr != nil {
-				log.ClientCore().Error("Failed to connect to default relays as fallback", "error", fallbackErr)
+		// Try index relays as fallback
+		if len(c.config.IndexRelays) > 0 {
+			log.ClientCore().Info("Attempting to reconnect to index relays as fallback")
+			if fallbackErr := c.ConnectToRelaysWithRetry(c.config.IndexRelays, 1); fallbackErr != nil {
+				log.ClientCore().Error("Failed to connect to index relays as fallback", "error", fallbackErr)
 			}
 		}
 
@@ -576,20 +576,22 @@ func (c *Client) SwitchToUserRelays(userRelays []RelayConfig) error {
 	return c.ReplaceRelayConnections(userRelays)
 }
 
-// SwitchToDefaultRelays switches the client back to default app relays
-func (c *Client) SwitchToDefaultRelays() error {
-	log.ClientCore().Info("Switching to default app relays")
+// SwitchToIndexRelays switches the client back to the configured index
+// (seed/discovery) relays — used when a session ends or when no per-user
+// mailbox set is known.
+func (c *Client) SwitchToIndexRelays() error {
+	log.ClientCore().Info("Switching to index relays")
 
-	// Convert default relays to RelayConfig format (both read and write)
-	var defaultRelayConfigs []RelayConfig
-	for _, url := range c.config.DefaultRelays {
-		defaultRelayConfigs = append(defaultRelayConfigs, RelayConfig{
+	// Convert index relays to RelayConfig format (both read and write)
+	var indexRelayConfigs []RelayConfig
+	for _, url := range c.config.IndexRelays {
+		indexRelayConfigs = append(indexRelayConfigs, RelayConfig{
 			URL:   url,
 			Read:  true,
 			Write: true,
 		})
 	}
 
-	// Replace connections with default relays
-	return c.ReplaceRelayConnections(defaultRelayConfigs)
+	// Replace connections with index relays
+	return c.ReplaceRelayConnections(indexRelayConfigs)
 }

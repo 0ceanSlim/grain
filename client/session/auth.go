@@ -73,7 +73,7 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSess
 	if coreClient != nil {
 		session.ConnectedRelays = coreClient.GetConnectedRelays()
 	} else {
-		session.ConnectedRelays = connection.GetClientRelays() // fallback
+		session.ConnectedRelays = connection.GetIndexRelays() // fallback
 	}
 
 	log.ClientSession().Info("User session created successfully",
@@ -170,11 +170,11 @@ func switchCoreClientToUserRelays(publicKey string) error {
 		"connected_count", connectedCount)
 
 	if connectedCount == 0 {
-		log.ClientSession().Error("No relays connected after switch, attempting fallback to defaults",
+		log.ClientSession().Error("No relays connected after switch, attempting fallback to index relays",
 			"pubkey", publicKey)
-		// Try to restore default relays
-		if err := connection.SwitchToDefaultRelays(); err != nil {
-			log.ClientSession().Error("Failed to restore default relays", "error", err)
+		// Try to restore index relays
+		if err := connection.SwitchToIndexRelays(); err != nil {
+			log.ClientSession().Error("Failed to restore index relays", "error", err)
 		}
 		return fmt.Errorf("failed to connect to any user relays")
 	}

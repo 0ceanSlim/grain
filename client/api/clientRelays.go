@@ -170,7 +170,7 @@ func getUserRelayStatus(publicKey string, r *http.Request) ([]RelayStatus, error
 // getDefaultRelayStatus gets relay status for default app relays (unauthenticated)
 func getDefaultRelayStatus(r *http.Request) []RelayStatus {
 	// Get default client relays
-	clientRelays := connection.GetClientRelays()
+	clientRelays := connection.GetIndexRelays()
 
 	if len(clientRelays) == 0 {
 		log.ClientAPI().Warn("No default client relays configured")

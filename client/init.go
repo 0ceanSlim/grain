@@ -24,17 +24,21 @@ func InitializeClient(serverCfg *cfgType.ServerConfig) error {
 		return err
 	}
 
-	// Set client relays for discovery (from config or defaults)
-	if serverCfg != nil && len(serverCfg.Client.DefaultRelays) > 0 {
-		connection.SetClientRelays(serverCfg.Client.DefaultRelays)
+	// Set index relays for discovery (from config or built-in indexer seed list).
+	// The fallback set mirrors the indexer-relay role from #56: relays that
+	// host metadata and relay lists for everyone, used to resolve NIP-65 /
+	// DM-relay lists for arbitrary users.
+	if serverCfg != nil && len(serverCfg.Client.IndexRelays) > 0 {
+		connection.SetIndexRelays(serverCfg.Client.IndexRelays)
 	} else {
-		// Fallback to hardcoded defaults if no config
-		defaultRelays := []string{
-			"wss://relay.damus.io",
-			"wss://nos.lol",
-			"wss://relay.nostr.band",
+		indexRelays := []string{
+			"wss://profiles.nostr1.com",
+			"wss://directory.yabu.me",
+			"wss://user.kindpag.es",
+			"wss://indexer.coracle.social",
+			"wss://purplepag.es",
 		}
-		connection.SetClientRelays(defaultRelays)
+		connection.SetIndexRelays(indexRelays)
 	}
 
 	// Start background session cleanup

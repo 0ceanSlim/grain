@@ -108,7 +108,7 @@ func main() {
 
 ```go
 config := &core.Config{
-    DefaultRelays: []string{
+    IndexRelays: []string{
         "wss://your-relay.com",
         "wss://another-relay.com",
     },
@@ -400,8 +400,8 @@ results, err := client.PublishEventWithRetry(event, relays, 3)
 // Switch to user's discovered relays
 err := client.ReplaceRelayConnections(userRelayConfigs)
 
-// Switch back to default app relays
-err := client.SwitchToDefaultRelays()
+// Switch back to index relays
+err := client.SwitchToIndexRelays()
 ```
 
 ### Event Builders for Different Kinds
@@ -457,7 +457,7 @@ profile := core.NewProfile()
 #### Relay Management
 - `ReplaceRelayConnections(newRelays []RelayConfig) error` - Replace all relay connections  
 - `SwitchToUserRelays(userRelays []RelayConfig) error` - Switch to user's relays
-- `SwitchToDefaultRelays() error` - Switch back to default relays
+- `SwitchToIndexRelays() error` - Switch back to index relays
 
 ### Subscription Methods
 
@@ -520,7 +520,7 @@ func main() {
     
     // 2. Create and configure client
     config := core.DefaultConfig()
-    config.DefaultRelays = []string{
+    config.IndexRelays = []string{
         "wss://relay.damus.io",
         "wss://nos.lol",
         "wss://relay.nostr.band",
@@ -530,7 +530,7 @@ func main() {
     defer client.Close()
     
     // 3. Connect to relays
-    if err := client.ConnectToRelaysWithRetry(config.DefaultRelays, 3); err != nil {
+    if err := client.ConnectToRelaysWithRetry(config.IndexRelays, 3); err != nil {
         log.Printf("Some relays failed to connect: %v", err)
     }
     

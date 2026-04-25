@@ -72,12 +72,14 @@ func SwitchToUserRelays(publicKey string) error {
 	return coreClient.SwitchToUserRelays(userRelayConfigs)
 }
 
-// SwitchToDefaultRelays switches the core client back to default relays
-func SwitchToDefaultRelays() error {
+// SwitchToIndexRelays switches the core client back to the configured
+// index/seed relays — used when a session ends and per-user mailbox
+// connections should be released.
+func SwitchToIndexRelays() error {
 	coreClient := GetCoreClient()
 	if coreClient == nil {
 		return fmt.Errorf("core client not available")
 	}
 
-	return coreClient.SwitchToDefaultRelays()
+	return coreClient.SwitchToIndexRelays()
 }

@@ -10,7 +10,7 @@ import (
 
 // Config holds client-specific configuration
 type Config struct {
-	DefaultRelays     []string      `json:"default_relays"`
+	IndexRelays       []string      `json:"index_relays"`
 	ConnectionTimeout time.Duration `json:"connection_timeout"`
 	ReadTimeout       time.Duration `json:"read_timeout"`
 	WriteTimeout      time.Duration `json:"write_timeout"`
@@ -21,13 +21,18 @@ type Config struct {
 	UserAgent         string        `json:"user_agent"`
 }
 
-// DefaultConfig returns a sensible default configuration
+// DefaultConfig returns a sensible default configuration. The IndexRelays
+// seed list mirrors the indexer-relay role described in #56: relays that
+// host metadata and relay lists for everyone, used to resolve NIP-65 /
+// DM-relay lists for arbitrary users.
 func DefaultConfig() *Config {
 	return &Config{
-		DefaultRelays: []string{
-			"wss://relay.damus.io",
-			"wss://nos.lol",
-			"wss://relay.nostr.band",
+		IndexRelays: []string{
+			"wss://profiles.nostr1.com",
+			"wss://directory.yabu.me",
+			"wss://user.kindpag.es",
+			"wss://indexer.coracle.social",
+			"wss://purplepag.es",
 		},
 		ConnectionTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -46,8 +51,8 @@ func ConfigFromServerConfig(serverCfg *cfgType.ServerConfig) *Config {
 	config := DefaultConfig()
 
 	// Override with values from YAML if provided
-	if serverCfg != nil && len(serverCfg.Client.DefaultRelays) > 0 {
-		config.DefaultRelays = serverCfg.Client.DefaultRelays
+	if serverCfg != nil && len(serverCfg.Client.IndexRelays) > 0 {
+		config.IndexRelays = serverCfg.Client.IndexRelays
 	}
 
 	if serverCfg != nil && serverCfg.Client.ConnectionTimeout > 0 {
@@ -111,12 +116,12 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("retry delay cannot be negative")
 	}
 
-	if len(c.DefaultRelays) == 0 {
-		return fmt.Errorf("at least one default relay must be specified")
+	if len(c.IndexRelays) == 0 {
+		return fmt.Errorf("at least one index relay must be specified")
 	}
 
 	// Validate relay URLs (basic check)
-	for _, relay := range c.DefaultRelays {
+	for _, relay := range c.IndexRelays {
 		if len(relay) == 0 {
 			return fmt.Errorf("empty relay URL found")
 		}

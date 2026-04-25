@@ -25,7 +25,7 @@ func FetchAndCacheUserDataWithCoreClient(publicKey string) error {
 	}
 
 	// Get default client relays as fallback
-	defaultRelays := connection.GetClientRelays()
+	defaultRelays := connection.GetIndexRelays()
 	connectedRelays := coreClient.GetConnectedRelays()
 
 	// Use connected relays if available, otherwise fall back to default
