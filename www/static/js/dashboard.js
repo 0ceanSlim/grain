@@ -21,46 +21,159 @@ const dashboardManager = {
     userProfile: "/api/v1/user/profile",
   },
 
-  // Profile cache to avoid redundant API calls
+  // Layered profile cache:
+  //   - in-memory Map for the current page session (zero cost)
+  //   - localStorage backing with per-entry TTL so reloads don't refetch
+  //
+  // Hits cache for 24h. Misses cache for 10 min so we retry on the next
+  // page load instead of permanently displaying an empty profile when the
+  // user's outbox relays were briefly unreachable.
   profileCache: new Map(),
+  _profileInflight: new Map(),
 
-  // Fetch user profile with caching
+  PROFILE_CACHE_VERSION: 1,
+  PROFILE_HIT_TTL_MS: 24 * 60 * 60 * 1000,
+  PROFILE_MISS_TTL_MS: 10 * 60 * 1000,
+  PROFILE_CACHE_PREFIX: "grain.profile.",
+  PROFILE_CACHE_MAX_ENTRIES: 500,
+
+  _readProfileFromStorage(pubkey) {
+    try {
+      const raw = localStorage.getItem(this.PROFILE_CACHE_PREFIX + pubkey);
+      if (!raw) return null;
+      const entry = JSON.parse(raw);
+      if (entry.v !== this.PROFILE_CACHE_VERSION) return null;
+      const ttl = entry.miss ? this.PROFILE_MISS_TTL_MS : this.PROFILE_HIT_TTL_MS;
+      if (Date.now() - entry.t > ttl) return null;
+      return entry;
+    } catch (_) {
+      return null;
+    }
+  },
+
+  _writeProfileToStorage(pubkey, profile, miss) {
+    try {
+      const entry = {
+        v: this.PROFILE_CACHE_VERSION,
+        t: Date.now(),
+        miss: !!miss,
+        p: profile,
+      };
+      localStorage.setItem(
+        this.PROFILE_CACHE_PREFIX + pubkey,
+        JSON.stringify(entry)
+      );
+      this._evictProfileCacheIfFull();
+    } catch (_) {
+      // Quota exceeded or storage unavailable — drop a few oldest entries
+      // and try one more time. Failure here is non-fatal; the in-memory
+      // cache still works for this session.
+      this._evictProfileCacheIfFull(true);
+    }
+  },
+
+  _evictProfileCacheIfFull(force = false) {
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(this.PROFILE_CACHE_PREFIX)) keys.push(key);
+      }
+      if (!force && keys.length <= this.PROFILE_CACHE_MAX_ENTRIES) return;
+      const entries = keys
+        .map((k) => {
+          try {
+            const e = JSON.parse(localStorage.getItem(k));
+            return { k, t: e?.t ?? 0 };
+          } catch (_) {
+            return { k, t: 0 };
+          }
+        })
+        .sort((a, b) => a.t - b.t);
+      const dropCount = force
+        ? Math.max(50, Math.ceil(entries.length * 0.1))
+        : entries.length - this.PROFILE_CACHE_MAX_ENTRIES;
+      for (let i = 0; i < dropCount && i < entries.length; i++) {
+        localStorage.removeItem(entries[i].k);
+      }
+    } catch (_) {}
+  },
+
+  // Fetch user profile with caching. Concurrent calls for the same pubkey
+  // share a single in-flight fetch so a row of duplicate keys doesn't
+  // produce duplicate HTTP requests.
   async fetchUserProfile(pubkey) {
-    // Check cache first
     if (this.profileCache.has(pubkey)) {
       return this.profileCache.get(pubkey);
     }
 
-    try {
-      const response = await fetch(
-        `${this.endpoints.userProfile}?pubkey=${pubkey}`
-      );
-      if (!response.ok) {
-        throw new Error(`Profile fetch failed: ${response.status}`);
+    const stored = this._readProfileFromStorage(pubkey);
+    if (stored) {
+      this.profileCache.set(pubkey, stored.p);
+      return stored.p;
+    }
+
+    if (this._profileInflight.has(pubkey)) {
+      return this._profileInflight.get(pubkey);
+    }
+
+    const promise = (async () => {
+      try {
+        const response = await fetch(
+          `${this.endpoints.userProfile}?pubkey=${pubkey}`
+        );
+        if (!response.ok) {
+          throw new Error(`Profile fetch failed: ${response.status}`);
+        }
+
+        const profileData = await response.json();
+
+        let profile = {};
+        if (profileData.content) {
+          try {
+            profile = JSON.parse(profileData.content);
+          } catch (e) {
+            console.warn(`Failed to parse profile content for ${pubkey}:`, e);
+            profile = { about: profileData.content };
+          }
+        }
+
+        this.profileCache.set(pubkey, profile);
+        this._writeProfileToStorage(pubkey, profile, false);
+        return profile;
+      } catch (error) {
+        console.warn(`Failed to fetch profile for ${pubkey}:`, error);
+        // Short-TTL miss — retry on next page load.
+        this.profileCache.set(pubkey, {});
+        this._writeProfileToStorage(pubkey, {}, true);
+        return {};
+      } finally {
+        this._profileInflight.delete(pubkey);
       }
+    })();
 
-      const profileData = await response.json();
+    this._profileInflight.set(pubkey, promise);
+    return promise;
+  },
 
-      // Parse content if it's a JSON string
-      let profile = {};
-      if (profileData.content) {
+  // Run an async fn over `items` with bounded concurrency. Errors from the
+  // worker are logged but do not stop the queue — we want one bad fetch
+  // not to block the rest of the dashboard from rendering.
+  async parallelMap(items, concurrency, fn) {
+    if (!items || items.length === 0) return;
+    const queue = items.slice();
+    const workerCount = Math.min(concurrency, queue.length);
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (queue.length) {
+        const item = queue.shift();
         try {
-          profile = JSON.parse(profileData.content);
+          await fn(item);
         } catch (e) {
-          console.warn(`Failed to parse profile content for ${pubkey}:`, e);
-          profile = { about: profileData.content };
+          console.warn("parallelMap worker error:", e);
         }
       }
-
-      // Cache the parsed profile
-      this.profileCache.set(pubkey, profile);
-      return profile;
-    } catch (error) {
-      console.warn(`Failed to fetch profile for ${pubkey}:`, error);
-      // Cache empty profile to avoid repeated failed requests
-      this.profileCache.set(pubkey, {});
-      return {};
-    }
+    });
+    await Promise.all(workers);
   },
 
   // Create profile card HTML for horizontal layout with source info
@@ -90,7 +203,34 @@ const dashboardManager = {
   `;
   },
 
-  // Progressive loading for horizontal key lists with source tracking
+  // Per-card placeholder rendered while a profile is being fetched. The
+  // outer wrapper stays in place after the profile resolves — only the
+  // inner content swaps in — so we don't reflow the row mid-load.
+  _placeholderCard(pubkey, slot = "horizontal") {
+    const size = slot === "small" ? "w-12 h-12" : "w-16 h-16";
+    return `
+      <div data-pubkey="${pubkey}" data-slot="${slot}" class="profile-card-slot flex-shrink-0 text-center animate-pulse">
+        <div class="${size} bg-gray-600 rounded-full mx-auto mb-2"></div>
+        <div class="h-3 bg-gray-600 rounded w-16 mb-1"></div>
+        <div class="h-2 bg-gray-600 rounded w-12 mx-auto"></div>
+      </div>
+    `;
+  },
+
+  _replaceCardSlot(container, pubkey, slot, html) {
+    if (!container) return;
+    // Slot is keyed by (pubkey, slot) so the same pubkey can render as both
+    // a mutelist author thumbnail and a blacklist entry on the same page.
+    const node = container.querySelector(
+      `.profile-card-slot[data-pubkey="${pubkey}"][data-slot="${slot}"]`
+    );
+    if (node) node.outerHTML = html;
+  },
+
+  // Progressive loading for horizontal key lists with source tracking.
+  // Renders placeholder cards immediately, then replaces each one in
+  // place as its profile fetch resolves — no waiting for the slowest
+  // relay before any data appears.
   async loadHorizontalKeyProfiles(
     keysWithSources,
     containerId,
@@ -104,56 +244,28 @@ const dashboardManager = {
       return;
     }
 
-    // Show loading state initially with key count
     container.innerHTML = `
-      <div class="text-sm text-gray-400 mb-3">Loading ${
-        keysWithSources.length
-      } profiles...</div>
+      <div class="text-sm text-gray-400 mb-3">${keysWithSources.length} users</div>
       <div class="flex space-x-4 overflow-x-auto pb-2 custom-scroll">
         ${keysWithSources
-          .map(
-            () => `
-          <div class="flex-shrink-0 text-center animate-pulse">
-            <div class="w-16 h-16 bg-gray-600 rounded-full mx-auto mb-2"></div>
-            <div class="h-3 bg-gray-600 rounded w-16 mb-1"></div>
-            <div class="h-2 bg-gray-600 rounded w-12 mx-auto"></div>
-          </div>
-        `
-          )
+          .map(({ pubkey }) => this._placeholderCard(pubkey, "horizontal"))
           .join("")}
       </div>
     `;
 
-    // Load profiles progressively with small delays
-    const profileCards = [];
-    for (let i = 0; i < keysWithSources.length; i++) {
-      const { pubkey, source } = keysWithSources[i];
+    // Enable horizontal scroll up front so the row is interactive while
+    // profiles populate.
+    setTimeout(() => this.enableHorizontalWheelScroll(container), 50);
+
+    await this.parallelMap(keysWithSources, 8, async ({ pubkey, source }) => {
       const profile = await this.fetchUserProfile(pubkey);
-      profileCards.push(
+      this._replaceCardSlot(
+        container,
+        pubkey,
+        "horizontal",
         this.createHorizontalProfileCard(pubkey, profile, source)
       );
-
-      // Add small delay between requests to be API-friendly
-      if (i < keysWithSources.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
-
-    // Update container with horizontal scrolling layout and custom scroll
-    container.innerHTML = `
-      <div class="text-sm text-gray-400 mb-3">${
-        keysWithSources.length
-      } users</div>
-      <div class="flex space-x-4 overflow-x-auto pb-2 custom-scroll">
-        ${profileCards.join("")}
-      </div>
-    `;
-
-    // Add horizontal scroll AFTER final content is loaded
-    // Small delay to ensure DOM is fully updated
-    setTimeout(() => {
-      this.enableHorizontalWheelScroll(container);
-    }, 50);
+    });
   },
 
   // Initialize dashboard
@@ -1668,60 +1780,52 @@ const dashboardManager = {
     );
   },
 
-  // Load mutelist author profiles separately
+  _mutelistAuthorCard(authorPubkey, profile) {
+    const name = profile.name || profile.display_name || "?";
+    const picture = profile.picture || null;
+    const fallback = `<div class="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
+      <img src="https://robohash.org/${authorPubkey}?set=set6&size=48x48" alt="${name}" class="w-12 h-12 rounded-full object-cover">
+    </div>`;
+    return `
+      <div onclick="navigateToProfileFromPubkey('${authorPubkey}')" class="profile-card-slot flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${authorPubkey}" data-slot="mutelist-author">
+        <div class="w-12 h-12 mx-auto mb-1">
+          ${
+            picture
+              ? `<img src="${picture}" alt="${name}" class="w-12 h-12 rounded-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">${fallback.replace(
+                  'class="w-12 h-12 bg-gray-600',
+                  'style="display: none;" class="w-12 h-12 bg-gray-600'
+                )}`
+              : fallback
+          }
+        </div>
+        <div class="text-xs text-white font-medium truncate max-w-[60px]">${name}</div>
+      </div>
+    `;
+  },
+
+  // Load mutelist author profiles separately, progressively.
   async loadMutelistAuthors(authorPubkeys) {
     const container = document.getElementById("mutelist-authors");
     if (!container || !authorPubkeys || authorPubkeys.length === 0) return;
 
-    // Show loading state
     container.innerHTML = authorPubkeys
-      .map(
-        () => `
-      <div class="flex-shrink-0 text-center animate-pulse">
-        <div class="w-12 h-12 bg-gray-600 rounded-full mx-auto mb-1"></div>
-        <div class="h-2 bg-gray-600 rounded w-12"></div>
-      </div>
-    `
-      )
+      .map((pk) => this._placeholderCard(pk, "mutelist-author"))
       .join("");
 
-    // Load author profiles
-    const authorCards = [];
-    for (const authorPubkey of authorPubkeys) {
-      const profile = await this.fetchUserProfile(authorPubkey);
-      const name = profile.name || profile.display_name || "?";
-      const picture = profile.picture || null;
-
-      authorCards.push(`
-        <div onclick="navigateToProfileFromPubkey('${authorPubkey}')" class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${authorPubkey}">
-          <div class="w-12 h-12 mx-auto mb-1">
-            ${
-              picture
-                ? `<img src="${picture}" alt="${name}" class="w-12 h-12 rounded-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-sm" style="display: none;">
-                  <img src="https://robohash.org/${authorPubkey}?set=set6&size=48x48" alt="${name}" class="w-12 h-12 rounded-full object-cover">
-                </div>`
-                : `<div class="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
-                  <img src="https://robohash.org/${authorPubkey}?set=set6&size=48x48" alt="${name}" class="w-12 h-12 rounded-full object-cover">
-                </div>`
-            }
-          </div>
-          <div class="text-xs text-white font-medium truncate max-w-[60px]">${name}</div>
-        </div>
-      `);
-
-      // Small delay between requests
-      if (authorPubkey !== authorPubkeys[authorPubkeys.length - 1]) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
-
-    container.innerHTML = authorCards.join("");
-
-    // Enable horizontal scroll for authors
+    // Make the row scrollable up front; cards swap in beneath.
     setTimeout(() => {
       this.enableHorizontalWheelScroll(container.parentElement);
     }, 50);
+
+    await this.parallelMap(authorPubkeys, 8, async (authorPubkey) => {
+      const profile = await this.fetchUserProfile(authorPubkey);
+      this._replaceCardSlot(
+        container,
+        authorPubkey,
+        "mutelist-author",
+        this._mutelistAuthorCard(authorPubkey, profile)
+      );
+    });
   },
 
   // Enhanced profile loading for blacklisted users with better source attribution
@@ -1738,33 +1842,24 @@ const dashboardManager = {
       return;
     }
 
-    // Show loading state
+    // Render placeholder for every entry with a stable (pubkey, slot) key.
+    // The slot suffix prevents collisions with the mutelist-author row when
+    // the same pubkey appears in both.
     container.innerHTML = `
-      <div class="text-sm text-gray-400 mb-3">Loading ${
-        keysWithSources.length
-      } profiles...</div>
+      <div class="text-sm text-gray-400 mb-3">${keysWithSources.length} users</div>
       <div class="flex space-x-4 overflow-x-auto pb-2 custom-scroll">
         ${keysWithSources
-          .map(
-            () => `
-          <div class="flex-shrink-0 text-center animate-pulse">
-            <div class="w-16 h-16 bg-gray-600 rounded-full mx-auto mb-2"></div>
-            <div class="h-3 bg-gray-600 rounded w-16 mb-1"></div>
-            <div class="h-2 bg-gray-600 rounded w-12 mx-auto"></div>
-          </div>
-        `
-          )
+          .map(({ pubkey }) => this._placeholderCard(pubkey, "blacklist"))
           .join("")}
       </div>
     `;
 
-    // Load profiles progressively
-    const profileCards = [];
-    for (let i = 0; i < keysWithSources.length; i++) {
-      const { pubkey, source, sourceType, authorPubkey } = keysWithSources[i];
+    setTimeout(() => this.enableHorizontalWheelScroll(container), 50);
+
+    await this.parallelMap(keysWithSources, 8, async (entry) => {
+      const { pubkey, source, sourceType, authorPubkey } = entry;
       const profile = await this.fetchUserProfile(pubkey);
 
-      // Get author name for mutelist entries
       let displaySource = source;
       if (sourceType === "mutelist" && authorPubkey) {
         const authorProfile = await this.fetchUserProfile(authorPubkey);
@@ -1772,7 +1867,10 @@ const dashboardManager = {
           authorProfile.name || authorProfile.display_name || "Mutelist";
       }
 
-      profileCards.push(
+      this._replaceCardSlot(
+        container,
+        pubkey,
+        "blacklist",
         this.createEnhancedBlacklistProfileCard(
           pubkey,
           profile,
@@ -1780,27 +1878,7 @@ const dashboardManager = {
           sourceType
         )
       );
-
-      // Small delay between requests
-      if (i < keysWithSources.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
-
-    // Update container with final content
-    container.innerHTML = `
-      <div class="text-sm text-gray-400 mb-3">${
-        keysWithSources.length
-      } users</div>
-      <div class="flex space-x-4 overflow-x-auto pb-2 custom-scroll">
-        ${profileCards.join("")}
-      </div>
-    `;
-
-    // Enable horizontal scroll
-    setTimeout(() => {
-      this.enableHorizontalWheelScroll(container);
-    }, 50);
+    });
   },
 
   // Enhanced profile card with better source indication
