@@ -70,9 +70,21 @@ func InitializePubkeyCache() {
 		globalPubkeyCache.blacklistRefreshInterval = 30 * time.Minute // Default 30 minutes
 	}
 
-	// Initial refresh - always cache regardless of enabled state
+	// Whitelist refresh is purely local (file/config) — safe to run sync.
 	globalPubkeyCache.RefreshWhitelist()
-	globalPubkeyCache.RefreshBlacklist()
+
+	// Blacklist refresh fans out to each mutelist author's NIP-65 outbox
+	// relays via the network. With a few configured authors and slow
+	// upstream relays this can take 10+ seconds, which would block the
+	// HTTP server from accepting connections. Kick it off in a goroutine
+	// so startup proceeds immediately; the dashboard tolerates an empty
+	// grouped-mutelist cache and shows results as soon as the background
+	// fetch completes.
+	go func() {
+		if err := globalPubkeyCache.RefreshBlacklist(); err != nil {
+			log.Config().Error("Initial blacklist refresh failed", "error", err)
+		}
+	}()
 
 	// Start background refresh routines
 	globalPubkeyCache.startBackgroundRefresh()

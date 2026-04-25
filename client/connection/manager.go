@@ -34,15 +34,23 @@ func InitializeCoreClient(serverCfg *cfgType.ServerConfig) error {
 	// Store relays for later use
 	clientRelays = config.DefaultRelays
 
-	// Attempt to connect to default relays but don't fail if offline
-	if err := coreClient.ConnectToRelaysWithRetry(config.DefaultRelays, config.RetryAttempts); err != nil {
-		log.ClientConnection().Warn("Failed to connect to relays during initialization - relay will operate in offline mode",
-			"error", err,
-			"relay_count", len(config.DefaultRelays))
-		// Don't return error - allow relay to start in offline mode
-	} else {
-		log.ClientConnection().Info("Core client initialized with relay connections", "relay_count", len(config.DefaultRelays))
-	}
+	// Connect to default relays asynchronously. Relay startup must never
+	// block on outbound network — when defaults are unreachable, the
+	// retry loop can take 30+ seconds and leave the HTTP server unable
+	// to accept connections. Subsystems that need a connection (mutelist
+	// fetch, dashboard profile fetch) tolerate the empty pool: they fall
+	// back gracefully or simply return empty results until connections
+	// establish in the background.
+	go func() {
+		if err := coreClient.ConnectToRelaysWithRetry(config.DefaultRelays, config.RetryAttempts); err != nil {
+			log.ClientConnection().Warn("Failed to connect to relays during initialization - relay will operate in offline mode",
+				"error", err,
+				"relay_count", len(config.DefaultRelays))
+		} else {
+			log.ClientConnection().Info("Core client connected to default relays",
+				"relay_count", len(config.DefaultRelays))
+		}
+	}()
 
 	log.ClientConnection().Info("Core client initialized successfully",
 		"offline_capable", true,
