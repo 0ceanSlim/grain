@@ -1612,22 +1612,28 @@ const dashboardManager = {
       this.fetchConfig(this.endpoints.blacklistConfig, "blacklist-config"),
     ]);
 
-    if (!keysData || !configData) return;
+    // Render the config block as long as configData arrived. The keys
+    // endpoint can be slow or transiently fail (it does live outbox-relay
+    // lookups for mutelist authors); when it does, we still want the
+    // status, counts, and ban-word config to render so the admin sees
+    // *something* instead of an empty panel.
+    if (!configData) return;
+    const safeKeys = keysData || {};
 
     // Load configuration section with new structure
     const configContainer = document.getElementById("blacklist-config");
     if (configContainer) {
-      const permanentCount = keysData.permanent?.length || 0;
-      const temporaryCount = keysData.temporary?.length || 0;
+      const permanentCount = safeKeys.permanent?.length || 0;
+      const temporaryCount = safeKeys.temporary?.length || 0;
 
       // Count total mutelist entries across all authors
-      const mutelistTotalCount = Object.values(keysData.mutelist || {}).reduce(
+      const mutelistTotalCount = Object.values(safeKeys.mutelist || {}).reduce(
         (total, entries) => total + entries.length,
         0
       );
 
       // Count mutelist authors
-      const mutelistAuthorCount = Object.keys(keysData.mutelist || {}).length;
+      const mutelistAuthorCount = Object.keys(safeKeys.mutelist || {}).length;
 
       configContainer.innerHTML = `
         <div class="space-y-4">
@@ -1725,7 +1731,7 @@ const dashboardManager = {
 
       // Load mutelist author profiles if any exist
       if (mutelistAuthorCount > 0) {
-        this.loadMutelistAuthors(Object.keys(keysData.mutelist));
+        this.loadMutelistAuthors(Object.keys(safeKeys.mutelist));
       }
     }
 
@@ -1733,8 +1739,8 @@ const dashboardManager = {
     const keysWithSources = [];
 
     // Add permanent blacklist keys
-    if (keysData.permanent) {
-      keysData.permanent.forEach((key) => {
+    if (safeKeys.permanent) {
+      safeKeys.permanent.forEach((key) => {
         keysWithSources.push({
           pubkey: key,
           source: "permanent",
@@ -1744,8 +1750,8 @@ const dashboardManager = {
     }
 
     // Add temporary blacklist keys
-    if (keysData.temporary) {
-      keysData.temporary.forEach((entry) => {
+    if (safeKeys.temporary) {
+      safeKeys.temporary.forEach((entry) => {
         // Handle both old format (string) and new format (object with expiration)
         const pubkey = typeof entry === "string" ? entry : entry.pubkey;
         keysWithSources.push({
@@ -1757,8 +1763,8 @@ const dashboardManager = {
     }
 
     // Add mutelist keys with author attribution
-    if (keysData.mutelist) {
-      Object.entries(keysData.mutelist).forEach(
+    if (safeKeys.mutelist) {
+      Object.entries(safeKeys.mutelist).forEach(
         ([authorPubkey, mutedPubkeys]) => {
           mutedPubkeys.forEach((mutedPubkey) => {
             keysWithSources.push({

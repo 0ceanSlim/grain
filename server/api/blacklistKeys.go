@@ -49,19 +49,11 @@ func GetAllBlacklistedPubkeys(w http.ResponseWriter, r *http.Request) {
 	// Get temporary blacklisted pubkeys with expiration times
 	temporary := config.GetTemporaryBlacklist()
 
-	// Fetch grouped mutelist data via the client library (same as live for
-	// consistency). The fetch path is author outbox relays, falling back to
-	// default client relays — see FetchGroupedMuteListPubkeys.
-	mutelist := make(map[string][]string)
-	if len(blacklistConfig.MuteListAuthors) > 0 {
-		grouped, err := config.FetchGroupedMuteListPubkeys(blacklistConfig.MuteListAuthors)
-		if err != nil {
-			log.RelayAPI().Error("Failed to fetch grouped mutelist for cached endpoint",
-				"error", err)
-		} else {
-			mutelist = grouped
-		}
-	}
+	// Read the grouped mutelist from the in-process cache populated by
+	// PubkeyCache.RefreshBlacklist on the configured refresh interval.
+	// The /live sibling endpoint bypasses this cache when callers need
+	// fresh data from outbox relays.
+	mutelist := config.GetPubkeyCache().GetGroupedMutelist()
 
 	// Prepare response
 	response := BlacklistKeysResponse{

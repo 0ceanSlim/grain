@@ -18,8 +18,14 @@ type PubkeyCache struct {
 	whitelistDomainPubkeys map[string]map[string]bool // domain -> pubkeys map
 	whitelistedPubkeys     map[string]bool            // Combined all sources (for fast lookup - backward compatibility)
 
-	// Blacklist data (unchanged)
+	// Blacklist data
 	blacklistedPubkeys map[string]bool
+
+	// Grouped mutelist (author -> public p-tag pubkeys). Refreshed on the
+	// same schedule as the flat blacklist so the dashboard API can serve
+	// per-author breakdowns without re-doing the slow outbox-relay fetch
+	// on every request.
+	groupedMutelist map[string][]string
 
 	// Mutex and timing (unchanged)
 	mu                       sync.RWMutex
@@ -36,6 +42,7 @@ var globalPubkeyCache = &PubkeyCache{
 	whitelistDomainPubkeys: make(map[string]map[string]bool),
 	whitelistedPubkeys:     make(map[string]bool),
 	blacklistedPubkeys:     make(map[string]bool),
+	groupedMutelist:        make(map[string][]string),
 }
 
 // GetPubkeyCache returns the global cache instance
@@ -303,12 +310,19 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 	// (falling back to configured default relays). Only public `p`-tag
 	// entries from kind:10000 and kind:30000 `d:"mute"` are applied —
 	// encrypted `.content` entries cannot be read by the relay.
+	//
+	// One call powers two consumers: the flat blacklist cache used by
+	// validation, and the grouped-by-author cache the dashboard API
+	// reads. Hitting the network here once per refresh interval keeps
+	// the API fast (the previous design called this on every request).
 	mutelistCount := 0
+	newGrouped := make(map[string][]string)
 	if len(blacklistCfg.MuteListAuthors) > 0 {
 		grouped, err := FetchGroupedMuteListPubkeys(blacklistCfg.MuteListAuthors)
 		if err != nil {
 			log.Config().Error("Failed to fetch mutelist pubkeys", "error", err)
 		} else {
+			newGrouped = grouped
 			for _, pubkeys := range grouped {
 				for _, pubkey := range pubkeys {
 					if !newBlacklist[pubkey] {
@@ -333,6 +347,7 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 	// Update cache atomically
 	pc.mu.Lock()
 	pc.blacklistedPubkeys = newBlacklist
+	pc.groupedMutelist = newGrouped
 	pc.lastBlacklistRefresh = time.Now()
 	pc.mu.Unlock()
 
@@ -362,6 +377,23 @@ func (pc *PubkeyCache) IsBlacklistedForValidation(pubkey string) bool {
 	}
 
 	return pc.IsBlacklisted(pubkey)
+}
+
+// GetGroupedMutelist returns a snapshot of the most recently fetched
+// per-author mutelist pubkey map. The returned map is a deep copy: callers
+// can mutate it freely without touching cache state. Returns an empty map
+// (never nil) when the cache hasn't been populated yet.
+func (pc *PubkeyCache) GetGroupedMutelist() map[string][]string {
+	pc.mu.RLock()
+	defer pc.mu.RUnlock()
+
+	out := make(map[string][]string, len(pc.groupedMutelist))
+	for author, pubkeys := range pc.groupedMutelist {
+		copied := make([]string, len(pubkeys))
+		copy(copied, pubkeys)
+		out[author] = copied
+	}
+	return out
 }
 
 func (pc *PubkeyCache) GetBlacklistedPubkeys() []string {
