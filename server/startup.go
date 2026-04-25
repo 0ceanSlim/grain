@@ -218,17 +218,22 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 		log.Startup().Error("Failed to load relay metadata", "error", err, "file", "relay_metadata.json")
 	}
 
-	// Initialize pubkey cache system
-	config.InitializePubkeyCache()
-
 	// Wire up real-time event broadcasting to active subscribers
 	handlers.OnEventStored = BroadcastEvent
 
-	// Initialize client package with server configuration
+	// Initialize client package with server configuration. This must happen
+	// BEFORE InitializePubkeyCache because the initial blacklist refresh
+	// fetches per-author NIP-65 mute lists via the core client; without it
+	// the first refresh produces an empty grouped-mutelist cache and the
+	// dashboard sees zero mutelist entries until the next scheduled refresh
+	// (mutelist_cache_refresh_minutes later — up to 30 min by default).
 	if err := client.InitializeClient(cfg); err != nil {
 		log.Startup().Error("Failed to initialize client package", "error", err)
 		return fmt.Errorf("client initialization failed: %w", err)
 	}
+
+	// Initialize pubkey cache system (after client init — see comment above)
+	config.InitializePubkeyCache()
 
 	log.Startup().Info("Server subsystems initialized successfully")
 	return nil

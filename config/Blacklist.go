@@ -375,28 +375,47 @@ func fetchAuthorMuteListPubkeys(client *core.Client, author string) []string {
 }
 
 // resolveMuteListRelays returns the relay set to query for the given author's
-// mute list events: their NIP-65 outbox relays if available, otherwise the
-// relay's configured default client relays as a fallback.
+// mute list events: the union of their NIP-65 outbox relays (write + both)
+// and the relay's configured default client relays, deduplicated.
+//
+// We query both rather than preferring outbox-only because authors often
+// publish kind:10000 to popular relays (relay.damus.io, nos.lol, etc.)
+// that aren't in their declared outbox list. Outbox-only coverage misses
+// these and yields zero public pubkeys for the author. Querying defaults
+// alongside outbox doubles our chances of finding the event without
+// meaningfully increasing per-fetch cost — the default set is already
+// connected from app startup.
 func resolveMuteListRelays(client *core.Client, author string) []string {
-	mailboxes, err := client.GetUserRelays(author)
-	if err == nil && mailboxes != nil {
-		var out []string
-		out = append(out, mailboxes.Write...)
-		out = append(out, mailboxes.Both...)
-		if len(out) > 0 {
-			log.Config().Debug("Using author outbox relays for mutelist fetch",
-				"author", author, "relay_count", len(out))
-			return out
+	seen := make(map[string]bool)
+	var out []string
+	add := func(urls []string) {
+		for _, u := range urls {
+			if u == "" || seen[u] {
+				continue
+			}
+			seen[u] = true
+			out = append(out, u)
 		}
 	}
-	if err != nil {
-		log.Config().Debug("NIP-65 lookup failed for mutelist author — falling back to default relays",
+
+	mailboxes, err := client.GetUserRelays(author)
+	if err == nil && mailboxes != nil {
+		add(mailboxes.Write)
+		add(mailboxes.Both)
+	} else if err != nil {
+		log.Config().Debug("NIP-65 lookup failed for mutelist author",
 			"author", author, "error", err)
 	}
-	defaults := connection.GetClientRelays()
-	log.Config().Debug("Falling back to default relays for mutelist fetch",
-		"author", author, "relay_count", len(defaults))
-	return defaults
+	outboxCount := len(out)
+
+	add(connection.GetClientRelays())
+
+	log.Config().Debug("Resolved mutelist relays",
+		"author", author,
+		"outbox_relays", outboxCount,
+		"default_relays_added", len(out)-outboxCount,
+		"total", len(out))
+	return out
 }
 
 // collectMuteListEvents drains the subscription's Events channel, returning
