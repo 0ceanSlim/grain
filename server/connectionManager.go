@@ -19,7 +19,7 @@ type ConnectionManager struct {
 // Global connection manager instance
 var connManager = &ConnectionManager{
 	connections:         make(map[*Client]time.Time),
-	memoryThreshold:     0.85,            // 85% memory threshold
+	memoryThreshold:     1.5,             // DISABLED: isMemoryThresholdExceeded uses MemStats.Alloc/Sys, which is heap-utilization-after-GC and naturally sits at 80–95% for any healthy long-running Go program. With the prior 0.85 value the check fired ~10x/sec, evicting every newly-registered client (NOTICE "memory constraints") and making the relay appear unresponsive. Setting >1.0 disables eviction until the metric is replaced with real system/process memory pressure.
 	estimatedMemPerConn: 2 * 1024 * 1024, // Start with 2MB estimate per connection
 }
 
