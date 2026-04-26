@@ -64,7 +64,10 @@ func (s *Subscription) Start() error {
 
 	for _, relayURL := range s.Relays {
 		if err := s.client.relayPool.SendMessage(relayURL, reqMessage); err != nil {
-			log.ClientCore().Warn("Failed to send subscription to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
+			// Demoted to Debug: races with upstream disconnect are
+			// normal flakiness, not grain bugs. The subscription's
+			// caller still sees the failure via the lastErr return.
+			log.ClientCore().Debug("Failed to send subscription to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
 			lastErr = err
 			continue
 		}
@@ -112,7 +115,9 @@ func (s *Subscription) Close() error {
 
 	for _, relayURL := range s.Relays {
 		if err := s.client.relayPool.SendMessage(relayURL, closeMessage); err != nil {
-			log.ClientCore().Warn("Failed to send close to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
+			// Demoted to Debug: closing a sub on an already-disconnected
+			// relay is expected during teardown, not a problem.
+			log.ClientCore().Debug("Failed to send close to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
 		}
 
 		// Remove subscription from relay

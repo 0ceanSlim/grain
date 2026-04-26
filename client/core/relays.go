@@ -373,14 +373,21 @@ func (rc *RelayConnection) readHandler() {
 					continue // Continue loop, don't terminate connection
 				}
 
-				log.ClientCore().Warn("Failed to read message from relay", "relay", rc.URL, "error", err)
+				// Demoted to Debug: upstream-side disconnects (EOF) and
+				// network read errors are normal flakiness for third-party
+				// relays we have no control over, not grain bugs. Operators
+				// can opt in by lowering the log level when diagnosing.
+				log.ClientCore().Debug("Failed to read message from relay", "relay", rc.URL, "error", err)
 				rc.Status = StatusError
 				return
 			}
 
-			// Process the received message
+			// Process the received message. Demoted to Debug: some upstream
+			// relays send non-JSON traffic (e.g. control frames, plain "OK"
+			// strings) that fail our parser. Logging at WARN drowned the
+			// real signal in the v0.5.0 RC.
 			if err := rc.processMessage(message); err != nil {
-				log.ClientCore().Warn("Failed to process message from relay", "relay", rc.URL, "error", err)
+				log.ClientCore().Debug("Failed to process message from relay", "relay", rc.URL, "error", err)
 			}
 		}
 	}
