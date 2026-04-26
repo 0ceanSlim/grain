@@ -28,6 +28,16 @@ type Client struct {
 	rateLimiter   *config.RateLimiter
 	messageBuffer strings.Builder
 
+	// Outbound message queue. The dedicated writeLoop goroutine drains
+	// this channel and is the ONLY thing that writes to ws. Callers
+	// enqueue via SendMessage and never block on the network — a slow
+	// or dead peer fills the buffer and gets disconnected via the
+	// slow-consumer path rather than freezing the broadcaster.
+	//
+	// Capacity 256 absorbs bursts (a few seconds of typical event flow)
+	// while still detecting truly stuck peers in bounded time.
+	outgoing chan []byte
+
 	// Timeout configuration
 	readTimeout  time.Duration // Per-message read timeout
 	writeTimeout time.Duration // Per-message write timeout
@@ -37,9 +47,6 @@ type Client struct {
 	// Context for cancellation
 	ctx    context.Context
 	cancel context.CancelFunc
-
-	// Write mutex to prevent concurrent writes
-	writeMu sync.Mutex
 
 	// Subscription mutex to protect concurrent subscription access
 	subMu sync.RWMutex
@@ -55,6 +62,11 @@ type Client struct {
 	messagesSent int64
 	mu           sync.RWMutex // Protects lastActivity
 }
+
+// clientOutgoingBuffer is the per-client outbound queue capacity. 256 messages
+// is enough to absorb normal bursts; once full the consumer is treated as
+// slow/dead and the connection is closed (see SendMessage).
+const clientOutgoingBuffer = 256
 
 // Track active clients
 var (
@@ -121,6 +133,7 @@ func ClientHandler(ws *websocket.Conn) {
 		subscriptions: make(map[string][]nostr.Filter),
 		rateLimiter:   config.NewClientRateLimiter(),
 		messageBuffer: strings.Builder{},
+		outgoing:      make(chan []byte, clientOutgoingBuffer),
 
 		// Configure timeouts from config
 		readTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
@@ -145,6 +158,10 @@ func ClientHandler(ws *websocket.Conn) {
 
 	// Register with connection manager
 	connManager.RegisterConnection(client)
+
+	// Start the dedicated writer goroutine BEFORE any SendMessage call
+	// (the AUTH challenge below is the first such call).
+	go client.writeLoop()
 
 	log.RelayClient().Info("New connection established",
 		"client_id", client.id,
@@ -212,7 +229,13 @@ func (c *Client) updateActivity() {
 }
 
 // Implement `ClientInterface` methods
-// SendMessage sends a message with write timeout and proper error handling
+
+// SendMessage marshals and enqueues a message for delivery to the client.
+// It NEVER blocks on the network — the dedicated writeLoop goroutine drains
+// the queue. If the per-client buffer is full, the consumer is treated as
+// slow/dead: the message is dropped and the connection is closed. This is
+// the load-bearing fix for the broadcaster lockup: a single stuck peer can
+// no longer freeze BroadcastEvent for every other client.
 func (c *Client) SendMessage(msg interface{}) {
 	select {
 	case <-c.ctx.Done():
@@ -220,7 +243,6 @@ func (c *Client) SendMessage(msg interface{}) {
 	default:
 	}
 
-	// Check if connection is still valid before attempting to send
 	if c.ws == nil {
 		return
 	}
@@ -233,21 +255,68 @@ func (c *Client) SendMessage(msg interface{}) {
 		return
 	}
 
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
-
-	// Double-check connection is still valid after acquiring lock
 	select {
+	case c.outgoing <- jsonMsg:
+		// Enqueued. The writer goroutine will deliver it.
 	case <-c.ctx.Done():
 		return
 	default:
+		// Buffer full = slow consumer. Close the connection so we stop
+		// trying to deliver to a peer that can't keep up. Done in a
+		// goroutine to avoid any chance of deadlock with a caller that
+		// holds locks (e.g. clientsMu released before BroadcastEvent
+		// iterates, but be defensive).
+		log.RelayClient().Warn("Slow consumer detected, closing connection",
+			"client_id", c.id,
+			"ip", c.ip,
+			"buffer_capacity", clientOutgoingBuffer)
+		c.markDisconnected()
+		go c.CloseClient()
 	}
+}
 
-	// Set write deadline if timeout is configured
+// writeLoop is the only goroutine that writes to c.ws. It drains the
+// outgoing channel, applies the per-message write deadline, and exits
+// when the context is cancelled. Centralising writes removes the need
+// for a write mutex and removes the deadlock surface that froze the
+// broadcaster when a single peer stalled.
+func (c *Client) writeLoop() {
+	defer func() {
+		// On exit, drain any remaining queued messages without writing
+		// so SendMessage callers blocked in `select` cases see ctx.Done.
+		// (Best-effort; the channel is GC'd, no need to close it.)
+		log.RelayClient().Debug("Write loop exited", "client_id", c.id)
+	}()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case jsonMsg, ok := <-c.outgoing:
+			if !ok {
+				return
+			}
+			if err := c.writeOne(jsonMsg); err != nil {
+				// writeOne already logged + marked disconnected; trigger
+				// full close and exit.
+				go c.CloseClient()
+				return
+			}
+			// Update stats only on successful delivery.
+			c.updateActivity()
+			atomic.AddInt64(&c.messagesSent, 1)
+			atomic.AddInt64(&totalMessagesSent, 1)
+		}
+	}
+}
+
+// writeOne does the synchronous wire write for a single already-marshalled
+// message. Only writeLoop should call this. Returns an error if the write
+// failed in a way that should terminate the connection.
+func (c *Client) writeOne(jsonMsg []byte) error {
 	if c.writeTimeout > 0 {
 		deadline := time.Now().Add(c.writeTimeout)
 		if err := c.ws.SetWriteDeadline(deadline); err != nil {
-			// Don't log error if connection is already closed
 			if !isConnectionClosed(err) {
 				log.RelayClient().Error("Failed to set write deadline",
 					"client_id", c.id,
@@ -255,24 +324,18 @@ func (c *Client) SendMessage(msg interface{}) {
 					"error", err)
 			}
 			c.markDisconnected()
-			c.CloseClient()
-			return
+			return err
 		}
 	}
 
-	// Send message to WebSocket
-	err = websocket.Message.Send(c.ws, string(jsonMsg))
+	err := websocket.Message.Send(c.ws, string(jsonMsg))
 
-	// Clear write deadline to prevent it from affecting future operations
 	if c.writeTimeout > 0 {
-		c.ws.SetWriteDeadline(time.Time{}) // Clear deadline
+		c.ws.SetWriteDeadline(time.Time{})
 	}
 
 	if err != nil {
-		// Mark as disconnected before logging/cleanup
 		c.markDisconnected()
-
-		// Only log if it's not a connection closed error
 		if !isConnectionClosed(err) {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				log.RelayClient().Warn("Write timeout sending message",
@@ -285,14 +348,10 @@ func (c *Client) SendMessage(msg interface{}) {
 					"error_type", fmt.Sprintf("%T", err))
 			}
 		}
-		c.CloseClient()
-		return
+		return err
 	}
 
-	// Update activity and statistics
-	c.updateActivity()
-	atomic.AddInt64(&c.messagesSent, 1)
-	atomic.AddInt64(&totalMessagesSent, 1)
+	return nil
 }
 
 // IsConnected returns true if the client connection is still active
@@ -330,11 +389,15 @@ func (c *Client) sendNoticeNoTimeout(message string) {
 		return // Best effort
 	}
 
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
-
-	// No timeout for cleanup messages
-	websocket.Message.Send(c.ws, string(jsonMsg))
+	// Cleanup-path send. By the time this runs the writer goroutine has
+	// usually already exited (ctx cancelled), so we write directly here.
+	// Use a tight deadline so a dead peer can't hang the cleanup path.
+	if c.ws == nil {
+		return
+	}
+	c.ws.SetWriteDeadline(time.Now().Add(time.Second))
+	_ = websocket.Message.Send(c.ws, string(jsonMsg))
+	c.ws.SetWriteDeadline(time.Time{})
 }
 
 func (c *Client) GetWS() *websocket.Conn {
