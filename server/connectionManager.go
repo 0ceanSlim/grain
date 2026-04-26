@@ -23,16 +23,29 @@ var connManager = &ConnectionManager{
 	estimatedMemPerConn: 2 * 1024 * 1024, // Start with 2MB estimate per connection
 }
 
-// RegisterConnection adds a connection to the manager
+// RegisterConnection adds a connection to the manager. If the memory
+// threshold is exceeded, the oldest connection is selected for eviction
+// and closed AFTER releasing cm.mu — the close path re-enters this
+// manager via RemoveConnection, which would self-deadlock the goroutine
+// if we were still holding the lock here. That self-deadlock was the
+// production WebSocket lockup symptom: the holding goroutine blocked
+// forever on its own mutex, every subsequent new connection then blocked
+// on cm.mu, and the relay went silent on WebSockets while HTTP kept
+// serving (it never touches cm).
 func (cm *ConnectionManager) RegisterConnection(client *Client) {
 	cm.mu.Lock()
-	defer cm.mu.Unlock()
 
 	cm.connections[client] = time.Now()
 
-	// Check memory usage after adding
+	var evict *Client
 	if cm.isMemoryThresholdExceeded() {
-		cm.dropOldestConnection()
+		evict = cm.removeOldestLocked()
+	}
+
+	cm.mu.Unlock()
+
+	if evict != nil {
+		evictClient(evict)
 	}
 }
 
@@ -63,12 +76,18 @@ func (cm *ConnectionManager) isMemoryThresholdExceeded() bool {
 	return false
 }
 
-// dropOldestConnection drops the oldest connection
-func (cm *ConnectionManager) dropOldestConnection() {
+// removeOldestLocked finds the oldest tracked connection, removes it
+// from cm.connections, and returns it for eviction by the caller.
+// MUST be called with cm.mu held. Returns nil if no connections exist.
+//
+// The split between removal-under-lock and the actual close (in
+// evictClient, called WITHOUT the lock) is load-bearing: closing a
+// client re-enters this manager via RemoveConnection, which would
+// re-acquire cm.mu and deadlock the goroutine.
+func (cm *ConnectionManager) removeOldestLocked() *Client {
 	var oldestClient *Client
 	var oldestTime time.Time
 
-	// Find the oldest connection
 	for client, connTime := range cm.connections {
 		if oldestClient == nil || connTime.Before(oldestTime) {
 			oldestClient = client
@@ -76,25 +95,33 @@ func (cm *ConnectionManager) dropOldestConnection() {
 		}
 	}
 
-	if oldestClient != nil {
-		log.RelayConnection().Info("Dropping oldest connection due to memory pressure",
-			"client_id", oldestClient.id,
-			"connected_since", oldestTime.Format(time.RFC3339),
-			"age_seconds", time.Since(oldestTime).Seconds(),
-			"total_connections", len(cm.connections))
-
-		// Send notice to client before disconnecting
-		oldestClient.SendMessage([]interface{}{
-			"NOTICE",
-			"Disconnecting due to server memory constraints. Please reconnect.",
-		})
-
-		// Remove from tracking first to prevent recursion
-		delete(cm.connections, oldestClient)
-
-		// Close the client connection
-		oldestClient.CloseClient()
+	if oldestClient == nil {
+		return nil
 	}
+
+	log.RelayConnection().Info("Dropping oldest connection due to memory pressure",
+		"client_id", oldestClient.id,
+		"connected_since", oldestTime.Format(time.RFC3339),
+		"age_seconds", time.Since(oldestTime).Seconds(),
+		"total_connections", len(cm.connections))
+
+	// Remove from tracking under the lock; the eviction path won't try
+	// to remove again (and even if RemoveConnection is called, the
+	// missing-key delete is a no-op).
+	delete(cm.connections, oldestClient)
+
+	return oldestClient
+}
+
+// evictClient performs the eviction of a client selected for memory-
+// pressure dropping. MUST NOT be called while holding cm.mu — the
+// close path re-enters this manager.
+func evictClient(c *Client) {
+	c.SendMessage([]interface{}{
+		"NOTICE",
+		"Disconnecting due to server memory constraints. Please reconnect.",
+	})
+	c.CloseClient()
 }
 
 // GetConnectionCount returns the current number of connections
