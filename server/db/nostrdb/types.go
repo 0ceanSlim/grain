@@ -73,7 +73,17 @@ func eventToJSON(evt nostr.Event) (string, error) {
 
 // noteToEventDirect converts a nostrdb note to Event by reading fields directly.
 // This avoids JSON round-tripping and is the primary query conversion path.
-// Note: only handles NDB_PACKED_STR and NDB_PACKED_ID tag value types.
+//
+// Tag-string flag handling: nostrdb stores each tag string as a 4-byte
+// union ndb_packed_str. Strings ≤2 chars are inlined with flag NDB_PACKED_STR
+// (1) or NDB_PACKED_ID (2). Strings >2 chars are stored as a uint32 offset
+// into the note's strings table — for regular strings the upper "flag" byte
+// is left zero (see ndb_offset_str in nostrdb.c), only ID offsets explicitly
+// set flag=NDB_PACKED_ID. nostrdb's reader resolves the offset and sets
+// str.str either way; only NDB_PACKED_ID needs hex encoding. An older
+// version of this loop whitelisted flag values (== STR or == ID) and
+// silently dropped the offset-string case (flag=0), which silently emptied
+// every tag value longer than 2 chars on read — see issue #65.
 func noteToEventDirect(note *C.struct_ndb_note) nostr.Event {
 	evt := nostr.Event{
 		ID:        hex.EncodeToString(C.GoBytes(unsafe.Pointer(C.ndb_note_id(note)), 32)),
@@ -98,10 +108,10 @@ func noteToEventDirect(note *C.struct_ndb_note) nostr.Event {
 		tag := make([]string, tagCount)
 		for i := 0; i < tagCount; i++ {
 			nstr := C.ndb_iter_tag_str(&iter, C.int(i))
-			if nstr.flag == C.NDB_PACKED_STR {
-				tag[i] = C.GoString(C.ndb_str_str(&nstr))
-			} else if nstr.flag == C.NDB_PACKED_ID {
+			if nstr.flag == C.NDB_PACKED_ID {
 				tag[i] = hex.EncodeToString(C.GoBytes(unsafe.Pointer(C.ndb_str_id(&nstr)), 32))
+			} else {
+				tag[i] = C.GoString(C.ndb_str_str(&nstr))
 			}
 		}
 		evt.Tags = append(evt.Tags, tag)
