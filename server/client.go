@@ -68,10 +68,24 @@ type Client struct {
 // slow/dead and the connection is closed (see SendMessage).
 const clientOutgoingBuffer = 256
 
-// Track active clients
+// Track active clients.
+//
+// currentConnections is an atomic counter. Map mutations to `clients` and
+// the matching counter delta are performed together under clientsMu so the
+// counter cannot disagree with map membership. The atomic type lets the
+// max-connections gate and the periodic stats reader sample the count
+// without grabbing clientsMu.
+//
+// There are two cleanup paths for a client (CloseClient and the
+// clientReader defer). Both race; whichever wins the clientsMu first
+// performs the decrement, the other observes the missing map entry and
+// becomes a no-op. Prior to issue #67's fix the reader defer
+// unconditionally decremented after CloseClient had already done so,
+// driving currentConnections deeply negative in production
+// (active_connections=-1339 observed) and silently disabling the
+// server.max_connections admission gate at client.go:108.
 var (
-	currentConnections int
-	mu                 sync.Mutex
+	currentConnections atomic.Int64
 	clients            = make(map[*websocket.Conn]*Client)
 	clientsMu          sync.Mutex
 
@@ -95,7 +109,7 @@ func PrintStats() {
 
 		log.RelayClient().Info("Connection and message statistics",
 			"messages_sent", sent,
-			"active_connections", currentConnections,
+			"active_connections", currentConnections.Load(),
 			"memory_used_pct", memStats["memory_used_percent"],
 			"estimated_mem_per_conn_mb", memStats["estimated_mem_per_conn_mb"])
 	}
@@ -106,17 +120,14 @@ func ClientHandler(ws *websocket.Conn) {
 
 	// Enforce max connections
 	if maxConn := cfg.Server.MaxConnections; maxConn > 0 {
-		mu.Lock()
-		if currentConnections >= maxConn {
-			mu.Unlock()
+		if current := currentConnections.Load(); current >= int64(maxConn) {
 			log.RelayClient().Warn("Max connections reached, rejecting",
 				"max", maxConn,
-				"current", currentConnections)
+				"current", current)
 			websocket.Message.Send(ws, `["NOTICE","error: server at max capacity, try again later"]`)
 			ws.Close()
 			return
 		}
-		mu.Unlock()
 	}
 
 	// Create context for this client connection
@@ -153,7 +164,7 @@ func ClientHandler(ws *websocket.Conn) {
 
 	clientsMu.Lock()
 	clients[ws] = client
-	currentConnections++
+	connectionCount := currentConnections.Add(1)
 	clientsMu.Unlock()
 
 	// Register with connection manager
@@ -170,7 +181,7 @@ func ClientHandler(ws *websocket.Conn) {
 		"read_timeout_sec", cfg.Server.ReadTimeout,
 		"write_timeout_sec", cfg.Server.WriteTimeout,
 		"idle_timeout_sec", cfg.Server.IdleTimeout,
-		"connections", currentConnections)
+		"connections", connectionCount)
 
 	// Always send NIP-42 AUTH challenge
 	challenge := utils.GenerateChallenge(32)
@@ -469,7 +480,15 @@ func (c *Client) AllowEvent(kind int, category string) (bool, string) {
 	return c.rateLimiter.AllowEvent(kind, category)
 }
 
-// CloseClient closes the client connection and cleans up resources
+// CloseClient closes the client connection and cleans up resources.
+//
+// Both this function and the clientReader defer race to clean up a given
+// client — whichever wins clientsMu first performs the decrement and the
+// other observes the missing map entry as a no-op. The exists guard is
+// load-bearing for #67's fix: without it the same connection's lifecycle
+// produced two decrements (once here, once in the reader defer), driving
+// currentConnections deeply negative and silently disabling the
+// max_connections admission gate.
 func (c *Client) CloseClient() {
 	// Cancel context first to stop all goroutines
 	c.cancel()
@@ -477,9 +496,10 @@ func (c *Client) CloseClient() {
 	// Remove from client tracking
 	clientsMu.Lock()
 	_, exists := clients[c.ws]
+	var remaining int64
 	if exists {
 		delete(clients, c.ws)
-		currentConnections--
+		remaining = currentConnections.Add(-1)
 	}
 	clientsMu.Unlock()
 
@@ -505,7 +525,7 @@ func (c *Client) CloseClient() {
 
 	log.RelayClient().Debug("Client connection closed and cleaned up",
 		"client_id", c.id,
-		"remaining_connections", currentConnections)
+		"remaining_connections", remaining)
 }
 
 // clientReader reads messages from the WebSocket connection and processes them
@@ -515,23 +535,34 @@ func clientReader(client *Client) {
 		// Mark as disconnected first
 		client.markDisconnected()
 
-		// Clean up tracking when function exits
+		// Clean up tracking when function exits. The exists check pairs
+		// with the same check in CloseClient — see #67. Either path may
+		// fire first; the second observes the empty map slot and skips
+		// the decrement.
 		clientsMu.Lock()
-		delete(clients, ws)
-		mu.Lock()
-		currentConnections--
-		mu.Unlock()
+		_, exists := clients[ws]
+		var remaining int64
+		if exists {
+			delete(clients, ws)
+			remaining = currentConnections.Add(-1)
+		} else {
+			remaining = currentConnections.Load()
+		}
 		clientsMu.Unlock()
 
-		// Unregister from connection manager
-		connManager.RemoveConnection(client)
+		if exists {
+			// Unregister from connection manager only if we were the
+			// path that cleaned up tracking; otherwise CloseClient
+			// already did it.
+			connManager.RemoveConnection(client)
+		}
 
-		// Close the connection if not already closed
+		// Close the connection if not already closed (idempotent).
 		ws.Close()
 
 		log.RelayClient().Debug("Client reader exited and connection cleaned up",
 			"client_id", client.id,
-			"remaining_connections", currentConnections)
+			"remaining_connections", remaining)
 	}()
 
 	for {
