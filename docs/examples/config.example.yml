@@ -10,25 +10,29 @@ logging:
   stdout: false # Mirror log records to stdout (pretty single-line). Useful for Docker so `docker logs` works.
   check_interval_min: 10 # Check every 10 minutes
   backup_count: 2 # Keep 2 backup files (.bak1, .bak2)
-  suppress_components: # Suppress INFO/DEBUG logs (WARN/ERROR still shown)
-    - "util"
-    - "log"
-    - "db-query"
-    - "db-store"
-    - "event-store"
-    - "relay-client"
-    - "relay-connection"
-    - "close-handler"
+
+  # Components listed here have their INFO/DEBUG records dropped; WARN/ERROR
+  # always pass through. The default list silences high-volume utility and
+  # storage-layer chatter. Connection-layer components (relay-client,
+  # relay-connection, client-connection) are intentionally NOT suppressed —
+  # those are where lockup symptoms surface and you want them visible by
+  # default. Add components here only if you confirm they're spamming.
+  suppress_components:
+    - "util"          # generic helper logs
+    - "log"           # the logger reporting on itself
+    - "db-query"      # one INFO per query — extremely noisy under load
+    - "db-store"      # one INFO per ingested event
+    - "event-store"   # event-pipeline tracing
+    - "close-handler" # subscription teardown noise
     - "client-main"
     - "client-api"
     - "client-core"
     - "client-tools"
     - "client-data"
-    - "client-connection"
     - "client-session"
     - "client-cache"
 
-# See docs/configuration.md for full component list
+# See docs/configuration.md for the full component list and what each emits.
 
 database:
   path: "data"       # Directory for nostrdb data files (relative to data dir)
@@ -62,21 +66,26 @@ client:
 
 server:
   port: :8181
-  read_timeout: 60 # Timeout for reading a single WebSocket message from client
-  write_timeout: 20 # Timeout for writing a single WebSocket message to client
-  idle_timeout: 1200 # Connection-level timeout for inactive clients (in seconds) ;  Set to 0 to disable idle timeout completely
+  read_timeout: 60   # Timeout for reading a single WebSocket message from client
+  write_timeout: 20  # Timeout for writing a single WebSocket message to client
+  idle_timeout: 1200 # Connection-level timeout for inactive clients (in seconds); 0 disables.
+  max_connections: 100               # Hard cap on concurrent WebSocket clients. 0 disables the gate. Without this set, the relay accepts unlimited connections — set it on every production deployment.
   max_subscriptions_per_client: 10
-  implicit_req_limit: 500 # Default limit applied to REQ when no limit is specified
-  connection_rate_limit_per_ip: 30 # Per-IP connection attempts per minute. Rejected before WS upgrade with HTTP 429. Set to 0 to disable.
+  implicit_req_limit: 500            # Default limit applied to REQ when no limit is specified
+  connection_rate_limit_per_ip: 30   # Per-IP connection attempts per minute. Rejected before WS upgrade with HTTP 429. 0 disables.
 
 resource_limits:
-  cpu_cores: 2 # Limit the number of CPU cores the application can use
-  memory_mb: 1024 # Cap the maximum amount of RAM in MB the application can use
-  heap_size_mb: 512 # Set a limit on the Go garbage collector's heap size in MB
+  cpu_cores: 2       # Limit the number of CPU cores the application can use
+  memory_mb: 2048    # Hard RSS cap in MB. Production grain at moderate load runs ~1GB; this leaves headroom. Raise for hosts with more RAM.
+  heap_size_mb: 1024 # Go GC heap soft target in MB. Should be roughly half of memory_mb so the runtime has room for stacks, mmap'd LMDB, etc.
 
 auth:
-  required: false # If true, clients MUST authenticate to read or write
-  relay_url: "wss://relay.example.com/" # MUST match the URL clients connect to
+  required: false # If true, clients MUST authenticate (NIP-42) before they can read or write.
+  # When required: true, this MUST be set to the externally-reachable URL clients
+  # use to connect (e.g. wss://relay.yourdomain.com/). The string is signed into
+  # the AUTH challenge and must match what the client sees, or the AUTH fails.
+  # Leave empty if required: false.
+  relay_url: ""
 
 backup_relay:
   enabled: false # Set to true to enable sending events to the backup relay
@@ -93,9 +102,8 @@ event_purge:
     addressable: false
     deprecated: true
   purge_by_kind_enabled: false # Enable purging by specific kinds, if false, all collections will be purged
-  kinds_to_purge: # List of event kinds to explicitly purge
+  kinds_to_purge: # List of event kinds to explicitly purge (kind 2 is deprecated and never stored, so don't list it)
     - 1
-    - 2
     - 1000
   exclude_whitelisted: true # Exclude events from whitelisted pubkeys during purging
 
@@ -106,13 +114,13 @@ event_time_constraints:
   max_created_at_string: now+5m # Use a string to set a date for max created at in the future or past from current time
 
 rate_limit:
-  ws_limit: 50 # WebSocket messages per second
-  ws_burst: 100 # Allowed burst of WebSocket messages
-  event_limit: 10 # Events per second
-  event_burst: 20 # Allowed burst of events
-  req_limit: 5 # HTTP requests per second
-  req_burst: 15 # Allowed burst of HTTP requests
-  max_event_size: 524288 # 512KB - reasonable for most Nostr events - applies to both event validation AND WebSocket message buffer
+  ws_limit: 50    # WebSocket messages per second per client (any frame: EVENT, REQ, CLOSE, etc.)
+  ws_burst: 100   # Allowed burst of WebSocket messages
+  event_limit: 10 # EVENT messages per second per client
+  event_burst: 20 # Allowed burst of EVENTs
+  req_limit: 10   # REQ subscription messages per second per client. Clients commonly fire several REQs at startup (one per filter shape), so don't set this too tight.
+  req_burst: 30   # Allowed burst of REQs
+  max_event_size: 524288 # 512KB — reasonable for most Nostr events; applies to both event validation AND the WebSocket message buffer
 
   # Size limits for specific event kinds
   kind_size_limits:
@@ -130,9 +138,9 @@ rate_limit:
     regular: # Kind 1, 4-44, 1000-9999 (most social media content)
       limit: 8 # 8 events per second - most common events
       burst: 16 # Allow posting several messages quickly
-    replaceable: # Kind 0, 3, 10000-19999 (profiles, contact lists)
-      limit: 2 # 2 events per second - these replace previous versions
-      burst: 5 # Lower burst since old events are deleted anyway
+    replaceable: # Kind 0, 3, 10000-19999 (profiles, contact lists, relay lists, mute lists)
+      limit: 5  # New users editing profile + contact list + relay list back-to-back can hit this; 5/sec leaves room.
+      burst: 10 # Allow a quick wave of replaceable updates at account-setup time
     ephemeral: # Kind 20000-29999 (temporary events, not stored)
       limit: 50 # 50 events per second - higher since not stored permanently
       burst: 100 # Allow high bursts for real-time features
@@ -140,11 +148,22 @@ rate_limit:
       limit: 3 # 3 events per second - often larger content
       burst: 8 # Moderate burst for content creation sessions
 
-  # Rate limits for specific event kinds
-  kind_limits:
-    - kind: 0
-      limit: 1 # Events per second
-      burst: 2 # Allowed burst
-    - kind: 1
-      limit: 5
-      burst: 12
+  # Rate limits for specific event kinds. Overrides category_limits for the
+  # listed kinds. Add an entry only when you want that kind to be tighter or
+  # looser than its category default. Example shapes (commented out — uncomment
+  # and tune for your traffic):
+  #
+  # kind_limits:
+  #   - kind: 0       # Profile metadata — tight by default since it's an identity update
+  #     limit: 1
+  #     burst: 2
+  #   - kind: 1       # Text notes — tighter than the regular category for spam control
+  #     limit: 5
+  #     burst: 12
+  #   - kind: 7       # Reactions — looser; high volume but tiny
+  #     limit: 20
+  #     burst: 40
+  #   - kind: 30023   # Long-form articles — usually authored slowly
+  #     limit: 1
+  #     burst: 3
+  kind_limits: []

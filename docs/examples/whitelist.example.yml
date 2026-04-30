@@ -20,8 +20,10 @@ kind_whitelist:
     - "7" # Reactions
 
 domain_whitelist:
-  enabled: false # Enable to verify users from specific domains (NIP-05)
-  domains: # Allowed domains for verification
-    - "happytavern.co"
-    - "damus.io"
+  enabled: false # Enable to verify users from specific NIP-05 domains
+  # Allowed NIP-05 domains. Empty by default; populate with the domains whose
+  # users you want to admit. Examples (commented out):
+  domains: []
+    # - "yourdomain.example"
+    # - "anotherdomain.example"
   cache_refresh_minutes: 120 # Refresh domain cache every 2 hours

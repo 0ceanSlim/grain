@@ -1,34 +1,58 @@
 # GRAIN Blacklist Configuration Example
-# Content moderation and user blocking configuration
+# Content moderation and user/IP blocking configuration.
+#
+# Word filters and pubkey blocklists ship empty by default — these are
+# strong moderation policies and should be opt-in per deployment, not a
+# default. Uncomment and populate as your moderation policy requires.
 
 enabled: false
 
-# Words that trigger immediate permanent bans
-permanent_ban_words:
-  - "serious-violation-example"
-  - "illegal-content-example"
+# Words that trigger immediate permanent bans on the offending pubkey.
+# Match is case-insensitive substring against event content. Use sparingly;
+# false positives become permanent. Examples (commented out):
+permanent_ban_words: []
+  # - "<phrase that should permaban a pubkey on first hit>"
 
-# Words that trigger temporary bans (escalate to permanent after max_temp_bans)
-temp_ban_words:
-  - "crypto"
-  - "airdrop"
-  - "web3"
-  - "nft"
-  - "giveaway"
+# Words that trigger temporary bans. Repeated temp bans on the same pubkey
+# escalate to permanent after max_temp_bans. Examples (commented out):
+temp_ban_words: []
+  # - "<phrase that should temp-ban a pubkey>"
 
-max_temp_bans: 3 # Number of temp bans before permanent ban
+max_temp_bans: 3        # Number of temp bans before promotion to permanent
 temp_ban_duration: 3600 # Temporary ban duration in seconds (1 hour)
 
-# Users permanently banned from the relay
-permanent_blacklist_pubkeys: # Hex format public keys
-  - "0000000000000000000000000000000000000000000000000000000000000000"
+# Users permanently banned from the relay (hex pubkeys). Empty by default.
+permanent_blacklist_pubkeys: []
+  # - "0000000000000000000000000000000000000000000000000000000000000000"
 
-permanent_blacklist_npubs: # Bech32 format public keys
-  - "npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+# Same list, accepting bech32 npub format. Empty by default.
+permanent_blacklist_npubs: []
+  # - "npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
 
-# Trusted users whose mute lists (kind 10000) are imported as blacklists
-mutelist_authors:
-  - "0000000000000000000000000000000000000000000000000000000000000000"
+# Trusted users whose mute lists (kind 10000) are imported as blacklists.
+# Empty by default — populate with hex pubkeys whose moderation judgment you
+# want to inherit. Note: mutelist events MUST be reachable via this relay or
+# the configured client.index_relays for retrieval.
+mutelist_authors: []
+  # - "0000000000000000000000000000000000000000000000000000000000000000"
 
-# Mutelist events MUST be stored in this relay for retrieval
-mutelist_cache_refresh_minutes: 30
+mutelist_cache_refresh_minutes: 30 # How often to re-fetch the mute lists above
+
+# IP-level blacklist (#62). Mirrors the pubkey escalation pattern at the
+# network layer. Connection-level blocks happen before the WebSocket
+# upgrade, so a banned IP pays only the cost of a TCP accept + 403.
+#
+# All of these can be left empty/zero to disable the corresponding feature.
+
+# Admin-curated permanent blocks. Accepts CIDR ("203.0.113.0/24") or single
+# IPs (parsed as /32 for IPv4, /128 for IPv6). Auto-escalated bans live
+# separately in <data_dir>/ip_bans.json — don't mix the two.
+permanent_blocked_ips: []
+  # - "203.0.113.0/24"
+  # - "198.51.100.42"
+
+# Auto-escalation: rate-limit violations roll up into temp bans, temp bans
+# accumulate until promotion to permanent. Set to 0 to disable each stage.
+ip_rate_violation_threshold: 5  # Per-IP rate-limit hits before issuing one temp ban
+ip_max_temp_bans: 3             # Temp bans accumulated before promotion to permanent
+ip_temp_ban_duration: 600       # Seconds; how long a temp ban lasts
