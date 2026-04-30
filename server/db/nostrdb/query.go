@@ -215,8 +215,25 @@ func buildSingleNDBFilter(nf *C.struct_ndb_filter, filter nostr.Filter) error {
 	cJSON := C.CString(filterJSON)
 	defer C.free(unsafe.Pointer(cJSON))
 
-	// ndb_filter_from_json needs a scratch buffer for IDs/strings
-	bufSize := 1024 * 16 // 16KB scratch
+	// ndb_filter_from_json needs a scratch buffer to hold the parsed
+	// IDs/strings/prefix tables. A fixed 16KB cap silently truncated
+	// large filters in production: clients sending REQ with 256
+	// two-char author prefixes ("00".."ff") or arrays of 100+ full
+	// 64-char pubkeys overran the buffer, ndb_filter_from_json
+	// returned 0, and the query was rejected with
+	// "ndb_filter_from_json failed". Originally fixed in 9784b70 and
+	// inadvertently reverted by 4a6650f (which was reverting the
+	// noteToEvent path change in the same commit). Restored here.
+	//
+	// 64KB covers most realistic filters; the 4× len(filterJSON)
+	// fallback is a generous upper bound for pathological filters
+	// (mostly relevant when the filter contains long indexed-tag
+	// arrays). nostrdb itself has higher ceilings, so this scratch
+	// is the only knob we need to widen.
+	bufSize := 1024 * 64
+	if needed := 4 * len(filterJSON); needed > bufSize {
+		bufSize = needed
+	}
 	buf := (*C.uchar)(C.malloc(C.size_t(bufSize)))
 	defer C.free(unsafe.Pointer(buf))
 
