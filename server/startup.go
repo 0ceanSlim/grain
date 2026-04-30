@@ -276,6 +276,11 @@ func startBackgroundServices(cfg *cfgType.ServerConfig, dbAvailable bool) {
 	// Start client statistics monitoring
 	go InitStatsMonitoring()
 
+	// Load IP blocklist (admin + sidecar) and start the temp-ban
+	// expiry sweeper. See #62. Both safe to call before the DB is up.
+	config.LoadIPBlocklist(cfg.Blacklist)
+	config.StartIPBlocklistSweeper()
+
 	// Only start DB-dependent services if database is available
 	if dbAvailable {
 		// Start event purging service

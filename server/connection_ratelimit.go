@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -138,11 +139,16 @@ func RecordRejection(category, ip string) {
 	}
 }
 
-// RecordIPViolation is the hook #62 consumes for auto-escalation. The
-// rate limiter calls it on every per-IP rejection. For now it only feeds
-// the aggregator; the escalation state machine arrives with #62.
+// RecordIPViolation is the per-IP rate-limit hook. It feeds the
+// rejection aggregator and drives #62's auto-escalation state machine
+// (config.RecordIPRateViolation), so a rate-limit hit can graduate to a
+// temp ban and eventually a permanent block. The escalation no-ops if
+// the relevant thresholds in BlacklistConfig are unset.
 func RecordIPViolation(ip string) {
 	RecordRejection("rate_limit", ip)
+	if cfg := config.GetConfig(); cfg != nil {
+		config.RecordIPRateViolation(ip, cfg.Blacklist)
+	}
 }
 
 // startRejectionAggregator emits one summary WARN per minute. If no
@@ -220,20 +226,36 @@ func startConnectionRejectionInfrastructure() {
 }
 
 // EnforceConnectionRateLimit is the HTTP middleware-style guard that runs
-// before the WebSocket upgrade. It consults the per-IP bucket, and on
-// rejection writes 429 with no body (cheaper than a structured response)
-// and reports to the aggregator. Returns true if the request should be
-// allowed to proceed to the WS upgrade.
+// before the WebSocket upgrade. It enforces, in order:
+//
+//  1. IP block list (#62) — both admin-curated and auto-escalated. 403.
+//  2. Per-IP attempt rate limit (#61). 429 + Retry-After.
+//
+// Returns true if the request should be allowed to proceed to the WS
+// upgrade. limitPerMinute=0 disables the rate-limit stage; the block
+// check still runs because there's no equivalent kill switch — admins
+// who want it off should empty their lists.
 func EnforceConnectionRateLimit(w http.ResponseWriter, r *http.Request, limitPerMinute int) bool {
+	ip := utils.GetClientIP(r)
+
+	// IP block list short-circuits before rate counting so a banned IP
+	// doesn't get to consume tokens and pollute the top-offenders map
+	// with rate_limit events instead of blocked events.
+	if blocked, _ := config.IsIPBlocked(ip); blocked {
+		RecordRejection("blocked", ip)
+		w.WriteHeader(http.StatusForbidden)
+		return false
+	}
+
 	if limitPerMinute <= 0 {
 		return true
 	}
-	ip := utils.GetClientIP(r)
 	if CheckIPConnectionRate(ip, limitPerMinute) {
 		return true
 	}
 	// CheckIPConnectionRate already routed through RecordIPViolation,
-	// which credits the rate_limit counter and the top-IP map.
+	// which credits the rate_limit counter, the top-IP map, and the
+	// auto-escalation state machine.
 	w.Header().Set("Retry-After", "60")
 	w.WriteHeader(http.StatusTooManyRequests)
 	return false
