@@ -331,6 +331,15 @@ var wsServer = &websocket.Server{
 func initRoot(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Header.Get("Upgrade") == "websocket":
+		// Pre-upgrade per-IP connection rate limit (#61). Rejecting here
+		// avoids paying the WS-upgrade cost for connection-storm
+		// attempts. Disabled when limit is 0.
+		cfg := config.GetConfig()
+		if cfg != nil {
+			if !EnforceConnectionRateLimit(w, r, cfg.Server.ConnectionRateLimitPerIP) {
+				return
+			}
+		}
 		// Handle Nostr WebSocket connections
 		wsServer.ServeHTTP(w, r)
 	case r.Header.Get("Accept") == "application/nostr+json":

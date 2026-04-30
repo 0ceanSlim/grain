@@ -118,12 +118,14 @@ func PrintStats() {
 func ClientHandler(ws *websocket.Conn) {
 	cfg := config.GetConfig()
 
-	// Enforce max connections
+	// Enforce max connections. The per-rejection WARN was replaced in
+	// #61 with an aggregator that emits one summary line per minute —
+	// production saw 169,272 of these WARNs in 4h, drowning every other
+	// signal. The rejected client still gets a NOTICE; only the
+	// server-side log is aggregated.
 	if maxConn := cfg.Server.MaxConnections; maxConn > 0 {
 		if current := currentConnections.Load(); current >= int64(maxConn) {
-			log.RelayClient().Warn("Max connections reached, rejecting",
-				"max", maxConn,
-				"current", current)
+			RecordRejection("max_conn", utils.GetClientIP(ws.Request()))
 			websocket.Message.Send(ws, `["NOTICE","error: server at max capacity, try again later"]`)
 			ws.Close()
 			return
@@ -766,4 +768,5 @@ func BroadcastEvent(evt nostr.Event) {
 // Start stats monitoring
 func InitStatsMonitoring() {
 	go PrintStats()
+	startConnectionRejectionInfrastructure()
 }

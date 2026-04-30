@@ -23,7 +23,8 @@ type ServerConfig struct {
 		IdleTimeout               int    `yaml:"idle_timeout"`
 		MaxConnections            int    `yaml:"max_connections"`
 		MaxSubscriptionsPerClient int    `yaml:"max_subscriptions_per_client"`
-		ImplicitReqLimit          int    `yaml:"implicit_req_limit"` // New field for implicit REQ limit
+		ImplicitReqLimit          int    `yaml:"implicit_req_limit"`           // New field for implicit REQ limit
+		ConnectionRateLimitPerIP  int    `yaml:"connection_rate_limit_per_ip"` // Per-IP connection attempts per minute (0 = disabled). See #61.
 	} `yaml:"server"`
 	Client               ClientConfig         `yaml:"client"`
 	RateLimit            RateLimitConfig      `yaml:"rate_limit"`

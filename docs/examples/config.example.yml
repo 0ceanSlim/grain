@@ -66,6 +66,7 @@ server:
   idle_timeout: 1200 # Connection-level timeout for inactive clients (in seconds) ;  Set to 0 to disable idle timeout completely
   max_subscriptions_per_client: 10
   implicit_req_limit: 500 # Default limit applied to REQ when no limit is specified
+  connection_rate_limit_per_ip: 30 # Per-IP connection attempts per minute. Rejected before WS upgrade with HTTP 429. Set to 0 to disable.
 
 resource_limits:
   cpu_cores: 2 # Limit the number of CPU cores the application can use
