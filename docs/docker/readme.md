@@ -60,7 +60,7 @@ services:
       - GRAIN_ENV=production
       - LOG_LEVEL=info
     volumes:
-      - grain_data:/app/data
+      - grain_data:/home/grain/.grain
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8181/"]
@@ -78,7 +78,7 @@ volumes:
 
 GRAIN v0.5.0 uses an embedded **nostrdb** engine. It is critical to use a Docker volume to persist your data, otherwise your database and configurations will be lost when the container is removed.
 
-The default Dockerfile is configured to store data in `/app/data` (which maps to your platform's data directory inside the container).
+The default `docker-compose.yml` mounts a named volume on `/home/grain/.grain`, which is GRAIN's data directory inside the container — it holds `config.yml`, `blacklist.yml`, `whitelist.yml`, `relay_metadata.json`, the LMDB store under `data/`, and the runtime log file `debug.log`. Mounting the entire directory persists the relay's full operational state across container recreation.
 
 ---
 
@@ -93,16 +93,18 @@ You can set basic options directly in `docker-compose.yml`:
 - `SERVER_PORT`: Internal port (default 8181)
 
 ### Method 2: Volume Mapping (Recommended)
-Map a local directory to the container's data path to manage config files easily:
+Bind a local directory to the container's data directory to manage config files from the host:
 
 ```yaml
 services:
   grain:
     volumes:
-      - ./my-grain-config:/app/data
+      - ./my-grain-config:/home/grain/.grain
 ```
 
 You can then edit `config.yml`, `whitelist.yml`, etc., directly on your host machine. GRAIN supports **hot-reloading**, so changes are applied instantly without restarting the container.
+
+The host directory should be writable by uid/gid `1001:1001` (the non-root `grain` user inside the container). On first run GRAIN will populate the directory with default config files if it is empty.
 
 ---
 
@@ -118,7 +120,7 @@ docker compose logs -f grain
 ### Application Logs (Detailed)
 ```bash
 # View real-time application activity
-docker exec grain-relay tail -f /app/data/logs/debug.log
+docker exec grain-relay tail -f /home/grain/.grain/debug.log
 ```
 
 ---

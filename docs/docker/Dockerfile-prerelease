@@ -37,6 +37,12 @@ RUN addgroup -g 1001 grain && \
     adduser -D -s /bin/sh -u 1001 -G grain grain && \
     chown -R grain:grain /app
 
+# Pre-create grain's data directory with the right ownership so a fresh
+# named volume mounted on /home/grain/.grain inherits grain:grain
+# rather than root:root (which would block the non-root user from
+# writing and crash-loop the container). See #70.
+RUN mkdir -p /home/grain/.grain && chown -R grain:grain /home/grain/.grain
+
 USER grain
 
 EXPOSE 8181
