@@ -83,22 +83,35 @@ func InitializeLoggers(cfg *cfgType.ServerConfig) {
 		}
 	}
 
-	// Choose between structured JSON logs and pretty logs
-	var handler slog.Handler
+	// Choose between structured JSON logs and pretty logs for the file
+	// sink. The stdout sink, when enabled, always uses the pretty
+	// single-line format regardless of the file's structure setting —
+	// `docker logs` and friends are easier to read that way, and the
+	// JSON-array file format does not stream cleanly anyway.
+	var fileHandler slog.Handler
 	if cfg.Logging.Structure {
-		// Pass backup count to JSONLogWriter
-		handler = NewJSONLogWriter(logFilePath, logLevel, cfg.Logging.MaxSizeMB, cfg.Logging.BackupCount, suppressedComponents)
+		fileHandler = NewJSONLogWriter(logFilePath, logLevel, cfg.Logging.MaxSizeMB, cfg.Logging.BackupCount, suppressedComponents)
 	} else {
 		logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_SYNC, 0644)
 		if err != nil {
 			fmt.Printf("Failed to open log file: %v\n", err)
 			os.Exit(1)
 		}
-		handler = &PrettyLogWriter{
+		fileHandler = &PrettyLogWriter{
 			output:               logFile,
 			level:                logLevel,
 			suppressedComponents: suppressedComponents,
 		}
+	}
+
+	var handler slog.Handler = fileHandler
+	if cfg.Logging.Stdout {
+		stdoutHandler := &PrettyLogWriter{
+			output:               os.Stdout,
+			level:                logLevel,
+			suppressedComponents: suppressedComponents,
+		}
+		handler = NewMultiHandler(fileHandler, stdoutHandler)
 	}
 
 	// Create main logger

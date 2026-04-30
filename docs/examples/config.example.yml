@@ -7,6 +7,7 @@ logging:
   file: "debug" # Log file name
   max_log_size_mb: 10 # Maximum log file size in MB before trimming
   structure: false # true = structured JSON logs, false = pretty logs
+  stdout: false # Mirror log records to stdout (pretty single-line). Useful for Docker so `docker logs` works.
   check_interval_min: 10 # Check every 10 minutes
   backup_count: 2 # Keep 2 backup files (.bak1, .bak2)
   suppress_components: # Suppress INFO/DEBUG logs (WARN/ERROR still shown)

@@ -117,9 +117,18 @@ GRAIN logs to both stdout (minimal) and a structured log file.
 docker compose logs -f grain
 ```
 
+By default the relay only writes to its log file inside the container, so `docker logs` shows just the startup line. To mirror the live log to stdout (so `docker compose logs -f grain` shows everything in real time), set `stdout: true` under `logging:` in `config.yml`:
+
+```yaml
+logging:
+  stdout: true
+```
+
+The file sink is unaffected — the canonical `debug.log` continues to be written; stdout just gets a copy.
+
 ### Application Logs (Detailed)
 ```bash
-# View real-time application activity
+# View real-time application activity from the file
 docker exec grain-relay tail -f /home/grain/.grain/debug.log
 ```
 

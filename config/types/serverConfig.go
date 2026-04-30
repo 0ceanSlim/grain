@@ -5,6 +5,7 @@ type LogConfig struct {
 	File               string   `yaml:"file"`
 	MaxSizeMB          int      `yaml:"max_log_size_mb"`
 	Structure          bool     `yaml:"structure"`
+	Stdout             bool     `yaml:"stdout"`              // Mirror log records to stdout (pretty single-line format) so `docker logs` works without losing the file sink.
 	CheckIntervalMin   int      `yaml:"check_interval_min"`  // How often the program checks the size of the current log file
 	BackupCount        int      `yaml:"backup_count"`        // Number of backup logs to keep
 	SuppressComponents []string `yaml:"suppress_components"` // Components to suppress INFO/DEBUG logs from
