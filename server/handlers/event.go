@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/db/nostrdb"
@@ -70,6 +71,15 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	if !validation.ValidateEventTimestamp(evt, cfg) {
 		log.Event().Warn("Invalid timestamp for event", "event_id", evt.ID)
 		response.SendOK(client, evt.ID, false, "invalid: event created_at timestamp is out of allowed range")
+		return
+	}
+
+	// NIP-40: reject events whose expiration has already passed at ingest time.
+	// Future expirations are stored normally and will be swept by the
+	// expiration tracker (see server/db/nostrdb/expiration.go).
+	if validation.IsExpired(evt, time.Now().Unix()) {
+		log.Event().Info("EVENT rejected: expired (NIP-40)", "event_id", evt.ID)
+		response.SendOK(client, evt.ID, false, "invalid: event is expired")
 		return
 	}
 

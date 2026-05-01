@@ -21,8 +21,9 @@ import (
 
 // NDB wraps a nostrdb instance. It is safe for concurrent use.
 type NDB struct {
-	ndb *C.struct_ndb
-	mu  sync.RWMutex // protects close
+	ndb        *C.struct_ndb
+	mu         sync.RWMutex // protects close
+	expiration *ExpirationTracker
 }
 
 // NDB open flags. These map 1:1 onto nostrdb.h NDB_FLAG_* bits.
@@ -68,7 +69,7 @@ func OpenWithFlags(dbDir string, mapSizeMB int, ingestThreads int, flags int) (*
 		"map_size_mb", mapSizeMB,
 		"ingest_threads", ingestThreads)
 
-	return &NDB{ndb: ndb}, nil
+	return &NDB{ndb: ndb, expiration: newExpirationTracker()}, nil
 }
 
 // Close shuts down the nostrdb instance and frees resources.

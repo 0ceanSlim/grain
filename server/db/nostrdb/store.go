@@ -63,6 +63,10 @@ func (db *NDB) ingestEvent(evt nostr.Event) error {
 		return fmt.Errorf("failed to ingest event kind %d: %w", evt.Kind, err)
 	}
 
+	// NIP-40: register a future expiration with the in-memory tracker.
+	// No-op if the event has no expiration tag or the tracker isn't set.
+	db.trackIfExpiring(evt)
+
 	log.GetLogger("db-store").Info("Event stored",
 		"event_id", evt.ID, "kind", evt.Kind, "pubkey", evt.PubKey)
 	return nil

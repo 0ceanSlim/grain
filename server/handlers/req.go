@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"time"
 
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/db/nostrdb"
@@ -11,6 +12,7 @@ import (
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
+	"github.com/0ceanslim/grain/server/validation"
 )
 
 // HandleReq processes a new subscription request with proper subscription management
@@ -156,8 +158,18 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 	// drain, overflow the channel, and hit the slow-consumer guard,
 	// disconnecting a perfectly healthy client mid-fulfillment. See
 	// the SendMessageBlocking docstring for the full pathology.
+	// NIP-40: drop events whose expiration has passed. Defense in depth
+	// alongside the background sweeper — guarantees expired events are
+	// never served even if a sweep hasn't yet reached them.
+	nowUnix := time.Now().Unix()
 	delivered := 0
+	skippedExpired := 0
+	aborted := false
 	for _, evt := range queriedEvents {
+		if validation.IsExpired(evt, nowUnix) {
+			skippedExpired++
+			continue
+		}
 		if err := client.SendMessageBlocking([]interface{}{"EVENT", subID, evt}); err != nil {
 			// Client gone; skip the rest and the EOSE. The
 			// "Subscription established" log below will still
@@ -166,18 +178,21 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 				"sub_id", subID,
 				"delivered", delivered,
 				"total_queried", len(queriedEvents))
+			aborted = true
 			break
 		}
 		delivered++
 	}
-	if delivered == len(queriedEvents) {
-		// Only send EOSE if we delivered the whole historical batch.
+	if !aborted {
+		// Only send EOSE if we delivered the whole historical batch
+		// (expired-skipped events count as delivered for EOSE purposes).
 		_ = client.SendMessageBlocking([]interface{}{"EOSE", subID})
 	}
 
 	log.Req().Info("Subscription established",
 		"sub_id", subID,
 		"historical_events_sent", delivered,
+		"skipped_expired", skippedExpired,
 		"status", "active")
 
 	// NOTE: Subscription remains ACTIVE after EOSE

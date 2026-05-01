@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -290,6 +291,20 @@ func startBackgroundServices(cfg *cfgType.ServerConfig, dbAvailable bool) {
 				pubkeyCache := config.GetPubkeyCache()
 				return pubkeyCache.GetWhitelistedPubkeys()
 			})
+
+			// NIP-40: rebuild the in-memory expiration heap from
+			// stored events, then start the sweeper. Bootstrap runs
+			// in a goroutine so a multi-million-event scan doesn't
+			// stall startup; the sweeper joins the heap as
+			// bootstrap populates it. ctx is intentionally
+			// background — the sweeper runs for the lifetime of
+			// this server instance and is unwound by process exit.
+			go func() {
+				if err := db.BootstrapExpirations(); err != nil {
+					log.Startup().Error("NIP-40 expiration bootstrap failed", "error", err)
+				}
+			}()
+			go db.RunExpirationSweeper(context.Background())
 		}
 
 		log.Startup().Info("All background services started")
