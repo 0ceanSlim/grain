@@ -5,6 +5,10 @@ import "golang.org/x/net/websocket"
 // ClientInterface abstracts WebSocket clients
 type ClientInterface interface {
 	SendMessage(msg interface{})
+	// SendMessageBlocking enqueues with backpressure for REQ-fulfillment
+	// loops that need producer/consumer rate parity. Never call from
+	// BroadcastEvent. Returns non-nil if the client has gone away.
+	SendMessageBlocking(msg interface{}) error
 	GetWS() *websocket.Conn
 	GetSubscriptions() map[string][]Filter
 	SetSubscription(subID string, filters []Filter)

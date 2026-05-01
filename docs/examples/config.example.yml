@@ -18,11 +18,11 @@ logging:
   # those are where lockup symptoms surface and you want them visible by
   # default. Add components here only if you confirm they're spamming.
   suppress_components:
-    - "util"          # generic helper logs
-    - "log"           # the logger reporting on itself
-    - "db-query"      # one INFO per query — extremely noisy under load
-    - "db-store"      # one INFO per ingested event
-    - "event-store"   # event-pipeline tracing
+    - "util" # generic helper logs
+    - "log" # the logger reporting on itself
+    - "db-query" # one INFO per query — extremely noisy under load
+    - "db-store" # one INFO per ingested event
+    - "event-store" # event-pipeline tracing
     - "close-handler" # subscription teardown noise
     - "client-main"
     - "client-api"
@@ -35,8 +35,8 @@ logging:
 # See docs/configuration.md for the full component list and what each emits.
 
 database:
-  path: "data"       # Directory for nostrdb data files (relative to data dir)
-  map_size_mb: 4096  # Maximum database size in MB (4GB default)
+  path: "data" # Directory for nostrdb data files (relative to data dir)
+  map_size_mb: 4096 # Maximum database size in MB (4GB default)
 
 # Client configuration for the built-in Nostr client
 client:
@@ -66,17 +66,17 @@ client:
 
 server:
   port: :8181
-  read_timeout: 60   # Timeout for reading a single WebSocket message from client
-  write_timeout: 20  # Timeout for writing a single WebSocket message to client
+  read_timeout: 60 # Timeout for reading a single WebSocket message from client
+  write_timeout: 20 # Timeout for writing a single WebSocket message to client
   idle_timeout: 1200 # Connection-level timeout for inactive clients (in seconds); 0 disables.
-  max_connections: 100               # Hard cap on concurrent WebSocket clients. 0 disables the gate. Without this set, the relay accepts unlimited connections — set it on every production deployment.
+  max_connections: 100 # Hard cap on concurrent WebSocket clients. 0 disables the gate. Without this set, the relay accepts unlimited connections — set it on every production deployment.
   max_subscriptions_per_client: 10
-  implicit_req_limit: 500            # Default limit applied to REQ when no limit is specified
-  connection_rate_limit_per_ip: 30   # Per-IP connection attempts per minute. Rejected before WS upgrade with HTTP 429. 0 disables.
+  implicit_req_limit: 500 # Default limit applied to REQ when no limit is specified
+  connection_rate_limit_per_ip: 30 # Per-IP connection attempts per minute. Rejected before WS upgrade with HTTP 429. 0 disables.
 
 resource_limits:
-  cpu_cores: 2       # Limit the number of CPU cores the application can use
-  memory_mb: 2048    # Hard RSS cap in MB. Production grain at moderate load runs ~1GB; this leaves headroom. Raise for hosts with more RAM.
+  cpu_cores: 2 # Limit the number of CPU cores the application can use
+  memory_mb: 2048 # Hard RSS cap in MB. Production grain at moderate load runs ~1GB; this leaves headroom. Raise for hosts with more RAM.
   heap_size_mb: 1024 # Go GC heap soft target in MB. Should be roughly half of memory_mb so the runtime has room for stacks, mmap'd LMDB, etc.
 
 auth:
@@ -114,12 +114,12 @@ event_time_constraints:
   max_created_at_string: now+5m # Use a string to set a date for max created at in the future or past from current time
 
 rate_limit:
-  ws_limit: 50    # WebSocket messages per second per client (any frame: EVENT, REQ, CLOSE, etc.)
-  ws_burst: 100   # Allowed burst of WebSocket messages
+  ws_limit: 50 # WebSocket messages per second per client (any frame: EVENT, REQ, CLOSE, etc.)
+  ws_burst: 100 # Allowed burst of WebSocket messages
   event_limit: 10 # EVENT messages per second per client
   event_burst: 20 # Allowed burst of EVENTs
-  req_limit: 10   # REQ subscription messages per second per client. Clients commonly fire several REQs at startup (one per filter shape), so don't set this too tight.
-  req_burst: 30   # Allowed burst of REQs
+  req_limit: 10 # REQ subscription messages per second per client. Clients commonly fire several REQs at startup (one per filter shape), so don't set this too tight.
+  req_burst: 30 # Allowed burst of REQs
   max_event_size: 524288 # 512KB — reasonable for most Nostr events; applies to both event validation AND the WebSocket message buffer
 
   # Size limits for specific event kinds
@@ -139,7 +139,7 @@ rate_limit:
       limit: 8 # 8 events per second - most common events
       burst: 16 # Allow posting several messages quickly
     replaceable: # Kind 0, 3, 10000-19999 (profiles, contact lists, relay lists, mute lists)
-      limit: 5  # New users editing profile + contact list + relay list back-to-back can hit this; 5/sec leaves room.
+      limit: 5 # New users editing profile + contact list + relay list back-to-back can hit this; 5/sec leaves room.
       burst: 10 # Allow a quick wave of replaceable updates at account-setup time
     ephemeral: # Kind 20000-29999 (temporary events, not stored)
       limit: 50 # 50 events per second - higher since not stored permanently

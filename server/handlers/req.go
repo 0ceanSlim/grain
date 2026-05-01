@@ -91,8 +91,11 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 			log.Req().Debug("Duplicate subscription detected, ignoring",
 				"sub_id", subID,
 				"filter_count", len(filters))
-			// Still send EOSE for duplicate subscriptions to satisfy client expectations
-			client.SendMessage([]interface{}{"EOSE", subID})
+			// Still send EOSE for duplicate subscriptions to satisfy client expectations.
+			// Use the blocking variant for symmetry with the historical-fulfillment
+			// path below — there's only one frame here, so backpressure is moot, but
+			// the error return lets us bail cleanly if the client has already gone.
+			_ = client.SendMessageBlocking([]interface{}{"EOSE", subID})
 			return
 		} else {
 			log.Req().Info("Subscription updated with new filters",
@@ -146,17 +149,35 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		return
 	}
 
-	// Send historical events to client
+	// Send historical events to client. Use SendMessageBlocking so the
+	// producer (this loop) stays in step with the writeLoop consumer —
+	// without backpressure, a 500-event REQ would shove all 500 events
+	// into the per-client buffer faster than the WS write rate could
+	// drain, overflow the channel, and hit the slow-consumer guard,
+	// disconnecting a perfectly healthy client mid-fulfillment. See
+	// the SendMessageBlocking docstring for the full pathology.
+	delivered := 0
 	for _, evt := range queriedEvents {
-		client.SendMessage([]interface{}{"EVENT", subID, evt})
+		if err := client.SendMessageBlocking([]interface{}{"EVENT", subID, evt}); err != nil {
+			// Client gone; skip the rest and the EOSE. The
+			// "Subscription established" log below will still
+			// fire so we have a record of how many made it.
+			log.Req().Debug("REQ fulfillment aborted: client disconnected",
+				"sub_id", subID,
+				"delivered", delivered,
+				"total_queried", len(queriedEvents))
+			break
+		}
+		delivered++
 	}
-
-	// Send EOSE message to indicate end of stored events
-	client.SendMessage([]interface{}{"EOSE", subID})
+	if delivered == len(queriedEvents) {
+		// Only send EOSE if we delivered the whole historical batch.
+		_ = client.SendMessageBlocking([]interface{}{"EOSE", subID})
+	}
 
 	log.Req().Info("Subscription established",
 		"sub_id", subID,
-		"historical_events_sent", len(queriedEvents),
+		"historical_events_sent", delivered,
 		"status", "active")
 
 	// NOTE: Subscription remains ACTIVE after EOSE

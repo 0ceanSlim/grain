@@ -63,10 +63,28 @@ type Client struct {
 	mu           sync.RWMutex // Protects lastActivity
 }
 
-// clientOutgoingBuffer is the per-client outbound queue capacity. 256 messages
-// is enough to absorb normal bursts; once full the consumer is treated as
-// slow/dead and the connection is closed (see SendMessage).
-const clientOutgoingBuffer = 256
+// clientOutgoingBuffer is the per-client outbound queue capacity. 1024
+// leaves headroom for both REQ historical-fulfillment runs (up to
+// implicit_req_limit events shoved in fast) and broadcast bursts. The
+// prior 256 was too tight: a REQ with limit=500 overflowed the buffer
+// before writeLoop could drain a single message, triggering a spurious
+// "Slow consumer detected" disconnect on a perfectly healthy client.
+// At ~1KB per queued message the worst-case memory cost is ~1MB per
+// client at full saturation — fine at any realistic connection count.
+//
+// Note: REQ fulfillment now uses SendMessageBlocking, so even if a
+// future change pushes more messages than the buffer holds, the
+// producer naturally backpressures rather than dropping the client.
+// BroadcastEvent still uses non-blocking SendMessage (drop-on-full),
+// which is correct: a single stuck peer must not freeze fan-out for
+// every other subscriber.
+const clientOutgoingBuffer = 1024
+
+// errClientGone is returned by SendMessageBlocking when the client's
+// context is already cancelled or the underlying websocket has been
+// torn down. Treat it as "abort, this client is done" — there is no
+// useful recovery beyond returning from the calling fulfillment loop.
+var errClientGone = errors.New("client disconnected")
 
 // Track active clients.
 //
@@ -285,6 +303,58 @@ func (c *Client) SendMessage(msg interface{}) {
 			"buffer_capacity", clientOutgoingBuffer)
 		c.markDisconnected()
 		go c.CloseClient()
+	}
+}
+
+// SendMessageBlocking enqueues a message with backpressure: it blocks
+// until the writeLoop drains a slot or the connection's context is
+// cancelled. Use this from REQ historical-fulfillment loops where the
+// producer and consumer must stay in step — never from BroadcastEvent,
+// where one stuck peer must not freeze fan-out for every other
+// subscriber (BroadcastEvent uses SendMessage, which drops on full).
+//
+// Returns errClientGone when the connection is already torn down or
+// becomes torn down while we're waiting for buffer space. Callers
+// should treat any error as "abort, this client is done" — there is
+// no useful recovery beyond returning from the fulfillment loop.
+//
+// This split exists because the prior single-path SendMessage produced
+// spurious "Slow consumer detected" disconnects under REQ load: the
+// REQ loop iterated through up to implicit_req_limit events at memory
+// speed (~10µs per Marshal+enqueue) while writeLoop drained at
+// network speed (~100-500µs per WS write). Producer ran ~10-50× faster
+// than consumer, the 256-slot buffer filled near-instantly, and the
+// 257th SendMessage call hit the default branch and disconnected a
+// healthy client mid-fulfillment. See req.go's historical-event loop
+// for the canonical caller.
+func (c *Client) SendMessageBlocking(msg interface{}) error {
+	// Fast-path bail when the connection is already torn down — avoids
+	// doing the json.Marshal work just to fail in the select below.
+	select {
+	case <-c.ctx.Done():
+		return errClientGone
+	default:
+	}
+
+	jsonMsg, err := json.Marshal(msg)
+	if err != nil {
+		log.RelayClient().Error("Failed to marshal message",
+			"client_id", c.id,
+			"error", err)
+		return err
+	}
+
+	// No c.ws nil-check here: in production c.ws is always set by the
+	// time any caller reaches this function, and the ctx-cancel path
+	// below cleanly handles the case where writeLoop never started
+	// (the only way the channel never drains). Keeping the guard would
+	// just shadow a real construction bug behind a benign-looking
+	// "client gone" error.
+	select {
+	case c.outgoing <- jsonMsg:
+		return nil
+	case <-c.ctx.Done():
+		return errClientGone
 	}
 }
 
