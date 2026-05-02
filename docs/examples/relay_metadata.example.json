@@ -8,7 +8,7 @@
   "icon": "https://example.com/icon.png",
   "pubkey": "0000000000000000000000000000000000000000000000000000000000000000",
   "contact": "mailto:admin@relay.com",
-  "supported_nips": [1, 7, 9, 11, 19, 40, 42, 55, 65],
+  "supported_nips": [1, 7, 9, 11, 19, 40, 42, 55, 65, 70],
   "software": "https://github.com/0ceanslim/grain",
   "version": "0.0.0-dev",
   "privacy_policy": "https://relay.com/privacy",

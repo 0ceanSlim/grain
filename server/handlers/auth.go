@@ -16,9 +16,13 @@ import (
 // Mutex to protect auth data
 var authMu sync.Mutex
 
-// Maps to track authentication sessions
+// Maps to track authentication sessions. authSessions stores the
+// authenticated pubkey (hex) per connection; an empty/missing entry
+// means the connection has not completed NIP-42 AUTH. We need the
+// pubkey itself (not just a bool) so NIP-70 can verify a protected
+// event came from its author's authenticated connection.
 var challenges = make(map[nostr.ClientInterface]string)
-var authSessions = make(map[nostr.ClientInterface]bool)
+var authSessions = make(map[nostr.ClientInterface]string)
 
 // HandleAuth processes the "AUTH" message type as defined in NIP-42
 func HandleAuth(client nostr.ClientInterface, message []interface{}) {
@@ -58,7 +62,7 @@ func HandleAuth(client nostr.ClientInterface, message []interface{}) {
 	}
 
 	// Mark the session as authenticated after successful verification
-	SetAuthenticated(client)
+	SetAuthenticated(client, authEvent.PubKey)
 	ClearChallengeForConnection(client) // Clear used challenge
 
 	log.Auth().Info("Authentication successful", "pubkey", authEvent.PubKey)
@@ -133,15 +137,24 @@ func ClearChallengeForConnection(client nostr.ClientInterface) {
 	delete(challenges, client)
 }
 
-// SetAuthenticated marks a connection as authenticated
-func SetAuthenticated(client nostr.ClientInterface) {
+// SetAuthenticated marks a connection as authenticated and records the
+// authenticated pubkey.
+func SetAuthenticated(client nostr.ClientInterface, pubkey string) {
 	authMu.Lock()
 	defer authMu.Unlock()
-	authSessions[client] = true
+	authSessions[client] = pubkey
 }
 
-// IsAuthenticated checks if a connection is authenticated
+// IsAuthenticated checks if a connection is authenticated.
 func IsAuthenticated(client nostr.ClientInterface) bool {
+	authMu.Lock()
+	defer authMu.Unlock()
+	return authSessions[client] != ""
+}
+
+// GetAuthedPubkey returns the pubkey the connection authenticated as,
+// or "" if the connection has not completed NIP-42 AUTH.
+func GetAuthedPubkey(client nostr.ClientInterface) string {
 	authMu.Lock()
 	defer authMu.Unlock()
 	return authSessions[client]

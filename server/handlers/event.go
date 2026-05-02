@@ -61,6 +61,25 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 		}
 	}
 
+	// NIP-70: events with a `["-"]` tag are protected and may only be
+	// accepted from an authenticated connection whose pubkey matches
+	// the event author.
+	if validation.IsProtectedEvent(evt) {
+		authedPubkey := GetAuthedPubkey(client)
+		if authedPubkey == "" {
+			log.Event().Info("EVENT rejected: protected event requires authentication (NIP-70)",
+				"event_id", evt.ID, "pubkey", evt.PubKey)
+			response.SendOK(client, evt.ID, false, "auth-required: this event is protected and requires authentication")
+			return
+		}
+		if authedPubkey != evt.PubKey {
+			log.Event().Info("EVENT rejected: protected event author mismatch (NIP-70)",
+				"event_id", evt.ID, "event_pubkey", evt.PubKey, "authed_pubkey", authedPubkey)
+			response.SendOK(client, evt.ID, false, "restricted: protected events may only be published by their author")
+			return
+		}
+	}
+
 	if cfg == nil {
 		log.Event().Error("Failed to get server configuration")
 		response.SendOK(client, evt.ID, false, "error: internal server error")
