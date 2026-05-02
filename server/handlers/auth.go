@@ -10,6 +10,7 @@ import (
 	"github.com/0ceanslim/grain/server/handlers/response"
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
+	"github.com/0ceanslim/grain/server/utils/relayurl"
 	"github.com/0ceanslim/grain/server/validation"
 )
 
@@ -56,7 +57,15 @@ func HandleAuth(client nostr.ClientInterface, message []interface{}) {
 
 	err = VerifyAuthEvent(client, authEvent)
 	if err != nil {
-		log.Auth().Info("Auth verification failed", "event_id", authEvent.ID, "pubkey", authEvent.PubKey, "error", err)
+		// Pull the relay tag for the failure log so URL-mismatch
+		// problems can be diagnosed from the file alone (otherwise
+		// the only signal is the opaque "relay URL does not match").
+		gotRelay, _ := extractTag(authEvent.Tags, "relay")
+		log.Auth().Info("Auth verification failed",
+			"event_id", authEvent.ID,
+			"pubkey", authEvent.PubKey,
+			"relay_tag", gotRelay,
+			"error", err)
 		response.SendOK(client, authEvent.ID, false, err.Error())
 		return
 	}
@@ -94,7 +103,7 @@ func VerifyAuthEvent(client nostr.ClientInterface, evt nostr.Event) error {
 		return errors.New("invalid: challenge does not match or is missing")
 	}
 
-	if relayURL != config.GetConfig().Auth.RelayURL {
+	if !relayurl.Match(relayURL, config.GetConfig().Auth.RelayURL) {
 		return errors.New("invalid: relay URL does not match")
 	}
 
