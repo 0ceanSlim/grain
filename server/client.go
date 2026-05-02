@@ -767,6 +767,11 @@ func clientReader(client *Client) {
 				"client_id", client.id,
 				"message_parts", len(message))
 			handlers.HandleEvent(client, message)
+		case "COUNT":
+			log.RelayClient().Debug("Processing COUNT message",
+				"client_id", client.id,
+				"message_parts", len(message))
+			handlers.HandleCount(client, message)
 		default:
 			log.RelayClient().Warn("Unknown message type",
 				"type", messageType,
