@@ -1,7 +1,7 @@
 package integration
 
 import (
-	"fmt"
+	"crypto/rand"
 	"testing"
 	"time"
 
@@ -9,14 +9,24 @@ import (
 )
 
 // NIP-50 fulltext search. nostrdb indexes content for kinds 1 and
-// 30023 only — these tests use kind 1 throughout. Searches use a
-// per-test unique token so concurrent test runs (and stale data from
-// prior runs against the same default-relay container) don't leak
-// matches into each other.
+// 30023 only — these tests use kind 1 throughout. Each test uses a
+// fresh random all-letters token so prior test runs (and the
+// surrounding tests in this file) can't leak matches via nostrdb's
+// tokenizer. A tokenizer that splits on letter↔digit boundaries
+// would otherwise turn `grntest1234` into the two tokens `grntest`
+// and `1234`, making the `grntest` token shared across all tests.
 
 func uniqueToken(t *testing.T) string {
 	t.Helper()
-	return fmt.Sprintf("grntest%d", time.Now().UnixNano())
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		t.Fatalf("rand.Read: %v", err)
+	}
+	out := make([]byte, len(b))
+	for i, x := range b {
+		out[i] = 'a' + (x % 26)
+	}
+	return string(out)
 }
 
 func TestNIP50_BasicMatch(t *testing.T) {
