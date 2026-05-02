@@ -71,6 +71,10 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		f.Since = utils.ToTime(filterData["since"])
 		f.Until = utils.ToTime(filterData["until"])
 		f.Limit = utils.ToInt(filterData["limit"])
+		// NIP-50: optional fulltext search query.
+		if s, ok := filterData["search"].(string); ok {
+			f.Search = s
+		}
 
 		// NIP-01: tag filters are top-level keys like "#e", "#p", "#a".
 		f.Tags = make(map[string][]string)
@@ -142,13 +146,42 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		effectiveLimit = cfg.Server.ImplicitReqLimit
 	}
 
-	queriedEvents, err := db.Query(filters, effectiveLimit)
-	if err != nil {
-		log.Req().Error("Error querying events",
-			"sub_id", subID,
-			"error", err)
-		response.SendClosed(client, subID, "error: could not query events")
-		return
+	// Split filters into search vs. non-search. NIP-50 search filters
+	// hit nostrdb's fulltext index via TextSearch; the rest go through
+	// the standard Query path. Concatenate results — NIP-01 multi-
+	// filter REQs are already a union with no dedupe contract.
+	var nonSearch []nostr.Filter
+	var searchFilters []nostr.Filter
+	for _, f := range filters {
+		if f.Search != "" {
+			searchFilters = append(searchFilters, f)
+		} else {
+			nonSearch = append(nonSearch, f)
+		}
+	}
+
+	var queriedEvents []nostr.Event
+	if len(nonSearch) > 0 {
+		evts, err := db.Query(nonSearch, effectiveLimit)
+		if err != nil {
+			log.Req().Error("Error querying events",
+				"sub_id", subID,
+				"error", err)
+			response.SendClosed(client, subID, "error: could not query events")
+			return
+		}
+		queriedEvents = append(queriedEvents, evts...)
+	}
+	for _, sf := range searchFilters {
+		evts, err := pagedTextSearch(db, sf, effectiveLimit)
+		if err != nil {
+			log.Req().Error("Error executing search",
+				"sub_id", subID,
+				"error", err)
+			response.SendClosed(client, subID, "error: could not run search")
+			return
+		}
+		queriedEvents = append(queriedEvents, evts...)
 	}
 
 	// Send historical events to client. Use SendMessageBlocking so the
@@ -214,6 +247,60 @@ func areFiltersIdentical(filters1, filters2 []nostr.Filter) bool {
 	hash2 := hashFilters(filters2)
 
 	return hash1 == hash2
+}
+
+// pagedTextSearch runs the NIP-50 search on `f` and pages through the
+// nostrdb 128-result-per-call cap until either the effective REQ limit
+// is filled, the search is exhausted, or the filter's Since bound is
+// crossed. Same Until-cursor pattern as CountFiltered and the
+// expiration bootstrap; same same-second-tie undercount caveat.
+func pagedTextSearch(db *nostrdb.NDB, f nostr.Filter, effectiveLimit int) ([]nostr.Event, error) {
+	const pageSize = 128
+	remaining := effectiveLimit
+	if f.Limit != nil && *f.Limit > 0 && *f.Limit < remaining {
+		remaining = *f.Limit
+	}
+
+	var acc []nostr.Event
+	cursor := f.Until
+	for remaining > 0 {
+		page := f
+		page.Until = cursor
+
+		want := pageSize
+		if remaining < want {
+			want = remaining
+		}
+		events, err := db.TextSearch(f.Search, page, want)
+		if err != nil {
+			return nil, err
+		}
+		if len(events) == 0 {
+			break
+		}
+		acc = append(acc, events...)
+		remaining -= len(events)
+
+		if len(events) < pageSize {
+			break
+		}
+
+		// Advance cursor strictly older than the oldest result on this
+		// page. nostrdb returns newest-first per the descending order
+		// we set in TextSearch.
+		oldestTs := events[0].CreatedAt
+		for _, e := range events {
+			if e.CreatedAt < oldestTs {
+				oldestTs = e.CreatedAt
+			}
+		}
+		next := time.Unix(oldestTs-1, 0)
+		if f.Since != nil && !next.After(*f.Since) {
+			break
+		}
+		cursor = &next
+	}
+	return acc, nil
 }
 
 // hashFilters creates a deterministic hash of filter contents

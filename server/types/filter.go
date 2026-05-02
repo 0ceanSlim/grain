@@ -1,6 +1,9 @@
 package relay
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Filter represents the criteria used to query events
 type Filter struct {
@@ -11,6 +14,7 @@ type Filter struct {
 	Since   *time.Time          `json:"since,omitempty"`
 	Until   *time.Time          `json:"until,omitempty"`
 	Limit   *int                `json:"limit,omitempty"`
+	Search  string              `json:"search,omitempty"` // NIP-50: fulltext search query
 }
 
 // MatchesEvent returns true if the event satisfies all filter criteria per NIP-01.
@@ -67,6 +71,19 @@ func (f Filter) MatchesEvent(evt Event) bool {
 		return false
 	}
 
+	// NIP-50: substring match on event content. nostrdb's index is
+	// ingest-time, but BroadcastEvent calls MatchesEvent against
+	// in-memory subscriptions before reindex completes — so we need
+	// our own check here for live (post-EOSE) search subscriptions.
+	// This is a substring match, not the tokenized AND-of-words match
+	// nostrdb does at REQ time; consistent with NIP-50's "implementation-
+	// defined" search semantics.
+	if f.Search != "" {
+		if !strings.Contains(strings.ToLower(evt.Content), strings.ToLower(f.Search)) {
+			return false
+		}
+	}
+
 	// Check tag filters (e.g. Tags["e"] = ["abc..."] means #e tag must contain "abc...")
 	for tagName, filterValues := range f.Tags {
 		if len(filterValues) == 0 {
@@ -121,6 +138,9 @@ func (f Filter) ToSubscriptionFilter() map[string]interface{} {
 	}
 	if f.Limit != nil {
 		filter["limit"] = *f.Limit
+	}
+	if f.Search != "" {
+		filter["search"] = f.Search
 	}
 
 	return filter
