@@ -772,6 +772,11 @@ func clientReader(client *Client) {
 				"client_id", client.id,
 				"message_parts", len(message))
 			handlers.HandleCount(client, message)
+		case "PING":
+			// Application-level keepalive used by some clients (not a
+			// NIP). Reply with PONG so the WARN log doesn't fire and
+			// the client knows the relay is alive.
+			client.SendMessage([]interface{}{"PONG"})
 		default:
 			log.RelayClient().Warn("Unknown message type",
 				"type", messageType,
