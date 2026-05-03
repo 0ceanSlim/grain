@@ -103,7 +103,8 @@ func VerifyAuthEvent(client nostr.ClientInterface, evt nostr.Event) error {
 		return errors.New("invalid: challenge does not match or is missing")
 	}
 
-	if !relayurl.Match(relayURL, config.GetConfig().Auth.RelayURL) {
+	cfg := config.GetConfig().Auth
+	if !relayurl.Match(relayURL, cfg.RelayURL, relayurl.ParseMode(cfg.RelayURLMatch)) {
 		return errors.New("invalid: relay URL does not match")
 	}
 

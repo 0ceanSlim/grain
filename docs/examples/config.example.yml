@@ -86,6 +86,16 @@ auth:
   # the AUTH challenge and must match what the client sees, or the AUTH fails.
   # Leave empty if required: false.
   relay_url: ""
+  # How strictly the AUTH `relay` tag is compared against relay_url.
+  # Both modes canonicalize scheme + host (lowercase, strip default ports) and
+  # ignore trailing slashes. They differ in path handling:
+  #   strict (default) - path is significant. Safe for shared-host/multi-tenant
+  #                      deployments (a relay at /v1 won't accept AUTH for /v2).
+  #   host             - path is ignored entirely. Use this if clients in the
+  #                      wild append fingerprint suffixes to your URL and you
+  #                      don't share the host with another relay.
+  # Unknown values fall back to strict.
+  relay_url_match: "strict"
 
 backup_relay:
   enabled: false # Set to true to enable sending events to the backup relay
