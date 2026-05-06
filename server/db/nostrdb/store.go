@@ -101,7 +101,7 @@ func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event) error {
 		if old.CreatedAt > evt.CreatedAt || (old.CreatedAt == evt.CreatedAt && old.ID < evt.ID) {
 			log.GetLogger("db-store").Info("Rejecting replaceable event - newer version exists",
 				"event_id", evt.ID, "existing_id", old.ID, "kind", evt.Kind)
-			return fmt.Errorf("blocked: relay already has a newer event of the same kind with this pubkey")
+			return fmt.Errorf("blocked: a newer replaceable event of kind %d already exists for this pubkey", evt.Kind)
 		}
 		// New event wins — physically remove the superseded version so
 		// queries with limits, until-cursors, or history walks don't see
@@ -159,7 +159,7 @@ func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event) error {
 			log.GetLogger("db-store").Info("Rejecting addressable event - newer version exists",
 				"event_id", evt.ID, "existing_id", old.ID,
 				"kind", evt.Kind, "d_tag", dTag)
-			return fmt.Errorf("blocked: relay already has a newer event for this pubkey and dTag")
+			return fmt.Errorf("blocked: a newer addressable event of kind %d with d-tag %q already exists for this pubkey", evt.Kind, dTag)
 		}
 		// Physically remove the superseded addressable version — see the
 		// comment in storeReplaceable for the ordering rationale.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/0ceanslim/grain/config"
@@ -154,7 +155,8 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 
 	if isDuplicate {
 		log.Event().Info("Duplicate event detected", "event_id", evt.ID)
-		response.SendOK(client, evt.ID, false, "blocked: the database already contains this event")
+		response.SendOK(client, evt.ID, false, "duplicate: already have this event")
+		response.SendNotice(client, evt.PubKey, fmt.Sprintf("event %s was rejected because the relay already stores it", evt.ID))
 		return
 	}
 
@@ -167,6 +169,21 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	}
 
 	if storeErr != nil {
+		// Storage layer returns errors prefixed with NIP-01 OK reasons
+		// (`blocked:`, `duplicate:`, `invalid:`) for normal client-facing
+		// rejections. Pass those through verbatim and log at INFO — the
+		// client is expected to handle them, not the operator. Anything
+		// else is a real failure: log ERROR and wrap with `error:`.
+		msg := storeErr.Error()
+		if isClientFacingReject(msg) {
+			log.Event().Info("Event rejected",
+				"event_id", evt.ID,
+				"kind", evt.Kind,
+				"reason", msg)
+			response.SendOK(client, evt.ID, false, msg)
+			response.SendNotice(client, evt.PubKey, fmt.Sprintf("event %s was rejected: %s", evt.ID, msg))
+			return
+		}
 		log.Event().Error("Failed to store event",
 			"event_id", evt.ID,
 			"kind", evt.Kind,
@@ -207,4 +224,17 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 		"event_id", evt.ID,
 		"kind", evt.Kind,
 		"pubkey", evt.PubKey)
+}
+
+// isClientFacingReject reports whether a storage error message starts with a
+// NIP-01 OK-machine-readable prefix that the client is expected to handle
+// (`blocked:`, `duplicate:`, `invalid:`). These are normal client interactions
+// — log at INFO, not ERROR.
+func isClientFacingReject(msg string) bool {
+	for _, p := range []string{"blocked:", "duplicate:", "invalid:"} {
+		if strings.HasPrefix(msg, p) {
+			return true
+		}
+	}
+	return false
 }
