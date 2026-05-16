@@ -28,7 +28,7 @@ RUN cd server/db/nostrdb && bash build.sh
 # is the build-time half of the contract; the runtime half lives in
 # server/api/docs.
 RUN go install github.com/swaggo/swag/cmd/swag@v1.16.4 \
-    && swag init --parseDependency --parseInternal -g main.go -o docs/openapi
+    && swag init --parseDependency --parseInternal -g main.go -o docs/openapi -ot json
 
 # Build the binary with CGO enabled for nostrdb
 RUN CGO_ENABLED=1 go build -buildvcs=false -o grain .

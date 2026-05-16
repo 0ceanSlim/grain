@@ -7,7 +7,6 @@ toolchain go1.23.4
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/swaggo/http-swagger/v2 v2.0.2
-	github.com/swaggo/swag v1.8.1
 	golang.org/x/net v0.27.0
 )
 
@@ -21,8 +20,9 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/swaggo/files/v2 v2.0.0 // indirect
+	github.com/swaggo/swag v1.16.4 // indirect
 	golang.org/x/sys v0.22.0 // indirect
-	golang.org/x/tools v0.1.12 // indirect
+	golang.org/x/tools v0.7.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
