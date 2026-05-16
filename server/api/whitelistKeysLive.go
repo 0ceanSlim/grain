@@ -12,6 +12,14 @@ import (
 
 // GetAllWhitelistedPubkeysLive handles the request to return all whitelisted pubkeys with live domain fetching
 // This endpoint fetches fresh data from domains and is suitable for verification after configuration changes
+//
+// @Summary      List whitelisted pubkeys (live)
+// @Description  Same shape as the cached endpoint but fetches every `.well-known/nostr.json` referenced by `domain_whitelist` on demand. Useful after a config change when you want to verify domain resolution without waiting for the background refresh.
+// @Tags         relay-keys
+// @Produce      json
+// @Success      200  {object}  WhitelistKeysResponse
+// @Failure      500  {string}  string  "Whitelist configuration not available"
+// @Router       /api/v1/relay/keys/whitelist/live [get]
 func GetAllWhitelistedPubkeysLive(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Live whitelist keys API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

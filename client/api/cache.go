@@ -13,6 +13,15 @@ import (
 
 // GetCacheHandler returns the cached user data as JSON (no session data)
 // Automatically refreshes cache if expired or missing
+//
+// @Summary      Get cached user data
+// @Description  Returns the cached profile, mailboxes (kind 10002), and managed client relay list for the logged-in user. Rebuilds the cache on miss.
+// @Tags         client-cache
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Failure      401  {string}  string  "User not logged in"
+// @Failure      500  {string}  string  "Failed to load user data"
+// @Router       /api/v1/cache [get]
 func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 	// Get current session to identify user
 	userSession := session.SessionMgr.GetCurrentUser(r)
@@ -145,6 +154,16 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // RefreshCacheHandler manually refreshes cache for the current user
+//
+// @Summary      Force cache refresh
+// @Description  Clears and rebuilds the cached user data from outbox relays. Useful after profile updates.
+// @Tags         client-cache
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Failure      401  {string}  string  "User not logged in"
+// @Failure      405  {string}  string  "Method not allowed"
+// @Failure      500  {string}  string  "Failed to refresh cache"
+// @Router       /api/v1/cache/refresh [post]
 func RefreshCacheHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

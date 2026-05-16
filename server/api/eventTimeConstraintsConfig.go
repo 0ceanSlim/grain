@@ -18,6 +18,14 @@ type EventTimeConstraintsConfigResponse struct {
 }
 
 // GetEventTimeConstraintsConfig handles the request to return event time constraints configuration
+//
+// @Summary      Get event-time-constraints config
+// @Description  Returns the accepted window for event `created_at` (min/max as Unix timestamps and human-readable strings).
+// @Tags         relay-config
+// @Produce      json
+// @Success      200  {object}  EventTimeConstraintsConfigResponse
+// @Failure      500  {string}  string  "Server configuration not available"
+// @Router       /api/v1/relay/config/event_time_constraints [get]
 func GetEventTimeConstraintsConfig(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Event time constraints config API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

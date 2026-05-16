@@ -16,6 +16,18 @@ type Nip19DecodeRequest struct {
 
 // Nip19DecodeHandler decodes NIP-19 bech32 entities (npub, note, nprofile, nevent, naddr)
 // Accepts both GET (URL path) and POST (JSON body) requests to handle long entities
+//
+// @Summary      Decode NIP-19 entity
+// @Description  Decodes any NIP-19 bech32 entity (npub, nsec, note, nprofile, nevent, naddr). POST accepts entities too long for a URL path.
+// @Tags         client-keys
+// @Accept       json
+// @Produce      json
+// @Param        entity  path      string              false  "NIP-19 entity (GET path form)"
+// @Param        body    body      Nip19DecodeRequest  false  "NIP-19 entity (POST body form)"
+// @Success      200     {object}  map[string]interface{}
+// @Failure      400     {object}  map[string]string  "Invalid entity"
+// @Failure      405     {string}  string             "Method not allowed"
+// @Router       /api/v1/keys/decode/nip19/{entity} [get]
 func Nip19DecodeHandler(w http.ResponseWriter, r *http.Request) {
 	var entity string
 

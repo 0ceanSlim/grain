@@ -9,6 +9,14 @@ import (
 )
 
 // LogoutHandler handles user logout requests via API
+//
+// @Summary      Log out
+// @Description  Clears the active session cookie. Idempotent — succeeds even if no session was active.
+// @Tags         client-auth
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Failure      405  {string}  string  "Method not allowed"
+// @Router       /api/v1/auth/logout [post]
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

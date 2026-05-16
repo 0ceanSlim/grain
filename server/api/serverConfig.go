@@ -20,6 +20,14 @@ type ServerConfigResponse struct {
 }
 
 // GetServerConfig handles the request to return server configuration
+//
+// @Summary      Get server config
+// @Description  Returns the HTTP server settings (timeouts, connection caps, subscription caps).
+// @Tags         relay-config
+// @Produce      json
+// @Success      200  {object}  ServerConfigResponse
+// @Failure      500  {string}  string  "Server configuration not available"
+// @Router       /api/v1/relay/config/server [get]
 func GetServerConfig(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Server config API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

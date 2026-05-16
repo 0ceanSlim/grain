@@ -18,6 +18,14 @@ type BlacklistKeysResponse struct {
 }
 
 // GetAllBlacklistedPubkeys handles the request to return all blacklisted pubkeys organized by source
+//
+// @Summary      List blacklisted pubkeys (cached)
+// @Description  Returns permanent bans (from config), live temporary bans (with expiry timestamps), and the grouped per-author mutelist from the in-process cache.
+// @Tags         relay-keys
+// @Produce      json
+// @Success      200  {object}  BlacklistKeysResponse
+// @Failure      500  {string}  string  "Blacklist configuration not available"
+// @Router       /api/v1/relay/keys/blacklist [get]
 func GetAllBlacklistedPubkeys(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Blacklist keys API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

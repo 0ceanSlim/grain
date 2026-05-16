@@ -18,6 +18,15 @@ type KeyGenerationResponse struct {
 }
 
 // KeyGenerationHandler generates a new random Nostr key pair
+//
+// @Summary      Generate keypair
+// @Description  Generates a fresh secp256k1 keypair and returns both the hex and bech32 (nsec/npub) forms. Pure utility — the relay does not store the private key.
+// @Tags         client-keys
+// @Produce      json
+// @Success      200  {object}  KeyGenerationResponse
+// @Failure      405  {string}  string                "Method not allowed"
+// @Failure      500  {object}  KeyGenerationResponse "Key pair generation failed"
+// @Router       /api/v1/keys/generate [get]
 func KeyGenerationHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

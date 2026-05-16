@@ -22,6 +22,14 @@ type WhitelistDomainInfo struct {
 }
 
 // GetAllWhitelistedPubkeys handles the cached request to return all whitelisted pubkeys organized by source
+//
+// @Summary      List whitelisted pubkeys (cached)
+// @Description  Returns the configured whitelist registry (direct pubkeys + npubs converted) and a per-domain breakdown from the in-process cache. This is the registry, not the enforcement gate — values are returned regardless of whether the whitelist is currently enabled. See `/api/v1/relay/keys/whitelist/live` for a fresh fetch.
+// @Tags         relay-keys
+// @Produce      json
+// @Success      200  {object}  WhitelistKeysResponse
+// @Failure      500  {string}  string  "Whitelist configuration not available"
+// @Router       /api/v1/relay/keys/whitelist [get]
 func GetAllWhitelistedPubkeys(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Cached whitelist keys API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

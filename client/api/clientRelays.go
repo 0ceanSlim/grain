@@ -33,6 +33,16 @@ type ClientRelaysResponse struct {
 
 // ClientRelaysHandler returns the client's configured relays and their status
 // Works with or without authentication - returns user relays if authenticated, app relays if not
+//
+// @Summary      List client relays
+// @Description  Returns the client's currently-configured relays with read/write permissions and live connection state. Falls back to the default index relays when no session is active.
+// @Tags         client-relays
+// @Produce      json
+// @Param        ping  query     string  false  "Set to `true` to measure latency for each relay"
+// @Success      200   {object}  ClientRelaysResponse
+// @Failure      405   {string}  string                "Method not allowed"
+// @Failure      500   {string}  string                "Failed to retrieve client relays"
+// @Router       /api/v1/client/relays [get]
 func ClientRelaysHandler(w http.ResponseWriter, r *http.Request) {
 	// Only allow GET requests
 	if r.Method != http.MethodGet {

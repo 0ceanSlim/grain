@@ -18,6 +18,16 @@ type KeyValidationResponse struct {
 }
 
 // KeyValidationHandler validates any key type (hex, npub, or nsec)
+//
+// @Summary      Validate key
+// @Description  Reports whether the supplied string is a well-formed key, and what type (hex, npub, nsec). Does not distinguish public from private when given raw hex.
+// @Tags         client-keys
+// @Produce      json
+// @Param        key  path      string  true  "Key to validate"
+// @Success      200  {object}  KeyValidationResponse
+// @Failure      400  {object}  map[string]string     "Key parameter required"
+// @Failure      405  {string}  string                "Method not allowed"
+// @Router       /api/v1/keys/validate/{key} [get]
 func KeyValidationHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

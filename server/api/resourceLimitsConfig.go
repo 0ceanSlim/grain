@@ -17,6 +17,14 @@ type ResourceLimitsConfigResponse struct {
 }
 
 // GetResourceLimitsConfig handles the request to return resource limits configuration
+//
+// @Summary      Get resource limits config
+// @Description  Returns the OS resource caps the relay self-imposes — CPU cores, memory ceiling, Go heap target.
+// @Tags         relay-config
+// @Produce      json
+// @Success      200  {object}  ResourceLimitsConfigResponse
+// @Failure      500  {string}  string  "Server configuration not available"
+// @Router       /api/v1/relay/config/resource_limits [get]
 func GetResourceLimitsConfig(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Resource limits config API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

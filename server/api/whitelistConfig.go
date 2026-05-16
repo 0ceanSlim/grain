@@ -29,6 +29,14 @@ type WhitelistConfigResponse struct {
 }
 
 // GetWhitelistConfig handles the request to return whitelist configuration
+//
+// @Summary      Get whitelist config
+// @Description  Returns the full whitelist.yml — pubkey, kind, and domain whitelists with their enabled flags. The configured set is grain's "elevated users" registry; enforcement only happens when `enabled` is true.
+// @Tags         relay-config
+// @Produce      json
+// @Success      200  {object}  WhitelistConfigResponse
+// @Failure      500  {string}  string  "Whitelist configuration not available"
+// @Router       /api/v1/relay/config/whitelist [get]
 func GetWhitelistConfig(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Whitelist config API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

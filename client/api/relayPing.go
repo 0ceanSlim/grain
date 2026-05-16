@@ -13,6 +13,16 @@ import (
 // PingHandler pings any relay and returns response time and connection status
 // Now supports domain-in-path with auto ws/wss detection
 // Usage: GET /api/v1/ping/relay.damus.io
+//
+// @Summary      Ping a relay
+// @Description  Opens a WebSocket to the given relay and reports the dial latency. Tries `wss://` first, falls back to `ws://`.
+// @Tags         client-relays
+// @Produce      json
+// @Param        domain  path      string  true  "Relay domain (no scheme)"
+// @Success      200     {object}  map[string]interface{}
+// @Failure      400     {object}  map[string]string  "Missing domain"
+// @Failure      405     {string}  string             "Method not allowed"
+// @Router       /api/v1/ping/{domain} [get]
 func PingHandler(w http.ResponseWriter, r *http.Request) {
 	// Only allow GET requests
 	if r.Method != http.MethodGet {

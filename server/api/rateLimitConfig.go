@@ -25,6 +25,14 @@ type RateLimitConfigResponse struct {
 }
 
 // GetRateLimitConfig handles the request to return rate limiting configuration
+//
+// @Summary      Get rate limit config
+// @Description  Returns the rate-limit settings (ws/event/req limits and bursts, kind/category overrides, max event size).
+// @Tags         relay-config
+// @Produce      json
+// @Success      200  {object}  RateLimitConfigResponse
+// @Failure      500  {string}  string  "Server configuration not available"
+// @Router       /api/v1/relay/config/rate_limit [get]
 func GetRateLimitConfig(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Rate limit config API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

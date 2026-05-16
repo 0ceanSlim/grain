@@ -21,6 +21,15 @@ type AmberCallbackData struct {
 var pubKeyRegex = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
 
 // HandleAmberCallback processes callbacks from Amber app
+//
+// @Summary      Amber NIP-55 callback
+// @Description  Landing page hit by the Amber signer app after the user approves a pubkey share. Creates a session and returns an HTML shim that closes the popup. Not intended for direct client use.
+// @Tags         client-auth
+// @Param        event  query     string  true  "Amber response: signed event JSON or 64-hex pubkey for get_public_key"
+// @Produce      html
+// @Success      200  {string}  string  "HTML success page"
+// @Failure      400  {string}  string  "HTML error page"
+// @Router       /api/v1/auth/amber-callback [get]
 func HandleAmberCallback(w http.ResponseWriter, r *http.Request) {
 	log.Auth().Debug("amber callback received",
 		"method", r.Method,

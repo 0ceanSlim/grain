@@ -23,6 +23,14 @@ type BlacklistConfigResponse struct {
 }
 
 // GetBlacklistConfig handles the request to return blacklist configuration
+//
+// @Summary      Get blacklist config
+// @Description  Returns the full blacklist.yml — permanent and temporary ban words, blacklisted pubkeys/npubs, and the mutelist authors whose mutelists grain consumes.
+// @Tags         relay-config
+// @Produce      json
+// @Success      200  {object}  BlacklistConfigResponse
+// @Failure      500  {string}  string  "Blacklist configuration not available"
+// @Router       /api/v1/relay/config/blacklist [get]
 func GetBlacklistConfig(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Blacklist config API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

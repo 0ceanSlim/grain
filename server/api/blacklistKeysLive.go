@@ -11,6 +11,14 @@ import (
 )
 
 // GetAllBlacklistedPubkeysLive handles the request to return all blacklisted pubkeys with live mutelist fetching
+//
+// @Summary      List blacklisted pubkeys (live)
+// @Description  Same shape as the cached endpoint but bypasses the mutelist cache to fetch each author's mutelist from their outbox relays. Slower but always fresh.
+// @Tags         relay-keys
+// @Produce      json
+// @Success      200  {object}  BlacklistKeysResponse
+// @Failure      500  {string}  string  "Blacklist configuration not available"
+// @Router       /api/v1/relay/keys/blacklist/live [get]
 func GetAllBlacklistedPubkeysLive(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Live blacklist keys API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

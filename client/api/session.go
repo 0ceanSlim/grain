@@ -9,6 +9,14 @@ import (
 )
 
 // GetSessionHandler returns the current user's session data as JSON (auth state only)
+//
+// @Summary      Get current session
+// @Description  Returns the logged-in user's pubkey, sign-in mode (read-only/write), and signing method. 401 if no active session.
+// @Tags         client-auth
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Failure      401  {string}  string  "No active session found"
+// @Router       /api/v1/session [get]
 func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 	// Get current session
 	userSession := session.SessionMgr.GetCurrentUser(r)

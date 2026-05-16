@@ -15,6 +15,19 @@ import (
 
 // ClientDisconnectHandler disconnects the client from a relay
 // Usage: POST /api/v1/client/disconnect/relay.damus.io
+//
+// @Summary      Disconnect from a relay
+// @Description  Removes the relay from the logged-in user's managed list and closes the pooled WebSocket if one is open.
+// @Tags         client-relays
+// @Produce      json
+// @Param        domain  path      string  true  "Relay domain (no scheme)"
+// @Success      200     {object}  map[string]interface{}
+// @Failure      400     {object}  map[string]string       "Missing domain"
+// @Failure      401     {object}  map[string]string       "Login required"
+// @Failure      404     {object}  map[string]interface{}  "Relay not in user's list"
+// @Failure      405     {string}  string                  "Method not allowed"
+// @Failure      500     {object}  map[string]interface{}  "Disconnect failed"
+// @Router       /api/v1/client/disconnect/{domain} [post]
 func ClientDisconnectHandler(w http.ResponseWriter, r *http.Request) {
 	// Only allow POST requests
 	if r.Method != http.MethodPost {

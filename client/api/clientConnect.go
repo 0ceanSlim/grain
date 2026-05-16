@@ -14,6 +14,20 @@ import (
 
 // ClientConnectHandler connects the client to a relay
 // Usage: POST /api/v1/client/connect/relay.damus.io?read=true&write=false
+//
+// @Summary      Connect to a relay
+// @Description  Dials the relay (auto-detecting `ws://` vs `wss://`) and adds it to the logged-in user's managed relay list with the requested permissions.
+// @Tags         client-relays
+// @Produce      json
+// @Param        domain  path      string  true   "Relay domain (no scheme)"
+// @Param        read    query     bool    false  "Permission to subscribe from this relay (default true)"
+// @Param        write   query     bool    false  "Permission to publish to this relay (default true)"
+// @Success      200     {object}  map[string]interface{}
+// @Failure      400     {object}  map[string]interface{}  "Missing domain or no permissions enabled"
+// @Failure      401     {object}  map[string]string       "Login required"
+// @Failure      405     {string}  string                  "Method not allowed"
+// @Failure      500     {object}  map[string]interface{}  "Connect failed"
+// @Router       /api/v1/client/connect/{domain} [post]
 func ClientConnectHandler(w http.ResponseWriter, r *http.Request) {
 	// Only allow POST requests
 	if r.Method != http.MethodPost {

@@ -21,6 +21,14 @@ type LoggingConfigResponse struct {
 }
 
 // GetLoggingConfig handles the request to return logging configuration
+//
+// @Summary      Get logging config
+// @Description  Returns log level, file path, rotation settings, and per-component suppressions.
+// @Tags         relay-config
+// @Produce      json
+// @Success      200  {object}  LoggingConfigResponse
+// @Failure      500  {string}  string  "Server configuration not available"
+// @Router       /api/v1/relay/config/logging [get]
 func GetLoggingConfig(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Logging config API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

@@ -16,6 +16,14 @@ type BackupRelayConfigResponse struct {
 }
 
 // GetBackupRelayConfig handles the request to return backup relay configuration
+//
+// @Summary      Get backup relay config
+// @Description  Returns the upstream relay grain mirrors accepted events to (URL plus enabled flag).
+// @Tags         relay-config
+// @Produce      json
+// @Success      200  {object}  BackupRelayConfigResponse
+// @Failure      500  {string}  string  "Server configuration not available"
+// @Router       /api/v1/relay/config/backup_relay [get]
 func GetBackupRelayConfig(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Backup relay config API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

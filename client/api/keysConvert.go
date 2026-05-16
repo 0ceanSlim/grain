@@ -10,6 +10,16 @@ import (
 )
 
 // PublicKeyConversionHandler converts between hex and npub formats
+//
+// @Summary      Convert public key
+// @Description  Converts the supplied public key between hex and npub. Detects direction from the prefix.
+// @Tags         client-keys
+// @Produce      json
+// @Param        key  path      string  true  "Public key (hex or npub)"
+// @Success      200  {object}  map[string]string
+// @Failure      400  {object}  map[string]string  "Invalid key"
+// @Failure      405  {string}  string             "Method not allowed"
+// @Router       /api/v1/keys/convert/public/{key} [get]
 func PublicKeyConversionHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -64,6 +74,16 @@ func PublicKeyConversionHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // PrivateKeyConversionHandler converts between hex and nsec formats
+//
+// @Summary      Convert private key
+// @Description  Converts the supplied private key between hex and nsec. Detects direction from the prefix.
+// @Tags         client-keys
+// @Produce      json
+// @Param        key  path      string  true  "Private key (hex or nsec)"
+// @Success      200  {object}  map[string]string
+// @Failure      400  {object}  map[string]string  "Invalid key"
+// @Failure      405  {string}  string             "Method not allowed"
+// @Router       /api/v1/keys/convert/private/{key} [get]
 func PrivateKeyConversionHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

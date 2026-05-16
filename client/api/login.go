@@ -13,6 +13,18 @@ import (
 // LoginHandler handles user login requests via API
 // Initializes user by fetching mailboxes, setting app relays, getting metadata from outboxes,
 // caching the data, and creating session with appropriate signing capabilities
+//
+// @Summary      Log in
+// @Description  Creates a session for the given pubkey. Fetches mailboxes and metadata from outbox relays as a side effect. Set `requestedMode=write` and provide a signing method to enable event publishing.
+// @Tags         client-auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      session.SessionInitRequest  true  "Login parameters"
+// @Success      200   {object}  session.Response
+// @Failure      400   {object}  session.Response  "Invalid request"
+// @Failure      405   {string}  string            "Method not allowed"
+// @Failure      500   {object}  session.Response  "Failed to create session"
+// @Router       /api/v1/auth/login [post]
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

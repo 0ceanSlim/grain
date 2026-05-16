@@ -34,6 +34,19 @@ type PublishEventResponse struct {
 }
 
 // PublishEventHandler handles event publishing requests
+//
+// @Summary      Publish event
+// @Description  Builds, signs (server-side using the supplied private key), and broadcasts a Nostr event to the user's outbox relays plus any extras specified in `relays`.
+// @Tags         client-events
+// @Accept       json
+// @Produce      json
+// @Param        body  body      PublishEventRequest  true  "Event to publish"
+// @Success      200   {object}  PublishEventResponse
+// @Failure      400   {string}  string               "Invalid request body"
+// @Failure      401   {string}  string               "Authentication required"
+// @Failure      405   {string}  string               "Method not allowed"
+// @Failure      500   {object}  PublishEventResponse "Publish failed"
+// @Router       /api/v1/publish [post]
 func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -142,6 +155,17 @@ func sendEventResponse(w http.ResponseWriter, response PublishEventResponse) {
 }
 
 // GetUserProfileHandler fetches user profile using core client
+//
+// @Summary      Get user profile
+// @Description  Fetches the kind-0 profile event for the given pubkey from outbox relays. Falls back to the logged-in user's pubkey if `pubkey` is omitted.
+// @Tags         client-events
+// @Produce      json
+// @Param        pubkey  query     string  false  "Hex pubkey (defaults to current session)"
+// @Success      200     {object}  map[string]interface{}
+// @Failure      401     {string}  string  "Authentication required"
+// @Failure      404     {string}  string  "Profile not found"
+// @Failure      503     {string}  string  "No relay connections available"
+// @Router       /api/v1/user/profile [get]
 func GetUserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	// Get pubkey from query parameter
 	pubkey := r.URL.Query().Get("pubkey")
@@ -185,6 +209,17 @@ func GetUserProfileHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetUserRelaysHandler fetches user relay list using core client
+//
+// @Summary      Get user relays
+// @Description  Fetches the kind-10002 relay list (mailboxes) for the given pubkey. Falls back to the logged-in user's pubkey if `pubkey` is omitted.
+// @Tags         client-events
+// @Produce      json
+// @Param        pubkey  query     string  false  "Hex pubkey (defaults to current session)"
+// @Success      200     {object}  map[string]interface{}
+// @Failure      401     {string}  string  "Authentication required"
+// @Failure      404     {string}  string  "Relays not found"
+// @Failure      503     {string}  string  "No relay connections available"
+// @Router       /api/v1/user/relays [get]
 func GetUserRelaysHandler(w http.ResponseWriter, r *http.Request) {
 	// Get pubkey from query parameter
 	pubkey := r.URL.Query().Get("pubkey")
@@ -228,6 +263,22 @@ func GetUserRelaysHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // QueryEventsHandler handles event querying using core client
+//
+// @Summary      Query events
+// @Description  Issues a Nostr REQ to the connected relays with the filter built from query params. Returns deduplicated, time-sorted events. Caps results at 500 by default.
+// @Tags         client-events
+// @Produce      json
+// @Param        authors  query     []string  false  "Pubkey filter (repeatable)"  collectionFormat(multi)
+// @Param        kinds    query     []int     false  "Kind filter (repeatable)"    collectionFormat(multi)
+// @Param        ids      query     []string  false  "Event id filter (repeatable)" collectionFormat(multi)
+// @Param        since    query     int       false  "created_at lower bound (Unix seconds)"
+// @Param        until    query     int       false  "created_at upper bound (Unix seconds)"
+// @Param        limit    query     int       false  "Max events to return"
+// @Success      200      {object}  map[string]interface{}
+// @Failure      400      {string}  string  "Invalid query parameters"
+// @Failure      404      {string}  string  "Event not found (only when querying a single id)"
+// @Failure      503      {string}  string  "No relay connections available"
+// @Router       /api/v1/events/query [get]
 func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters into filters
 	filters, err := parseFiltersFromQuery(r)

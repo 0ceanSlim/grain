@@ -22,6 +22,14 @@ type EventPurgeConfigResponse struct {
 }
 
 // GetEventPurgeConfig handles the request to return event purging configuration
+//
+// @Summary      Get event-purge config
+// @Description  Returns retention settings — what's purged, by kind/category, on what interval, and whether whitelisted authors are exempt.
+// @Tags         relay-config
+// @Produce      json
+// @Success      200  {object}  EventPurgeConfigResponse
+// @Failure      500  {string}  string  "Server configuration not available"
+// @Router       /api/v1/relay/config/event_purge [get]
 func GetEventPurgeConfig(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Event purge config API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

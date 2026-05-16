@@ -10,6 +10,16 @@ import (
 )
 
 // KeyDeriveHandler derives public key from private key
+//
+// @Summary      Derive public key
+// @Description  Derives the pubkey (hex + npub) from a private key supplied in the URL path. Accepts either hex or nsec format.
+// @Tags         client-keys
+// @Produce      json
+// @Param        key  path      string  true  "Private key (hex or nsec)"
+// @Success      200  {object}  map[string]string
+// @Failure      400  {object}  map[string]string  "Invalid key"
+// @Failure      405  {string}  string             "Method not allowed"
+// @Router       /api/v1/keys/derive/{key} [get]
 func KeyDeriveHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
