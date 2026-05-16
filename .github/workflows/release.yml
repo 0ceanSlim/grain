@@ -160,18 +160,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download HTMX + Hyperscript and build Tailwind
+      - name: Download HTMX + Hyperscript + Swagger UI and build Tailwind
         shell: bash
         run: |
           set -euo pipefail
           HTMX_VERSION=2.0.4
           HYPERSCRIPT_VERSION=0.9.14
+          SWAGGER_UI_VERSION=5.17.14
 
           mkdir -p www/static/js
           curl -fsSL -o www/static/js/htmx.min.js \
             "https://unpkg.com/htmx.org@${HTMX_VERSION}/dist/htmx.min.js"
           curl -fsSL -o www/static/js/hyperscript.min.js \
             "https://unpkg.com/hyperscript.org@${HYPERSCRIPT_VERSION}/dist/_hyperscript.min.js"
+
+          # Pinned swagger-ui-dist for the /api/docs page. Version
+          # tracks the Dockerfile so local docker builds and CI
+          # release builds embed the same assets.
+          mkdir -p www/static/swagger
+          curl -fsSL -o /tmp/swagger.tgz \
+            "https://registry.npmjs.org/swagger-ui-dist/-/swagger-ui-dist-${SWAGGER_UI_VERSION}.tgz"
+          tar -xzf /tmp/swagger.tgz -C /tmp
+          cp /tmp/package/swagger-ui-bundle.js \
+             /tmp/package/swagger-ui-standalone-preset.js \
+             /tmp/package/swagger-ui.css \
+             www/static/swagger/
 
           curl -fsSL -o /tmp/tailwindcss \
             https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64

@@ -1,19 +1,18 @@
-// Package docs serves grain's OpenAPI specification and the Swagger
-// UI that consumes it.
+// Package docs serves grain's OpenAPI specification.
 //
 // The spec is generated at build time by `swag init` (see the root
 // Makefile's `generate` target) from doc comments scattered across
 // the HTTP handlers, then embedded into the binary via //go:embed in
 // main.go. This package is the runtime side of that pipeline: it
-// holds the spec bytes and serves them, plus the Swagger UI HTML
-// shell that points back at the JSON URL.
+// holds the spec bytes and serves them.
 //
-// The reason it lives in its own subpackage (rather than alongside
-// the rest of server/api) is that github.com/swaggo/http-swagger
-// pulls in transitively github.com/swaggo/files, which only matters
-// when docs are served. Keeping that import out of the main api
-// package avoids surprising downstream callers with a heavyweight
-// dependency they don't need.
+// The HTML shell that consumes the spec — grain's restyled Swagger
+// UI — lives in www/views/api-docs.html and is rendered through the
+// standard template engine from client/registerEndpoints.go. The
+// swagger-ui-dist JS/CSS bundle is downloaded into www/static/swagger
+// at build time (see tests/docker/Dockerfile and the assets job in
+// .github/workflows/release.yml). Keeping the runtime here narrow
+// means swap-out is just an HTML rewrite, no Go changes.
 package docs
 
 import (
@@ -21,8 +20,6 @@ import (
 
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
-
-	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 // spec holds the raw OpenAPI JSON bytes. Wired in main.go via SetSpec
@@ -57,23 +54,4 @@ func ServeSpec(w http.ResponseWriter, r *http.Request) {
 			"client_ip", utils.GetClientIP(r),
 			"error", err)
 	}
-}
-
-// UIHandler returns an http.Handler that serves the Swagger UI shell
-// pointing at our embedded spec. swaggo's handler embeds its own
-// copy of the UI assets, so no separate static-file setup is needed.
-//
-// The handler is registered at /api/docs/ — the trailing slash
-// matters: http.ServeMux's tree treats it as a subtree match so
-// requests to /api/docs/index.html, /api/docs/swagger-ui.css, etc.
-// all resolve to the swaggo handler without our having to enumerate
-// each asset.
-func UIHandler() http.Handler {
-	return httpSwagger.Handler(
-		httpSwagger.URL("/api/docs/openapi.json"),
-		// DeepLinking lets ?tag-name= URLs scroll directly to a
-		// section, which is handy when linking to a method from
-		// chat or a PR description.
-		httpSwagger.DeepLinking(true),
-	)
 }

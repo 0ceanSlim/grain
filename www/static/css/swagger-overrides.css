@@ -1,0 +1,250 @@
+/* GRAIN overrides for swagger-ui-dist.
+ *
+ * Strategy: targeted overrides only. Swagger UI has a deep
+ * selector tree and we don't try to restyle every corner — just the
+ * surfaces that read most visually wrong against grain's dark
+ * palette. Anything not overridden inherits the swagger-ui defaults
+ * (which are tasteful enough at the leaf level — fonts, spacing).
+ *
+ * All colors reference design tokens defined in www/style/input.css,
+ * so switching themes via the header swapper recolors the docs
+ * automatically.
+ */
+
+/* Strip Swagger branding. The topbar holds the Swagger logo and the
+ * URL input field; both are noise here since the spec URL is fixed. */
+.swagger-ui .topbar,
+.swagger-ui .information-container.wrapper {
+  display: none !important;
+}
+
+/* Page-level surfaces */
+.swagger-ui {
+  background: var(--color-surface-base);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+.swagger-ui .wrapper {
+  padding: 0 1rem;
+  max-width: 1200px;
+}
+
+.swagger-ui .info,
+.swagger-ui .info .title,
+.swagger-ui .info p,
+.swagger-ui .info li,
+.swagger-ui .info table,
+.swagger-ui .info a {
+  color: var(--color-text);
+}
+
+.swagger-ui .info .title small {
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+}
+
+.swagger-ui .info a {
+  color: var(--color-accent);
+}
+
+/* Operation block (the collapsible per-route cards) */
+.swagger-ui .opblock {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.swagger-ui .opblock .opblock-summary {
+  border-color: var(--color-border);
+}
+
+.swagger-ui .opblock .opblock-summary-description,
+.swagger-ui .opblock .opblock-summary-path,
+.swagger-ui .opblock .opblock-summary-path__deprecated,
+.swagger-ui .opblock-tag,
+.swagger-ui .opblock-tag small,
+.swagger-ui .opblock-description-wrapper p,
+.swagger-ui .opblock-external-docs-wrapper p,
+.swagger-ui .opblock-title_normal p,
+.swagger-ui table thead tr th,
+.swagger-ui table thead tr td,
+.swagger-ui .parameter__name,
+.swagger-ui .parameter__type,
+.swagger-ui .parameter__in,
+.swagger-ui .response-col_status,
+.swagger-ui .response-col_links,
+.swagger-ui .responses-inner h4,
+.swagger-ui .responses-inner h5,
+.swagger-ui .tab li {
+  color: var(--color-text);
+}
+
+.swagger-ui .opblock .opblock-section-header {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
+.swagger-ui .opblock .opblock-section-header h4 {
+  color: var(--color-text);
+}
+
+/* Tag headers — the big section dividers */
+.swagger-ui .opblock-tag {
+  background: transparent;
+  border-color: var(--color-border);
+}
+
+.swagger-ui .opblock-tag:hover {
+  background: var(--color-surface);
+}
+
+/* Per-verb stripes. Keeps the standard swagger color coding but tints
+ * them through the semantic tokens so they harmonize with the rest of
+ * the page. */
+.swagger-ui .opblock.opblock-get {
+  border-left-color: var(--color-info);
+  background: var(--color-info-dim);
+}
+.swagger-ui .opblock.opblock-get .opblock-summary-method {
+  background: var(--color-info);
+  color: var(--color-text-on-accent);
+}
+
+.swagger-ui .opblock.opblock-post {
+  border-left-color: var(--color-success);
+  background: var(--color-success-dim);
+}
+.swagger-ui .opblock.opblock-post .opblock-summary-method {
+  background: var(--color-success);
+  color: var(--color-text-on-accent);
+}
+
+.swagger-ui .opblock.opblock-put,
+.swagger-ui .opblock.opblock-patch {
+  border-left-color: var(--color-warning);
+  background: var(--color-warning-dim);
+}
+.swagger-ui .opblock.opblock-put .opblock-summary-method,
+.swagger-ui .opblock.opblock-patch .opblock-summary-method {
+  background: var(--color-warning);
+  color: var(--color-text-on-accent);
+}
+
+.swagger-ui .opblock.opblock-delete {
+  border-left-color: var(--color-danger);
+  background: var(--color-danger-dim);
+}
+.swagger-ui .opblock.opblock-delete .opblock-summary-method {
+  background: var(--color-danger);
+  color: var(--color-text-on-accent);
+}
+
+/* Try-it-out + Execute buttons → accent */
+.swagger-ui .btn {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  border-color: var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.swagger-ui .btn:hover {
+  background: var(--color-surface-overlay);
+  color: var(--color-text);
+}
+
+.swagger-ui .btn.execute,
+.swagger-ui .authorize,
+.swagger-ui .btn.authorize {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  border-color: var(--color-accent);
+}
+
+.swagger-ui .btn.execute:hover,
+.swagger-ui .btn.authorize:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+.swagger-ui .btn.cancel {
+  background: var(--color-danger-dim);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+/* Inputs and code blocks */
+.swagger-ui input[type="text"],
+.swagger-ui input[type="email"],
+.swagger-ui input[type="password"],
+.swagger-ui input[type="search"],
+.swagger-ui textarea,
+.swagger-ui select {
+  background: var(--color-surface-inset);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.swagger-ui input:focus,
+.swagger-ui textarea:focus,
+.swagger-ui select:focus {
+  border-color: var(--color-border-focus);
+  outline: none;
+}
+
+.swagger-ui .highlight-code,
+.swagger-ui pre,
+.swagger-ui code,
+.swagger-ui .microlight {
+  background: var(--color-surface-inset-strong) !important;
+  color: var(--color-text) !important;
+  font-family: var(--font-mono);
+  border-radius: var(--radius-sm);
+}
+
+/* Tables / parameters */
+.swagger-ui table {
+  background: transparent;
+}
+
+.swagger-ui table tbody tr td {
+  border-color: var(--color-border);
+}
+
+/* Model / schema viewer */
+.swagger-ui .model-box {
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-sm);
+}
+
+.swagger-ui .model,
+.swagger-ui .model-title,
+.swagger-ui section.models h4,
+.swagger-ui section.models {
+  color: var(--color-text);
+  background: transparent;
+  border-color: var(--color-border);
+}
+
+.swagger-ui section.models.is-open h4 {
+  border-bottom-color: var(--color-border);
+}
+
+/* Servers / scheme selector */
+.swagger-ui .scheme-container {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
+/* Mobile breathing room — Swagger UI's default `wrapper` is wide */
+@media (max-width: 640px) {
+  .swagger-ui .wrapper {
+    padding: 0 0.5rem;
+  }
+  .swagger-ui .opblock .opblock-summary {
+    flex-wrap: wrap;
+  }
+}

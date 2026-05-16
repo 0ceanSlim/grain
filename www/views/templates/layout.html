@@ -51,7 +51,12 @@
       href="/static/icons/icon-16x16.png"
     />
 
-    <!-- Load external libraries first. These will be replaced on build with local minified 
+    <!-- Apply the saved theme BEFORE the body renders so the page
+         doesn't flash the wrong palette during paint. theme.js
+         exposes window.GrainTheme for the header swapper. -->
+    <script src="/static/js/theme.js"></script>
+
+    <!-- Load external libraries first. These will be replaced on build with local minified
      versions and the build step will replace the tailwind cdn and compile the full minified css -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script

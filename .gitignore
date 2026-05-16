@@ -25,3 +25,10 @@ tools/migrate-mongo/migrate-mongo.exe
 # spec is rebuilt from swag annotations on every build.
 docs/openapi/*
 !docs/openapi/.gitkeep
+
+# swagger-ui-dist assets are downloaded at build time by the
+# Dockerfile / release workflow. .gitkeep keeps the directory in tree
+# so the //go:embed www/* directive resolves locally before the
+# bundle step runs.
+www/static/swagger/*
+!www/static/swagger/.gitkeep

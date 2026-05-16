@@ -1,0 +1,41 @@
+{{define "view"}}
+<!-- Grain-styled Swagger UI shell.
+     swagger-ui-dist assets are bundled into www/static/swagger/ at
+     build time (release.yml + tests/docker/Dockerfile). The
+     swagger-overrides.css file applies grain's design tokens on top
+     of the default Swagger stylesheet — this is the seam where the
+     embedded docs join the rest of the app's look. -->
+<link rel="stylesheet" href="/static/swagger/swagger-ui.css" />
+<link rel="stylesheet" href="/static/css/swagger-overrides.css" />
+
+<main
+  class="min-h-screen"
+  style="background: var(--color-surface-base); color: var(--color-text)"
+>
+  <div id="swagger-ui"></div>
+</main>
+
+<script src="/static/swagger/swagger-ui-bundle.js" charset="UTF-8"></script>
+<script src="/static/swagger/swagger-ui-standalone-preset.js" charset="UTF-8"></script>
+<script>
+  window.addEventListener("load", function () {
+    window.ui = SwaggerUIBundle({
+      url: "/api/docs/openapi.json",
+      dom_id: "#swagger-ui",
+      deepLinking: true,
+      // BaseLayout drops the Swagger topbar (logo + URL input) that
+      // StandaloneLayout would otherwise add. We want grain's header
+      // to be the only page chrome.
+      layout: "BaseLayout",
+      presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIStandalonePreset,
+      ],
+      plugins: [SwaggerUIBundle.plugins.DownloadUrl],
+      docExpansion: "list",
+      defaultModelsExpandDepth: 1,
+      tryItOutEnabled: true,
+    });
+  });
+</script>
+{{end}}

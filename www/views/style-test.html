@@ -1,0 +1,321 @@
+{{define "view"}}
+<!-- Style tester. Renders every design token exactly once so we can
+     eyeball new themes before adopting them. Add a swatch / widget
+     here when you add a new token to www/style/input.css. -->
+<main class="max-w-6xl px-4 py-8 mx-auto text-left">
+  <header class="mb-8">
+    <h1 class="text-3xl font-bold" style="font-family: var(--font-display)">
+      🌾 grain style tester
+    </h1>
+    <p class="mt-1 text-sm" style="color: var(--color-text-secondary)">
+      Every design token and common widget rendered against the active theme.
+      Use the swapper in the page header to flip themes.
+    </p>
+  </header>
+
+  <!-- ============================================================== -->
+  <!-- Color swatches -->
+  <!-- ============================================================== -->
+  <section class="mb-12">
+    <h2 class="mb-4 text-xl font-semibold">Color swatches</h2>
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <!-- Each swatch uses inline CSS rather than Tailwind utilities
+           so the page never depends on the generated tailwind.min.css
+           having a class for every token (useful while we iterate). -->
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-surface-base); border-color: var(--color-border)"
+      >
+        <div class="text-sm font-mono">surface-base</div>
+      </div>
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-surface); border-color: var(--color-border)"
+      >
+        <div class="text-sm font-mono">surface</div>
+      </div>
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-surface-elevated); border-color: var(--color-border)"
+      >
+        <div class="text-sm font-mono">surface-elevated</div>
+      </div>
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-surface-overlay); border-color: var(--color-border)"
+      >
+        <div class="text-sm font-mono">surface-overlay</div>
+      </div>
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-surface-inset); border-color: var(--color-border)"
+      >
+        <div class="text-sm font-mono">surface-inset</div>
+      </div>
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-surface-inset-strong); border-color: var(--color-border)"
+      >
+        <div class="text-sm font-mono">surface-inset-strong</div>
+      </div>
+
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-accent); color: var(--color-accent-fg); border-color: var(--color-accent-hover)"
+      >
+        <div class="text-sm font-mono">accent</div>
+      </div>
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-accent-hover); color: var(--color-accent-fg); border-color: var(--color-accent)"
+      >
+        <div class="text-sm font-mono">accent-hover</div>
+      </div>
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-accent-dim); color: var(--color-text); border-color: var(--color-accent)"
+      >
+        <div class="text-sm font-mono">accent-dim</div>
+      </div>
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-accent-2); color: var(--color-accent-fg); border-color: var(--color-border)"
+      >
+        <div class="text-sm font-mono">accent-2</div>
+      </div>
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-accent-2-dim); color: var(--color-text); border-color: var(--color-accent-2)"
+      >
+        <div class="text-sm font-mono">accent-2-dim</div>
+      </div>
+
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-success-dim); color: var(--color-success); border-color: var(--color-success)"
+      >
+        <div class="text-sm font-mono">success</div>
+      </div>
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-warning-dim); color: var(--color-warning); border-color: var(--color-warning)"
+      >
+        <div class="text-sm font-mono">warning</div>
+      </div>
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-danger-dim); color: var(--color-danger); border-color: var(--color-danger)"
+      >
+        <div class="text-sm font-mono">danger</div>
+      </div>
+      <div
+        class="p-4 border rounded"
+        style="background: var(--color-info-dim); color: var(--color-info); border-color: var(--color-info)"
+      >
+        <div class="text-sm font-mono">info</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- Typography ramp -->
+  <!-- ============================================================== -->
+  <section class="mb-12">
+    <h2 class="mb-4 text-xl font-semibold">Typography</h2>
+    <div
+      class="p-6 space-y-2 border rounded"
+      style="background: var(--color-surface); border-color: var(--color-border)"
+    >
+      <h1 class="text-4xl font-bold" style="font-family: var(--font-display)">
+        Heading 1 / display
+      </h1>
+      <h2 class="text-3xl font-semibold">Heading 2</h2>
+      <h3 class="text-2xl font-semibold">Heading 3</h3>
+      <h4 class="text-xl font-medium">Heading 4</h4>
+      <p class="text-base">
+        Body text — the quick brown fox jumps over the lazy dog. Body uses
+        <code style="font-family: var(--font-mono)">var(--font-sans)</code>.
+      </p>
+      <p style="color: var(--color-text-secondary)" class="text-sm">
+        Secondary text. Notes, sub-headers, captions.
+      </p>
+      <p style="color: var(--color-text-muted)" class="text-xs">
+        Muted text. Disabled hints, placeholder copy.
+      </p>
+      <pre
+        style="font-family: var(--font-mono); background: var(--color-surface-inset-strong); color: var(--color-text); padding: 0.75rem; border-radius: var(--radius-sm);"
+      >mono / pre { example: "code block"; }</pre>
+    </div>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- Form elements -->
+  <!-- ============================================================== -->
+  <section class="mb-12">
+    <h2 class="mb-4 text-xl font-semibold">Form elements</h2>
+    <div
+      class="grid gap-4 p-6 border rounded sm:grid-cols-2"
+      style="background: var(--color-surface); border-color: var(--color-border)"
+    >
+      <label class="flex flex-col text-sm">
+        <span class="mb-1" style="color: var(--color-text-secondary)">Text input</span>
+        <input
+          type="text"
+          placeholder="placeholder"
+          class="px-3 py-2 border rounded"
+          style="background: var(--color-surface-inset); color: var(--color-text); border-color: var(--color-border)"
+        />
+      </label>
+
+      <label class="flex flex-col text-sm">
+        <span class="mb-1" style="color: var(--color-text-secondary)">Select</span>
+        <select
+          class="px-3 py-2 border rounded"
+          style="background: var(--color-surface-inset); color: var(--color-text); border-color: var(--color-border)"
+        >
+          <option>Option 1</option>
+          <option>Option 2</option>
+        </select>
+      </label>
+
+      <label class="flex flex-col text-sm sm:col-span-2">
+        <span class="mb-1" style="color: var(--color-text-secondary)">Textarea</span>
+        <textarea
+          rows="3"
+          placeholder="placeholder"
+          class="px-3 py-2 border rounded"
+          style="background: var(--color-surface-inset); color: var(--color-text); border-color: var(--color-border)"
+        ></textarea>
+      </label>
+
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" /> Checkbox
+      </label>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="radio" name="r" /> Radio
+      </label>
+
+      <div class="flex flex-wrap gap-2 sm:col-span-2">
+        <button
+          type="button"
+          class="px-4 py-2 text-sm rounded border"
+          style="background: var(--color-accent); color: var(--color-accent-fg); border-color: var(--color-accent)"
+        >
+          Primary
+        </button>
+        <button
+          type="button"
+          class="px-4 py-2 text-sm rounded border"
+          style="background: var(--color-surface-elevated); color: var(--color-text); border-color: var(--color-border)"
+        >
+          Secondary
+        </button>
+        <button
+          type="button"
+          class="px-4 py-2 text-sm rounded border"
+          style="background: var(--color-danger-dim); color: var(--color-danger); border-color: var(--color-danger)"
+        >
+          Danger
+        </button>
+        <button
+          type="button"
+          disabled
+          class="px-4 py-2 text-sm rounded border opacity-50 cursor-not-allowed"
+          style="background: var(--color-surface-elevated); color: var(--color-text-muted); border-color: var(--color-border)"
+        >
+          Disabled
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- Surface nesting -->
+  <!-- ============================================================== -->
+  <section class="mb-12">
+    <h2 class="mb-4 text-xl font-semibold">Surface nesting</h2>
+    <div
+      class="p-6 border rounded"
+      style="background: var(--color-surface-base); border-color: var(--color-border)"
+    >
+      base
+      <div
+        class="p-4 mt-3 border rounded"
+        style="background: var(--color-surface); border-color: var(--color-border)"
+      >
+        surface
+        <div
+          class="p-4 mt-3 border rounded"
+          style="background: var(--color-surface-elevated); border-color: var(--color-border)"
+        >
+          elevated
+          <div
+            class="p-4 mt-3 border rounded"
+            style="background: var(--color-surface-overlay); border-color: var(--color-border)"
+          >
+            overlay
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- Data table -->
+  <!-- ============================================================== -->
+  <section class="mb-12">
+    <h2 class="mb-4 text-xl font-semibold">Data table</h2>
+    <div
+      class="overflow-x-auto border rounded"
+      style="background: var(--color-surface); border-color: var(--color-border)"
+    >
+      <table class="w-full text-sm">
+        <thead style="background: var(--color-surface-elevated); color: var(--color-text-secondary)">
+          <tr>
+            <th class="p-3 text-left">Method</th>
+            <th class="p-3 text-left">Endpoint</th>
+            <th class="p-3 text-left">Tag</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-top: 1px solid var(--color-border)">
+            <td class="p-3 font-mono">GET</td>
+            <td class="p-3">/api/v1/relay/config/auth</td>
+            <td class="p-3" style="color: var(--color-text-secondary)">relay-config</td>
+          </tr>
+          <tr style="border-top: 1px solid var(--color-border)">
+            <td class="p-3 font-mono">POST</td>
+            <td class="p-3">/</td>
+            <td class="p-3" style="color: var(--color-text-secondary)">nip86</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- Shadows -->
+  <!-- ============================================================== -->
+  <section class="mb-12">
+    <h2 class="mb-4 text-xl font-semibold">Shadows</h2>
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div
+        class="p-6 text-center text-xs font-mono rounded"
+        style="background: var(--color-surface); box-shadow: var(--shadow-sm)"
+      >shadow-sm</div>
+      <div
+        class="p-6 text-center text-xs font-mono rounded"
+        style="background: var(--color-surface); box-shadow: var(--shadow)"
+      >shadow</div>
+      <div
+        class="p-6 text-center text-xs font-mono rounded"
+        style="background: var(--color-surface); box-shadow: var(--shadow-lg)"
+      >shadow-lg</div>
+      <div
+        class="p-6 text-center text-xs font-mono rounded"
+        style="background: var(--color-surface); box-shadow: var(--shadow-glow)"
+      >shadow-glow</div>
+    </div>
+  </section>
+</main>
+{{end}}

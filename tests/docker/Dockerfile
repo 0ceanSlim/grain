@@ -30,6 +30,23 @@ RUN cd server/db/nostrdb && bash build.sh
 RUN go install github.com/swaggo/swag/cmd/swag@v1.16.4 \
     && swag init --parseDependency --parseInternal -g main.go -o docs/openapi -ot json
 
+# Bundle swagger-ui-dist for the API docs page. The version is pinned
+# rather than tracking "latest" so a surprise UI overhaul upstream
+# can't change the look without a deliberate bump. Files land in
+# www/static/swagger/ which is embedded via the existing //go:embed
+# www/* directive in main.go.
+ARG SWAGGER_UI_VERSION=5.17.14
+RUN apk add --no-cache curl tar \
+    && mkdir -p www/static/swagger \
+    && curl -fsSL -o /tmp/swagger.tgz \
+        "https://registry.npmjs.org/swagger-ui-dist/-/swagger-ui-dist-${SWAGGER_UI_VERSION}.tgz" \
+    && tar -xzf /tmp/swagger.tgz -C /tmp \
+    && cp /tmp/package/swagger-ui-bundle.js \
+          /tmp/package/swagger-ui-standalone-preset.js \
+          /tmp/package/swagger-ui.css \
+          www/static/swagger/ \
+    && rm -rf /tmp/swagger.tgz /tmp/package
+
 # Build the binary with CGO enabled for nostrdb
 RUN CGO_ENABLED=1 go build -buildvcs=false -o grain .
 

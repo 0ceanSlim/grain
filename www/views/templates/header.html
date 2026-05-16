@@ -173,9 +173,26 @@
   </div>
 
   <nav class="flex items-center space-x-4">
+    <!-- Theme swapper. The option list is populated by theme.js so
+         adding a theme is one line in www/static/js/theme.js. -->
+    <select
+      id="grain-theme-select"
+      title="Switch theme"
+      class="px-2 py-1 text-sm rounded border bg-surface text-text border-border focus:outline-none focus:border-border-focus"
+    ></select>
     <div id="profile-nav">{{template "login-button"}}</div>
   </nav>
 </header>
+
+<script>
+  // Wire the swapper once the header is in the DOM. GrainTheme is
+  // installed synchronously by theme.js earlier in <head>, so it's
+  // safe to read here without waiting.
+  (function () {
+    var el = document.getElementById("grain-theme-select");
+    if (el && window.GrainTheme) window.GrainTheme.initSwapper(el);
+  })();
+</script>
 
 <!-- Hidden templates -->
 <div class="hidden">

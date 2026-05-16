@@ -1,47 +1,180 @@
+/* GRAIN design tokens.
+ *
+ * Theming model:
+ *   - Every token is a CSS variable defined under :root (the default
+ *     "dark" theme) and re-declared under :root[data-theme="<name>"]
+ *     for each additional theme.
+ *   - Tailwind v4 picks up tokens in the @theme block, so utilities
+ *     like `bg-surface`, `text-muted`, `border-accent`, `rounded-lg`,
+ *     `shadow-glow` work out of the box and react live to data-theme
+ *     changes (no rebuild required).
+ *
+ * Theme namespace (kept stable so future themes only restate values):
+ *   surface-base | surface | surface-elevated | surface-overlay
+ *     | surface-inset | surface-inset-strong
+ *   text | text-secondary | text-muted | text-on-accent
+ *   border | border-strong | border-focus
+ *   accent | accent-hover | accent-dim | accent-fg
+ *   accent-2 | accent-2-dim
+ *   success / warning / danger / info  (+ -dim variants)
+ *   backdrop
+ *
+ * Adding a new theme later (midnight, matrix, grain-green, etc.):
+ *   1. Add a `:root[data-theme="<id>"] { ... }` block redeclaring the
+ *      variables you want to change. Anything you don't redeclare
+ *      inherits from :root.
+ *   2. Add the id to THEMES in www/static/js/theme.js so the swapper
+ *      knows about it.
+ *
+ * Starter palettes (dark + light) are lifted from C:\code\mill so the
+ * relay UI and the future mill-powered login modal share an identity.
+ */
+
 @import "tailwindcss";
 
 @source "../views/**/*.html";
 @source "../static/**/*.js";
 
-@theme {
-  --color-bgPrimary: rgb(16, 16, 16);
-  --color-bgSecondary: rgb(40, 40, 40);
-  --color-bgInverted: rgb(225, 225, 225);
-  --color-textPrimary: rgb(255, 255, 255);
-  --color-textSecondary: rgb(235, 235, 235);
-  --color-textMuted: rgb(200, 200, 200);
-  --color-textInverted: rgb(16, 16, 16);
+/* ------------------------------------------------------------------ *
+ *  @theme: registers tokens with Tailwind v4 so utilities exist
+ *  (bg-surface, text-muted, etc.). Values here are read-once; runtime
+ *  theme switching happens via :root overrides below, which the
+ *  generated utilities resolve through var(--color-*) calls.
+ * ------------------------------------------------------------------ */
 
-  /* Light theme variables */
-  --color-bgPrimary-light: rgb(200, 200, 200);
-  --color-bgSecondary-light: rgb(230, 230, 230);
-  --color-bgInverted-light: rgb(80, 80, 80);
-  --color-textPrimary-light: rgb(0, 0, 0);
-  --color-textSecondary-light: rgb(20, 20, 20);
-  --color-textMuted-light: rgb(100, 100, 100);
-  --color-textInverted-light: rgb(255, 255, 255);
+@theme {
+  /* Surfaces */
+  --color-surface-base: #09080f;
+  --color-surface: #100e1b;
+  --color-surface-elevated: #181528;
+  --color-surface-overlay: #1f1c35;
+  --color-surface-inset: rgb(0 0 0 / 0.25);
+  --color-surface-inset-strong: rgb(0 0 0 / 0.35);
+
+  /* Text */
+  --color-text: #ede8fc;
+  --color-text-secondary: #9d94c0;
+  --color-text-muted: #5e5880;
+  --color-text-on-accent: #ffffff;
+
+  /* Borders */
+  --color-border: #2a2544;
+  --color-border-strong: #3e3860;
+  --color-border-focus: oklch(0.73 0.28 282);
+
+  /* Primary accent (purple — mill's default) */
+  --color-accent: oklch(0.67 0.28 282);
+  --color-accent-hover: oklch(0.73 0.28 282);
+  --color-accent-dim: oklch(0.67 0.28 282 / 0.13);
+  --color-accent-fg: #ffffff;
+
+  /* Secondary accent (teal) */
+  --color-accent-2: oklch(0.67 0.18 195);
+  --color-accent-2-dim: oklch(0.67 0.18 195 / 0.13);
+
+  /* Semantic */
+  --color-success: oklch(0.70 0.20 155);
+  --color-success-dim: oklch(0.70 0.20 155 / 0.13);
+  --color-warning: oklch(0.78 0.18 65);
+  --color-warning-dim: oklch(0.78 0.18 65 / 0.13);
+  --color-danger: oklch(0.65 0.24 15);
+  --color-danger-dim: oklch(0.65 0.24 15 / 0.13);
+  --color-info: oklch(0.70 0.16 235);
+  --color-info-dim: oklch(0.70 0.16 235 / 0.13);
+
+  --color-backdrop: rgb(4 3 10 / 0.78);
+
+  /* Typography */
+  --font-sans: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+
+  /* Radius */
+  --radius-sm: 0.375rem;
+  --radius: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-pill: 9999px;
+
+  /* Shadows.
+   * Composed from a hairline rim + deep drop + accent glow — gives
+   * surfaces a tactile feel in dark mode that pure box-shadow can't. */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow: 0 8px 24px rgb(0 0 0 / 0.55);
+  --shadow-lg:
+    0 0 0 1px rgb(130 80 255 / 0.08),
+    0 24px 64px rgb(0 0 0 / 0.7),
+    0 0 80px oklch(0.67 0.28 282 / 0.06);
+  --shadow-glow: 0 0 16px oklch(0.67 0.28 282 / 0.4);
 }
 
+/* ------------------------------------------------------------------ *
+ *  Theme overrides. Adding a new theme means adding another block
+ *  here and registering the id in www/static/js/theme.js.
+ * ------------------------------------------------------------------ */
+
 @layer base {
-  :root {
-    /* Default (dark) theme */
-    --color-bgPrimary: var(--color-bgPrimary);
-    --color-bgSecondary: var(--color-bgSecondary);
-    --color-bgInverted: var(--color-bgInverted);
-    --color-textPrimary: var(--color-textPrimary);
-    --color-textSecondary: var(--color-textSecondary);
-    --color-textMuted: var(--color-textMuted);
-    --color-textInverted: var(--color-textInverted);
+  /* Dark is the default. The @theme block above already encodes it;
+   * the :root selector is included for symmetry with the light block
+   * and to give an obvious place to hang dark-specific tweaks later. */
+  :root,
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-surface-base: #09080f;
+    --color-surface: #100e1b;
+    --color-surface-elevated: #181528;
+    --color-surface-overlay: #1f1c35;
+    --color-surface-inset: rgb(0 0 0 / 0.25);
+    --color-surface-inset-strong: rgb(0 0 0 / 0.35);
+
+    --color-text: #ede8fc;
+    --color-text-secondary: #9d94c0;
+    --color-text-muted: #5e5880;
+
+    --color-border: #2a2544;
+    --color-border-strong: #3e3860;
+
+    --color-backdrop: rgb(4 3 10 / 0.78);
   }
 
   :root[data-theme="light"] {
-    /* Light theme override */
-    --color-bgPrimary: var(--color-bgPrimary-light);
-    --color-bgSecondary: var(--color-bgSecondary-light);
-    --color-bgInverted: var(--color-bgInverted-light);
-    --color-textPrimary: var(--color-textPrimary-light);
-    --color-textSecondary: var(--color-textSecondary-light);
-    --color-textMuted: var(--color-textMuted-light);
-    --color-textInverted: var(--color-textInverted-light);
+    color-scheme: light;
+    --color-surface-base: #f4f1fa;
+    --color-surface: #ffffff;
+    --color-surface-elevated: #fbf9ff;
+    --color-surface-overlay: #f1edfb;
+    --color-surface-inset: rgb(0 0 0 / 0.04);
+    --color-surface-inset-strong: rgb(0 0 0 / 0.07);
+
+    --color-text: #1a1530;
+    --color-text-secondary: #4d4670;
+    --color-text-muted: #8b85a8;
+
+    --color-border: #d9d1ec;
+    --color-border-strong: #b7add0;
+
+    --color-backdrop: rgb(20 12 40 / 0.45);
+
+    /* Accent stays the same hue across themes so the brand reads
+     * consistently; only the dim variant gets a slightly lower
+     * alpha so it doesn't bleed on lighter surfaces. */
+    --color-accent-dim: oklch(0.67 0.28 282 / 0.10);
+    --color-accent-2-dim: oklch(0.67 0.18 195 / 0.10);
+    --color-success-dim: oklch(0.70 0.20 155 / 0.10);
+    --color-warning-dim: oklch(0.78 0.18 65 / 0.10);
+    --color-danger-dim: oklch(0.65 0.24 15 / 0.10);
+    --color-info-dim: oklch(0.70 0.16 235 / 0.10);
+
+    --shadow-sm: 0 1px 2px rgb(20 12 40 / 0.08);
+    --shadow: 0 8px 24px rgb(20 12 40 / 0.10);
+    --shadow-lg:
+      0 0 0 1px rgb(130 80 255 / 0.06),
+      0 24px 64px rgb(20 12 40 / 0.12);
+  }
+
+  body {
+    background: var(--color-surface-base);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    transition: background-color 0.15s ease, color 0.15s ease;
   }
 }

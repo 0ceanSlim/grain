@@ -6,7 +6,7 @@ import (
 
 	"github.com/0ceanslim/grain/client/api"
 	relay "github.com/0ceanslim/grain/server/api"
-	"github.com/0ceanslim/grain/server/api/docs"
+	docs "github.com/0ceanslim/grain/server/api/docs"
 )
 
 // RegisterEndpoints registers all endpoints on the given mux
@@ -62,14 +62,41 @@ func RegisterEndpoints(mux *http.ServeMux) {
 
 	// OpenAPI / Swagger UI. The spec is served standalone so other
 	// tooling (Postman, openapi-generator, etc.) can consume it
-	// without scraping the UI shell. The UI subtree (trailing slash)
-	// pulls in all of swaggo's static assets.
+	// without scraping the UI shell. The UI itself is grain's own
+	// HTML shell that loads swagger-ui-dist from /static/swagger/ and
+	// applies the design tokens — the swaggo runtime is no longer
+	// used; only its CLI participates, at build time, to generate the
+	// spec embedded into the binary.
 	mux.HandleFunc("/api/docs/openapi.json", docs.ServeSpec)
-	mux.Handle("/api/docs/", docs.UIHandler())
+	mux.HandleFunc("/api/docs/", apiDocsHandler)
+	mux.HandleFunc("/api/docs", apiDocsHandler)
+
+	// Style tester. Renders every design token + common widget
+	// against the active theme. No auth gate — kept in the binary as
+	// a permanent dev/preview tool.
+	mux.HandleFunc("/style-test", styleTestHandler)
 
 	// Core Nostr client function endpoints
 	registerCoreClientEndpoints(mux)
 
+}
+
+// apiDocsHandler serves grain's Swagger UI shell. The actual
+// SwaggerUIBundle JS and base CSS are loaded by the template from
+// /static/swagger/; grain's overrides go on top via
+// /static/css/swagger-overrides.css. The handler ignores any path
+// beyond /api/docs/ — assets are mounted under /static/swagger/
+// instead, so a request to /api/docs/swagger-ui.css won't accidentally
+// hit this template renderer.
+func apiDocsHandler(w http.ResponseWriter, r *http.Request) {
+	RenderTemplate(w, PageData{Title: "🌾 grain — API docs"}, "api-docs.html")
+}
+
+// styleTestHandler renders the design-token preview page. Bypasses the
+// HTMX SPA shell so the layout (header + theme swapper + footer)
+// wraps the tester even on direct navigation.
+func styleTestHandler(w http.ResponseWriter, r *http.Request) {
+	RenderTemplate(w, PageData{Title: "🌾 grain — style tester"}, "style-test.html")
 }
 
 // registerCoreClientEndpoints registers endpoints for core Nostr client functions
