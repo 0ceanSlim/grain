@@ -13,6 +13,15 @@ function handleRouteLoad() {
 
   console.log("[ROUTING] Handling route load for path:", currentPath);
 
+  // Server-rendered routes: the page is already in place; routing.js
+  // has nothing to do. Without this short-circuit the default branch
+  // below would HTMX-swap home.html into #main-content and clobber
+  // the rendered content.
+  if (currentPath === "/style-test" || currentPath.startsWith("/api/docs")) {
+    console.log("[ROUTING] Server-rendered route, skipping client swap:", currentPath);
+    return;
+  }
+
   // Map URL paths to view files
   switch (currentPath) {
     case "/":
@@ -91,6 +100,14 @@ window.addEventListener("popstate", function (event) {
   let targetView = "/views/home.html";
 
   console.log("[ROUTING] Popstate - current path:", currentPath);
+
+  // Same short-circuit for server-rendered routes — let the browser
+  // do its native back/forward without a client-side swap that would
+  // mismatch the URL we're navigating to.
+  if (currentPath === "/style-test" || currentPath.startsWith("/api/docs")) {
+    window.location.reload();
+    return;
+  }
 
   switch (currentPath) {
     case "/":

@@ -36,7 +36,7 @@ RUN go install github.com/swaggo/swag/cmd/swag@v1.16.4 \
 # www/static/swagger/ which is embedded via the existing //go:embed
 # www/* directive in main.go.
 ARG SWAGGER_UI_VERSION=5.17.14
-RUN apk add --no-cache curl tar \
+RUN apk add --no-cache curl tar libstdc++ libgcc \
     && mkdir -p www/static/swagger \
     && curl -fsSL -o /tmp/swagger.tgz \
         "https://registry.npmjs.org/swagger-ui-dist/-/swagger-ui-dist-${SWAGGER_UI_VERSION}.tgz" \
@@ -46,6 +46,20 @@ RUN apk add --no-cache curl tar \
           /tmp/package/swagger-ui.css \
           www/static/swagger/ \
     && rm -rf /tmp/swagger.tgz /tmp/package
+
+# Compile Tailwind. The Tailwind v3 CDN script in layout.html only
+# processes inline utility classes — it never reads input.css, which
+# means the @theme tokens (--color-surface-*, --color-accent, …)
+# never reach the browser. Compiling input.css → tailwind.min.css
+# and rewriting the layout to load it mirrors what
+# .github/workflows/release.yml does for production builds, so test
+# and prod render the same design tokens.
+RUN curl -fsSL -o /tmp/tailwindcss \
+        https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64-musl \
+    && chmod +x /tmp/tailwindcss \
+    && (cd www/style && /tmp/tailwindcss -i input.css -o tailwind.min.css --minify) \
+    && sed -i 's|<script src="https://cdn.tailwindcss.com"></script>|<link rel="stylesheet" href="/style/tailwind.min.css">|g' www/views/templates/layout.html \
+    && rm /tmp/tailwindcss
 
 # Build the binary with CGO enabled for nostrdb
 RUN CGO_ENABLED=1 go build -buildvcs=false -o grain .
