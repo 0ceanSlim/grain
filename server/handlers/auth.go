@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"net/url"
 	"sync"
 	"time"
 
@@ -13,6 +14,16 @@ import (
 	"github.com/0ceanslim/grain/server/utils/relayurl"
 	"github.com/0ceanslim/grain/server/validation"
 )
+
+// NIP98AuthKind is the event kind reserved by NIP-98 for HTTP Auth.
+const NIP98AuthKind = 27235
+
+// nip98TimeWindow is the ±tolerance applied to NIP-98 `created_at`.
+// The spec says implementations "should reject requests with a value
+// in the past or future, with a reasonable margin." 60 seconds is the
+// commonly cited reasonable margin and is what this implementation
+// uses both backwards (replay window) and forwards (clock skew).
+const nip98TimeWindow = 60 * time.Second
 
 // Mutex to protect auth data
 var authMu sync.Mutex
@@ -113,6 +124,127 @@ func VerifyAuthEvent(client nostr.ClientInterface, evt nostr.Event) error {
 	}
 
 	return nil
+}
+
+// VerifyNIP98Event verifies an HTTP Auth event per NIP-98.
+//
+// Callers (typically the HTTP middleware in server/api/authHelpers.go)
+// supply the request context the event must commit to:
+//
+//   - method: the uppercase HTTP method of the request
+//   - absURL: the absolute URL of the request as the server sees it,
+//     reconstructed honoring X-Forwarded-Proto / X-Forwarded-Host so
+//     the value matches what the client signed
+//   - bodyHashHex: sha256 hex digest of the request body. Pass "" for
+//     methods/requests with no body — in that case the event's payload
+//     tag (if any) must also be empty/absent
+//
+// On success the caller may trust evt.PubKey as the request's
+// authenticated identity. NIP-98 does not standardize a relay-side
+// challenge/nonce; the tight created_at window is the only replay
+// defense.
+func VerifyNIP98Event(evt nostr.Event, method, absURL, bodyHashHex string) error {
+	if evt.Kind != NIP98AuthKind {
+		return errors.New("invalid: event kind must be 27235")
+	}
+
+	// Time window: NIP-98 says ~60s in either direction. We reject
+	// "too old" (replay) and "too far in the future" (clock skew /
+	// pre-signed events) symmetrically.
+	now := time.Now()
+	created := time.Unix(evt.CreatedAt, 0)
+	if now.Sub(created) > nip98TimeWindow {
+		return errors.New("invalid: event is too old")
+	}
+	if created.Sub(now) > nip98TimeWindow {
+		return errors.New("invalid: event created_at is in the future")
+	}
+
+	uTag, err := extractTag(evt.Tags, "u")
+	if err != nil {
+		return errors.New("invalid: u tag missing")
+	}
+	methodTag, err := extractTag(evt.Tags, "method")
+	if err != nil {
+		return errors.New("invalid: method tag missing")
+	}
+
+	if methodTag != method {
+		return errors.New("invalid: method tag does not match request method")
+	}
+
+	cfg := config.GetConfig().Auth
+	mode := relayurl.ParseMode(cfg.RelayURLMatch)
+	if !relayurl.Match(uTag, absURL, mode) {
+		return errors.New("invalid: u tag does not match request URL")
+	}
+	// relayurl.Match drops the query string by design (it was built
+	// for NIP-42 where the relay URL has no query). For NIP-98 in
+	// strict mode the full URL must match, so the query is compared
+	// here as a second step. In host mode the query is intentionally
+	// ignored, matching the same operator preference that loosens
+	// NIP-42 host matching.
+	if mode == relayurl.ModeStrict {
+		if !queriesMatch(uTag, absURL) {
+			return errors.New("invalid: u tag does not match request URL")
+		}
+	}
+
+	// Payload tag rules (NIP-98):
+	//   - If the request has a body, the event MUST carry a `payload`
+	//     tag whose value is the lowercase sha256 hex of that body.
+	//   - If the request has no body, the `payload` tag MUST be absent
+	//     (or empty). A non-empty payload tag on a body-less request
+	//     is suspicious and rejected so a client can't sign a
+	//     body-bearing event and replay it against a body-less route.
+	payloadTag, payloadPresent := findTag(evt.Tags, "payload")
+	if bodyHashHex == "" {
+		if payloadPresent && payloadTag != "" {
+			return errors.New("invalid: payload tag present but request has no body")
+		}
+	} else {
+		if !payloadPresent || payloadTag == "" {
+			return errors.New("invalid: payload tag missing")
+		}
+		if payloadTag != bodyHashHex {
+			return errors.New("invalid: payload tag does not match request body hash")
+		}
+	}
+
+	if !validation.CheckSignature(evt) {
+		return errors.New("invalid: signature verification failed")
+	}
+	return nil
+}
+
+// queriesMatch reports whether two URLs share the same raw query
+// string. Used only in strict-match mode for NIP-98 because
+// relayurl.Match deliberately ignores queries.
+func queriesMatch(a, b string) bool {
+	ua, err := url.Parse(a)
+	if err != nil {
+		return false
+	}
+	ub, err := url.Parse(b)
+	if err != nil {
+		return false
+	}
+	return ua.RawQuery == ub.RawQuery
+}
+
+// findTag returns the first value for the given tag name and whether
+// the tag was present. extractTag conflates "absent" and "present but
+// empty"; NIP-98's payload rules need to distinguish them.
+func findTag(tags [][]string, key string) (string, bool) {
+	for _, tag := range tags {
+		if len(tag) >= 1 && tag[0] == key {
+			if len(tag) >= 2 {
+				return tag[1], true
+			}
+			return "", true
+		}
+	}
+	return "", false
 }
 
 // extractTag extracts a specific tag from an event's tags

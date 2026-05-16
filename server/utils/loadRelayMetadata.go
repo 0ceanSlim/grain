@@ -60,6 +60,13 @@ func LoadRelayMetadataJSON() error {
 	return LoadRelayMetadata("relay_metadata.json")
 }
 
+// GetRelayOwnerPubkey returns the relay owner's hex pubkey from
+// relay_metadata.json. This is the pubkey allowed to authenticate
+// against admin/management HTTP endpoints via NIP-98.
+func GetRelayOwnerPubkey() string {
+	return relayMetadata.Pubkey
+}
+
 func LoadRelayMetadata(filename string) error {
 	log.Util().Info("Loading relay metadata", "file", filename)
 

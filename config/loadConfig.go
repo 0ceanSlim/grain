@@ -49,6 +49,14 @@ func GetBlacklistConfig() *cfgType.BlacklistConfig {
 	return blacklistCfg
 }
 
+// SetConfigForTesting injects a server configuration without going
+// through the YAML loader. Reserved for tests that need to exercise
+// behavior gated on specific config values (e.g. auth.relay_url_match
+// in the NIP-98 path) without writing a fixture file. Production code
+// should never call this — there is no mutex held across the swap,
+// so concurrent readers may observe the new value at any moment.
+func SetConfigForTesting(c *cfgType.ServerConfig) { cfg = c }
+
 // ResetConfig clears the existing server configuration.
 func ResetConfig() {
 	mu.Lock()
