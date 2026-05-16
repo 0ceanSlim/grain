@@ -155,6 +155,30 @@ func LoadIPBlocklist(cfg cfgType.BlacklistConfig) {
 		"total_permanent", count)
 }
 
+// GetBlockedIPs returns the merged list of permanent CIDRs (admin-curated
+// from blacklist.yml plus auto-escalated entries from the sidecar) as
+// canonical strings. Single-host bans render as bare IPs ("1.2.3.4"
+// rather than "1.2.3.4/32") because that's how operators tend to type
+// them. Order is not guaranteed; callers that care should sort.
+//
+// Used by NIP-86's `listblockedips` — read-only, never returns nil.
+func GetBlockedIPs() []string {
+	ipMu.Lock()
+	defer ipMu.Unlock()
+
+	out := make([]string, 0, len(permanentPrefixes))
+	for _, p := range permanentPrefixes {
+		// /32 or /128 means "one host" — strip the suffix so the
+		// admin sees the same string they configured.
+		if (p.Addr().Is4() && p.Bits() == 32) || (p.Addr().Is6() && p.Bits() == 128) {
+			out = append(out, p.Addr().String())
+		} else {
+			out = append(out, p.String())
+		}
+	}
+	return out
+}
+
 // IsIPBlocked returns (true, reason) if the given IP string matches any
 // permanent CIDR or has an active temp ban. The reason is suitable for
 // log attribution.

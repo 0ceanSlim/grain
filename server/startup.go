@@ -15,6 +15,7 @@ import (
 	"github.com/0ceanslim/grain/client"
 	"github.com/0ceanslim/grain/config"
 	cfgType "github.com/0ceanslim/grain/config/types"
+	relay "github.com/0ceanslim/grain/server/api"
 	"github.com/0ceanslim/grain/server/db/nostrdb"
 	"github.com/0ceanslim/grain/server/handlers"
 	"github.com/0ceanslim/grain/server/utils"
@@ -350,6 +351,12 @@ var wsServer = &websocket.Server{
 // initRoot handles the root endpoint, routing between WebSocket, NIP-11, and web interface
 func initRoot(w http.ResponseWriter, r *http.Request) {
 	switch {
+	case r.Method == http.MethodPost && r.Header.Get("Content-Type") == relay.NIP86ContentType:
+		// NIP-86 relay management API. Matched ahead of the WebSocket
+		// branch because a malformed Upgrade header on a POST request
+		// would otherwise swallow it. Auth and owner checks happen
+		// inside HandleNIP86 via RequireOwner.
+		relay.HandleNIP86(w, r)
 	case r.Header.Get("Upgrade") == "websocket":
 		// Pre-upgrade per-IP connection rate limit (#61). Rejecting here
 		// avoids paying the WS-upgrade cost for connection-storm

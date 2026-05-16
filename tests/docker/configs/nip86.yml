@@ -1,0 +1,70 @@
+logging:
+  level: "warn"
+  file: "debug"
+  max_log_size_mb: 10
+  structure: false
+  check_interval_min: 10
+  backup_count: 2
+
+client:
+  index_relays: []
+
+database:
+  path: "data"
+  map_size_mb: 32
+
+server:
+  port: :8190
+  read_timeout: 60
+  write_timeout: 20
+  idle_timeout: 1200
+  max_subscriptions_per_client: 10
+  implicit_req_limit: 500
+
+resource_limits:
+  cpu_cores: 2
+  memory_mb: 512
+  heap_size_mb: 256
+
+auth:
+  required: false
+  relay_url: "http://127.0.0.1:8190"
+
+backup_relay:
+  enabled: false
+  url: ""
+
+event_purge:
+  enabled: false
+  disable_at_startup: true
+  keep_interval_hours: 24
+  purge_interval_minutes: 240
+  purge_by_category: {regular: false, replaceable: false, addressable: false, deprecated: false}
+  purge_by_kind_enabled: false
+  kinds_to_purge: []
+  exclude_whitelisted: true
+
+event_time_constraints:
+  min_created_at: 1577836800
+  max_created_at_string: now+5m
+
+rate_limit:
+  ws_limit: 500
+  ws_burst: 1000
+  event_limit: 500
+  event_burst: 1000
+  req_limit: 500
+  req_burst: 1000
+  max_event_size: 524288
+  kind_size_limits: []
+  category_limits: {}
+  kind_limits: []
+
+# Mirrored under `blacklist:` because LoadIPBlocklist reads
+# ServerConfig.Blacklist (config.yml) rather than the standalone
+# blacklist.yml. The pubkey-bans + words live in the sibling
+# blacklist.yml file; IPs go here for the loader to find them.
+blacklist:
+  permanent_blocked_ips:
+    - "203.0.113.7"
+    - "198.51.100.0/24"

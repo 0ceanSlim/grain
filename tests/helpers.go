@@ -43,6 +43,7 @@ const (
 	TimeCheckRelayURL  = "ws://127.0.0.1:8187"
 	EventPurgeRelayURL = "ws://127.0.0.1:8188"
 	HotReloadRelayURL  = "ws://127.0.0.1:8189"
+	NIP86RelayURL      = "ws://127.0.0.1:8190"
 
 	DefaultHTTPURL    = "http://127.0.0.1:8182"
 	RateLimitHTTPURL  = "http://127.0.0.1:8183"
@@ -52,6 +53,7 @@ const (
 	TimeCheckHTTPURL  = "http://127.0.0.1:8187"
 	EventPurgeHTTPURL = "http://127.0.0.1:8188"
 	HotReloadHTTPURL  = "http://127.0.0.1:8189"
+	NIP86HTTPURL      = "http://127.0.0.1:8190"
 )
 
 // AllRelayHTTPURLs is used by TestMain readiness checks.
@@ -64,11 +66,22 @@ var AllRelayHTTPURLs = []string{
 	TimeCheckHTTPURL,
 	EventPurgeHTTPURL,
 	HotReloadHTTPURL,
+	NIP86HTTPURL,
 }
 
 // WhitelistSeed MUST match tests/genconfigs/main.go.WhitelistSeed — the
 // whitelist-rules.yml fixture contains the pubkey derived from this seed.
 const WhitelistSeed = "grain-test-whitelist-allowed"
+
+// NIP-86 fixture seeds. The genconfigs tool plants the pubkeys derived
+// from these seeds into nip86-*.yml / nip86-relay_metadata.json so the
+// integration tests can use NewDeterministicKeypair to recover the same
+// keys. Keep these in sync with tests/genconfigs/main.go.
+const (
+	NIP86OwnerSeed   = "grain-test-nip86-owner"
+	NIP86AllowedSeed = "grain-test-nip86-allowed"
+	NIP86BannedSeed  = "grain-test-nip86-banned"
+)
 
 // TestKeypair holds a private key and its corresponding public key hex for testing.
 type TestKeypair struct {
