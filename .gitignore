@@ -32,3 +32,7 @@ docs/openapi/*
 # bundle step runs.
 www/static/swagger/*
 !www/static/swagger/.gitkeep
+
+# Self-hosted webfonts. Same pattern as swagger above.
+www/static/fonts/*
+!www/static/fonts/.gitkeep

@@ -186,6 +186,17 @@ jobs:
              /tmp/package/swagger-ui.css \
              www/static/swagger/
 
+          # Self-hosted webfonts. Token stacks in input.css reference
+          # Space Grotesk, JetBrains Mono, and Comfortaa; @font-face
+          # rules point at /static/fonts/*.woff2.
+          mkdir -p www/static/fonts
+          for slug in space-grotesk jetbrains-mono comfortaa; do
+            for weight in 400 700; do
+              curl -fsSL -o "www/static/fonts/${slug}-${weight}.woff2" \
+                "https://cdn.jsdelivr.net/npm/@fontsource/${slug}@5/files/${slug}-latin-${weight}-normal.woff2"
+            done
+          done
+
           curl -fsSL -o /tmp/tailwindcss \
             https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
           chmod +x /tmp/tailwindcss

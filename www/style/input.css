@@ -35,6 +35,53 @@
 @source "../views/**/*.html";
 @source "../static/**/*.js";
 
+/* Self-hosted webfonts. Files are downloaded into www/static/fonts/
+ * by the Dockerfile / release workflow. font-display: swap means we
+ * paint with the system fallback first and swap in the woff2 once it
+ * arrives — no FOIT on slow connections. */
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("/static/fonts/space-grotesk-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("/static/fonts/space-grotesk-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/static/fonts/jetbrains-mono-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/static/fonts/jetbrains-mono-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Comfortaa";
+  src: url("/static/fonts/comfortaa-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Comfortaa";
+  src: url("/static/fonts/comfortaa-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ------------------------------------------------------------------ *
  *  @theme: registers tokens with Tailwind v4 so utilities exist
  *  (bg-surface, text-muted, etc.). Values here are read-once; runtime
@@ -83,6 +130,39 @@
   --color-info-dim: oklch(0.70 0.16 235 / 0.13);
 
   --color-backdrop: rgb(4 3 10 / 0.78);
+
+  /* Interaction states. Defaults derive from the palette above so
+   * a theme that doesn't redeclare them still gets sensible values;
+   * any theme can override individual entries to break the
+   * derivation (e.g. candy uses a desaturated selection bg because
+   * its accent at full strength makes hot-pink-highlighted text
+   * hard to read). */
+  --color-link: var(--color-accent);
+  --color-link-hover: var(--color-accent-hover);
+  --color-link-visited: var(--color-accent-2);
+  --color-selection-bg: oklch(0.67 0.28 282 / 0.35);
+  --color-selection-fg: var(--color-text);
+  --color-surface-hover: var(--color-surface-overlay);
+  --color-surface-active: var(--color-surface-elevated);
+  --color-text-disabled: var(--color-text-muted);
+  --color-scrollbar-track: var(--color-surface);
+  --color-scrollbar-thumb: var(--color-border-strong);
+  --color-scrollbar-thumb-hover: var(--color-text-muted);
+  --color-code-bg: var(--color-surface-inset-strong);
+  --color-code-fg: var(--color-text);
+
+  /* Motion. Pin all timing to two values so transitions feel
+   * coherent across the app instead of "fast here, slower there". */
+  --motion-fast: 100ms;
+  --motion: 180ms;
+  --motion-slow: 280ms;
+
+  /* Focus ring. Applied via :focus-visible in base styles below so
+   * every keyboard-focusable element gets it for free. The dim
+   * variant gives a soft halo; tweaking to accent at higher alpha
+   * would make it more aggressive. */
+  --shadow-focus: 0 0 0 3px var(--color-accent-dim),
+                  0 0 0 1px var(--color-accent);
 
   /* Typography */
   --font-sans: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -136,6 +216,270 @@
     --color-backdrop: rgb(4 3 10 / 0.78);
   }
 
+  /* Midnight: deep blue-purple bg, lavender text. Lifted from
+   * pubkey-quest's midnight (`rgb(25, 24, 48)` bg, `rgb(177, 174, 255)`
+   * text) and expanded across the rest of the token namespace. The
+   * accent shifts a touch toward blue so the brand reads "after-hours
+   * purple" rather than the default's clean violet. */
+  :root[data-theme="midnight"] {
+    color-scheme: dark;
+    --color-surface-base: #0c0a1e;
+    --color-surface: #14122e;
+    --color-surface-elevated: #1c1a3a;
+    --color-surface-overlay: #25224a;
+    --color-surface-inset: rgb(0 0 0 / 0.30);
+    --color-surface-inset-strong: rgb(0 0 0 / 0.45);
+
+    --color-text: #d8d5ff;
+    --color-text-secondary: #a8a3d4;
+    --color-text-muted: #6a648f;
+
+    --color-border: #2a2754;
+    --color-border-strong: #3e3970;
+    --color-border-focus: oklch(0.75 0.22 265);
+
+    --color-accent: oklch(0.70 0.22 265);
+    --color-accent-hover: oklch(0.78 0.22 265);
+    --color-accent-dim: oklch(0.70 0.22 265 / 0.15);
+    --color-accent-fg: #0c0a1e;
+
+    --color-accent-2: oklch(0.72 0.16 215);
+    --color-accent-2-dim: oklch(0.72 0.16 215 / 0.15);
+
+    --color-info: oklch(0.72 0.16 235);
+    --color-info-dim: oklch(0.72 0.16 235 / 0.15);
+
+    --color-backdrop: rgb(2 2 12 / 0.82);
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+    --shadow: 0 8px 24px rgb(0 0 0 / 0.6);
+    --shadow-lg:
+      0 0 0 1px rgb(120 100 255 / 0.10),
+      0 24px 64px rgb(0 0 0 / 0.75),
+      0 0 80px oklch(0.70 0.22 265 / 0.10);
+    --shadow-glow: 0 0 18px oklch(0.70 0.22 265 / 0.45);
+  }
+
+  /* Matrix: pure black surfaces, neon green accents. Body text uses a
+   * slightly desaturated green (#7dff9b) so reading API docs doesn't
+   * burn your retinas; the saturated #00ff41 lives in the accent and
+   * focus states. Semantic colors get green-tinted so error/warning
+   * still pop without breaking the monochrome vibe.
+   * Font: JetBrains Mono everywhere — sells the terminal feel. */
+  :root[data-theme="matrix"] {
+    color-scheme: dark;
+    --font-sans: "JetBrains Mono", ui-monospace, monospace;
+    --font-display: "JetBrains Mono", ui-monospace, monospace;
+    --color-surface-base: #000000;
+    --color-surface: #050a05;
+    --color-surface-elevated: #0a140a;
+    --color-surface-overlay: #0f1f10;
+    --color-surface-inset: rgb(0 25 0 / 0.5);
+    --color-surface-inset-strong: rgb(0 40 0 / 0.7);
+
+    --color-text: #7dff9b;
+    --color-text-secondary: #3ec963;
+    --color-text-muted: #1f6e34;
+
+    --color-border: #0e3d18;
+    --color-border-strong: #196b2a;
+    --color-border-focus: #00ff41;
+
+    --color-accent: #00ff41;
+    --color-accent-hover: #4dff7d;
+    --color-accent-dim: rgb(0 255 65 / 0.13);
+    --color-accent-fg: #001a06;
+
+    --color-accent-2: #00d9c3;
+    --color-accent-2-dim: rgb(0 217 195 / 0.13);
+
+    --color-success: #00ff41;
+    --color-success-dim: rgb(0 255 65 / 0.13);
+    --color-warning: #d9d100;
+    --color-warning-dim: rgb(217 209 0 / 0.13);
+    --color-danger: #ff5050;
+    --color-danger-dim: rgb(255 80 80 / 0.13);
+    --color-info: #00d9c3;
+    --color-info-dim: rgb(0 217 195 / 0.13);
+
+    --color-backdrop: rgb(0 0 0 / 0.85);
+
+    --shadow-sm: 0 1px 2px rgb(0 255 65 / 0.15);
+    --shadow: 0 0 0 1px rgb(0 255 65 / 0.10), 0 8px 24px rgb(0 0 0 / 0.8);
+    --shadow-lg:
+      0 0 0 1px rgb(0 255 65 / 0.20),
+      0 24px 64px rgb(0 0 0 / 0.9),
+      0 0 80px rgb(0 255 65 / 0.08);
+    --shadow-glow: 0 0 16px rgb(0 255 65 / 0.55);
+  }
+
+  /* Grain: green-accent dark, ported from mill's "grain" theme variant
+   * (C:\code\mill\src\themes.js:140). This is the brand's natural
+   * habitat — wheat-tinted neutrals with an apothecary-green accent.
+   * When mill replaces the login modal, the two will match
+   * pixel-for-pixel because the tokens trace to the same source. */
+  :root[data-theme="grain"] {
+    color-scheme: dark;
+    --color-surface-base: #0d0f0c;
+    --color-surface: #141710;
+    --color-surface-elevated: #1a1f16;
+    --color-surface-overlay: #222820;
+    --color-surface-inset: rgb(0 0 0 / 0.25);
+    --color-surface-inset-strong: rgb(0 0 0 / 0.35);
+
+    --color-text: #e8f0e4;
+    --color-text-secondary: #8ea882;
+    --color-text-muted: #506048;
+
+    --color-border: #2c3226;
+    --color-border-strong: #3d4736;
+
+    /* Accent shifted warmer (hue 142 → 130, toward yellow-green) and
+     * brighter (L 0.67 → 0.78) so it reads as "sunlit wheat field"
+     * rather than the original mill "apothecary jar". The shadow
+     * glow and border-focus reference the same hue so the whole
+     * theme stays harmonized. */
+    --color-accent: oklch(0.78 0.22 130);
+    --color-accent-hover: oklch(0.85 0.22 130);
+    --color-accent-dim: oklch(0.78 0.22 130 / 0.14);
+    --color-accent-fg: #0d0f0c;
+    --color-border-focus: oklch(0.85 0.22 130);
+
+    --color-accent-2: oklch(0.72 0.18 175);
+    --color-accent-2-dim: oklch(0.72 0.18 175 / 0.13);
+
+    --color-success: oklch(0.78 0.22 130);
+    --color-success-dim: oklch(0.78 0.22 130 / 0.13);
+    --color-warning: oklch(0.80 0.18 80);
+    --color-warning-dim: oklch(0.80 0.18 80 / 0.13);
+    --color-danger: oklch(0.67 0.22 25);
+    --color-danger-dim: oklch(0.67 0.22 25 / 0.13);
+    --color-info: oklch(0.72 0.18 175);
+    --color-info-dim: oklch(0.72 0.18 175 / 0.13);
+
+    --color-backdrop: rgb(8 12 6 / 0.78);
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.45);
+    --shadow: 0 8px 24px rgb(0 0 0 / 0.55);
+    --shadow-lg:
+      0 0 0 1px rgb(170 220 130 / 0.10),
+      0 24px 64px rgb(0 0 0 / 0.7),
+      0 0 80px oklch(0.78 0.22 130 / 0.08);
+    --shadow-glow: 0 0 16px oklch(0.78 0.22 130 / 0.45);
+  }
+
+  /* Solar: Solarized Dark by Ethan Schoonover. Canonical palette
+   * (https://ethanschoonover.com/solarized/) — base03 background,
+   * base0 body text, blue as the working accent, cyan as the
+   * secondary. The semantic colors map to Solarized's own warning
+   * yellow / error red / success green so this theme reads like a
+   * familiar editor color scheme. */
+  :root[data-theme="solar"] {
+    color-scheme: dark;
+    --color-surface-base: #002b36;    /* base03 */
+    --color-surface: #073642;          /* base02 */
+    --color-surface-elevated: #0d4250;
+    --color-surface-overlay: #14505f;
+    --color-surface-inset: rgb(0 0 0 / 0.25);
+    --color-surface-inset-strong: rgb(0 0 0 / 0.40);
+
+    /* Canonical Solarized maps body text to base0/base1, which the
+     * spec considers ideal on base03. In practice on modern
+     * monitors they read as low-contrast gray. Promoting body text
+     * to base2 (the cream meant for the light theme's surface)
+     * keeps the palette in-family but lifts contrast to ~10:1. */
+    --color-text: #eee8d5;             /* base2 */
+    --color-text-secondary: #93a1a1;   /* base1 */
+    --color-text-muted: #657b83;       /* base00 */
+
+    --color-border: #0d4250;
+    --color-border-strong: #1d5e6f;
+    --color-border-focus: #268bd2;
+
+    --color-accent: #268bd2;           /* blue */
+    --color-accent-hover: #4ca8e8;
+    --color-accent-dim: rgb(38 139 210 / 0.16);
+    --color-accent-fg: #002b36;
+
+    --color-accent-2: #2aa198;         /* cyan */
+    --color-accent-2-dim: rgb(42 161 152 / 0.16);
+
+    --color-success: #859900;          /* green */
+    --color-success-dim: rgb(133 153 0 / 0.16);
+    --color-warning: #b58900;          /* yellow */
+    --color-warning-dim: rgb(181 137 0 / 0.16);
+    --color-danger: #dc322f;           /* red */
+    --color-danger-dim: rgb(220 50 47 / 0.16);
+    --color-info: #2aa198;             /* cyan */
+    --color-info-dim: rgb(42 161 152 / 0.16);
+
+    --color-backdrop: rgb(0 20 28 / 0.82);
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+    --shadow-lg:
+      0 0 0 1px rgb(38 139 210 / 0.10),
+      0 24px 64px rgb(0 0 0 / 0.6);
+    --shadow-glow: 0 0 16px rgb(38 139 210 / 0.40);
+  }
+
+  /* Candy: bright pastel light theme. Cream-pink surfaces, hot pink
+   * accent, mint as the secondary. Tuned to stay legible — text
+   * lives in deep plum (#3d1830) so it has 7+ contrast against the
+   * lightest surfaces. Saturated accents are reserved for
+   * interactive elements; surfaces stay quiet.
+   * Font: Comfortaa for everything visible (rounded, playful) with
+   * JetBrains Mono kept for code blocks so they still look like
+   * code. */
+  :root[data-theme="candy"] {
+    color-scheme: light;
+    --font-sans: "Comfortaa", system-ui, sans-serif;
+    --font-display: "Comfortaa", system-ui, sans-serif;
+    /* The default selection-bg uses purple alpha — swap to a soft
+     * pink that actually matches the candy palette. */
+    --color-selection-bg: oklch(0.80 0.20 5 / 0.30);
+    --color-surface-base: #fff5f9;
+    --color-surface: #ffffff;
+    --color-surface-elevated: #fff0f6;
+    --color-surface-overlay: #ffe1ee;
+    --color-surface-inset: rgb(255 197 220 / 0.18);
+    --color-surface-inset-strong: rgb(255 156 191 / 0.25);
+
+    --color-text: #3d1830;
+    --color-text-secondary: #7a4561;
+    --color-text-muted: #b88aa3;
+
+    --color-border: #ffd1e2;
+    --color-border-strong: #ffb1cd;
+    --color-border-focus: #ff5c8d;
+
+    --color-accent: oklch(0.70 0.20 5);          /* hot pink */
+    --color-accent-hover: oklch(0.76 0.20 5);
+    --color-accent-dim: oklch(0.70 0.20 5 / 0.12);
+    --color-accent-fg: #ffffff;
+
+    --color-accent-2: oklch(0.78 0.14 175);       /* mint */
+    --color-accent-2-dim: oklch(0.78 0.14 175 / 0.14);
+
+    --color-success: oklch(0.72 0.18 155);
+    --color-success-dim: oklch(0.72 0.18 155 / 0.12);
+    --color-warning: oklch(0.80 0.18 75);
+    --color-warning-dim: oklch(0.80 0.18 75 / 0.14);
+    --color-danger: oklch(0.66 0.22 25);
+    --color-danger-dim: oklch(0.66 0.22 25 / 0.12);
+    --color-info: oklch(0.72 0.16 235);
+    --color-info-dim: oklch(0.72 0.16 235 / 0.12);
+
+    --color-backdrop: rgb(60 20 40 / 0.40);
+
+    --shadow-sm: 0 1px 2px rgb(255 100 160 / 0.10);
+    --shadow: 0 8px 24px rgb(255 100 160 / 0.14);
+    --shadow-lg:
+      0 0 0 1px rgb(255 100 160 / 0.10),
+      0 24px 64px rgb(255 100 160 / 0.18);
+    --shadow-glow: 0 0 18px oklch(0.70 0.20 5 / 0.40);
+  }
+
   :root[data-theme="light"] {
     color-scheme: light;
     --color-surface-base: #f4f1fa;
@@ -175,6 +519,115 @@
     background: var(--color-surface-base);
     color: var(--color-text);
     font-family: var(--font-sans);
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: background-color var(--motion) ease, color var(--motion) ease;
+  }
+
+  /* ---------------------------------------------------------------- *
+   *  Element defaults that consume the interaction tokens. Keep
+   *  this list short — anything component-specific should live in
+   *  the template, not here. The goal is "any new <a>, <input>,
+   *  <code>, scrollbar, or :focus-visible state automatically uses
+   *  the right tokens without thinking about it."
+   * ---------------------------------------------------------------- */
+
+  a {
+    color: var(--color-link);
+    text-decoration: underline;
+    text-decoration-thickness: from-font;
+    text-underline-offset: 2px;
+    transition: color var(--motion-fast) ease;
+  }
+  a:hover {
+    color: var(--color-link-hover);
+  }
+  a:visited {
+    color: var(--color-link-visited);
+  }
+
+  ::selection {
+    background: var(--color-selection-bg);
+    color: var(--color-selection-fg);
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+    border-radius: var(--radius-sm);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-text-muted);
+    opacity: 1;
+  }
+
+  input:disabled,
+  textarea:disabled,
+  select:disabled,
+  button:disabled {
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  /* Scrollbars. Firefox uses scrollbar-color/width; WebKit uses the
+   * pseudo-element rules. Both reference the same tokens so
+   * theming carries across browsers. */
+  * {
+    scrollbar-color: var(--color-scrollbar-thumb) var(--color-scrollbar-track);
+    scrollbar-width: thin;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-scrollbar-track);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-scrollbar-thumb);
+    border-radius: var(--radius-pill);
+    border: 2px solid var(--color-scrollbar-track);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-scrollbar-thumb-hover);
+  }
+
+  /* Inline <code> and <pre>. Inline gets a tight padding + small
+   * radius; blocks get more breathing room. <pre><code>...</code></pre>
+   * inherits transparency so the outer block's bg shows through. */
+  code {
+    background: var(--color-code-bg);
+    color: var(--color-code-fg);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+  }
+  pre {
+    background: var(--color-code-bg);
+    color: var(--color-code-fg);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    overflow-x: auto;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    font-size: inherit;
+  }
+
+  mark {
+    background: var(--color-warning-dim);
+    color: var(--color-text);
+    padding: 0 0.2em;
+    border-radius: var(--radius-sm);
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 1rem 0;
   }
 }

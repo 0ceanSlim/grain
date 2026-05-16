@@ -47,6 +47,24 @@ RUN apk add --no-cache curl tar libstdc++ libgcc \
           www/static/swagger/ \
     && rm -rf /tmp/swagger.tgz /tmp/package
 
+# Bundle self-hosted webfonts. The token stacks reference Space
+# Grotesk (default sans), JetBrains Mono (default mono + matrix
+# theme's sans), and Comfortaa (candy theme's display font). Without
+# bundling, those names resolve only on machines that happen to have
+# the fonts installed; the @font-face declarations in input.css
+# point at /static/fonts/*.woff2 and need real files to load.
+#
+# Pulled from fontsource via jsdelivr (the npm packages package the
+# files for self-hosting and jsdelivr mirrors them with stable URLs).
+# Latin subset only; weights 400 and 700.
+RUN mkdir -p www/static/fonts \
+    && for slug in space-grotesk jetbrains-mono comfortaa; do \
+         for weight in 400 700; do \
+           curl -fsSL -o "www/static/fonts/${slug}-${weight}.woff2" \
+             "https://cdn.jsdelivr.net/npm/@fontsource/${slug}@5/files/${slug}-latin-${weight}-normal.woff2"; \
+         done; \
+       done
+
 # Compile Tailwind. The Tailwind v3 CDN script in layout.html only
 # processes inline utility classes — it never reads input.css, which
 # means the @theme tokens (--color-surface-*, --color-accent, …)

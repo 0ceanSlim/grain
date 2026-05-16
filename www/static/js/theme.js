@@ -23,6 +23,11 @@
   const THEMES = [
     { id: "dark", label: "Dark" },
     { id: "light", label: "Light" },
+    { id: "midnight", label: "Midnight" },
+    { id: "matrix", label: "Matrix" },
+    { id: "grain", label: "Grain" },
+    { id: "solar", label: "Solar" },
+    { id: "candy", label: "Candy" },
   ];
 
   function getTheme() {

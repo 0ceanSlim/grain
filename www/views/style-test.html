@@ -294,6 +294,167 @@
   </section>
 
   <!-- ============================================================== -->
+  <!-- Links, selection, focus -->
+  <!-- ============================================================== -->
+  <section class="mb-12">
+    <h2 class="mb-4 text-xl font-semibold">Links, selection &amp; focus</h2>
+    <div
+      class="p-6 space-y-4 border rounded"
+      style="background: var(--color-surface); border-color: var(--color-border)"
+    >
+      <p>
+        Anchor styles auto-apply: <a href="#">a link to nowhere</a>, and an
+        <a href="#" style="color: var(--color-link-visited)">visited-state example</a>.
+      </p>
+      <p>
+        Try selecting this paragraph with your mouse to see <code>::selection</code> colors.
+        Try tabbing through the form below to see <code>:focus-visible</code> rings.
+      </p>
+      <div class="flex flex-wrap gap-3">
+        <input
+          type="text"
+          placeholder="tab into me"
+          class="px-3 py-2 border rounded"
+          style="background: var(--color-surface-inset); color: var(--color-text); border-color: var(--color-border)"
+        />
+        <button
+          type="button"
+          class="px-4 py-2 rounded border"
+          style="background: var(--color-surface-elevated); color: var(--color-text); border-color: var(--color-border)"
+        >
+          Tab to focus
+        </button>
+        <a
+          href="#"
+          class="px-4 py-2 rounded border"
+          style="background: var(--color-accent); color: var(--color-accent-fg); border-color: var(--color-accent); text-decoration: none"
+        >
+          Link as button
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- Hover & active surfaces -->
+  <!-- ============================================================== -->
+  <section class="mb-12">
+    <h2 class="mb-4 text-xl font-semibold">Hover &amp; active surfaces</h2>
+    <p class="mb-3 text-sm" style="color: var(--color-text-secondary)">
+      Mouse over a row to see <code>--color-surface-hover</code>; press to see <code>--color-surface-active</code>.
+    </p>
+    <div
+      class="overflow-hidden border rounded"
+      style="background: var(--color-surface); border-color: var(--color-border)"
+    >
+      <button
+        type="button"
+        class="block w-full px-4 py-3 text-left border-b"
+        style="border-color: var(--color-border); background: transparent"
+        onmouseover="this.style.background='var(--color-surface-hover)'"
+        onmouseout="this.style.background='transparent'"
+        onmousedown="this.style.background='var(--color-surface-active)'"
+        onmouseup="this.style.background='var(--color-surface-hover)'"
+      >Row 1 — hover me, press me</button>
+      <button
+        type="button"
+        class="block w-full px-4 py-3 text-left border-b"
+        style="border-color: var(--color-border); background: transparent"
+        onmouseover="this.style.background='var(--color-surface-hover)'"
+        onmouseout="this.style.background='transparent'"
+        onmousedown="this.style.background='var(--color-surface-active)'"
+        onmouseup="this.style.background='var(--color-surface-hover)'"
+      >Row 2</button>
+      <button
+        type="button"
+        class="block w-full px-4 py-3 text-left"
+        style="background: transparent"
+        onmouseover="this.style.background='var(--color-surface-hover)'"
+        onmouseout="this.style.background='transparent'"
+        onmousedown="this.style.background='var(--color-surface-active)'"
+        onmouseup="this.style.background='var(--color-surface-hover)'"
+      >Row 3</button>
+    </div>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- Code -->
+  <!-- ============================================================== -->
+  <section class="mb-12">
+    <h2 class="mb-4 text-xl font-semibold">Code &amp; mark</h2>
+    <div
+      class="p-6 space-y-3 border rounded"
+      style="background: var(--color-surface); border-color: var(--color-border)"
+    >
+      <p>
+        Inline <code>code</code> sits in <code>--color-code-bg</code> using
+        <code>--font-mono</code>. The mark element <mark>highlights with warning-dim</mark>.
+      </p>
+      <pre><code>POST / HTTP/1.1
+Content-Type: application/nostr+json+rpc
+Authorization: Nostr &lt;base64-event&gt;
+
+{"method": "supportedmethods"}</code></pre>
+    </div>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- Scrollbar -->
+  <!-- ============================================================== -->
+  <section class="mb-12">
+    <h2 class="mb-4 text-xl font-semibold">Scrollbar</h2>
+    <div
+      class="overflow-y-auto border rounded p-4"
+      style="background: var(--color-surface); border-color: var(--color-border); max-height: 200px"
+    >
+      <p style="color: var(--color-text-secondary)">
+        Scroll inside this box to see the themed scrollbar (track =
+        <code>--color-scrollbar-track</code>, thumb =
+        <code>--color-scrollbar-thumb</code>, hover thumb =
+        <code>--color-scrollbar-thumb-hover</code>).
+      </p>
+      <ol class="mt-2 space-y-1 text-sm pl-6 list-decimal">
+        <li>Lorem ipsum dolor sit amet</li>
+        <li>consectetur adipiscing elit</li>
+        <li>sed do eiusmod tempor incididunt</li>
+        <li>ut labore et dolore magna aliqua</li>
+        <li>Ut enim ad minim veniam</li>
+        <li>quis nostrud exercitation</li>
+        <li>ullamco laboris nisi ut aliquip</li>
+        <li>ex ea commodo consequat</li>
+        <li>Duis aute irure dolor</li>
+        <li>in reprehenderit in voluptate</li>
+        <li>velit esse cillum dolore</li>
+        <li>eu fugiat nulla pariatur</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- Fonts -->
+  <!-- ============================================================== -->
+  <section class="mb-12">
+    <h2 class="mb-4 text-xl font-semibold">Fonts</h2>
+    <div
+      class="grid gap-3 p-6 border rounded sm:grid-cols-3"
+      style="background: var(--color-surface); border-color: var(--color-border)"
+    >
+      <div>
+        <div class="text-xs mb-1" style="color: var(--color-text-secondary); font-family: var(--font-mono)">--font-sans</div>
+        <div class="text-lg" style="font-family: var(--font-sans)">The quick brown fox</div>
+      </div>
+      <div>
+        <div class="text-xs mb-1" style="color: var(--color-text-secondary); font-family: var(--font-mono)">--font-mono</div>
+        <div class="text-lg" style="font-family: var(--font-mono)">The quick brown fox</div>
+      </div>
+      <div>
+        <div class="text-xs mb-1" style="color: var(--color-text-secondary); font-family: var(--font-mono)">--font-display</div>
+        <div class="text-lg" style="font-family: var(--font-display)">The quick brown fox</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================== -->
   <!-- Shadows -->
   <!-- ============================================================== -->
   <section class="mb-12">
