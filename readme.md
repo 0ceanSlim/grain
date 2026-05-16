@@ -221,7 +221,7 @@ I welcome contributions, bug reports, and feature requests via GitHub.
 
 - **🔧 Development Guide** - _[Development Documentation](docs/development/readme.md)_
 - **🧪 Testing Guide** - _[Testing Documentation](tests/readme.md)_
-- **📚 API Documentation** - _[API Documentation](docs/api.md)_
+- **📚 API Documentation** - The running relay serves Swagger UI at `/api/docs` and the OpenAPI spec at `/api/docs/openapi.json`. See _[docs/api.md](docs/api.md)_ for regeneration instructions.
 
 These guides cover setting up your development environment, code standards, testing procedures, client library usage, and contribution workflows.
 
