@@ -16,6 +16,14 @@ type AuthConfigResponse struct {
 }
 
 // GetAuthConfig handles the request to return authentication configuration
+//
+// @Summary      Get auth config
+// @Description  Returns whether NIP-42 AUTH is required on websocket connections and the relay URL clients must echo back in their AUTH events.
+// @Tags         relay-config
+// @Produce      json
+// @Success      200  {object}  AuthConfigResponse
+// @Failure      500  {string}  string  "Server configuration not available"
+// @Router       /api/v1/relay/config/auth [get]
 func GetAuthConfig(w http.ResponseWriter, r *http.Request) {
 	log.RelayAPI().Debug("Auth config API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),

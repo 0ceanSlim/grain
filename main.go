@@ -1,3 +1,20 @@
+// Package main is the GRAIN relay entry point.
+//
+// The swag annotations on this file (@title, @version, etc.) populate
+// the top-level info block of the generated OpenAPI document. The
+// per-route annotations live on the individual handlers — search the
+// codebase for `@Router` to find them.
+//
+// @title           GRAIN Relay API
+// @version         0.7
+// @description     HTTP API for grain — Nostr relay and client tooling. Includes read-only relay configuration endpoints, key utilities, event publishing/query helpers, and (gated behind NIP-98) the NIP-86 relay management endpoint.
+// @license.name    MIT
+// @license.url     https://github.com/0ceanslim/grain/blob/main/LICENSE
+// @BasePath        /
+// @securityDefinitions.apikey  NostrAuth
+// @in                          header
+// @name                        Authorization
+// @description                 NIP-98 HTTP Auth. Value is `Nostr <base64-encoded-kind-27235-event>` signed by the relay owner.
 package main
 
 import (
@@ -9,6 +26,7 @@ import (
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/config/datadir"
 	"github.com/0ceanslim/grain/server"
+	"github.com/0ceanslim/grain/server/api/docs"
 )
 
 //go:embed docs/examples/*
@@ -16,6 +34,16 @@ var embeddedExamples embed.FS
 
 //go:embed www/*
 var embeddedWWW embed.FS
+
+// embeddedOpenAPI is the swag-generated OpenAPI document. The file is
+// produced by `make generate` (or the equivalent step in CI) and
+// rebuilt on every build — it's intentionally gitignored. If the file
+// is missing the build fails with "pattern docs/openapi/swagger.json:
+// no matching files found", which is the right signal: a binary
+// without the spec would serve a broken /api/docs page.
+//
+//go:embed docs/openapi/swagger.json
+var embeddedOpenAPI []byte
 
 // Version information - these will be set during build
 var (
@@ -44,6 +72,7 @@ func main() {
 	// Set embedded filesystems
 	config.SetEmbeddedExamples(embeddedExamples)
 	client.SetEmbeddedWWW(embeddedWWW)
+	docs.SetSpec(embeddedOpenAPI)
 
 	// Handle --import flag: import events from JSONL file and exit
 	if importFile := parseImportFlag(); importFile != "" {

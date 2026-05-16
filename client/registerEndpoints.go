@@ -6,6 +6,7 @@ import (
 
 	"github.com/0ceanslim/grain/client/api"
 	relay "github.com/0ceanslim/grain/server/api"
+	"github.com/0ceanslim/grain/server/api/docs"
 )
 
 // RegisterEndpoints registers all endpoints on the given mux
@@ -58,6 +59,13 @@ func RegisterEndpoints(mux *http.ServeMux) {
 
 	mux.HandleFunc("/api/v1/ping/", api.PingHandler)
 	mux.HandleFunc("/api/v1/keys/decode/nip19/", api.Nip19DecodeHandler) // Decode NIP-19 entities
+
+	// OpenAPI / Swagger UI. The spec is served standalone so other
+	// tooling (Postman, openapi-generator, etc.) can consume it
+	// without scraping the UI shell. The UI subtree (trailing slash)
+	// pulls in all of swaggo's static assets.
+	mux.HandleFunc("/api/docs/openapi.json", docs.ServeSpec)
+	mux.Handle("/api/docs/", docs.UIHandler())
 
 	// Core Nostr client function endpoints
 	registerCoreClientEndpoints(mux)

@@ -19,3 +19,9 @@ docs/status/history/
 # Built tool binaries
 tools/migrate-mongo/migrate-mongo
 tools/migrate-mongo/migrate-mongo.exe
+
+# Swag-generated OpenAPI artifacts. The directory itself is kept via
+# .gitkeep so `make generate` / CI has somewhere to drop output; the
+# spec is rebuilt from swag annotations on every build.
+docs/openapi/*
+!docs/openapi/.gitkeep
