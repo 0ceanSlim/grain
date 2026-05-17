@@ -5,19 +5,19 @@
     <div
       class="inline-block w-8 h-8 border-2 border-white rounded-full animate-spin border-t-transparent"
     ></div>
-    <p class="mt-2 text-gray-400">Loading profile...</p>
+    <p class="mt-2 text-text-secondary">Loading profile...</p>
   </div>
 
   <!-- Error State -->
   <div id="error" class="hidden text-center">
     <div
-      class="max-w-md p-6 mx-auto bg-red-900 border border-red-700 rounded-lg"
+      class="max-w-md p-6 mx-auto bg-danger-dim border border-danger rounded-lg"
     >
-      <h2 class="mb-2 text-xl font-bold text-red-200">❌ Profile Error</h2>
-      <p id="error-message" class="mb-4 text-red-300">Failed to load profile</p>
+      <h2 class="mb-2 text-xl font-bold text-danger">❌ Profile Error</h2>
+      <p id="error-message" class="mb-4 text-danger">Failed to load profile</p>
       <button
         onclick="refreshProfile()"
-        class="px-4 py-2 text-white transition-colors bg-red-700 rounded hover:bg-red-600"
+        class="px-4 py-2 text-text transition-colors bg-danger rounded hover:opacity-80"
       >
         Retry
       </button>
@@ -27,10 +27,10 @@
   <!-- Profile Content -->
   <div id="profile-content" class="hidden">
     <!-- Banner Section -->
-    <div class="relative mb-20 overflow-visible bg-gray-800 rounded-xl">
+    <div class="relative mb-20 overflow-visible bg-surface rounded-xl">
       <!-- Banner placeholder/background -->
       <div
-        class="flex items-center justify-center h-48 rounded-md bg-gradient-to-r from-purple-600 to-blue-600"
+        class="flex items-center justify-center h-48 rounded-md bg-gradient-to-r from-accent to-accent-2"
       ></div>
 
       <!-- Banner image (hidden by default) -->
@@ -48,12 +48,12 @@
           <!-- Picture placeholder - rounded square -->
           <div
             id="profile-avatar-placeholder"
-            class="flex items-center justify-center w-32 h-32 bg-gray-600 border-2 border-gray-400 rounded-lg shadow-lg"
+            class="flex items-center justify-center w-32 h-32 bg-surface-overlay border-2 border-border-strong rounded-lg shadow-lg"
           ></div>
           <!-- Actual picture - rounded square -->
           <img
             id="profile-avatar-img"
-            class="hidden object-cover w-32 h-32 border-2 border-gray-400 rounded-lg shadow-lg"
+            class="hidden object-cover w-32 h-32 border-2 border-border-strong rounded-lg shadow-lg"
             alt="Profile Picture"
           />
         </div>
@@ -63,24 +63,24 @@
     <!-- Profile Info Section (starts below banner with space for visible profile pic) -->
     <div class="text-center">
       <!-- Display Name -->
-      <h1 id="profile-name" class="mb-2 text-3xl font-bold text-white">
+      <h1 id="profile-name" class="mb-2 text-3xl font-bold text-text">
         display_name
       </h1>
 
       <!-- Display name alternate (if different from name) -->
       <div
         id="profile-display-name"
-        class="hidden mb-2 text-xl text-gray-300"
+        class="hidden mb-2 text-xl text-text-secondary"
       ></div>
 
       <!-- NPub with copy button -->
       <div class="flex items-center justify-center gap-2 mb-6">
-        <span id="profile-identifier" class="font-mono text-sm text-gray-400"
+        <span id="profile-identifier" class="font-mono text-sm text-text-secondary"
           >npubxxx...</span
         >
         <button
           onclick="copyIdentifier()"
-          class="text-gray-400 transition-colors hover:text-white"
+          class="text-text-secondary transition-colors hover:text-text"
           title="Copy npub"
         >
           📋
@@ -89,8 +89,8 @@
 
       <!-- About Section -->
       <div class="max-w-2xl mx-auto mb-4">
-        <div class="p-6 bg-gray-800 rounded-lg">
-          <p id="profile-about" class="leading-relaxed text-gray-300">
+        <div class="p-6 bg-surface rounded-lg">
+          <p id="profile-about" class="leading-relaxed text-text-secondary">
             Loading bio...
           </p>
         </div>
@@ -101,32 +101,32 @@
         <!-- NIP-05 Address -->
         <div
           id="profile-nip05-container"
-          class="hidden p-4 bg-gray-800 rounded-lg"
+          class="hidden p-4 bg-surface rounded-lg"
         >
-          <h4 class="mb-2 text-sm font-medium text-gray-400">nip-05</h4>
-          <p id="profile-nip05" class="text-purple-400 break-all">-</p>
+          <h4 class="mb-2 text-sm font-medium text-text-secondary">nip-05</h4>
+          <p id="profile-nip05" class="text-accent break-all">-</p>
         </div>
 
         <!-- Lightning Address -->
         <div
           id="profile-lightning-container"
-          class="hidden p-4 bg-gray-800 rounded-lg"
+          class="hidden p-4 bg-surface rounded-lg"
         >
-          <h4 class="mb-2 text-sm font-medium text-gray-400">⚡</h4>
-          <p id="profile-lightning" class="text-yellow-400 break-all">-</p>
+          <h4 class="mb-2 text-sm font-medium text-text-secondary">⚡</h4>
+          <p id="profile-lightning" class="text-warning break-all">-</p>
         </div>
 
         <!-- Website -->
         <div
           id="profile-website-container"
-          class="hidden p-4 bg-gray-800 rounded-lg"
+          class="hidden p-4 bg-surface rounded-lg"
         >
-          <h4 class="mb-2 text-sm font-medium text-gray-400">🌐</h4>
+          <h4 class="mb-2 text-sm font-medium text-text-secondary">🌐</h4>
           <a
             id="profile-website"
             href="#"
             target="_blank"
-            class="text-blue-400 break-all hover:text-blue-300"
+            class="text-accent break-all hover:opacity-80"
             >-</a
           >
         </div>
@@ -144,7 +144,7 @@
       <div class="text-center">
         <button
           onclick="refreshProfile()"
-          class="px-6 py-3 text-white transition-colors bg-gray-700 rounded-lg hover:bg-gray-600"
+          class="px-6 py-3 text-text transition-colors bg-surface-elevated rounded-lg hover:bg-surface-hover"
         >
           view event json
         </button>

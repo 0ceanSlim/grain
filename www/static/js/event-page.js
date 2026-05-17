@@ -108,9 +108,9 @@
     // For now, just show raw JSON for all kinds
     // TODO: Add kind-specific rendering in future iterations
     container.innerHTML = `
-        <div class="p-4 bg-gray-900 rounded-lg">
-          <h4 class="mb-2 text-sm font-medium text-gray-400">Raw Event JSON</h4>
-          <pre class="text-sm text-gray-300 whitespace-pre-wrap break-all">${JSON.stringify(
+        <div class="p-4 bg-surface-inset-strong rounded-lg">
+          <h4 class="mb-2 text-sm font-medium text-text-secondary">Raw Event JSON</h4>
+          <pre class="text-sm text-text-secondary whitespace-pre-wrap break-all">${JSON.stringify(
             event,
             null,
             2
@@ -140,9 +140,9 @@
         const tagValues = tag.slice(1).join(", ");
 
         return `
-          <div class="flex items-start gap-2 p-2 bg-gray-700 rounded">
-            <span class="px-2 py-1 text-xs font-mono text-white bg-gray-600 rounded">${tagType}</span>
-            <span class="text-sm text-gray-300 break-all">${tagValues}</span>
+          <div class="flex items-start gap-2 p-2 bg-surface-elevated rounded">
+            <span class="px-2 py-1 text-xs font-mono text-text bg-surface-overlay rounded">${tagType}</span>
+            <span class="text-sm text-text-secondary break-all">${tagValues}</span>
           </div>
         `;
       })
@@ -257,9 +257,9 @@
   function showToast(message, type = "success") {
     // Simple toast implementation
     const toast = document.createElement("div");
-    const bgColor = type === "error" ? "bg-red-600" : "bg-green-600";
+    const bgColor = type === "error" ? "bg-danger" : "bg-success";
 
-    toast.className = `fixed top-4 right-4 ${bgColor} text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-opacity`;
+    toast.className = `fixed top-4 right-4 ${bgColor} text-text px-4 py-2 rounded-lg shadow-lg z-50 transition-opacity`;
     toast.textContent = message;
 
     document.body.appendChild(toast);

@@ -5,19 +5,19 @@
     <div
       class="inline-block w-8 h-8 border-2 border-white rounded-full animate-spin border-t-transparent"
     ></div>
-    <p class="mt-2 text-gray-400">Loading event...</p>
+    <p class="mt-2 text-text-secondary">Loading event...</p>
   </div>
 
   <!-- Error State -->
   <div id="error" class="hidden text-center">
     <div
-      class="max-w-md p-6 mx-auto bg-red-900 border border-red-700 rounded-lg"
+      class="max-w-md p-6 mx-auto bg-danger-dim border border-danger rounded-lg"
     >
-      <h2 class="mb-2 text-xl font-bold text-red-200">❌ Event Error</h2>
-      <p id="error-message" class="mb-4 text-red-300">Failed to load event</p>
+      <h2 class="mb-2 text-xl font-bold text-danger">❌ Event Error</h2>
+      <p id="error-message" class="mb-4 text-danger">Failed to load event</p>
       <button
         onclick="retryLoadEvent()"
-        class="px-4 py-2 text-white transition-colors bg-red-700 rounded hover:bg-red-600"
+        class="px-4 py-2 text-text transition-colors bg-danger rounded hover:opacity-80"
       >
         Retry
       </button>
@@ -28,15 +28,15 @@
   <div id="event-content" class="hidden">
     <!-- Event Header -->
     <div class="mb-6 text-center">
-      <h1 class="mb-2 text-3xl font-bold text-white">Event</h1>
+      <h1 class="mb-2 text-3xl font-bold text-text">Event</h1>
       <!-- Event ID with copy button -->
       <div class="flex items-center justify-center gap-2 mb-4">
-        <span id="event-id" class="font-mono text-sm text-gray-400"
+        <span id="event-id" class="font-mono text-sm text-text-secondary"
           >Loading...</span
         >
         <button
           onclick="copyEventId()"
-          class="text-gray-400 transition-colors hover:text-white"
+          class="text-text-secondary transition-colors hover:text-text"
           title="Copy Event ID"
         >
           📋
@@ -46,21 +46,21 @@
 
     <!-- Event Kind Display -->
     <div id="event-kind-display" class="mb-6">
-      <div class="p-6 bg-gray-800 rounded-lg">
-        <h3 class="mb-4 text-xl font-semibold text-white">
-          Event Kind <span id="event-kind" class="text-blue-400">0</span>
+      <div class="p-6 bg-surface rounded-lg">
+        <h3 class="mb-4 text-xl font-semibold text-text">
+          Event Kind <span id="event-kind" class="text-accent">0</span>
         </h3>
 
         <!-- Kind-specific content will be rendered here -->
         <div id="kind-specific-content">
           <!-- Default: Raw JSON display -->
-          <div class="p-4 bg-gray-900 rounded-lg">
-            <h4 class="mb-2 text-sm font-medium text-gray-400">
+          <div class="p-4 bg-surface-inset-strong rounded-lg">
+            <h4 class="mb-2 text-sm font-medium text-text-secondary">
               Raw Event JSON
             </h4>
             <pre
               id="raw-event-json"
-              class="text-sm text-gray-300 break-all whitespace-pre-wrap"
+              class="text-sm text-text-secondary break-all whitespace-pre-wrap"
             >
 Loading...</pre
             >
@@ -72,17 +72,17 @@ Loading...</pre
     <!-- Event Metadata -->
     <div class="grid grid-cols-1 gap-4 mb-6 md:grid-cols-2">
       <!-- Author -->
-      <div class="p-4 bg-gray-800 rounded-lg">
-        <h4 class="mb-2 text-sm font-medium text-gray-400">Author</h4>
+      <div class="p-4 bg-surface rounded-lg">
+        <h4 class="mb-2 text-sm font-medium text-text-secondary">Author</h4>
         <div class="flex items-center gap-2">
           <span
             id="event-author"
-            class="font-mono text-sm text-blue-400 break-all"
+            class="font-mono text-sm text-accent break-all"
             >Loading...</span
           >
           <button
             onclick="copyAuthor()"
-            class="text-gray-400 transition-colors hover:text-white"
+            class="text-text-secondary transition-colors hover:text-text"
             title="Copy Author"
           >
             📋
@@ -91,16 +91,16 @@ Loading...</pre
       </div>
 
       <!-- Created At -->
-      <div class="p-4 bg-gray-800 rounded-lg">
-        <h4 class="mb-2 text-sm font-medium text-gray-400">Created</h4>
-        <span id="event-created" class="text-gray-300">Loading...</span>
+      <div class="p-4 bg-surface rounded-lg">
+        <h4 class="mb-2 text-sm font-medium text-text-secondary">Created</h4>
+        <span id="event-created" class="text-text-secondary">Loading...</span>
       </div>
     </div>
 
     <!-- Event Tags (if any) -->
     <div id="event-tags-container" class="hidden mb-6">
-      <div class="p-4 bg-gray-800 rounded-lg">
-        <h4 class="mb-2 text-sm font-medium text-gray-400">Tags</h4>
+      <div class="p-4 bg-surface rounded-lg">
+        <h4 class="mb-2 text-sm font-medium text-text-secondary">Tags</h4>
         <div id="event-tags" class="space-y-2">
           <!-- Tags will be populated here -->
         </div>
@@ -112,14 +112,14 @@ Loading...</pre
       <button
         onclick="toggleEventJson()"
         id="toggle-json-btn"
-        class="px-6 py-3 text-white transition-colors bg-gray-700 rounded-lg hover:bg-gray-600"
+        class="px-6 py-3 text-text transition-colors bg-surface-elevated rounded-lg hover:bg-surface-hover"
       >
         Show Event JSON
       </button>
 
       <button
         onclick="viewAuthorProfile()"
-        class="px-6 py-3 text-white transition-colors bg-blue-700 rounded-lg hover:bg-blue-600"
+        class="px-6 py-3 text-text transition-colors bg-accent rounded-lg hover:bg-accent-hover"
       >
         View Author Profile
       </button>
@@ -127,13 +127,13 @@ Loading...</pre
 
     <!-- JSON Toggle Container (hidden by default) -->
     <div id="json-container" class="hidden mt-6">
-      <div class="p-4 bg-gray-900 rounded-lg">
-        <h4 class="mb-2 text-sm font-medium text-gray-400">
+      <div class="p-4 bg-surface-inset-strong rounded-lg">
+        <h4 class="mb-2 text-sm font-medium text-text-secondary">
           Complete Event JSON
         </h4>
         <pre
           id="complete-event-json"
-          class="overflow-x-auto text-sm text-gray-300 break-all whitespace-pre-wrap"
+          class="overflow-x-auto text-sm text-text-secondary break-all whitespace-pre-wrap"
         >
 Loading...</pre
         >

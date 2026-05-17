@@ -168,7 +168,7 @@
       // Set initial loading state with spinner before the address
       setElementHTML(
         "profile-nip05",
-        `<span class="inline-block w-3 h-3 border border-gray-400 rounded-full animate-spin border-t-transparent mr-2"></span>${profileContent.nip05}`
+        `<span class="inline-block w-3 h-3 border border-border-strong rounded-full animate-spin border-t-transparent mr-2"></span>${profileContent.nip05}`
       );
       showElement("profile-nip05-container");
 
@@ -249,9 +249,9 @@
       .trim();
 
     if (isValid) {
-      nip05Element.innerHTML = `<span class="text-green-400 mr-2" title="NIP-05 verified">✅</span>${originalText}`;
+      nip05Element.innerHTML = `<span class="text-success mr-2" title="NIP-05 verified">✅</span>${originalText}`;
     } else {
-      nip05Element.innerHTML = `<span class="text-red-400 mr-2" title="NIP-05 verification failed: ${message}">❌</span>${originalText}`;
+      nip05Element.innerHTML = `<span class="text-danger mr-2" title="NIP-05 verification failed: ${message}">❌</span>${originalText}`;
     }
   }
 
@@ -352,7 +352,7 @@
     const profileUrl = config.getUrl(identity);
     platformElement.innerHTML = `
         <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" 
-           class="inline-flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
+           class="inline-flex items-center gap-2 text-text-secondary hover:text-text transition-colors"
            title="${config.name} profile">
           <img src="${config.icon}" alt="${config.name}" class="w-4 h-4" />
           <span>${config.name}</span>
@@ -404,7 +404,7 @@
       const cleanUrl = url.replace(/[.,;:!?]+$/, "");
       const trailingPunc = url.substring(cleanUrl.length);
 
-      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 underline">${cleanUrl}</a>${trailingPunc}`;
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-accent underline">${cleanUrl}</a>${trailingPunc}`;
     });
   }
 
@@ -476,7 +476,7 @@
     // Simple toast notification
     const toast = document.createElement("div");
     toast.className = `fixed top-4 right-4 px-4 py-2 rounded shadow-lg z-50 ${
-      type === "error" ? "bg-red-600 text-white" : "bg-green-600 text-white"
+      type === "error" ? "bg-danger text-text-on-accent" : "bg-success text-text-on-accent"
     }`;
     toast.textContent = message;
 

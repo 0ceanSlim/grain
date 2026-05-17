@@ -1,37 +1,37 @@
 <!-- GRAIN Relay Dashboard Home View - Phase 1 Redesign with Layout Fixes -->
-<div id="dashboard-main" class="min-h-screen p-4 text-white">
+<div id="dashboard-main" class="min-h-screen p-4 text-text">
   <!-- Compact Dashboard Header -->
-  <div class="pb-4 mb-6 border-b border-gray-700">
+  <div class="pb-4 mb-6 border-b border-border">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="mb-1 text-2xl font-bold text-white">Relay Dashboard</h1>
-        <p class="text-sm text-gray-400">
+        <h1 class="mb-1 text-2xl font-bold text-text">Relay Dashboard</h1>
+        <p class="text-sm text-text-secondary">
           Relay management and system overview
         </p>
       </div>
       <div class="flex items-center space-x-4">
         <div class="flex items-center space-x-4">
           <div class="flex items-center space-x-2" id="relay-status">
-            <div class="w-3 h-3 bg-gray-500 rounded-full animate-pulse"></div>
-            <span class="font-medium text-gray-400">Loading...</span>
+            <div class="w-3 h-3 bg-text-muted rounded-full animate-pulse"></div>
+            <span class="font-medium text-text-secondary">Loading...</span>
           </div>
         </div>
       </div>
     </div>
-    <div class="mt-2 text-xs text-gray-500">
+    <div class="mt-2 text-xs text-text-muted">
       Last updated: <span id="last-updated">Loading...</span>
     </div>
   </div>
 
   <!-- 1. Relay Overview Section - MOVED ABOVE WHITELIST/BLACKLIST -->
   <div
-    class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
+    class="mb-8 overflow-hidden bg-surface border border-border rounded-lg"
   >
     <div id="relay-overview-content" class="p-6">
       <div class="space-y-3">
-        <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-        <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-        <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        <div class="h-4 bg-surface-elevated rounded animate-pulse"></div>
+        <div class="w-5/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
+        <div class="w-4/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
       </div>
     </div>
   </div>
@@ -39,59 +39,59 @@
   <!-- Whitelist and Blacklist Containers with Fixed Layout -->
   <div class="mb-8 grid-container">
     <!-- Whitelist Container (Larger - 2/3 width) -->
-    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
-      <div class="px-4 py-3 border-b border-gray-700 bg-gray-750">
-        <h2 class="text-lg font-semibold text-white">⬜ Whitelist</h2>
-        <p class="text-xs text-gray-400">Approved users and configuration</p>
+    <div class="overflow-hidden bg-surface border border-border rounded-lg">
+      <div class="px-4 py-3 border-b border-border bg-surface-elevated">
+        <h2 class="text-lg font-semibold text-text">⬜ Whitelist</h2>
+        <p class="text-xs text-text-secondary">Approved users and configuration</p>
       </div>
 
       <!-- Whitelist Configuration Section with Improved Layout -->
-      <div class="p-4 border-b border-gray-700">
-        <h3 class="mb-4 text-base font-medium text-center text-white">
+      <div class="p-4 border-b border-border">
+        <h3 class="mb-4 text-base font-medium text-center text-text">
           Configuration
         </h3>
         <div id="whitelist-config" class="space-y-3">
-          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="h-4 bg-surface-elevated rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
         </div>
       </div>
 
       <!-- Whitelist Keys Section -->
       <div class="p-4">
-        <h3 class="mb-3 text-base font-medium text-white">Whitelisted Users</h3>
+        <h3 class="mb-3 text-base font-medium text-text">Whitelisted Users</h3>
         <div id="whitelist-keys" class="space-y-3">
-          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="h-4 bg-surface-elevated rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
         </div>
       </div>
     </div>
 
     <!-- Blacklist Container (Smaller - 1/3 width) -->
-    <div class="overflow-hidden bg-gray-800 border border-gray-700 rounded-lg">
-      <div class="px-4 py-3 border-b border-gray-700 bg-gray-750">
-        <h2 class="text-lg font-semibold text-white">⬛ Blacklist</h2>
-        <p class="text-xs text-gray-400">Blocked users and configuration</p>
+    <div class="overflow-hidden bg-surface border border-border rounded-lg">
+      <div class="px-4 py-3 border-b border-border bg-surface-elevated">
+        <h2 class="text-lg font-semibold text-text">⬛ Blacklist</h2>
+        <p class="text-xs text-text-secondary">Blocked users and configuration</p>
       </div>
 
       <!-- Blacklist Configuration Section -->
-      <div class="p-4 border-b border-gray-700">
-        <h3 class="mb-3 text-base font-medium text-white">Configuration</h3>
+      <div class="p-4 border-b border-border">
+        <h3 class="mb-3 text-base font-medium text-text">Configuration</h3>
         <div id="blacklist-config" class="space-y-3">
-          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="h-4 bg-surface-elevated rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
         </div>
       </div>
 
       <!-- Blacklist Keys Section -->
       <div class="p-4">
-        <h3 class="mb-3 text-base font-medium text-white">Blocked Users</h3>
+        <h3 class="mb-3 text-base font-medium text-text">Blocked Users</h3>
         <div id="blacklist-keys" class="space-y-3">
-          <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-          <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+          <div class="h-4 bg-surface-elevated rounded animate-pulse"></div>
+          <div class="w-5/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
+          <div class="w-4/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
         </div>
       </div>
     </div>
@@ -99,64 +99,64 @@
 
   <!-- 2. Policy & Limits Section - Redesigned with Detailed Breakdown -->
   <div
-    class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
+    class="mb-8 overflow-hidden bg-surface border border-border rounded-lg"
   >
-    <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-      <h2 class="text-xl font-semibold text-white">⚙️ Policy & Limits</h2>
-      <p class="text-sm text-gray-400">
+    <div class="px-6 py-4 border-b border-border bg-surface-elevated">
+      <h2 class="text-xl font-semibold text-text">⚙️ Policy & Limits</h2>
+      <p class="text-sm text-text-secondary">
         Comprehensive relay configuration and constraints
       </p>
     </div>
 
     <!-- Top Row: Rate Limits and Size Limits -->
-    <div class="grid grid-cols-1 xl:grid-cols-2 border-b border-gray-700">
+    <div class="grid grid-cols-1 xl:grid-cols-2 border-b border-border">
       <!-- Rate Limits Container -->
-      <div class="border-r border-gray-700">
-        <div class="px-4 py-3 bg-gray-750 border-b border-gray-700">
-          <h3 class="text-sm font-medium text-white">📊 Rate Limits</h3>
+      <div class="border-r border-border">
+        <div class="px-4 py-3 bg-surface-elevated border-b border-border">
+          <h3 class="text-sm font-medium text-text">📊 Rate Limits</h3>
         </div>
         <div class="p-4 space-y-4">
           <!-- Overall Rate Limits -->
           <div id="rate-limits-overall">
             <!-- Loading placeholder -->
-            <div class="w-20 h-4 bg-gray-700 rounded animate-pulse mb-2"></div>
-            <div class="w-full h-16 bg-gray-700 rounded animate-pulse"></div>
+            <div class="w-20 h-4 bg-surface-elevated rounded animate-pulse mb-2"></div>
+            <div class="w-full h-16 bg-surface-elevated rounded animate-pulse"></div>
           </div>
 
           <!-- Category Limits -->
           <div id="rate-limits-category">
             <!-- Loading placeholder -->
-            <div class="w-24 h-4 bg-gray-700 rounded animate-pulse mb-2"></div>
-            <div class="w-full h-20 bg-gray-700 rounded animate-pulse"></div>
+            <div class="w-24 h-4 bg-surface-elevated rounded animate-pulse mb-2"></div>
+            <div class="w-full h-20 bg-surface-elevated rounded animate-pulse"></div>
           </div>
 
           <!-- Kind-Specific Limits -->
           <div id="rate-limits-kind">
             <!-- Loading placeholder -->
-            <div class="w-16 h-4 bg-gray-700 rounded animate-pulse mb-2"></div>
-            <div class="w-full h-16 bg-gray-700 rounded animate-pulse"></div>
+            <div class="w-16 h-4 bg-surface-elevated rounded animate-pulse mb-2"></div>
+            <div class="w-full h-16 bg-surface-elevated rounded animate-pulse"></div>
           </div>
         </div>
       </div>
 
       <!-- Size Limits Container -->
       <div>
-        <div class="px-4 py-3 bg-gray-750 border-b border-gray-700">
-          <h3 class="text-sm font-medium text-white">📏 Size Limits</h3>
+        <div class="px-4 py-3 bg-surface-elevated border-b border-border">
+          <h3 class="text-sm font-medium text-text">📏 Size Limits</h3>
         </div>
         <div class="p-4 space-y-4">
           <!-- Overall Size Limits -->
           <div id="size-limits-overall">
             <!-- Loading placeholder -->
-            <div class="w-20 h-4 bg-gray-700 rounded animate-pulse mb-2"></div>
-            <div class="w-full h-12 bg-gray-700 rounded animate-pulse"></div>
+            <div class="w-20 h-4 bg-surface-elevated rounded animate-pulse mb-2"></div>
+            <div class="w-full h-12 bg-surface-elevated rounded animate-pulse"></div>
           </div>
 
           <!-- Kind-Specific Size Limits -->
           <div id="size-limits-kind">
             <!-- Loading placeholder -->
-            <div class="w-16 h-4 bg-gray-700 rounded animate-pulse mb-2"></div>
-            <div class="w-full h-20 bg-gray-700 rounded animate-pulse"></div>
+            <div class="w-16 h-4 bg-surface-elevated rounded animate-pulse mb-2"></div>
+            <div class="w-full h-20 bg-surface-elevated rounded animate-pulse"></div>
           </div>
         </div>
       </div>
@@ -165,40 +165,40 @@
     <!-- Bottom Row: Time Constraints, Timeouts, and Connection Limits -->
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
       <!-- Time Constraints Container -->
-      <div class="border-r border-gray-700">
-        <div class="px-4 py-3 bg-gray-750 border-b border-gray-700">
-          <h3 class="text-sm font-medium text-white">⏰ Time Constraints</h3>
+      <div class="border-r border-border">
+        <div class="px-4 py-3 bg-surface-elevated border-b border-border">
+          <h3 class="text-sm font-medium text-text">⏰ Time Constraints</h3>
         </div>
         <div class="p-4">
           <div id="time-constraints">
             <!-- Loading placeholder -->
-            <div class="w-full h-16 bg-gray-700 rounded animate-pulse"></div>
+            <div class="w-full h-16 bg-surface-elevated rounded animate-pulse"></div>
           </div>
         </div>
       </div>
 
       <!-- Connection Timeouts Container -->
-      <div class="border-r border-gray-700 md:border-r-0 xl:border-r">
-        <div class="px-4 py-3 bg-gray-750 border-b border-gray-700">
-          <h3 class="text-sm font-medium text-white">⚡ Timeouts</h3>
+      <div class="border-r border-border md:border-r-0 xl:border-r">
+        <div class="px-4 py-3 bg-surface-elevated border-b border-border">
+          <h3 class="text-sm font-medium text-text">⚡ Timeouts</h3>
         </div>
         <div class="p-4">
           <div id="connection-timeouts">
             <!-- Loading placeholder -->
-            <div class="w-full h-20 bg-gray-700 rounded animate-pulse"></div>
+            <div class="w-full h-20 bg-surface-elevated rounded animate-pulse"></div>
           </div>
         </div>
       </div>
 
       <!-- Connection Limits Container -->
       <div class="md:col-span-2 xl:col-span-1">
-        <div class="px-4 py-3 bg-gray-750 border-b border-gray-700">
-          <h3 class="text-sm font-medium text-white">🔗 Connection Limits</h3>
+        <div class="px-4 py-3 bg-surface-elevated border-b border-border">
+          <h3 class="text-sm font-medium text-text">🔗 Connection Limits</h3>
         </div>
         <div class="p-4">
           <div id="connection-limits">
             <!-- Loading placeholder -->
-            <div class="w-full h-16 bg-gray-700 rounded animate-pulse"></div>
+            <div class="w-full h-16 bg-surface-elevated rounded animate-pulse"></div>
           </div>
         </div>
       </div>
@@ -207,19 +207,19 @@
 
   <!-- 3. Event Purge Management Section -->
   <div
-    class="mb-8 overflow-hidden bg-gray-800 border border-gray-700 rounded-lg"
+    class="mb-8 overflow-hidden bg-surface border border-border rounded-lg"
   >
-    <div class="px-6 py-4 border-b border-gray-700 bg-gray-750">
-      <h2 class="text-xl font-semibold text-white">
+    <div class="px-6 py-4 border-b border-border bg-surface-elevated">
+      <h2 class="text-xl font-semibold text-text">
         🗑️ Event Purge Management
       </h2>
-      <p class="text-sm text-gray-400">Event retention and cleanup policies</p>
+      <p class="text-sm text-text-secondary">Event retention and cleanup policies</p>
     </div>
     <div id="event-purge-content" class="p-6">
       <div class="space-y-3">
-        <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-        <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-        <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+        <div class="h-4 bg-surface-elevated rounded animate-pulse"></div>
+        <div class="w-5/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
+        <div class="w-4/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
       </div>
     </div>
   </div>
@@ -230,14 +230,16 @@
 <div></div>
 
 <style>
-  /* Fix initial width issues by setting explicit container width */
+  /* Structural-only — colors all come from tokens via Tailwind
+     utility classes in the markup above. The .custom-scroll block
+     that used to live here is gone; the global scrollbar rules in
+     www/style/input.css cover every scrollable area now. */
   #dashboard-main {
     width: 100%;
     max-width: none;
     min-height: 100vh;
   }
 
-  /* Prevent width flicker during load */
   .grid-container {
     width: 100%;
     display: grid;
@@ -245,39 +247,16 @@
     gap: 2rem;
   }
 
-  @media (min-width: 1024px) {
+  /* Bumped from 1024px → 1280px. At exactly 1024 the 2fr/1fr
+     split started overflowing because the blacklist column hits
+     its content min-width. Phones, tablets, and small laptops
+     all get the safe single-column layout. */
+  @media (min-width: 1280px) {
     .grid-container {
       grid-template-columns: 2fr 1fr;
     }
   }
 
-  /* Custom scrollbar for better aesthetics */
-  .custom-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: #4b5563 #1f2937;
-  }
-
-  .custom-scroll::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-
-  .custom-scroll::-webkit-scrollbar-track {
-    background: #1f2937;
-    border-radius: 4px;
-  }
-
-  .custom-scroll::-webkit-scrollbar-thumb {
-    background: #4b5563;
-    border-radius: 4px;
-    border: 1px solid #374151;
-  }
-
-  .custom-scroll::-webkit-scrollbar-thumb:hover {
-    background: #6b7280;
-  }
-
-  /* Ensure consistent grid behavior */
   .whitelist-config-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;

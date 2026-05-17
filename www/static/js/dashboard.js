@@ -182,22 +182,22 @@ const dashboardManager = {
     const picture = profile.picture || null;
 
     return `
-    <div onclick="navigateToProfileFromPubkey('${pubkey}')" class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
+    <div onclick="navigateToProfileFromPubkey('${pubkey}')" class="flex-shrink-0 text-center cursor-pointer hover:bg-surface-hover rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
       <div class="w-16 h-16 mx-auto mb-2">
         ${
           picture
             ? `<img src="${picture}" alt="${name}" class="w-16 h-16 rounded-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-           <div class="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-lg" style="display: none;">
+           <div class="w-16 h-16 bg-surface-overlay rounded-full flex items-center justify-center text-text font-medium text-lg" style="display: none;">
              <img src="https://robohash.org/${pubkey}?set=set6&size=64x64" alt="${name}" class="w-16 h-16 rounded-full object-cover">
            </div>`
-            : `<div class="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-lg">
+            : `<div class="w-16 h-16 bg-surface-overlay rounded-full flex items-center justify-center text-text font-medium text-lg">
              <img src="https://robohash.org/${pubkey}?set=set6&size=64x64" alt="${name}" class="w-16 h-16 rounded-full object-cover">
            </div>`
         }
       </div>
-      <div class="text-xs text-white font-medium truncate max-w-[80px] mb-1">${name}</div>
+      <div class="text-xs text-text font-medium truncate max-w-[80px] mb-1">${name}</div>
       <div class="text-xs ${
-        source === "direct" ? "text-green-400" : "text-blue-400"
+        source === "direct" ? "text-success" : "text-accent"
       } truncate max-w-[80px]">${source}</div>
     </div>
   `;
@@ -210,9 +210,9 @@ const dashboardManager = {
     const size = slot === "small" ? "w-12 h-12" : "w-16 h-16";
     return `
       <div data-pubkey="${pubkey}" data-slot="${slot}" class="profile-card-slot flex-shrink-0 text-center animate-pulse">
-        <div class="${size} bg-gray-600 rounded-full mx-auto mb-2"></div>
-        <div class="h-3 bg-gray-600 rounded w-16 mb-1"></div>
-        <div class="h-2 bg-gray-600 rounded w-12 mx-auto"></div>
+        <div class="${size} bg-surface-overlay rounded-full mx-auto mb-2"></div>
+        <div class="h-3 bg-surface-overlay rounded w-16 mb-1"></div>
+        <div class="h-2 bg-surface-overlay rounded w-12 mx-auto"></div>
       </div>
     `;
   },
@@ -239,13 +239,13 @@ const dashboardManager = {
     const container = document.getElementById(containerId);
     if (!container || !keysWithSources || keysWithSources.length === 0) {
       if (container) {
-        container.innerHTML = `<div class="text-center text-gray-400 py-8">${emptyMessage}</div>`;
+        container.innerHTML = `<div class="text-center text-text-secondary py-8">${emptyMessage}</div>`;
       }
       return;
     }
 
     container.innerHTML = `
-      <div class="text-sm text-gray-400 mb-3">${keysWithSources.length} users</div>
+      <div class="text-sm text-text-secondary mb-3">${keysWithSources.length} users</div>
       <div class="flex space-x-4 overflow-x-auto pb-2 custom-scroll">
         ${keysWithSources
           .map(({ pubkey }) => this._placeholderCard(pubkey, "horizontal"))
@@ -353,7 +353,7 @@ const dashboardManager = {
       // Show error in container
       const container = document.getElementById(errorContainer);
       if (container) {
-        container.innerHTML = `<div class="text-center text-red-400 py-4">Error loading data</div>`;
+        container.innerHTML = `<div class="text-center text-danger py-4">Error loading data</div>`;
       }
       return null;
     }
@@ -367,9 +367,9 @@ const dashboardManager = {
     // Show loading state
     container.innerHTML = `
     <div class="space-y-3">
-      <div class="h-4 bg-gray-700 rounded animate-pulse"></div>
-      <div class="w-5/6 h-4 bg-gray-700 rounded animate-pulse"></div>
-      <div class="w-4/6 h-4 bg-gray-700 rounded animate-pulse"></div>
+      <div class="h-4 bg-surface-elevated rounded animate-pulse"></div>
+      <div class="w-5/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
+      <div class="w-4/6 h-4 bg-surface-elevated rounded animate-pulse"></div>
     </div>
   `;
 
@@ -408,17 +408,17 @@ const dashboardManager = {
       container.innerHTML = `
       <div class="space-y-4">
         <div class="flex justify-between items-center">
-          <span class="text-gray-300">Relay Status</span>
-          <span class="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+          <span class="text-text-secondary">Relay Status</span>
+          <span class="inline-flex px-2 py-1 text-xs font-medium bg-success-dim text-success rounded-full">
             Online
           </span>
         </div>
         <div class="flex justify-between items-center">
-          <span class="text-gray-300">Software</span>
-          <span class="text-white font-medium">🌾 GRAIN</span>
+          <span class="text-text-secondary">Software</span>
+          <span class="text-text font-medium">🌾 GRAIN</span>
         </div>
-        <div class="text-sm text-gray-400 mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded">
-          <p class="text-red-300">⚠️ Unable to load detailed relay information</p>
+        <div class="text-sm text-text-secondary mt-4 p-3 bg-danger-dim border border-danger rounded">
+          <p class="text-danger">⚠️ Unable to load detailed relay information</p>
           <p class="text-xs mt-1">${error.message}</p>
         </div>
       </div>
@@ -458,15 +458,15 @@ const dashboardManager = {
     // Centered header section with name
     html += `
     <div class="text-center">
-      <h3 class="text-2xl font-bold text-white">${this.escapeHtml(name)}</h3>
+      <h3 class="text-2xl font-bold text-text">${this.escapeHtml(name)}</h3>
     </div>
   `;
 
     // Description
     if (description) {
       html += `
-      <div class="bg-gray-750 p-3 rounded-lg">
-        <p class="text-white text-sm leading-relaxed text-center">${this.escapeHtml(
+      <div class="bg-surface-elevated p-3 rounded-lg">
+        <p class="text-text text-sm leading-relaxed text-center">${this.escapeHtml(
           description
         )}</p>
       </div>
@@ -477,7 +477,7 @@ const dashboardManager = {
     let versionDisplay = this.escapeHtml(version);
     if (software.includes("github.com") && version !== "Unknown") {
       const releaseUrl = `${software}/releases/tag/v${version}`;
-      versionDisplay = `<a href="${releaseUrl}" target="_blank" class="text-blue-400 hover:text-blue-300">${version}</a>`;
+      versionDisplay = `<a href="${releaseUrl}" target="_blank" class="text-accent hover:text-accent">${version}</a>`;
     }
 
     // 4 Containers Layout
@@ -488,27 +488,27 @@ const dashboardManager = {
       <div class="space-y-6">
         
         <!-- Technical Details Container -->
-        <div class="bg-gray-750 border border-gray-600 rounded-lg p-4">
-          <h4 class="text-lg font-semibold text-white mb-3 text-center border-b border-gray-600 pb-2">🔧 Technical Details</h4>
+        <div class="bg-surface-elevated border border-border-strong rounded-lg p-4">
+          <h4 class="text-lg font-semibold text-text mb-3 text-center border-b border-border-strong pb-2">🔧 Technical Details</h4>
           <div class="space-y-3 text-sm">
             <div class="flex justify-between items-center">
-              <span class="text-gray-400">Software</span>
-              <span class="text-white font-medium">
+              <span class="text-text-secondary">Software</span>
+              <span class="text-text font-medium">
                 ${
                   software.includes("github.com")
-                    ? `<a href="${software}" target="_blank" class="text-blue-400 hover:text-blue-300">🌾 GRAIN</a>`
+                    ? `<a href="${software}" target="_blank" class="text-accent hover:text-accent">🌾 GRAIN</a>`
                     : "🌾 GRAIN"
                 }
               </span>
             </div>
             <div class="flex justify-between items-center">
-              <span class="text-gray-400">Version</span>
-              <span class="text-white font-medium">${versionDisplay}</span>
+              <span class="text-text-secondary">Version</span>
+              <span class="text-text font-medium">${versionDisplay}</span>
             </div>
             
             <!-- Policies Section -->
-            <div class="pt-3 border-t border-gray-600">
-              <h5 class="text-center text-white font-medium mb-3">Policies</h5>
+            <div class="pt-3 border-t border-border-strong">
+              <h5 class="text-center text-text font-medium mb-3">Policies</h5>
               ${this.createPoliciesSection(
                 privacy_policy,
                 terms_of_service,
@@ -519,16 +519,16 @@ const dashboardManager = {
         </div>
 
         <!-- Supported NIPs Container -->
-        <div class="bg-gray-750 border border-gray-600 rounded-lg p-4">
-          <h4 class="text-lg font-semibold text-white mb-3 text-center border-b border-gray-600 pb-2">📋 Supported NIPs</h4>
+        <div class="bg-surface-elevated border border-border-strong rounded-lg p-4">
+          <h4 class="text-lg font-semibold text-text mb-3 text-center border-b border-border-strong pb-2">📋 Supported NIPs</h4>
           <div class="flex flex-wrap gap-1 justify-center">
             ${this.createNIPSLinks(supported_nips)}
           </div>
         </div>
 
         <!-- Tags Container -->
-        <div class="bg-gray-750 border border-gray-600 rounded-lg p-4">
-          <h4 class="text-lg font-semibold text-white mb-3 text-center border-b border-gray-600 pb-2">🏷️ Tags</h4>
+        <div class="bg-surface-elevated border border-border-strong rounded-lg p-4">
+          <h4 class="text-lg font-semibold text-text mb-3 text-center border-b border-border-strong pb-2">🏷️ Tags</h4>
           <div class="flex flex-wrap gap-1 justify-center">
             ${this.createTagsLinks(tags)}
           </div>
@@ -540,14 +540,14 @@ const dashboardManager = {
       <div class="space-y-6">
 
         <!-- Contact and Admin Container -->
-        <div class="bg-gray-750 border border-gray-600 rounded-lg p-4">
-          <h4 class="text-lg font-semibold text-white mb-3 text-center border-b border-gray-600 pb-2">📞 Contact & Admin</h4>
+        <div class="bg-surface-elevated border border-border-strong rounded-lg p-4">
+          <h4 class="text-lg font-semibold text-text mb-3 text-center border-b border-border-strong pb-2">📞 Contact & Admin</h4>
           ${this.createAdminSection(pubkey, contact)}
         </div>
 
         <!-- System Configuration Container -->
-        <div class="bg-gray-750 border border-gray-600 rounded-lg p-4">
-          <h4 class="text-lg font-semibold text-white mb-3 text-center border-b border-gray-600 pb-2">⚙️ System Configuration</h4>
+        <div class="bg-surface-elevated border border-border-strong rounded-lg p-4">
+          <h4 class="text-lg font-semibold text-text mb-3 text-center border-b border-border-strong pb-2">⚙️ System Configuration</h4>
           <div class="space-y-3 text-sm">
             ${this.createSystemConfigContent(authData, backupData)}
           </div>
@@ -579,7 +579,7 @@ const dashboardManager = {
     if (policies.length === 0) {
       return `
       <div class="text-center">
-        <span class="text-gray-400 text-xs cursor-help" title="No policies configured for this relay">No Policies</span>
+        <span class="text-text-secondary text-xs cursor-help" title="No policies configured for this relay">No Policies</span>
       </div>
     `;
     }
@@ -589,7 +589,7 @@ const dashboardManager = {
       ${policies
         .map(
           (policy) =>
-            `<a href="${policy.url}" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs">${policy.label}</a>`
+            `<a href="${policy.url}" target="_blank" class="text-accent hover:text-accent text-xs">${policy.label}</a>`
         )
         .join("")}
     </div>
@@ -599,20 +599,20 @@ const dashboardManager = {
   // Helper function to create NIPs links
   createNIPSLinks(supported_nips) {
     if (!supported_nips || supported_nips.length === 0) {
-      return `<div class="text-center text-gray-400 text-sm">No NIPs specified</div>`;
+      return `<div class="text-center text-text-secondary text-sm">No NIPs specified</div>`;
     }
 
     const nipLinks = supported_nips
       .slice(0, 12)
       .map((nip) => {
         const nipNum = String(nip).padStart(2, "0");
-        return `<a href="https://github.com/nostr-protocol/nips/blob/master/${nipNum}.md" target="_blank" class="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200 transition-colors">NIP-${nipNum}</a>`;
+        return `<a href="https://github.com/nostr-protocol/nips/blob/master/${nipNum}.md" target="_blank" class="inline-flex px-2 py-1 text-xs font-medium bg-info-dim text-info rounded-full hover:opacity-80 transition-colors">NIP-${nipNum}</a>`;
       })
       .join("");
 
     const remaining =
       supported_nips.length > 12
-        ? `<span class="text-xs text-gray-400">+${
+        ? `<span class="text-xs text-text-secondary">+${
             supported_nips.length - 12
           } more</span>`
         : "";
@@ -623,7 +623,7 @@ const dashboardManager = {
   // Helper function to create tags links
   createTagsLinks(tags) {
     if (!tags || tags.length === 0) {
-      return `<div class="text-center text-gray-400 text-sm">No tags specified</div>`;
+      return `<div class="text-center text-text-secondary text-sm">No tags specified</div>`;
     }
 
     const tagLinks = tags
@@ -632,7 +632,7 @@ const dashboardManager = {
         (tag) =>
           `<a href="https://nostr.band/?q=%23${encodeURIComponent(
             tag
-          )}" target="_blank" class="inline-flex px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full hover:bg-purple-200 transition-colors">${this.escapeHtml(
+          )}" target="_blank" class="inline-flex px-2 py-1 text-xs font-medium bg-accent-dim text-accent rounded-full hover:opacity-80 transition-colors">${this.escapeHtml(
             tag
           )}</a>`
       )
@@ -640,7 +640,7 @@ const dashboardManager = {
 
     const remaining =
       tags.length > 8
-        ? `<span class="text-xs text-gray-400">+${tags.length - 8} more</span>`
+        ? `<span class="text-xs text-text-secondary">+${tags.length - 8} more</span>`
         : "";
 
     return tagLinks + remaining;
@@ -654,19 +654,19 @@ const dashboardManager = {
     if (authData) {
       content += `
       <div class="flex justify-between items-center">
-        <span class="text-gray-400">Authentication</span>
+        <span class="text-text-secondary">Authentication</span>
         <div class="text-right">
           <div class="inline-flex px-2 py-1 text-xs font-medium ${
             authData.enabled
-              ? "bg-green-100 text-green-800"
-              : "bg-gray-100 text-gray-800"
+              ? "bg-success-dim text-success"
+              : "bg-surface-elevated text-text-secondary"
           } rounded-full">
             ${authData.enabled ? "Enabled" : "Disabled"}
           </div>
           ${
             authData.enabled && authData.relay_url
               ? `
-            <div class="text-xs text-gray-400 mt-1">${this.escapeHtml(
+            <div class="text-xs text-text-secondary mt-1">${this.escapeHtml(
               authData.relay_url
             )}</div>
           `
@@ -681,19 +681,19 @@ const dashboardManager = {
     if (backupData) {
       content += `
       <div class="flex justify-between items-center">
-        <span class="text-gray-400">Backup Relay</span>
+        <span class="text-text-secondary">Backup Relay</span>
         <div class="text-right">
           <div class="inline-flex px-2 py-1 text-xs font-medium ${
             backupData.enabled
-              ? "bg-blue-100 text-blue-800"
-              : "bg-gray-100 text-gray-800"
+              ? "bg-info-dim text-info"
+              : "bg-surface-elevated text-text-secondary"
           } rounded-full">
             ${backupData.enabled ? "Enabled" : "Disabled"}
           </div>
           ${
             backupData.enabled && backupData.url
               ? `
-            <div class="text-xs text-gray-400 mt-1">${this.escapeHtml(
+            <div class="text-xs text-text-secondary mt-1">${this.escapeHtml(
               backupData.url
             )}</div>
           `
@@ -706,7 +706,7 @@ const dashboardManager = {
 
     // If no data is available
     if (!authData && !backupData) {
-      content = `<div class="text-center text-gray-400">Configuration loading...</div>`;
+      content = `<div class="text-center text-text-secondary">Configuration loading...</div>`;
     }
 
     return content;
@@ -715,16 +715,16 @@ const dashboardManager = {
   // Helper function to create policy link with warning if missing
   createPolicyLink(url, label, shortLabel) {
     if (url) {
-      return `<a href="${url}" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm">${shortLabel}</a>`;
+      return `<a href="${url}" target="_blank" class="text-accent hover:text-accent text-sm">${shortLabel}</a>`;
     } else {
-      return `<span class="text-gray-500 text-sm cursor-help" title="No ${label.toLowerCase()} specified">⚠️ ${shortLabel}</span>`;
+      return `<span class="text-text-muted text-sm cursor-help" title="No ${label.toLowerCase()} specified">⚠️ ${shortLabel}</span>`;
     }
   },
 
   // Helper function to create admin section with profile
   createAdminSection(pubkey, contact) {
     if (!pubkey && !contact)
-      return '<p class="text-gray-400 text-center text-sm">No admin information available</p>';
+      return '<p class="text-text-secondary text-center text-sm">No admin information available</p>';
 
     return `
     <div class="flex flex-col items-center space-y-2">
@@ -735,8 +735,8 @@ const dashboardManager = {
           0,
           8
         )}" class="flex flex-col items-center space-y-1">
-          <div class="w-12 h-12 bg-gray-600 rounded-full animate-pulse cursor-pointer"></div>
-          <span class="text-gray-400 text-xs">Loading...</span>
+          <div class="w-12 h-12 bg-surface-overlay rounded-full animate-pulse cursor-pointer"></div>
+          <span class="text-text-secondary text-xs">Loading...</span>
         </div>
       `
           : ""
@@ -751,7 +751,7 @@ const dashboardManager = {
     if (!contact) return "";
 
     if (contact.startsWith("mailto:")) {
-      return `<a href="${contact}" class="text-blue-400 hover:text-blue-300 text-xs">${contact.replace(
+      return `<a href="${contact}" class="text-accent hover:text-accent text-xs">${contact.replace(
         "mailto:",
         ""
       )}</a>`;
@@ -759,9 +759,9 @@ const dashboardManager = {
       contact.startsWith("http://") ||
       contact.startsWith("https://")
     ) {
-      return `<a href="${contact}" target="_blank" class="text-blue-400 hover:text-blue-300 text-xs">Contact Website</a>`;
+      return `<a href="${contact}" target="_blank" class="text-accent hover:text-accent text-xs">Contact Website</a>`;
     } else {
-      return `<span class="text-white text-xs">${this.escapeHtml(
+      return `<span class="text-text text-xs">${this.escapeHtml(
         contact
       )}</span>`;
     }
@@ -783,36 +783,36 @@ const dashboardManager = {
       const npub = await this.convertPubkeyToNpub(pubkey);
 
       profileContainer.innerHTML = `
-      <div class="w-12 h-12 rounded-full overflow-hidden bg-gray-600 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" onclick="navigateToProfile('${npub}')">
+      <div class="w-12 h-12 rounded-full overflow-hidden bg-surface-overlay flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" onclick="navigateToProfile('${npub}')">
         ${
           picture
             ? `<img src="${picture}" alt="${name}" class="w-full h-full object-cover">`
-            : `<span class="text-white text-sm font-bold">${name
+            : `<span class="text-text text-sm font-bold">${name
                 .charAt(0)
                 .toUpperCase()}</span>`
         }
       </div>
       <div class="text-center">
-        <div class="text-white font-medium text-sm">${this.escapeHtml(
+        <div class="text-text font-medium text-sm">${this.escapeHtml(
           name
         )}</div>
         <div class="flex items-center space-x-1 text-xs">
-          <span class="text-gray-400 font-mono">${npub.slice(
+          <span class="text-text-secondary font-mono">${npub.slice(
             0,
             12
           )}...${npub.slice(-8)}</span>
-          <button onclick="navigator.clipboard.writeText('${npub}'); this.textContent='✓'; setTimeout(() => this.textContent='📋', 1000)" class="text-gray-400 hover:text-white transition-colors" title="Copy npub">📋</button>
+          <button onclick="navigator.clipboard.writeText('${npub}'); this.textContent='✓'; setTimeout(() => this.textContent='📋', 1000)" class="text-text-secondary hover:text-text transition-colors" title="Copy npub">📋</button>
         </div>
       </div>
     `;
     } catch (error) {
       console.error("Failed to load admin profile:", error);
       profileContainer.innerHTML = `
-      <div class="w-12 h-12 rounded-full bg-gray-600 flex items-center justify-center">
-        <span class="text-white text-sm">?</span>
+      <div class="w-12 h-12 rounded-full bg-surface-overlay flex items-center justify-center">
+        <span class="text-text text-sm">?</span>
       </div>
       <div class="text-center">
-        <div class="text-gray-400 font-mono text-xs">${pubkey.slice(
+        <div class="text-text-secondary font-mono text-xs">${pubkey.slice(
           0,
           8
         )}...${pubkey.slice(-8)}</div>
@@ -889,27 +889,27 @@ const dashboardManager = {
         rateLimitsOverall.innerHTML = `
           <table class="w-full text-sm">
             <thead>
-              <tr class="border-b border-gray-700">
-                <th class="text-left pb-1 text-xs text-gray-500 font-medium">Type</th>
-                <th class="text-right pb-1 text-xs text-gray-500 font-medium">Rate</th>
-                <th class="text-right pb-1 text-xs text-gray-500 font-medium">Burst</th>
+              <tr class="border-b border-border">
+                <th class="text-left pb-1 text-xs text-text-muted font-medium">Type</th>
+                <th class="text-right pb-1 text-xs text-text-muted font-medium">Rate</th>
+                <th class="text-right pb-1 text-xs text-text-muted font-medium">Burst</th>
               </tr>
             </thead>
             <tbody>
-              <tr class="border-b border-gray-700/30">
-                <td class="py-1 text-white text-xs">WebSocket</td>
-                <td class="py-1 text-right text-green-400 font-mono text-xs">${rateLimitData.ws_limit}/s</td>
-                <td class="py-1 text-right text-gray-300 text-xs">${rateLimitData.ws_burst}</td>
+              <tr class="border-b border-border/30">
+                <td class="py-1 text-text text-xs">WebSocket</td>
+                <td class="py-1 text-right text-success font-mono text-xs">${rateLimitData.ws_limit}/s</td>
+                <td class="py-1 text-right text-text-secondary text-xs">${rateLimitData.ws_burst}</td>
               </tr>
-              <tr class="border-b border-gray-700/30">
-                <td class="py-1 text-white text-xs">Events</td>
-                <td class="py-1 text-right text-green-400 font-mono text-xs">${rateLimitData.event_limit}/s</td>
-                <td class="py-1 text-right text-gray-300 text-xs">${rateLimitData.event_burst}</td>
+              <tr class="border-b border-border/30">
+                <td class="py-1 text-text text-xs">Events</td>
+                <td class="py-1 text-right text-success font-mono text-xs">${rateLimitData.event_limit}/s</td>
+                <td class="py-1 text-right text-text-secondary text-xs">${rateLimitData.event_burst}</td>
               </tr>
-              <tr class="border-b border-gray-700/30">
-                <td class="py-1 text-white text-xs">Requests</td>
-                <td class="py-1 text-right text-green-400 font-mono text-xs">${rateLimitData.req_limit}/s</td>
-                <td class="py-1 text-right text-gray-300 text-xs">${rateLimitData.req_burst}</td>
+              <tr class="border-b border-border/30">
+                <td class="py-1 text-text text-xs">Requests</td>
+                <td class="py-1 text-right text-success font-mono text-xs">${rateLimitData.req_limit}/s</td>
+                <td class="py-1 text-right text-text-secondary text-xs">${rateLimitData.req_burst}</td>
               </tr>
             </tbody>
           </table>
@@ -929,20 +929,20 @@ const dashboardManager = {
           rateLimitsCategory.innerHTML = `
             <table class="w-full text-sm">
               <thead>
-                <tr class="border-b border-gray-700">
-                  <th class="text-left pb-1 text-xs text-gray-500 font-medium">Category</th>
-                  <th class="text-right pb-1 text-xs text-gray-500 font-medium">Rate</th>
-                  <th class="text-right pb-1 text-xs text-gray-500 font-medium">Burst</th>
+                <tr class="border-b border-border">
+                  <th class="text-left pb-1 text-xs text-text-muted font-medium">Category</th>
+                  <th class="text-right pb-1 text-xs text-text-muted font-medium">Rate</th>
+                  <th class="text-right pb-1 text-xs text-text-muted font-medium">Burst</th>
                 </tr>
               </thead>
               <tbody>
                 ${categoryEntries
                   .map(
                     ([category, limits]) => `
-                  <tr class="border-b border-gray-700/30">
-                    <td class="py-1 text-white text-xs capitalize">${category}</td>
-                    <td class="py-1 text-right text-green-400 font-mono text-xs">${limits.Limit}/s</td>
-                    <td class="py-1 text-right text-gray-300 text-xs">${limits.Burst}</td>
+                  <tr class="border-b border-border/30">
+                    <td class="py-1 text-text text-xs capitalize">${category}</td>
+                    <td class="py-1 text-right text-success font-mono text-xs">${limits.Limit}/s</td>
+                    <td class="py-1 text-right text-text-secondary text-xs">${limits.Burst}</td>
                   </tr>
                 `
                   )
@@ -952,7 +952,7 @@ const dashboardManager = {
           `;
         } else {
           rateLimitsCategory.innerHTML =
-            '<p class="text-xs text-gray-500">No category-specific limits configured</p>';
+            '<p class="text-xs text-text-muted">No category-specific limits configured</p>';
         }
       }
 
@@ -963,20 +963,20 @@ const dashboardManager = {
           rateLimitsKind.innerHTML = `
             <table class="w-full text-sm">
               <thead>
-                <tr class="border-b border-gray-700">
-                  <th class="text-left pb-1 text-xs text-gray-500 font-medium">Kind</th>
-                  <th class="text-right pb-1 text-xs text-gray-500 font-medium">Rate</th>
-                  <th class="text-right pb-1 text-xs text-gray-500 font-medium">Burst</th>
+                <tr class="border-b border-border">
+                  <th class="text-left pb-1 text-xs text-text-muted font-medium">Kind</th>
+                  <th class="text-right pb-1 text-xs text-text-muted font-medium">Rate</th>
+                  <th class="text-right pb-1 text-xs text-text-muted font-medium">Burst</th>
                 </tr>
               </thead>
               <tbody>
                 ${rateLimitData.kind_limits
                   .map(
                     (kindLimit) => `
-                  <tr class="border-b border-gray-700/30">
-                    <td class="py-1 text-white text-xs">Kind ${kindLimit.Kind}</td>
-                    <td class="py-1 text-right text-green-400 font-mono text-xs">${kindLimit.Limit}/s</td>
-                    <td class="py-1 text-right text-gray-300 text-xs">${kindLimit.Burst}</td>
+                  <tr class="border-b border-border/30">
+                    <td class="py-1 text-text text-xs">Kind ${kindLimit.Kind}</td>
+                    <td class="py-1 text-right text-success font-mono text-xs">${kindLimit.Limit}/s</td>
+                    <td class="py-1 text-right text-text-secondary text-xs">${kindLimit.Burst}</td>
                   </tr>
                 `
                   )
@@ -986,7 +986,7 @@ const dashboardManager = {
           `;
         } else {
           rateLimitsKind.innerHTML =
-            '<p class="text-xs text-gray-500">No kind-specific limits configured</p>';
+            '<p class="text-xs text-text-muted">No kind-specific limits configured</p>';
         }
       }
 
@@ -994,18 +994,18 @@ const dashboardManager = {
       const sizeLimitsOverall = document.getElementById("size-limits-overall");
       if (sizeLimitsOverall) {
         sizeLimitsOverall.innerHTML = `
-          <h4 class="text-xs font-medium text-gray-400 uppercase mb-2">Overall</h4>
+          <h4 class="text-xs font-medium text-text-secondary uppercase mb-2">Overall</h4>
           <table class="w-full text-sm">
             <thead>
-              <tr class="border-b border-gray-700">
-                <th class="text-left pb-1 text-xs text-gray-500 font-medium">Type</th>
-                <th class="text-right pb-1 text-xs text-gray-500 font-medium">Limit</th>
+              <tr class="border-b border-border">
+                <th class="text-left pb-1 text-xs text-text-muted font-medium">Type</th>
+                <th class="text-right pb-1 text-xs text-text-muted font-medium">Limit</th>
               </tr>
             </thead>
             <tbody>
-              <tr class="border-b border-gray-700/30">
-                <td class="py-1 text-white text-xs">Max Event Size</td>
-                <td class="py-1 text-right text-purple-400 font-mono text-xs">${formatBytes(
+              <tr class="border-b border-border/30">
+                <td class="py-1 text-text text-xs">Max Event Size</td>
+                <td class="py-1 text-right text-accent font-mono text-xs">${formatBytes(
                   rateLimitData.max_event_size
                 )}</td>
               </tr>
@@ -1022,23 +1022,23 @@ const dashboardManager = {
           rateLimitData.kind_size_limits.length > 0
         ) {
           sizeLimitsKind.innerHTML = `
-            <h4 class="text-xs font-medium text-gray-400 uppercase mb-2">By Kind</h4>
+            <h4 class="text-xs font-medium text-text-secondary uppercase mb-2">By Kind</h4>
             <table class="w-full text-sm">
               <thead>
-                <tr class="border-b border-gray-700">
-                  <th class="text-left pb-1 text-xs text-gray-500 font-medium">Kind</th>
-                  <th class="text-right pb-1 text-xs text-gray-500 font-medium">Max Size</th>
+                <tr class="border-b border-border">
+                  <th class="text-left pb-1 text-xs text-text-muted font-medium">Kind</th>
+                  <th class="text-right pb-1 text-xs text-text-muted font-medium">Max Size</th>
                 </tr>
               </thead>
               <tbody>
                 ${rateLimitData.kind_size_limits
                   .map(
                     (sizeLimit) => `
-                  <tr class="border-b border-gray-700/30">
-                    <td class="py-1 text-white text-xs">Kind ${
+                  <tr class="border-b border-border/30">
+                    <td class="py-1 text-text text-xs">Kind ${
                       sizeLimit.Kind
                     }</td>
-                    <td class="py-1 text-right text-purple-400 font-mono text-xs">${formatBytes(
+                    <td class="py-1 text-right text-accent font-mono text-xs">${formatBytes(
                       sizeLimit.MaxSize
                     )}</td>
                   </tr>
@@ -1050,8 +1050,8 @@ const dashboardManager = {
           `;
         } else {
           sizeLimitsKind.innerHTML = `
-            <h4 class="text-xs font-medium text-gray-400 uppercase mb-2">By Kind</h4>
-            <p class="text-xs text-gray-500">No kind-specific size limits configured</p>
+            <h4 class="text-xs font-medium text-text-secondary uppercase mb-2">By Kind</h4>
+            <p class="text-xs text-text-muted">No kind-specific size limits configured</p>
           `;
         }
       }
@@ -1087,21 +1087,21 @@ const dashboardManager = {
         timeConstraints.innerHTML = `
           <table class="w-full text-sm">
             <thead>
-              <tr class="border-b border-gray-700">
-                <th class="text-left pb-2 text-xs text-gray-500 font-medium">Type</th>
-                <th class="text-right pb-2 text-xs text-gray-500 font-medium">Limit</th>
+              <tr class="border-b border-border">
+                <th class="text-left pb-2 text-xs text-text-muted font-medium">Type</th>
+                <th class="text-right pb-2 text-xs text-text-muted font-medium">Limit</th>
               </tr>
             </thead>
             <tbody>
-              <tr class="border-b border-gray-700/30">
-                <td class="py-2 text-white text-xs">Future Events</td>
-                <td class="py-2 text-right text-orange-400 font-mono text-xs">${Math.floor(
+              <tr class="border-b border-border/30">
+                <td class="py-2 text-text text-xs">Future Events</td>
+                <td class="py-2 text-right text-warning font-mono text-xs">${Math.floor(
                   futureSeconds / 60
                 )}min</td>
               </tr>
-              <tr class="border-b border-gray-700/30">
-                <td class="py-2 text-white text-xs">Past Events</td>
-                <td class="py-2 text-right text-orange-400 font-mono text-xs">${Math.floor(
+              <tr class="border-b border-border/30">
+                <td class="py-2 text-text text-xs">Past Events</td>
+                <td class="py-2 text-right text-warning font-mono text-xs">${Math.floor(
                   pastSeconds / 86400
                 )} days</td>
               </tr>
@@ -1116,23 +1116,23 @@ const dashboardManager = {
         connectionTimeouts.innerHTML = `
           <table class="w-full text-sm">
             <thead>
-              <tr class="border-b border-gray-700">
-                <th class="text-left pb-2 text-xs text-gray-500 font-medium">Type</th>
-                <th class="text-right pb-2 text-xs text-gray-500 font-medium">Value</th>
+              <tr class="border-b border-border">
+                <th class="text-left pb-2 text-xs text-text-muted font-medium">Type</th>
+                <th class="text-right pb-2 text-xs text-text-muted font-medium">Value</th>
               </tr>
             </thead>
             <tbody>
-              <tr class="border-b border-gray-700/30">
-                <td class="py-2 text-white text-xs">Read Timeout</td>
-                <td class="py-2 text-right text-blue-400 font-mono text-xs">${serverData.read_timeout}s</td>
+              <tr class="border-b border-border/30">
+                <td class="py-2 text-text text-xs">Read Timeout</td>
+                <td class="py-2 text-right text-accent font-mono text-xs">${serverData.read_timeout}s</td>
               </tr>
-              <tr class="border-b border-gray-700/30">
-                <td class="py-2 text-white text-xs">Write Timeout</td>
-                <td class="py-2 text-right text-blue-400 font-mono text-xs">${serverData.write_timeout}s</td>
+              <tr class="border-b border-border/30">
+                <td class="py-2 text-text text-xs">Write Timeout</td>
+                <td class="py-2 text-right text-accent font-mono text-xs">${serverData.write_timeout}s</td>
               </tr>
-              <tr class="border-b border-gray-700/30">
-                <td class="py-2 text-white text-xs">Idle Timeout</td>
-                <td class="py-2 text-right text-blue-400 font-mono text-xs">${serverData.idle_timeout}s</td>
+              <tr class="border-b border-border/30">
+                <td class="py-2 text-text text-xs">Idle Timeout</td>
+                <td class="py-2 text-right text-accent font-mono text-xs">${serverData.idle_timeout}s</td>
               </tr>
             </tbody>
           </table>
@@ -1145,19 +1145,19 @@ const dashboardManager = {
         connectionLimits.innerHTML = `
           <table class="w-full text-sm">
             <thead>
-              <tr class="border-b border-gray-700">
-                <th class="text-left pb-2 text-xs text-gray-500 font-medium">Setting</th>
-                <th class="text-right pb-2 text-xs text-gray-500 font-medium">Value</th>
+              <tr class="border-b border-border">
+                <th class="text-left pb-2 text-xs text-text-muted font-medium">Setting</th>
+                <th class="text-right pb-2 text-xs text-text-muted font-medium">Value</th>
               </tr>
             </thead>
             <tbody>
-              <tr class="border-b border-gray-700/30">
-                <td class="py-2 text-white text-xs">Max Subscriptions <div class="text-gray-400 text-xs">(per client connection)</div></td>
-                <td class="py-2 text-right text-cyan-400 font-mono text-xs">${serverData.max_subscriptions_per_client}</td>
+              <tr class="border-b border-border/30">
+                <td class="py-2 text-text text-xs">Max Subscriptions <div class="text-text-secondary text-xs">(per client connection)</div></td>
+                <td class="py-2 text-right text-accent-2 font-mono text-xs">${serverData.max_subscriptions_per_client}</td>
               </tr>
-              <tr class="border-b border-gray-700/30">
-                <td class="py-2 text-white text-xs">Implicit REQ Limit</td>
-                <td class="py-2 text-right text-cyan-400 font-mono text-xs">${serverData.implicit_req_limit}</td>
+              <tr class="border-b border-border/30">
+                <td class="py-2 text-text text-xs">Implicit REQ Limit</td>
+                <td class="py-2 text-right text-accent-2 font-mono text-xs">${serverData.implicit_req_limit}</td>
               </tr>
             </tbody>
           </table>
@@ -1183,7 +1183,7 @@ const dashboardManager = {
       containers.forEach((containerId) => {
         const container = document.getElementById(containerId);
         if (container) {
-          container.innerHTML = `<div class="text-center text-red-400 py-4">⚠️ Failed to load data</div>`;
+          container.innerHTML = `<div class="text-center text-danger py-4">⚠️ Failed to load data</div>`;
         }
       });
     }
@@ -1205,7 +1205,7 @@ const dashboardManager = {
     // Helper function to create category badges
     const createCategoryBadge = (enabled) => {
       return `<span class="inline-flex px-2 py-1 text-xs font-medium ${
-        enabled ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"
+        enabled ? "bg-danger-dim text-danger" : "bg-surface-elevated text-text-secondary"
       } rounded-full">
       ${enabled ? "Purging" : "Keeping"}
     </span>`;
@@ -1245,19 +1245,19 @@ const dashboardManager = {
       <!-- Main Status Section -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- Status Column -->
-        <div class="bg-gray-750 rounded-lg p-4 border border-gray-600 space-y-4">
+        <div class="bg-surface-elevated rounded-lg p-4 border border-border-strong space-y-4">
           <!-- Primary Status -->
           <div class="flex justify-between items-center">
-            <span class="text-sm font-medium text-gray-300">Status</span>
+            <span class="text-sm font-medium text-text-secondary">Status</span>
             <span class="inline-flex px-3 py-1 text-sm font-medium ${
               data.enabled
-                ? "bg-green-100 text-green-800"
-                : "bg-red-100 text-red-800"
+                ? "bg-success-dim text-success"
+                : "bg-danger-dim text-danger"
             } rounded-full">
               ${data.enabled ? "Enabled" : "Disabled"}
             </span>
           </div>
-          <div class="text-xs text-gray-400 mb-3">
+          <div class="text-xs text-text-secondary mb-3">
             ${
               data.enabled
                 ? "Events are being purged automatically"
@@ -1266,18 +1266,18 @@ const dashboardManager = {
           </div>
           
           <!-- Whitelist Protection -->
-          <div class="pt-3 border-t border-gray-600">
+          <div class="pt-3 border-t border-border-strong">
             <div class="flex justify-between items-center">
-              <span class="text-sm font-medium text-gray-300">Whitelist Protection</span>
+              <span class="text-sm font-medium text-text-secondary">Whitelist Protection</span>
               <span class="inline-flex px-3 py-1 text-sm font-medium ${
                 data.exclude_whitelisted
-                  ? "bg-green-100 text-green-800"
-                  : "bg-yellow-100 text-yellow-800"
+                  ? "bg-success-dim text-success"
+                  : "bg-warning-dim text-warning"
               } rounded-full">
                 ${data.exclude_whitelisted ? "Protected" : "Unprotected"}
               </span>
             </div>
-            <div class="text-xs text-gray-400 mt-2">
+            <div class="text-xs text-text-secondary mt-2">
               ${
                 data.exclude_whitelisted
                   ? "Whitelisted users' events are safe"
@@ -1288,24 +1288,24 @@ const dashboardManager = {
         </div>
 
         <!-- Timing Configuration -->
-        <div class="bg-gray-750 rounded-lg p-4 border border-gray-600">
-          <h4 class="text-sm font-medium text-white mb-4">⏰ Timing Configuration</h4>
+        <div class="bg-surface-elevated rounded-lg p-4 border border-border-strong">
+          <h4 class="text-sm font-medium text-text mb-4">⏰ Timing Configuration</h4>
           <div class="space-y-4">
             <div class="flex justify-between items-center">
               <div>
-                <span class="text-gray-300 text-sm">Event Retention</span>
-                <div class="text-xs text-gray-400">How long to keep events</div>
+                <span class="text-text-secondary text-sm">Event Retention</span>
+                <div class="text-xs text-text-secondary">How long to keep events</div>
               </div>
-              <span class="text-white font-medium text-lg">${formatInterval(
+              <span class="text-text font-medium text-lg">${formatInterval(
                 data.keep_interval_hours
               )}</span>
             </div>
             <div class="flex justify-between items-center">
               <div>
-                <span class="text-gray-300 text-sm">Purge Frequency</span>
-                <div class="text-xs text-gray-400">How often to clean up</div>
+                <span class="text-text-secondary text-sm">Purge Frequency</span>
+                <div class="text-xs text-text-secondary">How often to clean up</div>
               </div>
-              <span class="text-white font-medium text-lg">${formatPurgeInterval(
+              <span class="text-text font-medium text-lg">${formatPurgeInterval(
                 data.purge_interval_minutes
               )}</span>
             </div>
@@ -1317,9 +1317,9 @@ const dashboardManager = {
         data.enabled
           ? `
         <!-- Event Category Configuration -->
-        <div class="bg-gray-750 rounded-lg border border-gray-600">
-          <div class="px-4 py-3 border-b border-gray-600">
-            <h4 class="text-sm font-medium text-white">📂 Event Categories</h4>
+        <div class="bg-surface-elevated rounded-lg border border-border-strong">
+          <div class="px-4 py-3 border-b border-border-strong">
+            <h4 class="text-sm font-medium text-text">📂 Event Categories</h4>
           </div>
           <div class="p-4">
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1328,10 +1328,10 @@ const dashboardManager = {
                   ([category, enabled]) => `
                 <div class="flex flex-col items-center space-y-2 p-3 rounded-lg ${
                   enabled
-                    ? "bg-red-900/20 border border-red-700"
-                    : "bg-gray-700/30 border border-gray-600"
+                    ? "bg-danger-dim border border-danger"
+                    : "bg-surface-elevated/30 border border-border-strong"
                 }">
-                  <span class="text-sm font-medium text-white capitalize">${category}</span>
+                  <span class="text-sm font-medium text-text capitalize">${category}</span>
                   ${createCategoryBadge(enabled)}
                 </div>
               `
@@ -1345,9 +1345,9 @@ const dashboardManager = {
           data.purge_by_kind_enabled
             ? `
           <!-- Event Kinds Configuration -->
-          <div class="bg-gray-750 rounded-lg border border-gray-600">
-            <div class="px-4 py-3 border-b border-gray-600">
-              <h4 class="text-sm font-medium text-white">🏷️ Event Kinds to Purge</h4>
+          <div class="bg-surface-elevated rounded-lg border border-border-strong">
+            <div class="px-4 py-3 border-b border-border-strong">
+              <h4 class="text-sm font-medium text-text">🏷️ Event Kinds to Purge</h4>
             </div>
             <div class="p-4">
               ${
@@ -1357,19 +1357,19 @@ const dashboardManager = {
                   ${data.kinds_to_purge
                     .map(
                       (kind) => `
-                    <span class="inline-flex px-3 py-1 text-sm font-medium bg-red-100 text-red-800 rounded-full">
+                    <span class="inline-flex px-3 py-1 text-sm font-medium bg-danger-dim text-danger rounded-full">
                       Kind ${kind}
                     </span>
                   `
                     )
                     .join("")}
                 </div>
-                <div class="mt-3 text-xs text-gray-400">
+                <div class="mt-3 text-xs text-text-secondary">
                   Only these event kinds will be purged when kind-specific purging is enabled
                 </div>
               `
                   : `
-                <div class="text-center text-gray-400 py-4">
+                <div class="text-center text-text-secondary py-4">
                   <span class="text-sm">No specific kinds configured for purging</span>
                 </div>
               `
@@ -1379,12 +1379,12 @@ const dashboardManager = {
         `
             : `
           <!-- Kind Purging Disabled Notice -->
-          <div class="bg-gray-750 rounded-lg border border-gray-600">
-            <div class="px-4 py-3 border-b border-gray-600">
-              <h4 class="text-sm font-medium text-white">🏷️ Event Kinds</h4>
+          <div class="bg-surface-elevated rounded-lg border border-border-strong">
+            <div class="px-4 py-3 border-b border-border-strong">
+              <h4 class="text-sm font-medium text-text">🏷️ Event Kinds</h4>
             </div>
             <div class="p-4">
-              <div class="text-center text-gray-400 py-4">
+              <div class="text-center text-text-secondary py-4">
                 <span class="text-sm">Kind-specific purging is disabled</span>
                 <div class="text-xs mt-1">All event categories follow the category rules above</div>
               </div>
@@ -1395,21 +1395,21 @@ const dashboardManager = {
       `
           : `
         <!-- Disabled State Information -->
-        <div class="bg-gray-750 rounded-lg border border-gray-600">
+        <div class="bg-surface-elevated rounded-lg border border-border-strong">
           <div class="p-6 text-center">
-            <div class="text-gray-400 mb-4">
+            <div class="text-text-secondary mb-4">
               <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
               </svg>
             </div>
-            <h3 class="text-white font-medium mb-2">Event Purging Disabled</h3>
-            <p class="text-sm text-gray-400 mb-4">
+            <h3 class="text-text font-medium mb-2">Event Purging Disabled</h3>
+            <p class="text-sm text-text-secondary mb-4">
               Event purging is currently disabled. Events will be stored indefinitely until purging is enabled.
             </p>
             <div class="text-center max-w-md mx-auto">
               <div class="text-xs">
-                <span class="text-gray-300 font-medium">Whitelist Protection:</span>
-                <span class="text-gray-400 ml-2">${
+                <span class="text-text-secondary font-medium">Whitelist Protection:</span>
+                <span class="text-text-secondary ml-2">${
                   data.exclude_whitelisted ? "Enabled" : "Disabled"
                 }</span>
               </div>
@@ -1461,16 +1461,16 @@ const dashboardManager = {
             <div class="whitelist-config-grid">
               <!-- Status Column (with Event Kinds) -->
               <div class="space-y-3 text-center">
-                <h4 class="text-xs font-medium text-gray-400 uppercase tracking-wide">Status</h4>
+                <h4 class="text-xs font-medium text-text-secondary uppercase tracking-wide">Status</h4>
                 <div class="space-y-3">
                   <!-- Whitelist Status -->
                   <div class="space-y-2">
                     <div class="flex flex-col items-center space-y-1">
-                      <span class="text-sm text-gray-300">Pubkey Whitelist</span>
+                      <span class="text-sm text-text-secondary">Pubkey Whitelist</span>
                       <span class="inline-flex px-2 py-1 text-xs font-medium ${
                         configData.pubkey_whitelist?.enabled
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
+                          ? "bg-success-dim text-success"
+                          : "bg-surface-elevated text-text-secondary"
                       } rounded-full">
                         ${
                           configData.pubkey_whitelist?.enabled
@@ -1480,11 +1480,11 @@ const dashboardManager = {
                       </span>
                     </div>
                     <div class="flex flex-col items-center space-y-1">
-                      <span class="text-sm text-gray-300">Domain Whitelist</span>
+                      <span class="text-sm text-text-secondary">Domain Whitelist</span>
                       <span class="inline-flex px-2 py-1 text-xs font-medium ${
                         configData.domain_whitelist?.enabled
-                          ? "bg-purple-100 text-purple-800"
-                          : "bg-gray-100 text-gray-800"
+                          ? "bg-accent-dim text-accent"
+                          : "bg-surface-elevated text-text-secondary"
                       } rounded-full">
                         ${
                           configData.domain_whitelist?.enabled
@@ -1496,12 +1496,12 @@ const dashboardManager = {
                   </div>
       
                   <!-- Event Kinds in Status Column -->
-                  <div class="pt-2 border-t border-gray-600">
+                  <div class="pt-2 border-t border-border-strong">
                     ${
                       configData.kind_whitelist?.enabled
                         ? `
                       <div class="flex flex-col items-center space-y-2">
-                        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Allowed Event Kinds</span>
+                        <span class="text-xs font-medium text-text-secondary uppercase tracking-wide">Allowed Event Kinds</span>
                         <div class="flex flex-wrap gap-1 justify-center max-w-[200px]">
                           ${(configData.kind_whitelist?.kinds || [])
                             .map(
@@ -1515,8 +1515,8 @@ const dashboardManager = {
                       `
                         : `
                       <div class="flex flex-col items-center space-y-1">
-                        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Allowed Event Kinds</span>
-                        <span class="inline-flex px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded">
+                        <span class="text-xs font-medium text-text-secondary uppercase tracking-wide">Allowed Event Kinds</span>
+                        <span class="inline-flex px-2 py-1 text-xs font-medium bg-surface-elevated text-text-secondary rounded">
                           Any
                         </span>
                       </div>
@@ -1528,21 +1528,21 @@ const dashboardManager = {
       
               <!-- Key Counts Column -->
               <div class="space-y-3 text-center">
-                <h4 class="text-xs font-medium text-gray-400 uppercase tracking-wide">Key Counts</h4>
+                <h4 class="text-xs font-medium text-text-secondary uppercase tracking-wide">Key Counts</h4>
                 <div class="space-y-2">
                   <div class="flex flex-col items-center space-y-1">
-                    <span class="text-sm text-gray-300">Total Keys</span>
-                    <span class="text-white font-medium text-lg">${totalKeys}</span>
+                    <span class="text-sm text-text-secondary">Total Keys</span>
+                    <span class="text-text font-medium text-lg">${totalKeys}</span>
                   </div>
                   <div class="flex flex-col items-center space-y-1">
-                    <span class="text-sm text-gray-300">Direct Keys</span>
-                    <span class="text-green-400 font-medium text-sm">${
+                    <span class="text-sm text-text-secondary">Direct Keys</span>
+                    <span class="text-success font-medium text-sm">${
                       keysData.list?.length || 0
                     }</span>
                   </div>
                   <div class="flex flex-col items-center space-y-1">
-                    <span class="text-sm text-gray-300">Domain Keys</span>
-                    <span class="text-blue-400 font-medium text-sm">${totalDomainKeys} from ${
+                    <span class="text-sm text-text-secondary">Domain Keys</span>
+                    <span class="text-accent font-medium text-sm">${totalDomainKeys} from ${
         domainNames.length
       } domains</span>
                   </div>
@@ -1555,14 +1555,14 @@ const dashboardManager = {
           ${
             domainNames.length > 0
               ? `
-          <div class="pt-4 border-t border-gray-600">
+          <div class="pt-4 border-t border-border-strong">
             <div class="max-w-3xl mx-auto text-center">
-              <h4 class="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">Whitelisted Domains</h4>
+              <h4 class="text-xs font-medium text-text-secondary uppercase tracking-wide mb-3">Whitelisted Domains</h4>
               <div class="flex flex-wrap gap-3 justify-center">
                 ${domainNames
                   .map(
                     (domain) => `
-                  <a href="https://${domain}" target="_blank" rel="noopener noreferrer" class="inline-flex px-4 py-2 text-sm bg-blue-900 text-blue-200 rounded-lg border border-blue-700 hover:bg-blue-800 transition-colors cursor-pointer">${domain}</a>
+                  <a href="https://${domain}" target="_blank" rel="noopener noreferrer" class="inline-flex px-4 py-2 text-sm bg-info-dim text-info rounded-lg border border-border-strong hover:opacity-80 transition-colors cursor-pointer">${domain}</a>
                 `
                   )
                   .join("")}
@@ -1639,20 +1639,20 @@ const dashboardManager = {
         <div class="space-y-4">
           <!-- Status Section -->
           <div class="flex justify-between items-center">
-            <span class="text-gray-300">Status</span>
+            <span class="text-text-secondary">Status</span>
             <span class="inline-flex px-2 py-1 text-xs font-medium ${
               configData.enabled
-                ? "bg-red-100 text-red-800"
-                : "bg-gray-100 text-gray-800"
+                ? "bg-danger-dim text-danger"
+                : "bg-surface-elevated text-text-secondary"
             } rounded-full">
               ${configData.enabled ? "Active" : "Inactive"}
             </span>
           </div>
           
           <!-- Expandable Config Section -->
-          <div class="border-t border-gray-600 pt-3">
+          <div class="border-t border-border-strong pt-3">
             <button 
-              class="w-full flex justify-between items-center text-sm text-gray-300 hover:text-white transition-colors"
+              class="w-full flex justify-between items-center text-sm text-text-secondary hover:text-text transition-colors"
               onclick="this.nextElementSibling.classList.toggle('hidden')"
             >
               <span>Configuration Details</span>
@@ -1662,14 +1662,14 @@ const dashboardManager = {
             </button>
             <div class="mt-2 space-y-2 text-xs hidden">
               <div class="flex justify-between items-center">
-                <span class="text-gray-400">Max Temp Bans</span>
-                <span class="text-yellow-400">${
+                <span class="text-text-secondary">Max Temp Bans</span>
+                <span class="text-warning">${
                   configData.max_temp_bans || 0
                 }</span>
               </div>
               <div class="flex justify-between items-center">
-                <span class="text-gray-400">Temp Ban Duration</span>
-                <span class="text-yellow-400">${Math.floor(
+                <span class="text-text-secondary">Temp Ban Duration</span>
+                <span class="text-warning">${Math.floor(
                   (configData.temp_ban_duration || 0) / 3600
                 )}h</span>
               </div>
@@ -1677,13 +1677,13 @@ const dashboardManager = {
                 configData.temp_ban_words &&
                 configData.temp_ban_words.length > 0
                   ? `
-                <div class="pt-2 border-t border-gray-700">
-                  <span class="text-gray-400 block mb-1">Temp Ban Words</span>
+                <div class="pt-2 border-t border-border">
+                  <span class="text-text-secondary block mb-1">Temp Ban Words</span>
                   <div class="flex flex-wrap gap-1">
                     ${configData.temp_ban_words
                       .map(
                         (word) =>
-                          `<span class="px-2 py-1 bg-yellow-900 text-yellow-200 rounded text-xs">${word}</span>`
+                          `<span class="px-2 py-1 bg-warning-dim text-warning rounded text-xs">${word}</span>`
                       )
                       .join("")}
                   </div>
@@ -1691,25 +1691,25 @@ const dashboardManager = {
               `
                   : ""
               }
-              <div class="pt-2 border-t border-gray-700 text-xs text-gray-500">
+              <div class="pt-2 border-t border-border text-xs text-text-muted">
                 <span>⚠️ Permanent ban words not shown as they may be offensive</span>
               </div>
             </div>
           </div>
 
           <!-- User Counts Summary -->
-          <div class="grid grid-cols-3 gap-3 pt-3 border-t border-gray-600">
+          <div class="grid grid-cols-3 gap-3 pt-3 border-t border-border-strong">
             <div class="text-center">
-              <div class="text-lg font-medium text-red-400">${permanentCount}</div>
-              <div class="text-xs text-gray-400">Permanent</div>
+              <div class="text-lg font-medium text-danger">${permanentCount}</div>
+              <div class="text-xs text-text-secondary">Permanent</div>
             </div>
             <div class="text-center">
-              <div class="text-lg font-medium text-yellow-400">${temporaryCount}</div>
-              <div class="text-xs text-gray-400">Temporary</div>
+              <div class="text-lg font-medium text-warning">${temporaryCount}</div>
+              <div class="text-xs text-text-secondary">Temporary</div>
             </div>
             <div class="text-center">
-              <div class="text-lg font-medium text-orange-400">${mutelistTotalCount}</div>
-              <div class="text-xs text-gray-400">Mutelist</div>
+              <div class="text-lg font-medium text-warning">${mutelistTotalCount}</div>
+              <div class="text-xs text-text-secondary">Mutelist</div>
             </div>
           </div>
 
@@ -1717,10 +1717,10 @@ const dashboardManager = {
           ${
             mutelistAuthorCount > 0
               ? `
-            <div class="pt-3 border-t border-gray-600">
-              <h4 class="text-sm text-gray-300 mb-2">Mutelist Authors (${mutelistAuthorCount})</h4>
+            <div class="pt-3 border-t border-border-strong">
+              <h4 class="text-sm text-text-secondary mb-2">Mutelist Authors (${mutelistAuthorCount})</h4>
               <div id="mutelist-authors" class="flex space-x-3 overflow-x-auto pb-2 custom-scroll">
-                <div class="text-xs text-gray-400">Loading authors...</div>
+                <div class="text-xs text-text-secondary">Loading authors...</div>
               </div>
             </div>
           `
@@ -1789,22 +1789,22 @@ const dashboardManager = {
   _mutelistAuthorCard(authorPubkey, profile) {
     const name = profile.name || profile.display_name || "?";
     const picture = profile.picture || null;
-    const fallback = `<div class="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
+    const fallback = `<div class="w-12 h-12 bg-surface-overlay rounded-full flex items-center justify-center text-text font-medium text-sm">
       <img src="https://robohash.org/${authorPubkey}?set=set6&size=48x48" alt="${name}" class="w-12 h-12 rounded-full object-cover">
     </div>`;
     return `
-      <div onclick="navigateToProfileFromPubkey('${authorPubkey}')" class="profile-card-slot flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${authorPubkey}" data-slot="mutelist-author">
+      <div onclick="navigateToProfileFromPubkey('${authorPubkey}')" class="profile-card-slot flex-shrink-0 text-center cursor-pointer hover:bg-surface-hover rounded-lg p-2 transition-colors" data-pubkey="${authorPubkey}" data-slot="mutelist-author">
         <div class="w-12 h-12 mx-auto mb-1">
           ${
             picture
               ? `<img src="${picture}" alt="${name}" class="w-12 h-12 rounded-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">${fallback.replace(
-                  'class="w-12 h-12 bg-gray-600',
-                  'style="display: none;" class="w-12 h-12 bg-gray-600'
+                  'class="w-12 h-12 bg-surface-overlay',
+                  'style="display: none;" class="w-12 h-12 bg-surface-overlay'
                 )}`
               : fallback
           }
         </div>
-        <div class="text-xs text-white font-medium truncate max-w-[60px]">${name}</div>
+        <div class="text-xs text-text font-medium truncate max-w-[60px]">${name}</div>
       </div>
     `;
   },
@@ -1843,7 +1843,7 @@ const dashboardManager = {
     const container = document.getElementById(containerId);
     if (!container || !keysWithSources || keysWithSources.length === 0) {
       if (container) {
-        container.innerHTML = `<div class="text-center text-gray-400 py-8">${emptyMessage}</div>`;
+        container.innerHTML = `<div class="text-center text-text-secondary py-8">${emptyMessage}</div>`;
       }
       return;
     }
@@ -1852,7 +1852,7 @@ const dashboardManager = {
     // The slot suffix prevents collisions with the mutelist-author row when
     // the same pubkey appears in both.
     container.innerHTML = `
-      <div class="text-sm text-gray-400 mb-3">${keysWithSources.length} users</div>
+      <div class="text-sm text-text-secondary mb-3">${keysWithSources.length} users</div>
       <div class="flex space-x-4 overflow-x-auto pb-2 custom-scroll">
         ${keysWithSources
           .map(({ pubkey }) => this._placeholderCard(pubkey, "blacklist"))
@@ -1896,37 +1896,37 @@ const dashboardManager = {
     let sourceClass, sourceLabel;
     switch (sourceType) {
       case "permanent":
-        sourceClass = "text-red-400";
+        sourceClass = "text-danger";
         sourceLabel = "Permanent";
         break;
       case "temporary":
-        sourceClass = "text-yellow-400";
+        sourceClass = "text-warning";
         sourceLabel = "Temporary";
         break;
       case "mutelist":
-        sourceClass = "text-orange-400";
+        sourceClass = "text-warning";
         sourceLabel = source; // Author name or "Mutelist"
         break;
       default:
-        sourceClass = "text-gray-400";
+        sourceClass = "text-text-secondary";
         sourceLabel = source;
     }
 
     return `
-      <div onclick="navigateToProfileFromPubkey('${pubkey}')" class="flex-shrink-0 text-center cursor-pointer hover:bg-gray-700 rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
+      <div onclick="navigateToProfileFromPubkey('${pubkey}')" class="flex-shrink-0 text-center cursor-pointer hover:bg-surface-hover rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
         <div class="w-16 h-16 mx-auto mb-2">
           ${
             picture
               ? `<img src="${picture}" alt="${name}" class="w-16 h-16 rounded-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-              <div class="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-lg" style="display: none;">
+              <div class="w-16 h-16 bg-surface-overlay rounded-full flex items-center justify-center text-text font-medium text-lg" style="display: none;">
                 <img src="https://robohash.org/${pubkey}?set=set6&size=64x64" alt="${name}" class="w-16 h-16 rounded-full object-cover">
               </div>`
-              : `<div class="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-medium text-lg">
+              : `<div class="w-16 h-16 bg-surface-overlay rounded-full flex items-center justify-center text-text font-medium text-lg">
                 <img src="https://robohash.org/${pubkey}?set=set6&size=64x64" alt="${name}" class="w-16 h-16 rounded-full object-cover">
               </div>`
           }
         </div>
-        <div class="text-xs text-white font-medium truncate max-w-[80px] mb-1">${name}</div>
+        <div class="text-xs text-text font-medium truncate max-w-[80px] mb-1">${name}</div>
         <div class="text-xs ${sourceClass} truncate max-w-[80px]">${sourceLabel}</div>
       </div>
     `;
@@ -1935,16 +1935,16 @@ const dashboardManager = {
   // Utility functions for status badges
   getStatusBadge(status) {
     const statusClass = status
-      ? "bg-green-100 text-green-800"
-      : "bg-red-100 text-red-800";
+      ? "bg-success-dim text-success"
+      : "bg-danger-dim text-danger";
     const statusText = status ? "Active" : "Inactive";
     return `<span class="inline-flex px-2 py-1 text-xs font-medium ${statusClass} rounded-full">${statusText}</span>`;
   },
 
   getBooleanBadge(value) {
     const badgeClass = value
-      ? "bg-green-100 text-green-800"
-      : "bg-gray-100 text-gray-800";
+      ? "bg-success-dim text-success"
+      : "bg-surface-elevated text-text-secondary";
     const text = value ? "Enabled" : "Disabled";
     return `<span class="inline-flex px-2 py-1 text-xs font-medium ${badgeClass} rounded-full">${text}</span>`;
   },
@@ -1995,8 +1995,8 @@ async function updateRelayStatus() {
       } else {
         // Public relay - green colors
         statusElement.innerHTML = `
-          <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-          <span class="font-medium text-green-400">Public Relay Online</span>
+          <div class="w-3 h-3 bg-success rounded-full animate-pulse"></div>
+          <span class="font-medium text-success">Public Relay Online</span>
         `;
         console.log("Updated to public relay status");
       }
@@ -2009,8 +2009,8 @@ async function updateRelayStatus() {
     const statusElement = document.getElementById("relay-status");
     if (statusElement) {
       statusElement.innerHTML = `
-        <div class="w-3 h-3 bg-gray-500 rounded-full animate-pulse"></div>
-        <span class="font-medium text-gray-400">Relay Online</span>
+        <div class="w-3 h-3 bg-text-muted rounded-full animate-pulse"></div>
+        <span class="font-medium text-text-secondary">Relay Online</span>
       `;
     }
   }

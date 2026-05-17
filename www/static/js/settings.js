@@ -110,11 +110,11 @@ function switchRelayTab(tabName) {
     // Activate client relays tab
     if (clientTab) {
       clientTab.className =
-        "px-4 py-2 text-sm font-medium text-blue-400 transition-colors border-b-2 border-blue-500";
+        "px-4 py-2 text-sm font-medium text-accent transition-colors border-b-2 border-accent";
     }
     if (mailboxTab) {
       mailboxTab.className =
-        "px-4 py-2 text-sm font-medium text-gray-400 transition-colors border-b-2 border-transparent hover:text-white";
+        "px-4 py-2 text-sm font-medium text-text-secondary transition-colors border-b-2 border-transparent hover:text-text";
     }
     if (clientContent) clientContent.classList.remove("hidden");
     if (mailboxContent) mailboxContent.classList.add("hidden");
@@ -122,11 +122,11 @@ function switchRelayTab(tabName) {
     // Activate mailboxes tab
     if (mailboxTab) {
       mailboxTab.className =
-        "px-4 py-2 text-sm font-medium text-blue-400 transition-colors border-b-2 border-blue-500";
+        "px-4 py-2 text-sm font-medium text-accent transition-colors border-b-2 border-accent";
     }
     if (clientTab) {
       clientTab.className =
-        "px-4 py-2 text-sm font-medium text-gray-400 transition-colors border-b-2 border-transparent hover:text-white";
+        "px-4 py-2 text-sm font-medium text-text-secondary transition-colors border-b-2 border-transparent hover:text-text";
     }
     if (mailboxContent) mailboxContent.classList.remove("hidden");
     if (clientContent) clientContent.classList.add("hidden");
@@ -169,7 +169,7 @@ function updateClientRelaysTable(data) {
   if (!relaysList || relaysList.length === 0) {
     tableBody.innerHTML = `
         <tr>
-          <td colspan="5" class="text-center py-8 text-gray-400">
+          <td colspan="5" class="text-center py-8 text-text-secondary">
             No client relays configured
           </td>
         </tr>
@@ -193,9 +193,9 @@ function updateClientRelaysTable(data) {
 
       // Status indicator based on connection
       const statusClass = connected
-        ? "bg-green-100 text-green-800"
-        : "bg-red-100 text-red-800";
-      const statusDot = connected ? "bg-green-500" : "bg-red-500";
+        ? "bg-success-dim text-success"
+        : "bg-danger-dim text-danger";
+      const statusDot = connected ? "bg-success" : "bg-danger";
       const statusText = connected ? "Connected" : "Disconnected";
 
       const statusIndicator = `<span class="inline-flex items-center px-2 py-1 text-xs font-medium ${statusClass} rounded-full" id="status-${safeId}">
@@ -204,25 +204,25 @@ function updateClientRelaysTable(data) {
       </span>`;
 
       const readIndicator = readEnabled
-        ? '<span class="text-green-400">✓</span>'
-        : '<span class="text-gray-500">—</span>';
+        ? '<span class="text-success">✓</span>'
+        : '<span class="text-text-muted">—</span>';
 
       const writeIndicator = writeEnabled
-        ? '<span class="text-green-400">✓</span>'
-        : '<span class="text-gray-500">—</span>';
+        ? '<span class="text-success">✓</span>'
+        : '<span class="text-text-muted">—</span>';
 
       return `
-        <tr class="border-b border-gray-700 hover:bg-gray-750">
+        <tr class="border-b border-border hover:bg-surface-elevated">
           <td class="py-3 px-2">
-            <div class="font-mono text-white text-sm">${displayUrl}</div>
-            <div class="text-xs text-gray-400">${url}</div>
+            <div class="font-mono text-text text-sm">${displayUrl}</div>
+            <div class="text-xs text-text-secondary">${url}</div>
           </td>
           <td class="py-3 px-2 text-center">
             ${statusIndicator}
           </td>
           <td class="py-3 px-2 text-center">
             <button onclick="pingSingleRelay('${url}')" 
-                    class="text-blue-400 hover:text-blue-300 text-sm" 
+                    class="text-accent hover:text-accent text-sm" 
                     id="ping-${safeId}">
               Ping
             </button>
@@ -328,24 +328,24 @@ function addRelayFormEntry(url = "", read = true, write = true) {
     .substr(2, 9)}`;
 
   const entryHtml = `
-    <div class="flex items-center space-x-3 bg-gray-600 p-3 rounded" id="${entryId}">
+    <div class="flex items-center space-x-3 bg-surface-overlay p-3 rounded" id="${entryId}">
       <input 
         type="text" 
         placeholder="wss://relay.example.com" 
         value="${url}"
-        class="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+        class="flex-1 px-3 py-2 bg-surface border border-border-strong rounded text-text  focus:outline-none focus:border-accent"
       />
       <label class="flex items-center space-x-1">
-        <input type="checkbox" ${read ? "checked" : ""} class="text-blue-600">
-        <span class="text-sm text-gray-300">Read</span>
+        <input type="checkbox" ${read ? "checked" : ""} class="text-accent">
+        <span class="text-sm text-text-secondary">Read</span>
       </label>
       <label class="flex items-center space-x-1">
-        <input type="checkbox" ${write ? "checked" : ""} class="text-blue-600">
-        <span class="text-sm text-gray-300">Write</span>
+        <input type="checkbox" ${write ? "checked" : ""} class="text-accent">
+        <span class="text-sm text-text-secondary">Write</span>
       </label>
       <button 
         onclick="removeRelayFormEntry('${entryId}')"
-        class="px-3 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+        class="px-3 py-2 text-sm bg-danger hover:bg-danger text-text-on-accent rounded transition-colors"
       >
         Remove
       </button>
@@ -552,15 +552,15 @@ async function pingSingleRelay(relayUrl) {
     const result = await pingRelay(relayUrl);
     if (pingButton) {
       if (result.success) {
-        pingButton.innerHTML = `<span class="text-green-400 font-mono">${result.response_time}ms</span>`;
+        pingButton.innerHTML = `<span class="text-success font-mono">${result.response_time}ms</span>`;
       } else {
-        pingButton.innerHTML = `<span class="text-red-400">Error</span>`;
+        pingButton.innerHTML = `<span class="text-danger">Error</span>`;
       }
     }
   } catch (error) {
     console.error(`Failed to ping ${relayUrl}:`, error);
     if (pingButton) {
-      pingButton.innerHTML = `<span class="text-red-400">Failed</span>`;
+      pingButton.innerHTML = `<span class="text-danger">Failed</span>`;
     }
   }
 }
@@ -577,24 +577,24 @@ async function pingAllRelays(relays) {
 
       if (pingElement) {
         if (pingResult.success) {
-          pingElement.innerHTML = `<span class="text-green-400 font-mono">${pingResult.response_time}ms</span>`;
+          pingElement.innerHTML = `<span class="text-success font-mono">${pingResult.response_time}ms</span>`;
           if (statusElement) {
             statusElement.innerHTML = `
-              <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></span>
+              <span class="w-1.5 h-1.5 bg-success rounded-full mr-1.5"></span>
               Connected
             `;
             statusElement.className =
-              "inline-flex items-center px-2 py-1 text-xs font-medium text-green-800 bg-green-100 rounded-full";
+              "inline-flex items-center px-2 py-1 text-xs font-medium text-success bg-success-dim rounded-full";
           }
         } else {
-          pingElement.innerHTML = `<span class="text-red-400">Error</span>`;
+          pingElement.innerHTML = `<span class="text-danger">Error</span>`;
           if (statusElement) {
             statusElement.innerHTML = `
-              <span class="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"></span>
+              <span class="w-1.5 h-1.5 bg-danger rounded-full mr-1.5"></span>
               Offline
             `;
             statusElement.className =
-              "inline-flex items-center px-2 py-1 text-xs font-medium text-red-800 bg-red-100 rounded-full";
+              "inline-flex items-center px-2 py-1 text-xs font-medium text-danger bg-danger-dim rounded-full";
           }
         }
       }
@@ -607,15 +607,15 @@ async function pingAllRelays(relays) {
       const statusElement = document.getElementById(statusElementId);
 
       if (pingElement) {
-        pingElement.innerHTML = `<span class="text-red-400">Failed</span>`;
+        pingElement.innerHTML = `<span class="text-danger">Failed</span>`;
       }
       if (statusElement) {
         statusElement.innerHTML = `
-          <span class="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"></span>
+          <span class="w-1.5 h-1.5 bg-danger rounded-full mr-1.5"></span>
           Offline
         `;
         statusElement.className =
-          "inline-flex items-center px-2 py-1 text-xs font-medium text-red-800 bg-red-100 rounded-full";
+          "inline-flex items-center px-2 py-1 text-xs font-medium text-danger bg-danger-dim rounded-full";
       }
     }
   }
@@ -719,7 +719,7 @@ function updateMailboxTable(data) {
   if (!mailboxesData || Object.keys(mailboxesData).length === 0) {
     tableBody.innerHTML = `
         <tr>
-          <td colspan="5" class="text-center py-8 text-gray-400">
+          <td colspan="5" class="text-center py-8 text-text-secondary">
             No mailboxes configured
           </td>
         </tr>
@@ -747,33 +747,33 @@ function updateMailboxTable(data) {
       const displayUrl = url.replace(/^wss?:\/\//, "").replace(/\/$/, "");
 
       // Status indicators (start as "Checking...")
-      const statusIndicator = `<span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full" id="mailbox-status-${btoa(
+      const statusIndicator = `<span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-surface-elevated text-text-secondary rounded-full" id="mailbox-status-${btoa(
         url
       ).replace(/[^a-zA-Z0-9]/g, "")}">
-        <span class="w-1.5 h-1.5 bg-gray-500 rounded-full mr-1"></span>
+        <span class="w-1.5 h-1.5 bg-text-muted rounded-full mr-1"></span>
         Checking...
       </span>`;
 
       const readIndicator = readEnabled
-        ? '<span class="text-green-400">✓</span>'
-        : '<span class="text-gray-500">—</span>';
+        ? '<span class="text-success">✓</span>'
+        : '<span class="text-text-muted">—</span>';
 
       const writeIndicator = writeEnabled
-        ? '<span class="text-green-400">✓</span>'
-        : '<span class="text-gray-500">—</span>';
+        ? '<span class="text-success">✓</span>'
+        : '<span class="text-text-muted">—</span>';
 
       return `
-        <tr class="border-b border-gray-700 hover:bg-gray-750">
+        <tr class="border-b border-border hover:bg-surface-elevated">
           <td class="py-3 px-2">
-            <div class="font-mono text-white text-sm">${displayUrl}</div>
-            <div class="text-xs text-gray-400">${url}</div>
+            <div class="font-mono text-text text-sm">${displayUrl}</div>
+            <div class="text-xs text-text-secondary">${url}</div>
           </td>
           <td class="py-3 px-2 text-center">
             ${statusIndicator}
           </td>
           <td class="py-3 px-2 text-center">
             <button onclick="pingSingleRelay('${url}')" 
-                    class="text-blue-400 hover:text-blue-300 text-sm" 
+                    class="text-accent hover:text-accent text-sm" 
                     id="mailbox-ping-${btoa(url).replace(/[^a-zA-Z0-9]/g, "")}">
               Ping
             </button>
@@ -809,24 +809,24 @@ async function pingAllMailboxes(mailboxes) {
       if (pingElement) {
         if (pingResult.success) {
           // Fixed: use response_time instead of responseTime
-          pingElement.innerHTML = `<span class="text-green-400 font-mono">${pingResult.response_time}ms</span>`;
+          pingElement.innerHTML = `<span class="text-success font-mono">${pingResult.response_time}ms</span>`;
           if (statusElement) {
             statusElement.innerHTML = `
-              <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></span>
+              <span class="w-1.5 h-1.5 bg-success rounded-full mr-1.5"></span>
               Online
             `;
             statusElement.className =
-              "inline-flex items-center px-2 py-1 text-xs font-medium text-green-800 bg-green-100 rounded-full";
+              "inline-flex items-center px-2 py-1 text-xs font-medium text-success bg-success-dim rounded-full";
           }
         } else {
-          pingElement.innerHTML = `<span class="text-red-400">Error</span>`;
+          pingElement.innerHTML = `<span class="text-danger">Error</span>`;
           if (statusElement) {
             statusElement.innerHTML = `
-              <span class="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"></span>
+              <span class="w-1.5 h-1.5 bg-danger rounded-full mr-1.5"></span>
               Offline
             `;
             statusElement.className =
-              "inline-flex items-center px-2 py-1 text-xs font-medium text-red-800 bg-red-100 rounded-full";
+              "inline-flex items-center px-2 py-1 text-xs font-medium text-danger bg-danger-dim rounded-full";
           }
         }
       }
@@ -839,15 +839,15 @@ async function pingAllMailboxes(mailboxes) {
       const statusElement = document.getElementById(statusElementId);
 
       if (pingElement) {
-        pingElement.innerHTML = `<span class="text-red-400">Failed</span>`;
+        pingElement.innerHTML = `<span class="text-danger">Failed</span>`;
       }
       if (statusElement) {
         statusElement.innerHTML = `
-          <span class="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"></span>
+          <span class="w-1.5 h-1.5 bg-danger rounded-full mr-1.5"></span>
           Offline
         `;
         statusElement.className =
-          "inline-flex items-center px-2 py-1 text-xs font-medium text-red-800 bg-red-100 rounded-full";
+          "inline-flex items-center px-2 py-1 text-xs font-medium text-danger bg-danger-dim rounded-full";
       }
     }
   }
@@ -878,9 +878,9 @@ function updateElement(id, content) {
 // Notification functions
 function showNotification(message, type = "success") {
   // Create a simple toast notification
-  const bgColor = type === "error" ? "bg-red-600" : "bg-green-600";
+  const bgColor = type === "error" ? "bg-danger" : "bg-success";
   const notification = document.createElement("div");
-  notification.className = `fixed z-50 px-4 py-2 text-white ${bgColor} rounded-lg shadow-lg top-4 right-4`;
+  notification.className = `fixed z-50 px-4 py-2 text-text ${bgColor} rounded-lg shadow-lg top-4 right-4`;
   notification.textContent = message;
 
   document.body.appendChild(notification);

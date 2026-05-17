@@ -304,13 +304,13 @@ function showSearchSuggestions(query) {
     }
 
     searchResults.innerHTML = `
-      <div class="p-3 text-sm text-gray-300">
+      <div class="p-3 text-sm text-text-secondary">
         <div class="flex items-center space-x-2">
-          <span class="text-green-400">✓</span>
+          <span class="text-success">✓</span>
           <span>${icon}</span>
           <span>Valid ${description}</span>
         </div>
-        <div class="mt-1 text-xs text-gray-400">
+        <div class="mt-1 text-xs text-text-secondary">
           Press Enter to search
         </div>
       </div>
@@ -329,12 +329,12 @@ function showSearchError(message) {
   if (!searchResults) return;
 
   searchResults.innerHTML = `
-    <div class="p-3 text-sm text-red-400">
+    <div class="p-3 text-sm text-danger">
       <div class="flex items-center space-x-2">
         <span>⚠</span>
         <span>${message}</span>
       </div>
-      <div class="mt-1 text-xs text-gray-400">
+      <div class="mt-1 text-xs text-text-secondary">
         Click the ? button for help
       </div>
     </div>
