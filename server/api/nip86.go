@@ -75,7 +75,17 @@ type nip86IPEntry struct {
 // JSON-RPC errors — they're HTTP-level access control.
 //
 // @Summary      NIP-86 relay management
-// @Description  JSON-RPC over a single POST endpoint per [NIP-86](https://github.com/nostr-protocol/nips/blob/master/86.md). Requires NIP-98 HTTP Auth and the signer must equal the relay owner pubkey in `relay_metadata.json`. This phase implements the read-only methods only — see `supportedmethods` for the live list. Body is `{"method": "<name>", "params": [...]}`; response is `{"result": ..., "error": ""}`.
+// @Description  JSON-RPC over a single POST endpoint per [NIP-86](https://github.com/nostr-protocol/nips/blob/master/86.md). Requires NIP-98 HTTP Auth (kind:27235 with `u`, `method`, `payload` tags) and the signer must equal the relay owner pubkey in `relay_metadata.json`. Body is `{"method": "<name>", "params": [...]}`; response is `{"result": ..., "error": ""}`. Errors live in the envelope, not the HTTP status — only auth failures return 401/403.
+// @Description
+// @Description **Spec methods (reads):** `supportedmethods`, `listallowedpubkeys`, `listbannedpubkeys`, `listallowedkinds`, `listblockedips`.
+// @Description
+// @Description **Spec methods (writes):** `banpubkey` / `unbanpubkey` / `allowpubkey` / `unallowpubkey` (params: `[pubkey, reason?]`), `allowkind` / `disallowkind` (params: `[kind:int]`), `blockip` / `unblockip` (params: `[ip-or-cidr, reason?]`), `changerelayname` / `changerelaydescription` / `changerelayicon` (params: `[value:string]`).
+// @Description
+// @Description **Grain vendor extensions (writes):** `grain_updateserver`, `grain_updateratelimit`, `grain_updateeventpurge`, `grain_updatelogging`, `grain_updateauth`, `grain_updatebackuprelay`, `grain_updateresourcelimits`, `grain_updateeventtimeconstraints`, `grain_updatewhitelistconfig`, `grain_updateblacklistconfig`. Each takes the full section blob as `params[0]` (same shape the matching GET endpoint returns) and stages it to disk; the response is `{ok:true, restart_pending:true}`. Operator clicks Apply → dashboard calls `grain_reloadconfig`.
+// @Description
+// @Description **Grain vendor extensions (ops + reads):** `grain_reloadconfig` (triggers restart), `grain_refreshcache` (synchronous whitelist + blacklist cache refresh), `grain_whitelistconfig` / `grain_blacklistconfig` (full-struct reads — the blacklist read overlays IP fields from config.yml so the dashboard sees one coherent shape), `grain_stats_overview` (server counters + list/cache stats).
+// @Description
+// @Description **Out of scope:** event-moderation methods (`allowevent` / `banevent` / `listbannedevents` / `listeventsneedingmoderation`) need a moderation queue that doesn't exist yet — tracked separately. Call `supportedmethods` at runtime for the authoritative list this build advertises.
 // @Tags         nip86
 // @Accept       json
 // @Produce      json
