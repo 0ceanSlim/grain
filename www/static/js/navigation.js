@@ -29,12 +29,34 @@
     const content = getLoginBtnContent();
     if (!btn || !content) return;
     btn.title = "Login";
+    btn.disabled = false;
     btn.className =
       "flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded bg-accent text-accent-fg border-accent hover:bg-accent-hover transition-colors";
     content.className = "inline-flex items-center gap-2";
     content.innerHTML =
       '<span>🗝️</span><span class="hidden sm:inline">Login</span>';
   }
+
+  // Visible "logging you in" state used by the mill bridge while
+  // the server roundtrips /api/v1/auth/login (which does a
+  // synchronous mailbox + metadata fetch from outbox relays — see
+  // grain issue tracker for the v0.8 outbox-model overhaul). The
+  // existing nav refresh replaces this once /session + /cache come
+  // back.
+  function renderLoading() {
+    const btn = getLoginBtn();
+    const content = getLoginBtnContent();
+    if (!btn || !content) return;
+    btn.title = "Signing you in…";
+    btn.disabled = true;
+    btn.className =
+      "flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded bg-surface-elevated text-text-secondary border-border cursor-wait";
+    content.className = "inline-flex items-center gap-2";
+    content.innerHTML =
+      '<span class="inline-block w-4 h-4 rounded-full animate-spin" style="border: 2px solid var(--color-accent-dim); border-top-color: var(--color-accent);"></span>' +
+      '<span class="hidden sm:inline">Signing in…</span>';
+  }
+  window.renderLoginLoading = renderLoading;
 
   function renderLoggedIn(profileContent, npub) {
     const btn = getLoginBtn();
@@ -47,6 +69,7 @@
 
     // Switch to a quieter "logged in" look — the bright accent
     // button stops making sense once it's permanent chrome.
+    btn.disabled = false;
     btn.className =
       "flex items-center gap-2 px-2 py-1 text-sm border rounded bg-surface-elevated text-text border-border hover:bg-surface-hover transition-colors";
     btn.title = displayName;

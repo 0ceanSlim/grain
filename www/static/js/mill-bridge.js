@@ -68,6 +68,17 @@
     const signingMethod = METHOD_MAP[result.method] ?? "none";
     const requestedMode = result.method === "readonly" ? "read_only" : "write";
 
+    // Close mill immediately and flip the header button into a
+    // spinner state. /api/v1/auth/login currently synchronously
+    // fetches the user's mailboxes + metadata from outbox relays
+    // (slow — see the v0.8 outbox-model issue), so the gap between
+    // "mill closed" and "pfp+name rendered" can be several seconds.
+    // Without this visual the page looks frozen.
+    window.MILL?.close();
+    if (typeof window.renderLoginLoading === "function") {
+      window.renderLoginLoading();
+    }
+
     try {
       const resp = await fetch("/api/v1/auth/login", {
         method: "POST",
@@ -87,21 +98,20 @@
 
       // Swap login button for the user dropdown. We call the
       // navigation helper directly rather than dispatching the
-      // "updateNav" CustomEvent — the listener (navigation.js:202)
-      // binds to document.body and an event fired on window doesn't
-      // bubble down to it. forceNavigationUpdate does a fresh,
-      // cache-busted /api/v1/session check; same path the logout
-      // flow uses.
+      // "updateNav" CustomEvent — the listener binds to document.body
+      // and an event fired on window doesn't bubble down to it.
+      // forceNavigationUpdate does a fresh, cache-busted
+      // /api/v1/session check; same path the logout flow uses, and
+      // it'll replace the spinner state with pfp + display name.
       if (typeof window.forceNavigationUpdate === "function") {
         window.forceNavigationUpdate();
       }
-      // Close the modal. Mill keeps the "connected" screen open by
-      // default so the user can confirm; for grain we want to drop
-      // straight into the dashboard. Short timeout gives mill's
-      // animation room to finish.
-      setTimeout(() => window.MILL?.close(), 300);
     } catch (err) {
       console.error("[mill-bridge] login request errored:", err);
+      // Roll back to the logged-out look so the user can retry.
+      if (typeof window.forceNavigationUpdate === "function") {
+        window.forceNavigationUpdate();
+      }
     }
   }
 
