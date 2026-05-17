@@ -66,6 +66,13 @@
     ></script>
     <script src="https://unpkg.com/hyperscript.org@0.9.14"></script>
 
+    <!-- nostr-mill: registers the <nostr-signer> custom element and
+         exposes window.MILL. Bundled into the binary at build time;
+         no runtime CDN dependency. The bridge that wires mill into
+         grain's session API loads right after. -->
+    <script src="/static/mill/mill.umd.min.js"></script>
+    <script src="/static/js/mill-bridge.js" defer></script>
+
     <title>{{.Title}}</title>
     <style>
       .spinner {

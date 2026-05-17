@@ -36,3 +36,7 @@ www/static/swagger/*
 # Self-hosted webfonts. Same pattern as swagger above.
 www/static/fonts/*
 !www/static/fonts/.gitkeep
+
+# nostr-mill UMD bundle. Downloaded by Dockerfile / release workflow.
+www/static/mill/*
+!www/static/mill/.gitkeep

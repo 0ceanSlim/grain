@@ -199,8 +199,9 @@
   {{template "login-button"}} {{template "user-dropdown"}}
 </div>
 
-<!-- Login Modal -->
-{{template "login-modal"}}
+<!-- Login modal is now provided by mill (<nostr-signer>); see
+     www/static/js/mill-bridge.js. Mill auto-injects its element
+     into <body> the first time MILL.open() runs. -->
 
 <!-- Hyperscript handlers for navigation events -->
 <div

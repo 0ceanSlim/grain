@@ -630,4 +630,44 @@
     border-top: 1px solid var(--color-border);
     margin: 1rem 0;
   }
+
+  /* ---------------------------------------------------------------- *
+   *  Mill (<nostr-signer>) → grain token bridge.
+   *
+   *  Mill's modal lives in a closed shadow DOM and reads its own
+   *  --mill-* CSS variables. CSS custom properties pierce shadow
+   *  boundaries inherited from the host, so setting --mill-* on the
+   *  <nostr-signer> element makes mill render in grain's palette.
+   *  Each variable references grain's --color-* token so flipping
+   *  themes via the header swapper retints the login modal live —
+   *  no JS handoff needed.
+   * ---------------------------------------------------------------- */
+  nostr-signer {
+    --mill-bg:               var(--color-surface-base);
+    --mill-surface:          var(--color-surface);
+    --mill-card:             var(--color-surface-elevated);
+    --mill-card-hover:       var(--color-surface-hover);
+    --mill-inset:            var(--color-surface-inset);
+    --mill-inset-strong:     var(--color-surface-inset-strong);
+    --mill-overlay:          var(--color-backdrop);
+    --mill-border:           var(--color-border);
+    --mill-border-light:     var(--color-border-strong);
+    --mill-accent:           var(--color-accent);
+    --mill-accent-hover:     var(--color-accent-hover);
+    --mill-accent-dim:       var(--color-accent-dim);
+    --mill-teal:             var(--color-accent-2);
+    --mill-teal-dim:         var(--color-accent-2-dim);
+    --mill-text:             var(--color-text);
+    --mill-text-secondary:   var(--color-text-secondary);
+    --mill-muted:            var(--color-text-muted);
+    --mill-danger:           var(--color-danger);
+    --mill-danger-dim:       var(--color-danger-dim);
+    --mill-warning:          var(--color-warning);
+    --mill-warning-dim:      var(--color-warning-dim);
+    --mill-success:          var(--color-success);
+    --mill-success-dim:      var(--color-success-dim);
+    --mill-radius:           var(--radius);
+    --mill-font:             var(--font-sans);
+    --mill-font-mono:        var(--font-mono);
+  }
 }

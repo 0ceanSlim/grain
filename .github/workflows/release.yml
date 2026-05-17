@@ -186,6 +186,14 @@ jobs:
              /tmp/package/swagger-ui.css \
              www/static/swagger/
 
+          # nostr-mill: the <nostr-signer> login web component.
+          # Pinned to match the Dockerfile so test and release builds
+          # ship the same bundle.
+          MILL_VERSION=1.0.0
+          mkdir -p www/static/mill
+          curl -fsSL -o www/static/mill/mill.umd.min.js \
+            "https://cdn.jsdelivr.net/npm/nostr-mill@${MILL_VERSION}/dist/mill.umd.min.js"
+
           # Self-hosted webfonts. Token stacks in input.css reference
           # Space Grotesk, JetBrains Mono, and Comfortaa; @font-face
           # rules point at /static/fonts/*.woff2.

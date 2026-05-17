@@ -47,6 +47,15 @@ RUN apk add --no-cache curl tar libstdc++ libgcc \
           www/static/swagger/ \
     && rm -rf /tmp/swagger.tgz /tmp/package
 
+# Bundle nostr-mill (the <nostr-signer> web component). Pinned via
+# build-arg so a surprise major upstream can't change grain's login
+# UI without a deliberate bump. Loaded from layout.html with a plain
+# <script> tag — no module bundler needed.
+ARG MILL_VERSION=1.0.0
+RUN mkdir -p www/static/mill \
+    && curl -fsSL -o www/static/mill/mill.umd.min.js \
+        "https://cdn.jsdelivr.net/npm/nostr-mill@${MILL_VERSION}/dist/mill.umd.min.js"
+
 # Bundle self-hosted webfonts. The token stacks reference Space
 # Grotesk (default sans), JetBrains Mono (default mono + matrix
 # theme's sans), and Comfortaa (candy theme's display font). Without
