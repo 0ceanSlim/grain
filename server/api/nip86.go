@@ -172,6 +172,46 @@ func dispatchNIP86(req nip86Request, signer string) (any, string) {
 	case "changerelayicon":
 		return runChangeRelayMetadata(req.Params, signer, "icon")
 
+	// ─── grain_* phase 2: config section updates ─────────────
+	// Each takes the full section blob as params[0] and stages
+	// it (writes the YAML, suppresses fsnotify). Response carries
+	// restart_pending: true; the dashboard issues grain_reloadconfig
+	// when the operator clicks Apply.
+	case "grain_updateserver":
+		return runUpdateServer(req.Params, signer)
+	case "grain_updateratelimit":
+		return runUpdateRateLimit(req.Params, signer)
+	case "grain_updateeventpurge":
+		return runUpdateEventPurge(req.Params, signer)
+	case "grain_updatelogging":
+		return runUpdateLogging(req.Params, signer)
+	case "grain_updateauth":
+		return runUpdateAuth(req.Params, signer)
+	case "grain_updatebackuprelay":
+		return runUpdateBackupRelay(req.Params, signer)
+	case "grain_updateresourcelimits":
+		return runUpdateResourceLimits(req.Params, signer)
+	case "grain_updateeventtimeconstraints":
+		return runUpdateEventTimeConstraints(req.Params, signer)
+	case "grain_updatewhitelistconfig":
+		return runUpdateWhitelistConfig(req.Params, signer)
+	case "grain_updateblacklistconfig":
+		return runUpdateBlacklistConfig(req.Params, signer)
+
+	// ─── grain_* phase 2: operational ────────────────────────
+	case "grain_reloadconfig":
+		return runReloadConfig(signer)
+	case "grain_refreshcache":
+		return runRefreshCache(signer)
+
+	// ─── grain_* phase 2: reads ──────────────────────────────
+	case "grain_whitelistconfig":
+		return runGetWhitelistConfig()
+	case "grain_blacklistconfig":
+		return runGetBlacklistConfig()
+	case "grain_stats_overview":
+		return gatherStatsOverview(), ""
+
 	default:
 		return nil, "method not supported: " + req.Method
 	}
@@ -204,6 +244,22 @@ func supportedNIP86Methods() []string {
 		"changerelayname",
 		"changerelaydescription",
 		"changerelayicon",
+		// grain extensions
+		"grain_updateserver",
+		"grain_updateratelimit",
+		"grain_updateeventpurge",
+		"grain_updatelogging",
+		"grain_updateauth",
+		"grain_updatebackuprelay",
+		"grain_updateresourcelimits",
+		"grain_updateeventtimeconstraints",
+		"grain_updatewhitelistconfig",
+		"grain_updateblacklistconfig",
+		"grain_reloadconfig",
+		"grain_refreshcache",
+		"grain_whitelistconfig",
+		"grain_blacklistconfig",
+		"grain_stats_overview",
 	}
 }
 

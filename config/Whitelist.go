@@ -216,6 +216,27 @@ func saveWhitelistConfig(cfg cfgType.WhitelistConfig) error {
 	return nil
 }
 
+// UpdateWhitelistConfig stages the whole whitelist (enabled flags,
+// cache refresh intervals, pubkeys, npubs, kinds, domains). Used
+// by NIP-86's grain_updatewhitelistconfig — the dashboard fetches
+// the current config via GET /api/v1/relay/config/whitelist, lets
+// the operator edit it, then POSTs the full struct back through
+// here. Cache is refreshed in-place so reads see the new state
+// immediately; reload is only needed for changes that affect
+// background goroutines (refresh intervals).
+func UpdateWhitelistConfig(cfg cfgType.WhitelistConfig) error {
+	ConfigMu.Lock()
+	defer ConfigMu.Unlock()
+
+	current := GetWhitelistConfig()
+	if current == nil {
+		return fmt.Errorf("whitelist configuration is not loaded")
+	}
+	*current = cfg
+	log.Config().Info("Updated whitelist configuration (full)")
+	return saveWhitelistConfig(cfg)
+}
+
 // decodeNpubSafe wraps tools.DecodeNpub with an extra guard for the
 // rare case where it returns "" with no error (defensive — should
 // never happen, but the whitelist npub path runs on user-supplied

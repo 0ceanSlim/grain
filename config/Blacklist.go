@@ -333,6 +333,40 @@ func RemoveFromPermanentBlacklist(pubkey string) error {
 	return nil
 }
 
+// UpdateBlacklistConfig stages the standalone blacklist.yml — the
+// pubkey/npub/word/mutelist surface. Used by NIP-86's
+// grain_updateblacklistconfig.
+//
+// The IP fields (PermanentBlockedIPs, IPMaxTempBans, etc.) on the
+// supplied struct are intentionally ignored here: production IP
+// enforcement reads its state from config.yml's blacklist: section
+// (see [[project-whitelist-semantics]] for the equivalent gate-vs-
+// registry split). Honouring IP fields on this path would clobber
+// config.yml-owned state with whatever blacklist.yml happens to
+// hold (typically empty), wiping admin-curated IP blocks on every
+// dashboard save. Per-IP edits go through blockip / unblockip,
+// which target config.yml directly.
+func UpdateBlacklistConfig(cfg cfgType.BlacklistConfig) error {
+	ConfigMu.Lock()
+	defer ConfigMu.Unlock()
+
+	current := GetBlacklistConfig()
+	if current == nil {
+		return fmt.Errorf("blacklist configuration is not loaded")
+	}
+	// Preserve the IP-related fields the standalone file doesn't
+	// own. The on-disk blacklist.yml already has empties for these;
+	// this just keeps the in-memory copy honest if anyone reads
+	// GetBlacklistConfig().PermanentBlockedIPs.
+	cfg.PermanentBlockedIPs = current.PermanentBlockedIPs
+	cfg.IPMaxTempBans = current.IPMaxTempBans
+	cfg.IPTempBanDuration = current.IPTempBanDuration
+	cfg.IPRateViolationThreshold = current.IPRateViolationThreshold
+	*current = cfg
+	log.Config().Info("Updated blacklist configuration (full)")
+	return saveBlacklistConfig(cfg)
+}
+
 // saveBlacklistConfig marshals + writes blacklist.yml. Suppresses
 // the file watcher for the path so the admin write doesn't trigger
 // a server restart, and refreshes the in-memory pubkey cache so

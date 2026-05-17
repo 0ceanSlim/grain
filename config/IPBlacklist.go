@@ -155,14 +155,20 @@ func LoadIPBlocklist(cfg cfgType.BlacklistConfig) {
 		"total_permanent", count)
 }
 
-// AddAdminBlockedIP adds an IP or CIDR to blacklist.yml's
-// permanent_blocked_ips — the admin-curated source — distinct from
-// the auto-escalation path which writes to the ip_bans.json
-// sidecar. Used by NIP-86 `blockip`.
+// AddAdminBlockedIP adds an IP or CIDR to config.yml's
+// blacklist.permanent_blocked_ips — the admin-curated source —
+// distinct from the auto-escalation path which writes to the
+// ip_bans.json sidecar. Used by NIP-86 `blockip`.
+//
+// Important quirk: the BlacklistConfig type has a
+// PermanentBlockedIPs field but the *production* IP enforcement
+// reads its initial state from cfg.Blacklist (loaded from
+// config.yml), not from blacklist.yml. So admin writes funnel
+// through ServerConfig rather than the standalone blacklist file.
 //
 // The canonicalized form (via parseIPOrCIDR) is stored, so callers
 // can pass either "1.2.3.4" or "1.2.3.4/32" or " 1.2.3.4 " and get
-// consistent storage. After saving blacklist.yml the in-memory IP
+// consistent storage. After saving config.yml the in-memory IP
 // blocklist is rebuilt via LoadIPBlocklist so the next IsIPBlocked
 // call sees the new entry.
 //
@@ -183,36 +189,33 @@ func AddAdminBlockedIP(ipOrCIDR string) error {
 	ConfigMu.Lock()
 	defer ConfigMu.Unlock()
 
-	cfg := GetBlacklistConfig()
-	if cfg == nil {
-		return fmt.Errorf("blacklist configuration is not loaded")
+	sc := GetConfig()
+	if sc == nil {
+		return fmt.Errorf("server configuration is not loaded")
 	}
 
-	for _, existing := range cfg.PermanentBlockedIPs {
-		// Compare by parsed prefix so different spellings of the
-		// same range ("1.2.3.0/24" vs "1.2.3.0/24") dedupe.
+	for _, existing := range sc.Blacklist.PermanentBlockedIPs {
 		if existingPrefix, err := parseIPOrCIDR(existing); err == nil && existingPrefix == prefix {
 			log.Config().Info("IP already in admin blocklist, no-op", "ip", canonical)
 			return nil
 		}
 	}
 
-	cfg.PermanentBlockedIPs = append(cfg.PermanentBlockedIPs, canonical)
+	sc.Blacklist.PermanentBlockedIPs = append(sc.Blacklist.PermanentBlockedIPs, canonical)
 	log.Config().Info("Added admin-blocked IP", "ip", canonical)
 
-	if err := saveBlacklistConfig(*cfg); err != nil {
+	if err := saveServerConfig(*sc); err != nil {
 		return err
 	}
-	// Rebuild the in-memory permanentPrefixes list so the new entry
-	// is enforced immediately, without waiting for the watcher (which
-	// is suppressed for this write).
-	LoadIPBlocklist(*cfg)
+	// Rebuild the in-memory permanentPrefixes so the new entry
+	// is enforced immediately, without waiting for a reload.
+	LoadIPBlocklist(sc.Blacklist)
 	return nil
 }
 
 // RemoveAdminBlockedIP removes a matching prefix from
-// blacklist.yml's permanent_blocked_ips. Does NOT touch the sidecar
-// (auto-escalated bans) — those have their own lifecycle.
+// config.yml's blacklist.permanent_blocked_ips. Does NOT touch the
+// sidecar (auto-escalated bans) — those have their own lifecycle.
 // Idempotent.
 func RemoveAdminBlockedIP(ipOrCIDR string) error {
 	prefix, err := parseIPOrCIDR(ipOrCIDR)
@@ -223,17 +226,14 @@ func RemoveAdminBlockedIP(ipOrCIDR string) error {
 	ConfigMu.Lock()
 	defer ConfigMu.Unlock()
 
-	cfg := GetBlacklistConfig()
-	if cfg == nil {
-		return fmt.Errorf("blacklist configuration is not loaded")
+	sc := GetConfig()
+	if sc == nil {
+		return fmt.Errorf("server configuration is not loaded")
 	}
 
-	orig := cfg.PermanentBlockedIPs
+	orig := sc.Blacklist.PermanentBlockedIPs
 	kept := make([]string, 0, len(orig))
 	for _, existing := range orig {
-		// Keep entries that don't match OR that fail to parse —
-		// preserving malformed user data is safer than dropping it
-		// on a remove.
 		if existingPrefix, err := parseIPOrCIDR(existing); err != nil || existingPrefix != prefix {
 			kept = append(kept, existing)
 		}
@@ -244,13 +244,13 @@ func RemoveAdminBlockedIP(ipOrCIDR string) error {
 		return nil
 	}
 
-	cfg.PermanentBlockedIPs = kept
+	sc.Blacklist.PermanentBlockedIPs = kept
 	log.Config().Info("Removed admin-blocked IP", "ip", ipOrCIDR)
 
-	if err := saveBlacklistConfig(*cfg); err != nil {
+	if err := saveServerConfig(*sc); err != nil {
 		return err
 	}
-	LoadIPBlocklist(*cfg)
+	LoadIPBlocklist(sc.Blacklist)
 	return nil
 }
 

@@ -50,6 +50,33 @@ func Run() error {
 	signalChan := make(chan os.Signal, 1)
 
 	startConfigWatchers(restartChan)
+	// Wire the NIP-86 grain_reloadconfig method's restart trigger
+	// into the same channel the file watcher uses. Non-blocking
+	// send: if a restart is already queued we don't need to enqueue
+	// another one.
+	config.SetTriggerRestart(func() {
+		select {
+		case restartChan <- struct{}{}:
+		default:
+		}
+	})
+
+	// Provide server-side counters to NIP-86 grain_stats_overview.
+	// Hook pattern (instead of an import) — server already imports
+	// server/api for the dispatcher, so the reverse direction
+	// would cycle. Atomic loads keep the call cheap.
+	startTime := time.Now()
+	relay.SetServerStatsHook(func() relay.ServerStats {
+		return relay.ServerStats{
+			ActiveConnections: currentConnections.Load(),
+			TotalMessagesSent: totalMessagesSent,
+			UptimeSeconds:     int64(time.Since(startTime).Seconds()),
+			Version:           Version,
+			BuildTime:         BuildTime,
+			GitCommit:         GitCommit,
+		}
+	})
+
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	log.Startup().Info("GRAIN relay server starting")
