@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -243,7 +242,20 @@ func isPubKeyPermanentlyBlacklisted(pubKey string, blacklistConfig *cfgType.Blac
 	return false
 }
 
+// AddToPermanentBlacklist appends pubkey to blacklist.yml's
+// permanent_blacklist_pubkeys. Called from both the auto-escalation
+// path (temp-ban → permanent after threshold) and the NIP-86
+// banpubkey method. Idempotent: returns an error sentinel rather
+// than silently re-adding.
+//
+// Takes ConfigMu for the duration of the read-modify-write to keep
+// concurrent admin calls from clobbering each other. The save
+// helper does the watcher-suppression + atomic file write +
+// in-memory state reload; callers don't need to remember those.
 func AddToPermanentBlacklist(pubkey string) error {
+	ConfigMu.Lock()
+	defer ConfigMu.Unlock()
+
 	blacklistConfig := GetBlacklistConfig()
 	if blacklistConfig == nil {
 		return fmt.Errorf("blacklist configuration is not loaded")
@@ -255,30 +267,105 @@ func AddToPermanentBlacklist(pubkey string) error {
 	}
 
 	blacklistConfig.PermanentBlacklistPubkeys = append(blacklistConfig.PermanentBlacklistPubkeys, pubkey)
-
 	log.Config().Info("Added pubkey to permanent blacklist", "pubkey", pubkey)
 
-	err := saveBlacklistConfig(*blacklistConfig)
-	if err != nil {
+	if err := saveBlacklistConfig(*blacklistConfig); err != nil {
 		log.Config().Error("Failed to save blacklist configuration", "error", err)
 		return err
 	}
-
-	log.Config().Debug("Saved blacklist configuration to file")
 	return nil
 }
 
+// RemoveFromPermanentBlacklist removes pubkey from blacklist.yml's
+// permanent_blacklist_pubkeys AND permanent_blacklist_npubs (the
+// npub list is matched by decoding each entry and comparing the
+// resulting hex). Idempotent: removing a pubkey that isn't there
+// returns nil with an info log.
+func RemoveFromPermanentBlacklist(pubkey string) error {
+	ConfigMu.Lock()
+	defer ConfigMu.Unlock()
+
+	blacklistConfig := GetBlacklistConfig()
+	if blacklistConfig == nil {
+		return fmt.Errorf("blacklist configuration is not loaded")
+	}
+
+	lower := strings.ToLower(pubkey)
+	originalPubkeys := blacklistConfig.PermanentBlacklistPubkeys
+	originalNpubs := blacklistConfig.PermanentBlacklistNpubs
+
+	filteredPubkeys := make([]string, 0, len(originalPubkeys))
+	for _, p := range originalPubkeys {
+		if strings.ToLower(p) != lower {
+			filteredPubkeys = append(filteredPubkeys, p)
+		}
+	}
+
+	// Walk npubs and drop any that decode to the same hex pubkey.
+	// Malformed npubs in the existing list are passed through
+	// untouched — losing data on a remove call would be worse than
+	// leaving them in.
+	filteredNpubs := make([]string, 0, len(originalNpubs))
+	for _, n := range originalNpubs {
+		decoded, err := tools.DecodeNpub(n)
+		if err != nil {
+			filteredNpubs = append(filteredNpubs, n)
+			continue
+		}
+		if strings.ToLower(decoded) != lower {
+			filteredNpubs = append(filteredNpubs, n)
+		}
+	}
+
+	if len(filteredPubkeys) == len(originalPubkeys) && len(filteredNpubs) == len(originalNpubs) {
+		log.Config().Info("Pubkey not in permanent blacklist, no-op", "pubkey", pubkey)
+		return nil
+	}
+
+	blacklistConfig.PermanentBlacklistPubkeys = filteredPubkeys
+	blacklistConfig.PermanentBlacklistNpubs = filteredNpubs
+	log.Config().Info("Removed pubkey from permanent blacklist", "pubkey", pubkey)
+
+	if err := saveBlacklistConfig(*blacklistConfig); err != nil {
+		log.Config().Error("Failed to save blacklist configuration", "error", err)
+		return err
+	}
+	return nil
+}
+
+// saveBlacklistConfig marshals + writes blacklist.yml. Suppresses
+// the file watcher for the path so the admin write doesn't trigger
+// a server restart, and refreshes the in-memory pubkey cache so
+// subsequent reads see the new state immediately.
+//
+// Callers MUST hold ConfigMu — every admin path that mutates the
+// blacklist already does. This is package-private so accidental
+// outside callers don't sneak past the lock.
 func saveBlacklistConfig(blacklistConfig cfgType.BlacklistConfig) error {
 	data, err := yaml.Marshal(blacklistConfig)
 	if err != nil {
 		return fmt.Errorf("failed to marshal blacklist config: %v", err)
 	}
 
-	err = os.WriteFile("blacklist.yml", data, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write config to file: %v", err)
+	// Resolve the same absolute path the watcher monitors so
+	// suppression keys match. WatchConfigFile is given
+	// ConfigPath("blacklist.yml") in startup.go; mirror that here.
+	path := ConfigPath("blacklist.yml")
+	SuppressWatcherFor(path)
+
+	if err := AtomicWriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("failed to write blacklist.yml: %v", err)
 	}
 
+	// Refresh the pubkey cache synchronously so the next read
+	// reflects the write. The auto-escalation path used to rely on
+	// the watcher → restart loop to reload state; with suppression
+	// in place we have to do it ourselves.
+	if cache := GetPubkeyCache(); cache != nil {
+		if err := cache.RefreshBlacklist(); err != nil {
+			log.Config().Warn("Failed to refresh blacklist cache after write", "error", err)
+		}
+	}
 	return nil
 }
 

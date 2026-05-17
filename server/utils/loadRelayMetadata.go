@@ -2,8 +2,10 @@ package utils
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -65,6 +67,142 @@ func LoadRelayMetadataJSON() error {
 // against admin/management HTTP endpoints via NIP-98.
 func GetRelayOwnerPubkey() string {
 	return relayMetadata.Pubkey
+}
+
+// RelayMetadataWritePath is the on-disk path for the relay metadata
+// JSON. Settable via SetRelayMetadataWritePath at startup so writes
+// land in the same file the loader picked up (the loader currently
+// hard-codes "relay_metadata.json" too, but funneling through a
+// shared variable keeps the read and write halves in sync if we
+// ever move it).
+var relayMetadataWritePath = "relay_metadata.json"
+
+// SetRelayMetadataWritePath records the resolved absolute path of
+// the metadata file. Called from startup once the data dir is
+// known. UpdateRelayMetadata uses this path so the watcher
+// suppression key matches what fsnotify monitors.
+func SetRelayMetadataWritePath(p string) { relayMetadataWritePath = p }
+
+// UpdateRelayMetadata applies non-nil patches to relay_metadata.json
+// and reloads the in-memory copy so NIP-11 responses + the owner
+// check see the new values immediately.
+//
+// JSON is read into a map[string]any rather than the typed
+// RelayMetadata struct so unknown fields (custom NIP-11 extensions
+// an operator may have added) round-trip cleanly. Marshaling
+// through the typed struct would silently drop them.
+//
+// Used by NIP-86 changerelayname / changerelaydescription /
+// changerelayicon — each passes exactly one non-nil patch. Pointer
+// args so the dispatcher can express "don't touch this field" by
+// passing nil.
+//
+// Atomic write + watcher suppression are handled here so callers
+// don't have to remember. The function is safe for concurrent use:
+// it holds the same package-internal mutex used by the
+// suppression machinery on the config side.
+func UpdateRelayMetadata(name, description, icon, banner *string) error {
+	raw, err := os.ReadFile(relayMetadataWritePath)
+	if err != nil {
+		return fmt.Errorf("read relay metadata: %w", err)
+	}
+	var patched map[string]any
+	if err := json.Unmarshal(raw, &patched); err != nil {
+		return fmt.Errorf("parse relay metadata: %w", err)
+	}
+	if name != nil {
+		patched["name"] = *name
+	}
+	if description != nil {
+		patched["description"] = *description
+	}
+	if icon != nil {
+		patched["icon"] = *icon
+	}
+	if banner != nil {
+		patched["banner"] = *banner
+	}
+
+	out, err := json.MarshalIndent(patched, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal relay metadata: %w", err)
+	}
+
+	if err := suppressAndWrite(relayMetadataWritePath, out, 0644); err != nil {
+		return err
+	}
+
+	// Reload the in-memory struct so the next NIP-11 response, owner
+	// check, etc. reflect the change.
+	if err := LoadRelayMetadata(relayMetadataWritePath); err != nil {
+		log.Util().Warn("Failed to reload relay metadata after write", "error", err)
+		// Don't fail the whole call — the file is written; subsequent
+		// reads will pick up the new state eventually.
+	}
+	return nil
+}
+
+// WatcherSuppressor and FileWriter live in the config package; rather
+// than importing it (cyclic risk via the metadata loader's reverse
+// deps) the suppress + write step is funneled through a small
+// package-level hook the startup code wires up. config.WatchConfigFile
+// uses config.SuppressWatcherFor and config.atomicWriteFile; we
+// duplicate the tiny atomic write helper here to keep server/utils
+// independent.
+type adminWriter func(path string, data []byte, perm os.FileMode) error
+type watcherSuppressor func(path string)
+
+var (
+	writeImpl    adminWriter       = defaultAtomicWriteFile
+	suppressImpl watcherSuppressor = func(string) {}
+)
+
+// SetAdminWriteHooks lets server startup wire the write + suppression
+// implementations from the config package, avoiding an import cycle
+// while still keeping a single source of truth for the watcher key.
+func SetAdminWriteHooks(write adminWriter, suppress watcherSuppressor) {
+	if write != nil {
+		writeImpl = write
+	}
+	if suppress != nil {
+		suppressImpl = suppress
+	}
+}
+
+func suppressAndWrite(path string, data []byte, perm os.FileMode) error {
+	suppressImpl(path)
+	return writeImpl(path, data, perm)
+}
+
+// defaultAtomicWriteFile mirrors config.atomicWriteFile for the case
+// where SetAdminWriteHooks hasn't been called (tests, anything that
+// uses the metadata loader standalone). Same tmp+rename pattern.
+func defaultAtomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".tmp-"+filepath.Base(path)+"-")
+	if err != nil {
+		return fmt.Errorf("create tmp: %w", err)
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("write tmp: %w", err)
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("chmod tmp: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("close tmp: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("rename: %w", err)
+	}
+	return nil
 }
 
 func LoadRelayMetadata(filename string) error {

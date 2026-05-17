@@ -155,6 +155,105 @@ func LoadIPBlocklist(cfg cfgType.BlacklistConfig) {
 		"total_permanent", count)
 }
 
+// AddAdminBlockedIP adds an IP or CIDR to blacklist.yml's
+// permanent_blocked_ips — the admin-curated source — distinct from
+// the auto-escalation path which writes to the ip_bans.json
+// sidecar. Used by NIP-86 `blockip`.
+//
+// The canonicalized form (via parseIPOrCIDR) is stored, so callers
+// can pass either "1.2.3.4" or "1.2.3.4/32" or " 1.2.3.4 " and get
+// consistent storage. After saving blacklist.yml the in-memory IP
+// blocklist is rebuilt via LoadIPBlocklist so the next IsIPBlocked
+// call sees the new entry.
+//
+// Idempotent: returns nil with an info log if the prefix is
+// already in the admin list.
+func AddAdminBlockedIP(ipOrCIDR string) error {
+	prefix, err := parseIPOrCIDR(ipOrCIDR)
+	if err != nil {
+		return fmt.Errorf("invalid IP/CIDR %q: %w", ipOrCIDR, err)
+	}
+	canonical := prefix.String()
+	// Render /32 and /128 as the bare host for consistency with
+	// GetBlockedIPs and with how operators type bans.
+	if (prefix.Addr().Is4() && prefix.Bits() == 32) || (prefix.Addr().Is6() && prefix.Bits() == 128) {
+		canonical = prefix.Addr().String()
+	}
+
+	ConfigMu.Lock()
+	defer ConfigMu.Unlock()
+
+	cfg := GetBlacklistConfig()
+	if cfg == nil {
+		return fmt.Errorf("blacklist configuration is not loaded")
+	}
+
+	for _, existing := range cfg.PermanentBlockedIPs {
+		// Compare by parsed prefix so different spellings of the
+		// same range ("1.2.3.0/24" vs "1.2.3.0/24") dedupe.
+		if existingPrefix, err := parseIPOrCIDR(existing); err == nil && existingPrefix == prefix {
+			log.Config().Info("IP already in admin blocklist, no-op", "ip", canonical)
+			return nil
+		}
+	}
+
+	cfg.PermanentBlockedIPs = append(cfg.PermanentBlockedIPs, canonical)
+	log.Config().Info("Added admin-blocked IP", "ip", canonical)
+
+	if err := saveBlacklistConfig(*cfg); err != nil {
+		return err
+	}
+	// Rebuild the in-memory permanentPrefixes list so the new entry
+	// is enforced immediately, without waiting for the watcher (which
+	// is suppressed for this write).
+	LoadIPBlocklist(*cfg)
+	return nil
+}
+
+// RemoveAdminBlockedIP removes a matching prefix from
+// blacklist.yml's permanent_blocked_ips. Does NOT touch the sidecar
+// (auto-escalated bans) — those have their own lifecycle.
+// Idempotent.
+func RemoveAdminBlockedIP(ipOrCIDR string) error {
+	prefix, err := parseIPOrCIDR(ipOrCIDR)
+	if err != nil {
+		return fmt.Errorf("invalid IP/CIDR %q: %w", ipOrCIDR, err)
+	}
+
+	ConfigMu.Lock()
+	defer ConfigMu.Unlock()
+
+	cfg := GetBlacklistConfig()
+	if cfg == nil {
+		return fmt.Errorf("blacklist configuration is not loaded")
+	}
+
+	orig := cfg.PermanentBlockedIPs
+	kept := make([]string, 0, len(orig))
+	for _, existing := range orig {
+		// Keep entries that don't match OR that fail to parse —
+		// preserving malformed user data is safer than dropping it
+		// on a remove.
+		if existingPrefix, err := parseIPOrCIDR(existing); err != nil || existingPrefix != prefix {
+			kept = append(kept, existing)
+		}
+	}
+
+	if len(kept) == len(orig) {
+		log.Config().Info("IP not in admin blocklist, no-op", "ip", ipOrCIDR)
+		return nil
+	}
+
+	cfg.PermanentBlockedIPs = kept
+	log.Config().Info("Removed admin-blocked IP", "ip", ipOrCIDR)
+
+	if err := saveBlacklistConfig(*cfg); err != nil {
+		return err
+	}
+	LoadIPBlocklist(*cfg)
+	return nil
+}
+
 // GetBlockedIPs returns the merged list of permanent CIDRs (admin-curated
 // from blacklist.yml plus auto-escalated entries from the sidecar) as
 // canonical strings. Single-host bans render as bare IPs ("1.2.3.4"

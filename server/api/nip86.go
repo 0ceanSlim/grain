@@ -109,7 +109,7 @@ func HandleNIP86(w http.ResponseWriter, r *http.Request) {
 		"signer", signer,
 		"method", req.Method)
 
-	result, err := dispatchNIP86(req)
+	result, err := dispatchNIP86(req, signer)
 	if err != "" {
 		writeNIP86Error(w, err)
 		return
@@ -117,14 +117,20 @@ func HandleNIP86(w http.ResponseWriter, r *http.Request) {
 	writeNIP86Result(w, result)
 }
 
-// dispatchNIP86 routes a parsed request to the right read-method
-// handler. Returns (result, errorString) — the empty error string
-// signals success, matching the envelope semantics. Unknown methods
-// return a structured error rather than an HTTP code so clients can
+// dispatchNIP86 routes a parsed request to the right handler.
+// Returns (result, errorString) — the empty error string signals
+// success, matching the envelope semantics. Unknown methods return
+// a structured error rather than an HTTP code so clients can
 // feature-detect via `supportedmethods` and a subsequent unknown-
 // method response without parsing two different error shapes.
-func dispatchNIP86(req nip86Request) (any, string) {
+//
+// `signer` is the relay-owner pubkey RequireOwner returned for this
+// request; write methods log it for audit so admin actions can be
+// traced even though grain doesn't have a structured audit log yet.
+func dispatchNIP86(req nip86Request, signer string) (any, string) {
 	switch req.Method {
+
+	// ─── reads ─────────────────────────────────────────────────
 	case "supportedmethods":
 		return supportedNIP86Methods(), ""
 	case "listallowedpubkeys":
@@ -135,6 +141,37 @@ func dispatchNIP86(req nip86Request) (any, string) {
 		return listAllowedKindsNIP86(), ""
 	case "listblockedips":
 		return listBlockedIPsNIP86(), ""
+
+	// ─── pubkey writes ────────────────────────────────────────
+	case "banpubkey":
+		return runBanPubkey(req.Params, signer)
+	case "unbanpubkey":
+		return runUnbanPubkey(req.Params, signer)
+	case "allowpubkey":
+		return runAllowPubkey(req.Params, signer)
+	case "unallowpubkey":
+		return runUnallowPubkey(req.Params, signer)
+
+	// ─── kind writes ──────────────────────────────────────────
+	case "allowkind":
+		return runAllowKind(req.Params, signer)
+	case "disallowkind":
+		return runDisallowKind(req.Params, signer)
+
+	// ─── IP writes ────────────────────────────────────────────
+	case "blockip":
+		return runBlockIP(req.Params, signer)
+	case "unblockip":
+		return runUnblockIP(req.Params, signer)
+
+	// ─── relay-metadata writes ────────────────────────────────
+	case "changerelayname":
+		return runChangeRelayMetadata(req.Params, signer, "name")
+	case "changerelaydescription":
+		return runChangeRelayMetadata(req.Params, signer, "description")
+	case "changerelayicon":
+		return runChangeRelayMetadata(req.Params, signer, "icon")
+
 	default:
 		return nil, "method not supported: " + req.Method
 	}
@@ -143,14 +180,30 @@ func dispatchNIP86(req nip86Request) (any, string) {
 // supportedNIP86Methods returns the methods this build actually
 // implements. Spec calls this method out specifically so clients can
 // feature-detect; we treat it as the source of truth and update it in
-// lockstep with new wiring.
+// lockstep with new wiring. Event-moderation methods
+// (listeventsneedingmoderation / allowevent / banevent /
+// listbannedevents) are deliberately excluded — they need a
+// moderation queue grain doesn't have yet.
 func supportedNIP86Methods() []string {
 	return []string{
+		// reads
 		"supportedmethods",
 		"listallowedpubkeys",
 		"listbannedpubkeys",
 		"listallowedkinds",
 		"listblockedips",
+		// writes
+		"banpubkey",
+		"unbanpubkey",
+		"allowpubkey",
+		"unallowpubkey",
+		"allowkind",
+		"disallowkind",
+		"blockip",
+		"unblockip",
+		"changerelayname",
+		"changerelaydescription",
+		"changerelayicon",
 	}
 }
 

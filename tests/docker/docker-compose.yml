@@ -179,11 +179,16 @@ services:
       - "8190:8190"
     environment:
       - GRAIN_ENV=test
+    # Read-write mounts: NIP-86 write methods need to mutate these
+    # files. Bind-mounted single files still block `rename` (EBUSY)
+    # so AtomicWriteFile falls back to in-place write in this env;
+    # the fixture state resets on container restart so a CI rerun
+    # is always clean.
     volumes:
-      - ../docker/configs/nip86.yml:/app/testdata/config.yml:ro
-      - ../docker/configs/nip86-whitelist.yml:/app/testdata/whitelist.yml:ro
-      - ../docker/configs/nip86-blacklist.yml:/app/testdata/blacklist.yml:ro
-      - ../docker/configs/nip86-relay_metadata.json:/app/testdata/relay_metadata.json:ro
+      - ../docker/configs/nip86.yml:/app/testdata/config.yml
+      - ../docker/configs/nip86-whitelist.yml:/app/testdata/whitelist.yml
+      - ../docker/configs/nip86-blacklist.yml:/app/testdata/blacklist.yml
+      - ../docker/configs/nip86-relay_metadata.json:/app/testdata/relay_metadata.json
     restart: on-failure:3
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8190 > /dev/null 2>&1 || exit 1"]

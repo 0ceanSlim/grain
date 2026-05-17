@@ -215,8 +215,15 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 	// Clear any temporary bans from previous instance
 	config.ClearTemporaryBans()
 
-	// Load relay metadata
-	if err := utils.LoadRelayMetadata(config.ConfigPath("relay_metadata.json")); err != nil {
+	// Load relay metadata and wire the admin write path: NIP-86's
+	// changerelay* methods need to write back through the same
+	// atomic-write + watcher-suppression pipeline the config files
+	// use, but server/utils can't import config (would cycle), so
+	// startup installs hooks into the loader.
+	metadataPath := config.ConfigPath("relay_metadata.json")
+	utils.SetRelayMetadataWritePath(metadataPath)
+	utils.SetAdminWriteHooks(config.AtomicWriteFile, config.SuppressWatcherFor)
+	if err := utils.LoadRelayMetadata(metadataPath); err != nil {
 		log.Startup().Error("Failed to load relay metadata", "error", err, "file", "relay_metadata.json")
 	}
 
