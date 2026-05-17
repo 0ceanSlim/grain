@@ -1,10 +1,11 @@
 {{define "header"}}
 <header
-  class="flex items-center justify-between mx-4 mt-8 mb-8"
+  class="relative flex items-center gap-3 px-4 mt-6 mb-6"
   hx-boost="true"
 >
+  <!-- Logo. Click to home. -->
   <h1
-    class="text-3xl font-bold cursor-pointer"
+    class="text-2xl font-bold cursor-pointer shrink-0"
     hx-get="/views/home.html"
     hx-target="#main-content"
     hx-push-url="/"
@@ -12,23 +13,25 @@
     🌾 grain
   </h1>
 
-  <!-- Enhanced Search Bar Section -->
-  <div id="search-container" class="relative flex-1 max-w-md mx-8">
+  <!-- Search bar. Visible inline on md+; on mobile it's hidden by
+       default and toggled into a full-width overlay below the
+       header by #search-toggle. -->
+  <div
+    id="search-container"
+    class="absolute left-0 right-0 z-40 hidden px-4 top-full md:relative md:top-auto md:left-auto md:right-auto md:px-0 md:block md:flex-1 md:max-w-xl md:mx-auto"
+  >
     <div class="relative w-full">
-      <!-- Main Search Input -->
       <input
         type="text"
         id="search-input"
-        placeholder="Search profiles and events - click ? for help"
-        class="w-full px-4 py-2 pr-20 text-sm text-white transition-all duration-200 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        placeholder="Search profiles and events — click ? for help"
+        class="w-full px-4 py-2 pr-20 text-sm border rounded-lg bg-surface-elevated text-text border-border"
         autocomplete="off"
         spellcheck="false"
       />
-
-      <!-- Help Button -->
       <button
         id="search-help-button"
-        class="absolute top-0 h-full px-2 text-gray-400 transition-colors duration-200 right-10 hover:text-white focus:outline-none"
+        class="absolute top-0 h-full px-2 right-10 text-text-secondary hover:text-text"
         type="button"
         title="Search help"
       >
@@ -46,11 +49,9 @@
           ></path>
         </svg>
       </button>
-
-      <!-- Search Button -->
       <button
         id="search-button"
-        class="absolute top-0 right-0 h-full px-3 text-gray-400 transition-colors duration-200 hover:text-white focus:outline-none"
+        class="absolute top-0 right-0 h-full px-3 text-text-secondary hover:text-text"
         type="button"
       >
         <svg
@@ -72,21 +73,18 @@
     <!-- Search Results Dropdown -->
     <div
       id="search-results"
-      class="absolute left-0 right-0 z-50 hidden mt-1 overflow-y-auto bg-gray-800 border border-gray-600 rounded-lg shadow-lg top-full max-h-64"
-    >
-      <!-- Results will be dynamically populated here -->
-    </div>
+      class="absolute left-0 right-0 z-50 hidden mt-1 overflow-y-auto border rounded-lg shadow bg-surface border-border top-full max-h-64"
+    ></div>
 
     <!-- Search Help Panel -->
     <div
       id="search-help-panel"
-      class="absolute left-0 right-0 z-50 hidden p-4 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-lg top-full"
+      class="absolute left-0 right-0 z-50 hidden p-4 mt-1 border rounded-lg shadow bg-surface border-border top-full"
     >
-      <div class="space-y-3">
-        <!-- Header -->
+      <div class="space-y-3 text-left">
         <div class="flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-white">Search Help</h3>
-          <button id="close-help" class="text-gray-400 hover:text-white">
+          <h3 class="text-sm font-semibold">Search Help</h3>
+          <button id="close-help" class="text-text-secondary hover:text-text">
             <svg
               class="w-4 h-4"
               fill="none"
@@ -103,68 +101,61 @@
           </button>
         </div>
 
-        <!-- Supported Formats -->
         <div>
-          <h4 class="mb-2 text-xs font-medium text-gray-300">
+          <h4 class="mb-2 text-xs font-medium text-text-secondary">
             Supported Formats:
           </h4>
           <div class="space-y-1 text-xs">
             <div class="flex items-center space-x-2">
-              <span class="text-blue-400">👤</span>
-              <span class="font-mono text-white">npub1...</span>
-              <span class="text-gray-400">- Profile (public key)</span>
+              <span class="text-info">👤</span>
+              <span class="font-mono">npub1...</span>
+              <span class="text-text-secondary">- Profile (public key)</span>
             </div>
             <div class="flex items-center space-x-2">
-              <span class="text-green-400">📝</span>
-              <span class="font-mono text-white">note1...</span>
-              <span class="text-gray-400">- Event (note ID)</span>
+              <span class="text-success">📝</span>
+              <span class="font-mono">note1...</span>
+              <span class="text-text-secondary">- Event (note ID)</span>
             </div>
             <div class="flex items-center space-x-2">
-              <span class="text-purple-400">👤+</span>
-              <span class="font-mono text-white">nprofile1...</span>
-              <span class="text-gray-400">- Profile with relay hints</span>
+              <span class="text-accent">👤+</span>
+              <span class="font-mono">nprofile1...</span>
+              <span class="text-text-secondary">- Profile with relay hints</span>
             </div>
             <div class="flex items-center space-x-2">
-              <span class="text-orange-400">📝+</span>
-              <span class="font-mono text-white">nevent1...</span>
-              <span class="text-gray-400">- Event with relay hints</span>
+              <span class="text-warning">📝+</span>
+              <span class="font-mono">nevent1...</span>
+              <span class="text-text-secondary">- Event with relay hints</span>
             </div>
             <div class="flex items-center space-x-2">
-              <span class="text-cyan-400">🔗</span>
-              <span class="font-mono text-white">naddr1...</span>
-              <span class="text-gray-400">- Replaceable event</span>
+              <span class="text-accent-2">🔗</span>
+              <span class="font-mono">naddr1...</span>
+              <span class="text-text-secondary">- Replaceable event</span>
             </div>
             <div class="flex items-center space-x-2">
-              <span class="text-yellow-400">🔑</span>
-              <span class="font-mono text-white">64 hex chars</span>
-              <span class="text-gray-400">- Raw event ID</span>
+              <span class="text-warning">🔑</span>
+              <span class="font-mono">64 hex chars</span>
+              <span class="text-text-secondary">- Raw event ID</span>
             </div>
           </div>
         </div>
 
-        <!-- Quick Examples -->
         <div>
-          <h4 class="mb-2 text-xs font-medium text-gray-300">Examples:</h4>
-          <div class="space-y-1 text-xs">
-            <div class="text-gray-400">
-              <span class="text-blue-400">Profile:</span>
-              <code class="px-1 bg-gray-900 rounded"
-                >npub180cvv07tjdrrgpa0j7j7...</code
-              >
+          <h4 class="mb-2 text-xs font-medium text-text-secondary">Examples:</h4>
+          <div class="space-y-1 text-xs text-text-secondary">
+            <div>
+              <span class="text-info">Profile:</span>
+              <code>npub180cvv07tjdrrgpa0j7j7...</code>
             </div>
-            <div class="text-gray-400">
-              <span class="text-green-400">Event:</span>
-              <code class="px-1 bg-gray-900 rounded"
-                >note1qqsqtgp6yl8stlfj0znzw4d...</code
-              >
+            <div>
+              <span class="text-success">Event:</span>
+              <code>note1qqsqtgp6yl8stlfj0znzw4d...</code>
             </div>
           </div>
         </div>
 
-        <!-- Tips -->
-        <div class="pt-2 border-t border-gray-700">
-          <p class="text-xs text-gray-400">
-            💡 <span class="text-gray-300">Tip:</span> Paste any nostr
+        <div class="pt-2 border-t border-border">
+          <p class="text-xs text-text-secondary">
+            💡 <span class="text-text">Tip:</span> Paste any nostr
             identifier to search for profiles or events
           </p>
         </div>
@@ -172,36 +163,87 @@
     </div>
   </div>
 
-  <nav class="flex items-center space-x-4">
-    <!-- Theme swapper. The option list is populated by theme.js so
-         adding a theme is one line in www/static/js/theme.js. -->
-    <select
-      id="grain-theme-select"
-      title="Switch theme"
-      class="px-2 py-1 text-sm rounded border bg-surface text-text border-border focus:outline-none focus:border-border-focus"
-    ></select>
+  <!-- Right-side controls. ml-auto pins them to the right
+       regardless of whether the search bar takes its row. -->
+  <nav class="flex items-center gap-2 ml-auto shrink-0">
+    <!-- Mobile-only search toggle. Shows the search container as
+         an overlay below the header. -->
+    <button
+      id="search-toggle"
+      type="button"
+      title="Search"
+      class="p-2 rounded text-text-secondary hover:text-text hover:bg-surface-hover md:hidden"
+      onclick="toggleMobileSearch()"
+    >
+      <svg
+        class="w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        ></path>
+      </svg>
+    </button>
+
+    <!-- Login / profile button. Always present; content updated by
+         navigation.js. -->
     <div id="profile-nav">{{template "login-button"}}</div>
+
+    <!-- Theme swapper. Icon-only trigger + dropdown panel populated
+         by theme.js. Sits to the right of the login button per the
+         pubkey-quest convention. Compact on every viewport. -->
+    <div class="relative">
+      <button
+        id="grain-theme-button"
+        type="button"
+        title="Switch theme"
+        class="p-2 text-base rounded text-text-secondary hover:text-text hover:bg-surface-hover"
+      >🎨</button>
+      <div
+        id="grain-theme-panel"
+        class="absolute right-0 z-50 hidden mt-2 overflow-hidden border rounded-lg shadow w-44 bg-surface border-border top-full"
+      ></div>
+    </div>
   </nav>
 </header>
 
+<!-- Profile dropdown lives outside the header so flex-wrap can't
+     clip it. navigation.js positions it under the login button when
+     toggled. -->
+{{template "user-dropdown"}}
+
 <script>
-  // Wire the swapper once the header is in the DOM. GrainTheme is
-  // installed synchronously by theme.js earlier in <head>, so it's
-  // safe to read here without waiting.
+  // Wire the theme swapper once the header is in the DOM.
   (function () {
-    var el = document.getElementById("grain-theme-select");
-    if (el && window.GrainTheme) window.GrainTheme.initSwapper(el);
+    var btn = document.getElementById("grain-theme-button");
+    var panel = document.getElementById("grain-theme-panel");
+    if (btn && panel && window.GrainTheme) {
+      window.GrainTheme.initSwapper(btn, panel);
+    }
   })();
+
+  // Mobile search toggle. Drops the search overlay in/out below
+  // the header. On desktop the search bar is always visible so the
+  // toggle is hidden by md:hidden above.
+  window.toggleMobileSearch = function () {
+    var c = document.getElementById("search-container");
+    if (!c) return;
+    c.classList.toggle("hidden");
+    if (!c.classList.contains("hidden")) {
+      var input = document.getElementById("search-input");
+      if (input) setTimeout(function () { input.focus(); }, 50);
+    }
+  };
 </script>
 
-<!-- Hidden templates -->
-<div class="hidden">
-  {{template "login-button"}} {{template "user-dropdown"}}
-</div>
-
-<!-- Login modal is now provided by mill (<nostr-signer>); see
-     www/static/js/mill-bridge.js. Mill auto-injects its element
-     into <body> the first time MILL.open() runs. -->
+<!-- Hidden template for navigation.js to swap the logged-out
+     login button back in if the user logs out. -->
+<div class="hidden">{{template "login-button"}}</div>
 
 <!-- Hyperscript handlers for navigation events -->
 <div

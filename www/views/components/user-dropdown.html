@@ -1,69 +1,74 @@
 {{define "user-dropdown"}}
-<div id="user-dropdown-template" class="relative">
-  <button
-    id="user-menu-button"
-    class="flex items-center px-3 py-2 space-x-2 text-gray-300 transition-colors rounded hover:text-white"
-    onclick="toggleUserDropdown()"
-    type="button"
-  >
-    <span>🗃️</span>
-    <span class="hidden sm:inline">Menu</span>
-    <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
-      <path
-        fill-rule="evenodd"
-        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-        clip-rule="evenodd"
-      ></path>
-    </svg>
-  </button>
-
-  <!-- Dropdown menu -->
+<!-- Profile dropdown panel. Stays in the DOM (hidden) so HTMX can
+     bind hx-get attributes once at parse time; navigation.js
+     positions it under the login button when toggled open and
+     updates the profile header (pfp + name + npub) from /api/v1/cache.
+     The panel sits outside the header to avoid clipping by the
+     header's flex-wrap layout. -->
+<div
+  id="user-dropdown-menu"
+  class="fixed z-50 hidden w-64 mt-2 overflow-hidden border rounded-lg shadow bg-surface border-border"
+>
+  <!-- Profile section. JS fills in pfp + display name + npub from
+       /api/v1/cache after the dropdown opens. -->
   <div
-    id="user-dropdown-menu"
-    class="absolute right-0 z-50 hidden w-48 mt-2 bg-gray-700 border border-gray-600 rounded-lg shadow-lg"
+    id="user-dropdown-profile"
+    class="flex items-center gap-3 px-4 py-3 border-b bg-surface-elevated border-border"
   >
-    <div class="py-1">
-      <button
-        class="flex w-full px-4 py-2 text-sm text-left text-gray-300 transition-colors hover:bg-gray-600 hover:text-white"
-        hx-get="/views/home.html"
-        hx-target="#main-content"
-        hx-push-url="/"
-        onclick="closeUserDropdown()"
-      >
-        <span class="mr-2">🏠</span>
-        Home
-      </button>
-
-      <button
-        id="profile-nav-button"
-        class="flex w-full px-4 py-2 text-sm text-left text-gray-300 transition-colors hover:bg-gray-600 hover:text-white"
-        onclick="navigateToUserProfile(); closeUserDropdown();"
-      >
-        <span class="mr-2">👤</span>
-        Profile
-      </button>
-
-      <button
-        class="flex w-full px-4 py-2 text-sm text-left text-gray-300 transition-colors hover:bg-gray-600 hover:text-white"
-        hx-get="/views/settings.html"
-        hx-target="#main-content"
-        hx-push-url="/settings"
-        onclick="closeUserDropdown()"
-      >
-        <span class="mr-2">⚙️</span>
-        Settings
-      </button>
-
-      <hr class="border-gray-600" />
-
-      <button
-        class="flex w-full px-4 py-2 text-sm text-left text-red-300 transition-colors hover:bg-red-600 hover:text-white"
-        onclick="window.logoutUser(); closeUserDropdown();"
-      >
-        <span class="mr-2">🚪</span>
-        Logout
-      </button>
+    <div
+      class="flex items-center justify-center w-10 h-10 rounded-full bg-surface-overlay"
+      id="user-dropdown-pfp-wrap"
+    >
+      <span class="text-lg">👤</span>
     </div>
+    <div class="flex-1 min-w-0 text-left">
+      <div
+        id="user-dropdown-name"
+        class="text-sm font-semibold truncate"
+      >Loading…</div>
+      <div
+        id="user-dropdown-npub"
+        class="text-xs font-mono truncate text-text-secondary"
+      ></div>
+    </div>
+  </div>
+
+  <div class="py-1">
+    <button
+      class="flex items-center w-full gap-2 px-4 py-2 text-sm text-left hover:bg-surface-hover"
+      hx-get="/views/home.html"
+      hx-target="#main-content"
+      hx-push-url="/"
+      onclick="closeUserDropdown()"
+    >
+      <span>🏠</span> Home
+    </button>
+
+    <button
+      class="flex items-center w-full gap-2 px-4 py-2 text-sm text-left hover:bg-surface-hover"
+      onclick="navigateToUserProfile(); closeUserDropdown();"
+    >
+      <span>👤</span> Profile
+    </button>
+
+    <button
+      class="flex items-center w-full gap-2 px-4 py-2 text-sm text-left hover:bg-surface-hover"
+      hx-get="/views/settings.html"
+      hx-target="#main-content"
+      hx-push-url="/settings"
+      onclick="closeUserDropdown()"
+    >
+      <span>⚙️</span> Settings
+    </button>
+
+    <hr class="border-border" />
+
+    <button
+      class="flex items-center w-full gap-2 px-4 py-2 text-sm text-left text-danger hover:bg-danger-dim"
+      onclick="window.logoutUser(); closeUserDropdown();"
+    >
+      <span>🚪</span> Logout
+    </button>
   </div>
 </div>
 {{end}}

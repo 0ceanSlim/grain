@@ -1,218 +1,327 @@
 /**
- * Navigation management functions
- * Handles dynamic navigation updates based on user session
+ * Navigation: keep the header's login button in sync with /api/v1/session.
+ *
+ * The element #login-btn lives in the header at all times. This
+ * script just updates its inner content + click handler depending
+ * on whether there's an active session:
+ *
+ *   Logged out:  🗝️  + "Login"   →  click opens mill (window.showAuthModal)
+ *   Logged in:   pfp + display    →  click toggles #user-dropdown-menu
+ *
+ * On mobile the text label is hidden by Tailwind (sm:inline), so the
+ * button stays icon/pfp-only and never crowds the search toggle.
  */
 
-// Global navigation update function
-window.updateNavigation = function () {
-  console.log("Updating navigation...");
+(function () {
+  "use strict";
 
-  fetch("/api/v1/session")
-    .then((response) => {
-      console.log("Session check response status:", response.status);
-      if (response.ok) {
-        console.log("Session found, showing profile nav");
-        updateNavToLoggedIn();
-      } else {
-        console.log("No session, showing login nav");
-        updateNavToLoggedOut();
+  // ── Login button state ────────────────────────────────────────
+
+  function getLoginBtn() {
+    return document.getElementById("login-btn");
+  }
+  function getLoginBtnContent() {
+    return document.getElementById("login-btn-content");
+  }
+
+  function renderLoggedOut() {
+    const btn = getLoginBtn();
+    const content = getLoginBtnContent();
+    if (!btn || !content) return;
+    btn.title = "Login";
+    btn.className =
+      "flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded bg-accent text-accent-fg border-accent hover:bg-accent-hover transition-colors";
+    content.className = "inline-flex items-center gap-2";
+    content.innerHTML =
+      '<span>🗝️</span><span class="hidden sm:inline">Login</span>';
+  }
+
+  function renderLoggedIn(profileContent, npub) {
+    const btn = getLoginBtn();
+    const content = getLoginBtnContent();
+    if (!btn || !content) return;
+    const displayName =
+      (profileContent &&
+        (profileContent.display_name || profileContent.name)) ||
+      (npub ? npub.slice(0, 12) + "…" : "User");
+
+    // Switch to a quieter "logged in" look — the bright accent
+    // button stops making sense once it's permanent chrome.
+    btn.className =
+      "flex items-center gap-2 px-2 py-1 text-sm border rounded bg-surface-elevated text-text border-border hover:bg-surface-hover transition-colors";
+    btn.title = displayName;
+    // The img / avatar circle sits next to the display name as
+    // sibling flex items so the pfp doesn't drop onto its own line.
+    content.className = "inline-flex items-center gap-2";
+
+    if (profileContent && profileContent.picture) {
+      content.innerHTML =
+        '<img src="' +
+        escapeHtml(profileContent.picture) +
+        '" alt="" class="w-6 h-6 rounded-full object-cover shrink-0" />' +
+        '<span class="hidden sm:inline-block max-w-[12ch] truncate align-middle">' +
+        escapeHtml(displayName) +
+        "</span>";
+    } else {
+      content.innerHTML =
+        '<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-surface-overlay shrink-0">👤</span>' +
+        '<span class="hidden sm:inline-block max-w-[12ch] truncate align-middle">' +
+        escapeHtml(displayName) +
+        "</span>";
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  // ── Profile fetch ─────────────────────────────────────────────
+
+  // /api/v1/cache returns the whole kind-0 EVENT under .metadata —
+  // display_name / name / picture live inside its .content string as
+  // a second JSON document (the same shape profile-page.js parses).
+  // parseProfileContent surfaces the parsed inner object so callers
+  // don't have to know about the nesting.
+  function parseProfileContent(metadata) {
+    if (!metadata) return null;
+    if (typeof metadata.content === "string" && metadata.content) {
+      try { return JSON.parse(metadata.content); } catch (_) { return null; }
+    }
+    // Tolerate already-flat shapes (server-side parse, or future API
+    // change) so a reorder on the backend doesn't silently break us.
+    if (metadata.display_name || metadata.name || metadata.picture) {
+      return metadata;
+    }
+    return null;
+  }
+
+  async function fetchProfile() {
+    try {
+      const resp = await fetch("/api/v1/cache");
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return {
+        content: parseProfileContent(data.metadata),
+        npub: data.npub || null,
+        pubkey: data.publicKey || null,
+      };
+    } catch (e) {
+      console.warn("[nav] failed to fetch profile", e);
+      return null;
+    }
+  }
+
+  // ── Dropdown ──────────────────────────────────────────────────
+
+  function positionDropdown() {
+    const menu = document.getElementById("user-dropdown-menu");
+    const btn = getLoginBtn();
+    if (!menu || !btn) return;
+    const rect = btn.getBoundingClientRect();
+    // Width matches Tailwind w-64 in the dropdown template.
+    const menuWidth = 256;
+    // Anchor the menu's right edge to the button's right edge so
+    // the menu sits "below and aligned right" with the button.
+    let left = rect.right - menuWidth;
+    // Keep at least 8px from each viewport edge.
+    left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+    menu.style.left = left + "px";
+    menu.style.top = rect.bottom + 8 + "px";
+    // Clear any previous right/auto value left over from a different
+    // viewport size; left wins from here.
+    menu.style.right = "auto";
+  }
+
+  window.toggleUserDropdown = function () {
+    const menu = document.getElementById("user-dropdown-menu");
+    if (!menu) return;
+    if (menu.classList.contains("hidden")) {
+      positionDropdown();
+      menu.classList.remove("hidden");
+      // Refresh profile section every open so a new display
+      // name / picture from /api/v1/cache shows up without a reload.
+      fetchProfile().then(applyDropdownProfile);
+      setTimeout(() => document.addEventListener("click", clickOutside), 0);
+      window.addEventListener("resize", positionDropdown);
+    } else {
+      closeDropdown();
+    }
+  };
+  window.closeUserDropdown = closeDropdown;
+
+  function closeDropdown() {
+    const menu = document.getElementById("user-dropdown-menu");
+    if (menu) menu.classList.add("hidden");
+    document.removeEventListener("click", clickOutside);
+    window.removeEventListener("resize", positionDropdown);
+  }
+
+  function clickOutside(e) {
+    const menu = document.getElementById("user-dropdown-menu");
+    const btn = getLoginBtn();
+    if (
+      menu &&
+      !menu.contains(e.target) &&
+      btn &&
+      !btn.contains(e.target)
+    ) {
+      closeDropdown();
+    }
+  }
+
+  function applyDropdownProfile(info) {
+    if (!info) return;
+    const nameEl = document.getElementById("user-dropdown-name");
+    const npubEl = document.getElementById("user-dropdown-npub");
+    const pfpWrap = document.getElementById("user-dropdown-pfp-wrap");
+    if (!nameEl || !npubEl || !pfpWrap) return;
+    const c = info.content || {};
+    const display =
+      c.display_name ||
+      c.name ||
+      (info.npub ? info.npub.slice(0, 12) + "…" : "User");
+    nameEl.textContent = display;
+    npubEl.textContent = info.npub
+      ? info.npub.slice(0, 14) + "…" + info.npub.slice(-4)
+      : "";
+    if (c.picture) {
+      pfpWrap.innerHTML =
+        '<img src="' +
+        escapeHtml(c.picture) +
+        '" alt="" class="w-10 h-10 rounded-full object-cover" />';
+    } else {
+      pfpWrap.innerHTML = '<span class="text-lg">👤</span>';
+    }
+  }
+
+  // ── Click router ──────────────────────────────────────────────
+
+  // Single click handler the button always carries. Behaviour
+  // depends on the current auth state cached on window.
+  window.handleLoginClick = function () {
+    if (window.__grainLoggedIn) {
+      window.toggleUserDropdown();
+    } else if (typeof window.showAuthModal === "function") {
+      window.showAuthModal();
+    } else {
+      console.error("[nav] no login surface available");
+    }
+  };
+
+  // ── Auth state sync ──────────────────────────────────────────
+
+  window.updateNavigation = async function () {
+    try {
+      const resp = await fetch("/api/v1/session");
+      if (!resp.ok) {
+        window.__grainLoggedIn = false;
+        renderLoggedOut();
+        closeDropdown();
+        return;
       }
-    })
-    .catch((error) => {
-      console.error("Navigation update error:", error);
-      updateNavToLoggedOut();
-    });
-};
-
-// Force navigation update with cache busting
-window.forceNavigationUpdate = function () {
-  console.log("🔄 forceNavigationUpdate called");
-
-  // Add cache busting parameter
-  const cacheBuster = Date.now();
-  fetch(`/api/v1/session?_=${cacheBuster}`)
-    .then((response) => {
-      console.log("🔄 Force session check response status:", response.status);
-      if (response.ok) {
-        console.log("🔄 Force session found, showing profile nav");
-        updateNavToLoggedIn();
-      } else {
-        console.log("🔄 Force no session, showing login nav");
-        updateNavToLoggedOut();
-      }
-    })
-    .catch((error) => {
-      console.error("🔄 Force navigation update error:", error);
-      updateNavToLoggedOut();
-    });
-};
-
-// Navigate to current user's profile using npub
-window.navigateToUserProfile = async function () {
-  console.log("🔄 navigateToUserProfile called");
-
-  try {
-    // Get current session to get pubkey
-    const sessionResponse = await fetch("/api/v1/session");
-    if (!sessionResponse.ok) {
-      throw new Error("Not logged in");
+      window.__grainLoggedIn = true;
+      // Render with what we know from /session first (instant feedback)
+      // then upgrade with metadata from /cache.
+      renderLoggedIn(null, null);
+      const info = await fetchProfile();
+      if (info) renderLoggedIn(info.content, info.npub);
+    } catch (e) {
+      console.error("[nav] updateNavigation error", e);
+      window.__grainLoggedIn = false;
+      renderLoggedOut();
+      closeDropdown();
     }
+  };
 
-    const sessionData = await sessionResponse.json();
-    const pubkey = sessionData.publicKey;
+  // Force update with cache-busting — used by logout flow + the
+  // mill bridge right after a successful /api/v1/auth/login POST,
+  // where the session cookie has just been set and we need to skip
+  // any stale 401 response cached by the browser.
+  window.forceNavigationUpdate = function () {
+    const url = "/api/v1/session?_=" + Date.now();
+    fetch(url)
+      .then((r) => {
+        if (r.ok) {
+          window.__grainLoggedIn = true;
+          renderLoggedIn(null, null);
+          return fetchProfile().then((info) => {
+            if (info) renderLoggedIn(info.content, info.npub);
+          });
+        } else {
+          window.__grainLoggedIn = false;
+          renderLoggedOut();
+          closeDropdown();
+        }
+      })
+      .catch(() => {
+        window.__grainLoggedIn = false;
+        renderLoggedOut();
+        closeDropdown();
+      });
+  };
 
-    if (!pubkey) {
-      throw new Error("No public key in session");
+  // Navigate to the logged-in user's profile page. Existing
+  // user-dropdown menu binds this.
+  window.navigateToUserProfile = async function () {
+    try {
+      const sessionResp = await fetch("/api/v1/session");
+      if (!sessionResp.ok) throw new Error("not logged in");
+      const session = await sessionResp.json();
+      const pubkey = session.publicKey;
+      if (!pubkey) throw new Error("no public key");
+      const convertResp = await fetch(
+        "/api/v1/keys/convert/public/" + pubkey
+      );
+      if (!convertResp.ok) throw new Error("npub conversion failed");
+      const conv = await convertResp.json();
+      if (conv.error || !conv.npub) throw new Error(conv.error || "no npub");
+      const npub = conv.npub;
+      htmx.ajax("GET", "/views/components/profile-page.html", "#main-content");
+      window.history.pushState({}, "", "/p/" + npub);
+    } catch (e) {
+      console.error("[nav] navigateToUserProfile failed", e);
+      htmx.ajax("GET", "/views/home.html", "#main-content");
+      window.history.pushState({}, "", "/");
     }
+  };
 
-    console.log("🔄 Converting pubkey to npub", { pubkey });
+  // ── Logout ───────────────────────────────────────────────────
 
-    // Convert pubkey to npub using the correct endpoint
-    const convertResponse = await fetch(
-      `/api/v1/keys/convert/public/${pubkey}`
-    );
-
-    if (!convertResponse.ok) {
-      throw new Error("Failed to convert pubkey to npub");
-    }
-
-    const convertData = await convertResponse.json();
-
-    if (convertData.error) {
-      throw new Error(convertData.error);
-    }
-
-    const npub = convertData.npub;
-    console.log("🔄 Successfully converted to npub", { npub });
-
-    // Navigate to profile page
-    const profileUrl = `/p/${npub}`;
-    htmx.ajax("GET", "/views/components/profile-page.html", "#main-content");
-    window.history.pushState({}, "", profileUrl);
-
-    console.log("🔄 Navigated to user profile", { profileUrl });
-  } catch (error) {
-    console.error("🔄 Failed to navigate to user profile:", error);
-    // Redirect to home on error instead of deprecated profile route
-    htmx.ajax("GET", "/views/home.html", "#main-content");
-    window.history.pushState({}, "", "/");
-  }
-};
-
-// Update navigation to logged in state
-function updateNavToLoggedIn() {
-  console.log("🔄 updateNavToLoggedIn called");
-
-  // Get user dropdown from template
-  const dropdownTemplate = document.querySelector("#user-dropdown-template");
-  if (!dropdownTemplate) {
-    console.error("🔄 User dropdown template not found");
-    console.log(
-      "🔄 Available templates:",
-      document.querySelectorAll('[id*="template"]')
-    );
-    return;
-  }
-
-  console.log("🔄 Found dropdown template, cloning");
-  const userDropdown = dropdownTemplate.cloneNode(true);
-
-  // Remove the template ID to avoid conflicts
-  userDropdown.removeAttribute("id");
-
-  // Clear and update profile nav
-  const profileNav = document.getElementById("profile-nav");
-  if (profileNav) {
-    console.log("🔄 Updating profile-nav with dropdown");
-    profileNav.innerHTML = "";
-    profileNav.appendChild(userDropdown);
-
-    // Process HTMX attributes on new dropdown
-    if (typeof htmx !== "undefined") {
-      htmx.process(profileNav);
-    }
-
-    console.log("🔄 Navigation updated to logged in state with dropdown");
-  } else {
-    console.error("🔄 profile-nav element not found");
-  }
-}
-
-// Update navigation to logged out state
-function updateNavToLoggedOut() {
-  // Get login button from template
-  const loginTemplate = document.querySelector("#login-template");
-  if (!loginTemplate) {
-    console.error("Login template not found");
-    return;
-  }
-  const loginButton = loginTemplate.querySelector("button").cloneNode(true);
-
-  // Update profile nav
-  const profileNav = document.getElementById("profile-nav");
-  if (profileNav) {
-    profileNav.innerHTML = "";
-    profileNav.appendChild(loginButton);
-
-    // Process HTMX attributes on new button
-    if (typeof htmx !== "undefined") {
-      htmx.process(profileNav);
-    }
-
-    console.log("Navigation updated to logged out state");
-  }
-}
-
-// Global logout function for buttons to use
-window.logoutUser = function () {
-  if (confirm("Are you sure you want to logout?")) {
-    fetch("/api/v1/auth/logout", { method: "POST" }).then((response) => {
-      if (response.ok) {
-        console.log("Logout successful, updating navigation");
-        // Force update navigation immediately
+  window.logoutUser = function () {
+    if (!confirm("Are you sure you want to logout?")) return;
+    fetch("/api/v1/auth/logout", { method: "POST" })
+      .then((r) => {
+        if (!r.ok) return;
+        // Drop mill's signer reference alongside the server-side
+        // session. The mill bridge listens for grain:logout and
+        // handles its own cleanup.
+        window.dispatchEvent(new CustomEvent("grain:logout"));
         window.forceNavigationUpdate();
-
         htmx.ajax("GET", "/views/home.html", "#main-content");
         window.history.pushState({}, "", "/");
+        setTimeout(window.forceNavigationUpdate, 100);
+      })
+      .catch((e) => console.error("[nav] logout failed", e));
+  };
 
-        // Additional navigation update after redirect
-        setTimeout(() => {
-          window.forceNavigationUpdate();
-        }, 100);
-      }
-    });
-  }
-};
+  // ── Bootstrap ────────────────────────────────────────────────
 
-// Safe event listener setup
-function setupEventListeners() {
-  // Initialize navigation on page load
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () {
-      console.log("DOM loaded, updating navigation");
-      window.updateNavigation();
-    });
-  } else {
-    console.log("DOM already loaded, updating navigation");
+  function bootstrap() {
     window.updateNavigation();
-  }
-
-  // Listen for custom updateNav events
-  if (document.body) {
-    document.body.addEventListener("updateNav", function () {
-      console.log("Received updateNav event, force updating");
-      window.forceNavigationUpdate();
-    });
-
-    // Listen for HTMX events
+    document.body.addEventListener("updateNav", window.forceNavigationUpdate);
     document.body.addEventListener("htmx:afterSettle", function () {
-      console.log("HTMX after settle, updating navigation");
       setTimeout(window.updateNavigation, 100);
     });
-  } else {
-    console.error("document.body not available for event listeners");
   }
-}
 
-// Setup event listeners safely
-setupEventListeners();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootstrap);
+  } else {
+    bootstrap();
+  }
+})();

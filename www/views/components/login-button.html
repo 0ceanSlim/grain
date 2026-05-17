@@ -1,10 +1,22 @@
 {{define "login-button"}}
+<!-- The login button. Same element always lives in the header
+     (#profile-nav slot). navigation.js swaps its inner content
+     between "🗝️ Login" (logged out) and pfp + display name
+     (logged in), and rebinds the onclick handler accordingly.
+     On mobile the text label is hidden and only the icon/pfp
+     remains. -->
 <div id="login-template">
   <button
-    class="px-3 py-2 text-white transition-colors bg-purple-600 rounded hover:bg-purple-700"
-    onclick="showAuthModal()"
+    id="login-btn"
+    type="button"
+    onclick="handleLoginClick()"
+    class="flex items-center gap-2 px-3 py-2 text-sm font-medium border rounded bg-accent text-accent-fg border-accent hover:bg-accent-hover transition-colors"
+    title="Login"
   >
-    🔐 Login
+    <span id="login-btn-content" class="inline-flex items-center gap-2">
+      <span>🗝️</span>
+      <span class="hidden sm:inline">Login</span>
+    </span>
   </button>
 </div>
 {{end}}
