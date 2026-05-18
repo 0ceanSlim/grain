@@ -17,10 +17,13 @@
     </p>
   </header>
 
-  <!-- Single form wraps the whole accordion so the sticky "Apply"
-       footer is scoped to the page and per-section submit handlers
-       can find their <form data-section="..."> via event delegation. -->
-  <form id="admin-form" class="space-y-3" autocomplete="off" onsubmit="return false;">
+  <!-- Each section's <details> contains its own <form>. Section
+       partials (admin-sections/<id>.html) own their inputs;
+       sections without a partial yet fall through to the JSON
+       pretty-print stub. The page-level submit listener in
+       admin.js binds via event delegation, finds the form's
+       enclosing [data-section], and POSTs through grainNIP86.submit. -->
+  <div class="space-y-3">
     {{range .Sections}}
     <details
       class="rounded-lg border border-border-strong bg-surface"
@@ -30,27 +33,26 @@
       <summary class="flex items-center gap-3 px-4 py-3 cursor-pointer select-none">
         <span class="text-lg">{{.Icon}}</span>
         <span class="font-medium text-text">{{.Title}}</span>
+        <!-- Two-state badges, mutually exclusive in practice:
+               unsaved = local edits not yet POSTed to grain_update*
+               pending = saved on disk, awaiting grain_reloadconfig -->
         <span
           class="hidden ml-auto text-xs px-2 py-0.5 rounded bg-warning-dim text-warning"
+          data-role="unsaved-badge"
+        >● unsaved</span>
+        <span
+          class="hidden ml-auto text-xs px-2 py-0.5 rounded bg-danger-dim text-danger"
           data-role="pending-badge"
         >pending</span>
       </summary>
       <div class="px-4 pb-4 border-t border-border">
-        <!-- Phase 1 stub. Replaced one section per commit with a
-             real <form data-method="{{.Method}}"> wired to the
-             typed config. The JSON dump is intentionally cheap —
-             it proves the server-side read path works for every
-             section before we touch the write path. -->
-        {{if .Config}}
+        {{if eq .ID "logging"}}
+          {{template "admin-logging" .Config}}
+        {{else if .Config}}
+        <!-- Stub until this section's partial lands. -->
         <pre
           class="p-3 mt-3 overflow-x-auto text-xs rounded bg-surface-base text-text"
         >{{.Config | printf "%+v"}}</pre>
-        {{else}}
-        <p class="mt-3 text-sm text-text-secondary">
-          Operational controls (apply, reload cache, relay identity edits) —
-          form arrives in the ops commit.
-        </p>
-        {{end}}
         <div class="flex justify-end mt-3">
           <button
             type="button"
@@ -60,10 +62,38 @@
             Edit (coming soon)
           </button>
         </div>
+        {{else}}
+        <p class="mt-3 text-sm text-text-secondary">
+          Operational controls (apply, reload cache, relay identity edits) —
+          form arrives in the ops commit.
+        </p>
+        {{end}}
       </div>
     </details>
     {{end}}
-  </form>
+  </div>
+
+  <!-- Modal + toast host. Admin.js drives both:
+         - #admin-modal is the confirm/spinner host; its inner panel
+           gets swapped content (confirm body + Cancel/Confirm
+           buttons, then later a spinner + countdown).
+         - #admin-toasts is the stack the toast helper appends into,
+           so multiple notifications don't overlap. -->
+  <div
+    id="admin-modal"
+    class="fixed inset-0 z-50 flex items-center justify-center hidden bg-surface-overlay backdrop-blur-sm"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div
+      id="admin-modal-panel"
+      class="w-full max-w-md mx-4 p-6 rounded-lg bg-surface border border-border-strong shadow-xl"
+    ></div>
+  </div>
+  <div
+    id="admin-toasts"
+    class="fixed top-4 right-4 z-50 flex flex-col items-end gap-2 pointer-events-none"
+  ></div>
 
   <!-- Sticky footer. Apply calls grain_reloadconfig; Discard clears
        the pending set without server side-effects. Both stay

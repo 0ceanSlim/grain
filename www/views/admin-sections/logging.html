@@ -1,0 +1,133 @@
+{{define "admin-logging"}}
+<!-- Logging section form. The enclosing <details> (in admin.html)
+     supplies data-section="logging" and data-method="grain_updatelogging";
+     admin.js reads both off the closest [data-section] when this
+     form submits. The dot here is LoggingSectionData
+     (.Config = cfgType.LogConfig, .AllComponents = the catalog
+     from server/utils/log/components.go).
+
+     Field name="..." matches the JSON tag the server expects in
+     params[0]. data-shape on numeric / bool / multi inputs tells
+     admin.js's blobFromForm how to coerce — without it, every
+     value would arrive as a string and grain_updatelogging would
+     reject the params. -->
+{{with .Config}}
+<form class="grid gap-4 mt-3 sm:grid-cols-2" autocomplete="off">
+  <!-- Level: select beats a free-text input because the server
+       validates against slog's known levels and crashes on
+       unknown values (see InitializeLoggers). -->
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Level</span>
+    <select
+      name="level"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text"
+    >
+      <option value="debug" {{if eq .Level "debug"}}selected{{end}}>debug</option>
+      <option value="info"  {{if eq .Level "info"}}selected{{end}}>info</option>
+      <option value="warn"  {{if eq .Level "warn"}}selected{{end}}>warn</option>
+      <option value="error" {{if eq .Level "error"}}selected{{end}}>error</option>
+    </select>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">File path</span>
+    <input
+      type="text"
+      name="file"
+      value="{{.File}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Max log size (MB)</span>
+    <input
+      type="number"
+      name="max_log_size_mb"
+      data-shape="number"
+      min="1"
+      value="{{.MaxSizeMB}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text"
+    />
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Check interval (min)</span>
+    <input
+      type="number"
+      name="check_interval_min"
+      data-shape="number"
+      min="1"
+      value="{{.CheckIntervalMin}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text"
+    />
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Backup count</span>
+    <input
+      type="number"
+      name="backup_count"
+      data-shape="number"
+      min="0"
+      value="{{.BackupCount}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text"
+    />
+  </label>
+
+  <div class="flex flex-col gap-3 sm:col-span-1">
+    <label class="flex items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        name="structure"
+        data-shape="bool"
+        {{if .Structure}}checked{{end}}
+        class="w-4 h-4 accent-accent"
+      />
+      <span class="text-text">Structured (JSON) logs</span>
+    </label>
+    <label class="flex items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        name="stdout"
+        data-shape="bool"
+        {{if .Stdout}}checked{{end}}
+        class="w-4 h-4 accent-accent"
+      />
+      <span class="text-text">Also mirror to stdout</span>
+    </label>
+  </div>
+
+  <!-- Suppress components: one checkbox per known logger
+       component (catalog from server/utils/log/components.go).
+       Checked = suppress INFO/DEBUG from that component, matching
+       the wire field's semantic. data-shape="names" tells
+       blobFromForm to collect all checked values into a string
+       array. The local $cur var below is the saved suppress list
+       we cross-check against to pre-check boxes. -->
+  <fieldset class="sm:col-span-2">
+    <legend class="text-sm font-medium text-text-secondary">
+      Suppress components
+      <span class="text-text-secondary">(checked = quiet INFO/DEBUG from that component)</span>
+    </legend>
+    {{$cur := .SuppressComponents}}
+    <div class="grid grid-cols-2 gap-2 mt-2 sm:grid-cols-3 lg:grid-cols-4">
+      {{range $.AllComponents}}
+      {{$name := .}}
+      <label class="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="suppress_components"
+          data-shape="names"
+          value="{{$name}}"
+          {{range $cur}}{{if eq . $name}}checked{{end}}{{end}}
+          class="w-4 h-4 accent-accent"
+        />
+        <span class="font-mono text-text">{{$name}}</span>
+      </label>
+      {{end}}
+    </div>
+  </fieldset>
+</form>
+{{end}}
+{{end}}
