@@ -1,0 +1,51 @@
+{{define "view"}}
+<!-- First-run claim page. Server-rendered owner-empty branch; the
+     owner-set branch lives in setup-claimed.html. setup.js wires
+     the "Sign in & claim" button to the existing mill bridge so
+     every signer mill supports (extension, Amber, bunker, generated)
+     works without any per-method UI here. -->
+<main id="main-content" class="max-w-xl px-4 py-10 mx-auto text-center">
+  <h1 class="text-3xl font-bold text-text" style="font-family: var(--font-display)">
+    🌾 grain — first-run setup
+  </h1>
+  <p class="mt-4 text-text-secondary">
+    This relay has no owner yet. Sign in with any Nostr signer to
+    claim ownership. After you claim it, the admin dashboard at
+    <span class="font-mono">/admin</span> becomes available to your
+    pubkey only.
+  </p>
+  <p class="mt-2 text-sm text-warning">
+    Whoever claims this first becomes the owner — claim now before
+    anyone else does.
+  </p>
+
+  <div class="mt-8">
+    <button
+      id="setup-claim-btn"
+      type="button"
+      class="px-5 py-2.5 text-sm font-medium rounded bg-accent text-accent-fg hover:bg-accent-hover"
+    >
+      Sign in &amp; claim
+    </button>
+  </div>
+
+  <!-- Result panels. Hidden until setup.js swaps one in. -->
+  <div id="setup-success" class="hidden mt-8 p-4 rounded bg-success-dim text-success">
+    Claimed. Redirecting to <span class="font-mono">/admin</span>…
+  </div>
+  <div id="setup-conflict" class="hidden mt-8 p-4 rounded bg-danger-dim text-danger text-left">
+    <p class="font-medium">Someone else just claimed this relay.</p>
+    <p class="mt-2 text-sm">
+      Claimed by
+      <span id="setup-conflict-npub" class="font-mono break-all"></span>.
+      If that's not you, redeploy grain with a fresh
+      <span class="font-mono">relay_metadata.json</span> (set
+      <span class="font-mono">pubkey</span> to <span class="font-mono">""</span>)
+      and claim immediately.
+    </p>
+  </div>
+  <div id="setup-error" class="hidden mt-8 p-4 rounded bg-danger-dim text-danger"></div>
+</main>
+
+<script src="/static/js/setup.js"></script>
+{{end}}

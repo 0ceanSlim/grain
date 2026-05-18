@@ -1,0 +1,23 @@
+# Dev compose: builds grain from local source via Dockerfile.dev so
+# in-flight changes are exercisable without cutting a release.
+# Run from this directory:
+#   docker compose -f docker-compose.dev.yml up -d --build
+#
+# No persistent volume by default so each `down && up` is a fresh
+# first-run (good for exercising the /setup claim flow). Add a
+# volume on /home/grain/.grain if you want state to persist.
+services:
+  grain-dev:
+    build:
+      context: ../../
+      dockerfile: docs/docker/Dockerfile.dev
+    image: grain-dev:latest
+    container_name: grain-dev
+    ports:
+      - "8181:8181"
+    environment:
+      - GRAIN_ENV=development
+      # GRAIN_OWNER_PUBKEY intentionally unset so the /setup flow
+      # is exercised end-to-end. Set this to your hex/npub to skip
+      # the click-through path on subsequent boots.
+    restart: unless-stopped

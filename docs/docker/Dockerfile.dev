@@ -1,0 +1,97 @@
+# Local-source dev image for grain. Unlike the sibling Dockerfile
+# (which pulls the latest GitHub release), this builds from the
+# checked-out tree so in-flight changes are testable end-to-end
+# without going through a release. Multi-stage: a fat builder
+# compiles the binary + CGO nostrdb lib + Tailwind + mill, then a
+# minimal alpine stage runs the resulting static-ish binary.
+
+# ── Stage 1: builder ──────────────────────────────────────────────
+FROM golang:1.23-alpine AS builder
+
+RUN apk add --no-cache \
+    git ca-certificates dos2unix bash curl tar \
+    gcc musl-dev make autoconf automake libtool \
+    libstdc++ libgcc
+
+WORKDIR /src
+
+# Cache go modules first
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Bring in the rest of the tree.
+COPY . .
+
+# Normalize CRLF in the vendored nostrdb C tree (Windows checkouts
+# trip its autotools scripts).
+RUN find server/db/nostrdb -type f \
+        \! -name '*.o' \! -name '*.a' \! -name '*.png' \! -name '*.pdf' \
+        -exec sed -i 's/\r$//' {} +
+
+# Build the nostrdb C library so Go's CGO link step finds it.
+RUN cd server/db/nostrdb && bash build.sh
+
+# Compile Tailwind so the design tokens reach the browser. Without
+# this, layout.html falls through to the CDN script which doesn't
+# read input.css — themes look broken.
+RUN curl -fsSL -o /tmp/tailwindcss \
+        https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64-musl \
+    && chmod +x /tmp/tailwindcss \
+    && (cd www/style && /tmp/tailwindcss -i input.css -o tailwind.min.css --minify) \
+    && sed -i 's|<script src="https://cdn.tailwindcss.com"></script>|<link rel="stylesheet" href="/style/tailwind.min.css">|g' \
+        www/views/templates/layout.html \
+    && rm /tmp/tailwindcss
+
+# Mill (the <nostr-signer> web component) — required by /setup and
+# the header login flow.
+ARG MILL_VERSION=1.0.0
+RUN mkdir -p www/static/mill \
+    && curl -fsSL -o www/static/mill/mill.umd.min.js \
+        "https://cdn.jsdelivr.net/npm/nostr-mill@${MILL_VERSION}/dist/mill.umd.min.js"
+
+# Self-hosted webfonts (token stacks reference Space Grotesk, JetBrains
+# Mono, Comfortaa). Without them the @font-face declarations 404 and
+# the page falls back to system fonts.
+RUN mkdir -p www/static/fonts \
+    && for slug in space-grotesk jetbrains-mono comfortaa; do \
+         for weight in 400 700; do \
+           curl -fsSL -o "www/static/fonts/${slug}-${weight}.woff2" \
+             "https://cdn.jsdelivr.net/npm/@fontsource/${slug}@5/files/${slug}-latin-${weight}-normal.woff2"; \
+         done; \
+       done
+
+# main.go embeds docs/openapi/swagger.json via //go:embed. The release
+# build runs swag here; the dev image doesn't need a real spec, so a
+# stub keeps the embed directive happy.
+RUN mkdir -p docs/openapi \
+    && echo '{"swagger":"2.0","info":{"title":"grain dev","version":"dev"},"paths":{}}' \
+        > docs/openapi/swagger.json
+
+# Compile. CGO_ENABLED=1 because nostrdb is a C library.
+RUN CGO_ENABLED=1 go build -buildvcs=false -o /out/grain .
+
+# ── Stage 2: runtime ──────────────────────────────────────────────
+FROM alpine:latest
+
+RUN apk add --no-cache ca-certificates libstdc++ libgcc wget
+
+# Non-root user mirrors the prod Dockerfile.
+RUN addgroup -g 1001 grain \
+    && adduser -D -s /bin/sh -u 1001 -G grain grain
+
+WORKDIR /app
+COPY --from=builder /out/grain /app/grain
+
+# Pre-create the data dir with grain ownership so a fresh named
+# volume (or anonymous mount) inherits the right perms.
+RUN mkdir -p /home/grain/.grain \
+    && chown -R grain:grain /home/grain/.grain /app
+
+USER grain
+
+EXPOSE 8181
+
+HEALTHCHECK --interval=5s --timeout=5s --start-period=3s --retries=20 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8181/ || exit 1
+
+CMD ["./grain"]

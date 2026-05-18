@@ -1,4 +1,18 @@
 {{define "header"}}
+<!-- Unowned-relay banner. Hidden by default; revealed by
+     navigation.js once it confirms (via cached NIP-11) that
+     relay_metadata.json.pubkey is empty. Loud red because the
+     /setup race is first-claim-wins — operator needs to act
+     before someone else does. See plans/floating-imagining-tome.md. -->
+<div
+  id="unowned-banner"
+  class="hidden px-4 py-2 text-sm font-medium text-center bg-danger-dim text-danger"
+>
+  ⚠ Relay not yet claimed —
+  <a href="/setup" class="underline">claim ownership now</a>
+  before someone else does.
+</div>
+
 <header
   class="relative flex items-center gap-3 px-4 mt-6 mb-6"
   hx-boost="true"

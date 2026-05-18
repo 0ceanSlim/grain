@@ -1,0 +1,43 @@
+{{define "view"}}
+<!-- Rendered when /setup is hit and the relay already has an owner.
+     The whole point of showing the claimant's npub here (rather
+     than 404'ing) is the "did I get sniped" check — operator visits
+     /setup right after deploy, sees an npub that isn't theirs,
+     redeploys. See plans/floating-imagining-tome.md. -->
+<main id="main-content" class="max-w-xl px-4 py-10 mx-auto text-center">
+  <h1 class="text-3xl font-bold text-text" style="font-family: var(--font-display)">
+    🌾 grain — already claimed
+  </h1>
+  <p class="mt-4 text-text-secondary">
+    This relay's owner has been set. Setup is complete.
+  </p>
+
+  <div class="mt-6 p-4 rounded bg-surface text-left">
+    <div class="text-xs text-text-secondary mb-1">Owner</div>
+    {{if .OwnerNpub}}
+    <div class="font-mono text-sm break-all text-text">{{.OwnerNpub}}</div>
+    {{end}}
+    <div class="mt-2 text-xs text-text-secondary mb-1">Pubkey (hex)</div>
+    <div class="font-mono text-xs break-all text-text">{{.OwnerHex}}</div>
+  </div>
+
+  <div class="mt-6 p-4 rounded bg-warning-dim text-warning text-left">
+    <p class="text-sm">
+      <strong>If that's not your pubkey,</strong> someone else
+      claimed this relay before you. Redeploy grain with a fresh
+      <span class="font-mono">relay_metadata.json</span> (set
+      <span class="font-mono">pubkey</span> to
+      <span class="font-mono">""</span>) and claim immediately on
+      first run. Or set <span class="font-mono">GRAIN_OWNER_PUBKEY</span>
+      in your environment so the claim is automatic.
+    </p>
+  </div>
+
+  <div class="mt-6">
+    <a
+      href="/"
+      class="text-sm text-text-secondary underline hover:text-text"
+    >← back home</a>
+  </div>
+</main>
+{{end}}

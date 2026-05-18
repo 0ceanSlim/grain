@@ -197,12 +197,64 @@
     }
   }
 
+  // Lazily-fetched + cached relay owner pubkey from NIP-11. We use
+  // it for two things: the dropdown's admin-link reveal, and the
+  // unclaimed-relay banner. Fetched once on load (kick-off below)
+  // so the banner appears immediately rather than only after the
+  // user opens the dropdown.
+  let cachedRelayOwner = null;
+  async function getRelayOwnerPubkey() {
+    if (cachedRelayOwner !== null) return cachedRelayOwner;
+    try {
+      const resp = await fetch("/", {
+        headers: { Accept: "application/nostr+json" },
+      });
+      if (!resp.ok) return (cachedRelayOwner = "");
+      const info = await resp.json();
+      cachedRelayOwner = (info && info.pubkey) || "";
+    } catch (_) {
+      cachedRelayOwner = "";
+    }
+    return cachedRelayOwner;
+  }
+
+  // Reveal the unowned-relay banner if NIP-11's pubkey field is
+  // empty OR the all-zeros sentinel the example metadata ships with.
+  // Runs once on page load so any visitor (logged in or not) sees
+  // it. The banner element lives in templates/header.html, hidden
+  // by default.
+  const ALL_ZEROS_PUBKEY =
+    "0000000000000000000000000000000000000000000000000000000000000000";
+  async function maybeRevealUnownedBanner() {
+    const banner = document.getElementById("unowned-banner");
+    if (!banner) return;
+    const owner = await getRelayOwnerPubkey();
+    if (!owner || owner === ALL_ZEROS_PUBKEY) {
+      banner.classList.remove("hidden");
+    }
+  }
+
+  async function maybeRevealAdminLink(sessionPubkey) {
+    const link = document.getElementById("user-dropdown-admin");
+    if (!link || !sessionPubkey) return;
+    const owner = await getRelayOwnerPubkey();
+    if (
+      owner &&
+      owner !== ALL_ZEROS_PUBKEY &&
+      owner.toLowerCase() === sessionPubkey.toLowerCase()
+    ) {
+      link.classList.remove("hidden");
+      link.classList.add("flex");
+    }
+  }
+
   function applyDropdownProfile(info) {
     if (!info) return;
     const nameEl = document.getElementById("user-dropdown-name");
     const npubEl = document.getElementById("user-dropdown-npub");
     const pfpWrap = document.getElementById("user-dropdown-pfp-wrap");
     if (!nameEl || !npubEl || !pfpWrap) return;
+    maybeRevealAdminLink(info.pubkey);
     const c = info.content || {};
     const display =
       c.display_name ||
@@ -336,6 +388,7 @@
 
   function bootstrap() {
     window.updateNavigation();
+    maybeRevealUnownedBanner();
     document.body.addEventListener("updateNav", window.forceNavigationUpdate);
     document.body.addEventListener("htmx:afterSettle", function () {
       setTimeout(window.updateNavigation, 100);

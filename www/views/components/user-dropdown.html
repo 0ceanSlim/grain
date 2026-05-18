@@ -61,6 +61,20 @@
       <span>⚙️</span> Settings
     </button>
 
+    <!-- Admin link is hidden by default; navigation.js reveals it
+         after comparing the session pubkey to the relay owner
+         pubkey from NIP-11. /admin is server-rendered and
+         owner-gated, so the link revealing isn't load-bearing —
+         it just keeps the menu honest for non-owners. -->
+    <a
+      id="user-dropdown-admin"
+      href="/admin"
+      class="hidden items-center w-full gap-2 px-4 py-2 text-sm text-left hover:bg-surface-hover"
+      onclick="closeUserDropdown()"
+    >
+      <span>🛠️</span> Admin
+    </a>
+
     <hr class="border-border" />
 
     <button

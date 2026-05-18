@@ -2,10 +2,12 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -65,8 +67,35 @@ func LoadRelayMetadataJSON() error {
 // GetRelayOwnerPubkey returns the relay owner's hex pubkey from
 // relay_metadata.json. This is the pubkey allowed to authenticate
 // against admin/management HTTP endpoints via NIP-98.
+//
+// Note: returns the raw on-disk value, which may be the all-zeros
+// sentinel from the example metadata. Use IsRelayUnowned() when
+// you want to know whether ownership has been claimed.
 func GetRelayOwnerPubkey() string {
 	return relayMetadata.Pubkey
+}
+
+// allZerosPubkey is the sentinel the example relay_metadata.json
+// ships with — a 32-byte all-zeros key, which isn't a valid secp256k1
+// point and can never be signed against, making it a safe "no owner"
+// marker that's also valid JSON-schema-wise for the pubkey field.
+const allZerosPubkey = "0000000000000000000000000000000000000000000000000000000000000000"
+
+// IsRelayUnowned reports whether the relay has no owner claimed yet.
+// True when the pubkey field is empty OR set to the all-zeros sentinel
+// the example ships with. Used by /setup and /admin gates so a fresh
+// deployment routes operators to /setup regardless of which form the
+// example used.
+func IsRelayUnowned() bool {
+	return isRelayUnownedLocked()
+}
+
+// isRelayUnownedLocked is the same predicate without taking
+// ownerClaimMu. SetRelayOwner already holds the mutex and would
+// deadlock if it re-entered through the exported helper.
+func isRelayUnownedLocked() bool {
+	p := relayMetadata.Pubkey
+	return p == "" || p == allZerosPubkey
 }
 
 // RelayMetadataWritePath is the on-disk path for the relay metadata
@@ -82,6 +111,87 @@ var relayMetadataWritePath = "relay_metadata.json"
 // known. UpdateRelayMetadata uses this path so the watcher
 // suppression key matches what fsnotify monitors.
 func SetRelayMetadataWritePath(p string) { relayMetadataWritePath = p }
+
+// ownerClaimMu serializes the first-run owner-claim path so two
+// concurrent /setup POSTs can't both succeed. The mutex covers the
+// (peek empty, write disk, reload in-memory) sequence; once an owner
+// is set, subsequent SetRelayOwner calls return ErrOwnerAlreadySet
+// under this same lock so the check + write is single-winner.
+var ownerClaimMu sync.Mutex
+
+// ErrOwnerAlreadySet is returned by SetRelayOwner when the on-disk
+// metadata already names an owner. Callers (the /setup POST handler)
+// translate this to a 409 so the page can show the "already claimed"
+// state without conflating it with a real write failure.
+var ErrOwnerAlreadySet = errors.New("relay owner is already set")
+
+// SetRelayOwner persists the relay owner pubkey to relay_metadata.json
+// and reloads the in-memory copy. Intended for one-time first-run
+// provisioning from the /setup flow; runtime owner rotation would go
+// through a future NIP-86 method, not this path.
+//
+// Accepts lowercased hex only — callers (the /setup handler) normalize
+// first. Returns ErrOwnerAlreadySet without writing if the on-disk
+// owner is non-empty, so the first POST through this function wins
+// and the second sees a clean "already claimed" signal.
+//
+// Same atomic-write + watcher-suppression pipeline UpdateRelayMetadata
+// uses, plus the package-level ownerClaimMu guarding the
+// check+write atomicity.
+func SetRelayOwner(pubkey string) error {
+	ownerClaimMu.Lock()
+	defer ownerClaimMu.Unlock()
+
+	// Re-check against in-memory state under the lock so a parallel
+	// caller that already wrote can't slip through here. We trust
+	// the in-memory copy because LoadRelayMetadata at the end of the
+	// previous successful call updates it before releasing the lock.
+	if !isRelayUnownedLocked() {
+		return ErrOwnerAlreadySet
+	}
+
+	raw, err := os.ReadFile(relayMetadataWritePath)
+	if err != nil {
+		return fmt.Errorf("read relay metadata: %w", err)
+	}
+	var patched map[string]any
+	if err := json.Unmarshal(raw, &patched); err != nil {
+		return fmt.Errorf("parse relay metadata: %w", err)
+	}
+	patched["pubkey"] = pubkey
+
+	out, err := json.MarshalIndent(patched, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal relay metadata: %w", err)
+	}
+	if err := suppressAndWrite(relayMetadataWritePath, out, 0644); err != nil {
+		return err
+	}
+	if err := LoadRelayMetadata(relayMetadataWritePath); err != nil {
+		// Disk has the new owner; in-memory hasn't reloaded. That's
+		// recoverable (next NIP-11 read or process restart picks it
+		// up) but surface the error so the handler can surface it
+		// too — operator should investigate before treating the
+		// claim as fully complete.
+		return fmt.Errorf("relay owner written but reload failed: %w", err)
+	}
+	return nil
+}
+
+// OverrideRelayOwnerInMemory sets relayMetadata.Pubkey without
+// touching disk. Used by the env-var bootstrap path
+// (GRAIN_OWNER_PUBKEY) so the override is re-applied on every
+// startup and the on-disk file stays clean — operators who unset
+// the env var don't silently inherit a stale baked-in owner.
+//
+// Accepts lowercased hex only; the env-var parser normalizes first.
+// Holds ownerClaimMu so a /setup POST racing startup can't write a
+// claim that gets overwritten in memory a moment later.
+func OverrideRelayOwnerInMemory(pubkey string) {
+	ownerClaimMu.Lock()
+	defer ownerClaimMu.Unlock()
+	relayMetadata.Pubkey = pubkey
+}
 
 // UpdateRelayMetadata applies non-nil patches to relay_metadata.json
 // and reloads the in-memory copy so NIP-11 responses + the owner

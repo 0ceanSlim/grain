@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/0ceanslim/grain/client"
+	"github.com/0ceanslim/grain/client/core/tools"
 	"github.com/0ceanslim/grain/config"
 	cfgType "github.com/0ceanslim/grain/config/types"
 	relay "github.com/0ceanslim/grain/server/api"
@@ -254,6 +255,20 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 		log.Startup().Error("Failed to load relay metadata", "error", err, "file", "relay_metadata.json")
 	}
 
+	// First-run owner provisioning. GRAIN_OWNER_PUBKEY is the
+	// declarative path — wins over whatever the JSON says and is
+	// re-applied every startup (never written to disk). If the var
+	// isn't set and the metadata has no owner, log a WARN so the
+	// operator knows to visit /setup (the page itself is the primary
+	// signal — banner on every page — but the log line helps anyone
+	// watching `docker logs` too).
+	if envHex, ok := resolveOwnerEnv(); ok {
+		utils.OverrideRelayOwnerInMemory(envHex)
+		log.Startup().Info("Relay owner set from GRAIN_OWNER_PUBKEY", "pubkey", envHex)
+	} else if utils.IsRelayUnowned() {
+		log.Startup().Warn("Relay has no owner configured — visit /setup to claim ownership")
+	}
+
 	// Wire up real-time event broadcasting to active subscribers
 	handlers.OnEventStored = BroadcastEvent
 
@@ -428,4 +443,47 @@ func initRoot(w http.ResponseWriter, r *http.Request) {
 		client.RenderTemplate(w, data, "app.html")
 	}
 
+}
+
+// resolveOwnerEnv reads GRAIN_OWNER_PUBKEY and returns the
+// lowercased-hex pubkey + ok=true if the var is set to a usable
+// value. Accepts hex (64 chars) or npub (bech32 — routed through
+// tools.DecodeNpub). Malformed values log a WARN and return ok=false
+// so the relay still serves traffic, just unowned.
+//
+// Lives in startup.go (not server/utils) because it depends on the
+// client/core/tools package, which utils intentionally doesn't pull in.
+func resolveOwnerEnv() (string, bool) {
+	raw := strings.TrimSpace(os.Getenv("GRAIN_OWNER_PUBKEY"))
+	if raw == "" {
+		return "", false
+	}
+	if strings.HasPrefix(raw, "npub") {
+		hex, err := tools.DecodeNpub(raw)
+		if err != nil {
+			log.Startup().Warn("GRAIN_OWNER_PUBKEY: npub decode failed, ignoring", "error", err)
+			return "", false
+		}
+		return hex, true
+	}
+	lower := strings.ToLower(raw)
+	if len(lower) != 64 || !isHex(lower) {
+		log.Startup().Warn("GRAIN_OWNER_PUBKEY: must be 64-char hex or npub, ignoring",
+			"length", len(lower))
+		return "", false
+	}
+	return lower, true
+}
+
+func isHex(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= '0' && c <= '9':
+		case c >= 'a' && c <= 'f':
+		default:
+			return false
+		}
+	}
+	return true
 }

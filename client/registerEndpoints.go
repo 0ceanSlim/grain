@@ -76,6 +76,19 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	// a permanent dev/preview tool.
 	mux.HandleFunc("/style-test", styleTestHandler)
 
+	// Admin dashboard. Server-rendered, owner-gated via session cookie.
+	// Lives in this package because the handler renders through the
+	// shared template engine; the per-section grain_* writes the page
+	// issues go to the NIP-86 dispatcher on the relay side.
+	mux.HandleFunc("/admin", HandleAdmin)
+
+	// First-run owner provisioning. GET shows the claim form (or
+	// the "already claimed" panel); POST is the actual claim. The
+	// /setup page is loud-banner-advertised on every page until an
+	// owner is set — see plans/floating-imagining-tome.md for the
+	// threat model rationale.
+	mux.HandleFunc("/setup", HandleSetup)
+
 	// Core Nostr client function endpoints
 	registerCoreClientEndpoints(mux)
 

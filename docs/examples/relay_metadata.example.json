@@ -1,12 +1,12 @@
 {
-  "_comment_pubkey": "Replace with your relay operator's hex pubkey. Default is all zeros so a fresh deployment doesn't impersonate anyone.",
+  "_comment_pubkey": "Leave empty on a fresh deployment — first run will route operators to /setup to claim ownership via any Nostr signer. Or set GRAIN_OWNER_PUBKEY (hex or npub) in the environment to claim declaratively at startup without the UI step.",
   "_comment_version": "version is overlaid at NIP-11 response time from the running build; the placeholder below is fine to leave as-is.",
 
   "name": "🌾 GRAIN Relay",
   "description": "Go Relay Architecture for Implementing Nostr",
   "banner": "https://example.com/banner.jpg",
   "icon": "https://example.com/icon.png",
-  "pubkey": "0000000000000000000000000000000000000000000000000000000000000000",
+  "pubkey": "",
   "contact": "mailto:admin@relay.com",
   "supported_nips": [1, 7, 9, 11, 19, 40, 42, 45, 50, 55, 65, 70, 86, 98],
   "software": "https://github.com/0ceanslim/grain",

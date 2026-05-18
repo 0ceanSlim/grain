@@ -1,0 +1,101 @@
+{{define "view"}}
+<!-- Admin dashboard. Server-rendered (not an HTMX swap) so the
+     owner gate runs against the cookie session before any chrome
+     reaches the browser — non-owners 303 to "/" and never see this
+     markup. Each section renders as an accordion <details> panel;
+     Phase 1 ships read-only stubs (current config as JSON) so the
+     per-section "real form" commits in Phase 2+ replace one panel
+     at a time. -->
+<main id="main-content" class="max-w-5xl px-4 py-8 mx-auto text-left">
+  <header class="mb-6">
+    <h1 class="text-3xl font-bold text-text" style="font-family: var(--font-display)">
+      🌾 grain — admin
+    </h1>
+    <p class="mt-1 text-sm text-text-secondary">
+      Owner:
+      <span class="font-mono">{{.Owner}}</span>
+    </p>
+  </header>
+
+  <!-- Single form wraps the whole accordion so the sticky "Apply"
+       footer is scoped to the page and per-section submit handlers
+       can find their <form data-section="..."> via event delegation. -->
+  <form id="admin-form" class="space-y-3" autocomplete="off" onsubmit="return false;">
+    {{range .Sections}}
+    <details
+      class="rounded-lg border border-border-strong bg-surface"
+      data-section="{{.ID}}"
+      data-method="{{.Method}}"
+    >
+      <summary class="flex items-center gap-3 px-4 py-3 cursor-pointer select-none">
+        <span class="text-lg">{{.Icon}}</span>
+        <span class="font-medium text-text">{{.Title}}</span>
+        <span
+          class="hidden ml-auto text-xs px-2 py-0.5 rounded bg-warning-dim text-warning"
+          data-role="pending-badge"
+        >pending</span>
+      </summary>
+      <div class="px-4 pb-4 border-t border-border">
+        <!-- Phase 1 stub. Replaced one section per commit with a
+             real <form data-method="{{.Method}}"> wired to the
+             typed config. The JSON dump is intentionally cheap —
+             it proves the server-side read path works for every
+             section before we touch the write path. -->
+        {{if .Config}}
+        <pre
+          class="p-3 mt-3 overflow-x-auto text-xs rounded bg-surface-base text-text"
+        >{{.Config | printf "%+v"}}</pre>
+        {{else}}
+        <p class="mt-3 text-sm text-text-secondary">
+          Operational controls (apply, reload cache, relay identity edits) —
+          form arrives in the ops commit.
+        </p>
+        {{end}}
+        <div class="flex justify-end mt-3">
+          <button
+            type="button"
+            class="px-3 py-1.5 text-sm rounded border border-border-strong text-text-secondary cursor-not-allowed opacity-60"
+            disabled
+          >
+            Edit (coming soon)
+          </button>
+        </div>
+      </div>
+    </details>
+    {{end}}
+  </form>
+
+  <!-- Sticky footer. Apply calls grain_reloadconfig; Discard clears
+       the pending set without server side-effects. Both stay
+       disabled until at least one section is marked pending. -->
+  <div
+    class="sticky bottom-0 mt-6 -mx-4 px-4 py-3 border-t border-border-strong bg-surface-elevated"
+  >
+    <div class="flex items-center justify-between max-w-5xl mx-auto">
+      <span id="admin-pending-summary" class="text-sm text-text-secondary">
+        No pending changes.
+      </span>
+      <div class="space-x-2">
+        <button
+          id="admin-discard"
+          type="button"
+          class="px-3 py-1.5 text-sm rounded border border-border-strong text-text disabled:opacity-50"
+          disabled
+        >Discard</button>
+        <button
+          id="admin-apply"
+          type="button"
+          class="px-3 py-1.5 text-sm rounded bg-accent text-accent-fg disabled:opacity-50"
+          disabled
+        >Apply pending changes</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- nip86-submit.js is intentionally a separate file with no DOM
+     dependencies so it can be lifted into the grain client library
+     verbatim — the only Nostr-protocol code in the JS layer. -->
+<script src="/static/js/nip86-submit.js"></script>
+<script src="/static/js/admin.js"></script>
+{{end}}
