@@ -48,6 +48,8 @@
       <div class="px-4 pb-4 border-t border-border">
         {{if eq .ID "logging"}}
           {{template "admin-logging" .Config}}
+        {{else if eq .ID "auth"}}
+          {{template "admin-auth" .Config}}
         {{else if .Config}}
         <!-- Stub until this section's partial lands. -->
         <pre

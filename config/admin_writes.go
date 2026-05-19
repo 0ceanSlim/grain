@@ -38,6 +38,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	cfgType "github.com/0ceanslim/grain/config/types"
@@ -169,7 +170,17 @@ func UpdateLoggingConfig(lg cfgType.LogConfig) error {
 // makes new sessions see the new policy without restart. Existing
 // authenticated WS connections retain their session, which matches
 // operator intent (don't kick logged-in users for a policy tweak).
+//
+// Hard validation: when Required is true, RelayURL must be set —
+// the NIP-42 challenge's `relay` tag is what clients echo back, and
+// an empty URL means every signed AUTH event would be rejected. We
+// reject the write here rather than wait for the post-reload AUTH
+// flood that would lock every client out of a "public" relay.
 func UpdateAuthConfig(au cfgType.AuthConfig) error {
+	au.RelayURL = strings.TrimSpace(au.RelayURL)
+	if au.Required && au.RelayURL == "" {
+		return fmt.Errorf("relay_url must be set when AUTH is required")
+	}
 	ConfigMu.Lock()
 	defer ConfigMu.Unlock()
 	c := GetConfig()

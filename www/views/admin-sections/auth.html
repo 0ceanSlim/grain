@@ -1,0 +1,70 @@
+{{define "admin-auth"}}
+<!-- Auth section. The enclosing <details> (admin.html) supplies
+     data-section="auth" and data-method="grain_updateauth". Dot
+     here is cfgType.AuthConfig.
+
+     Wire shape (snake_case JSON keys, matches AuthConfig's json
+     tags): required, relay_url, relay_url_match. -->
+<form class="grid gap-4 mt-3 sm:grid-cols-2" autocomplete="off">
+  <!-- Toggle. Forced full-width — the checkbox + label reads
+       awkwardly inside a narrow grid cell. -->
+  <label class="flex items-start gap-3 sm:col-span-2 p-3 rounded bg-surface-elevated">
+    <input
+      type="checkbox"
+      name="required"
+      data-shape="bool"
+      {{if .Required}}checked{{end}}
+      class="w-4 h-4 mt-0.5 accent-accent"
+    />
+    <span class="flex-1">
+      <span class="block text-sm font-medium text-text">
+        Require NIP-42 AUTH
+      </span>
+      <span class="block mt-1 text-xs text-text-secondary">
+        When enabled, every WebSocket session must complete a signed
+        AUTH challenge before EVENT or REQ are accepted.
+      </span>
+    </span>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm sm:col-span-2">
+    <span class="font-medium text-text-secondary">
+      Relay URL
+      <span class="font-normal text-warning">(required when AUTH is on)</span>
+    </span>
+    <input
+      type="text"
+      name="relay_url"
+      value="{{.RelayURL}}"
+      placeholder="wss://relay.example.com"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+    <span class="text-xs text-text-secondary">
+      The URL clients must echo in their signed AUTH event's <span class="font-mono">relay</span> tag.
+      Recommended for any public relay so clients always know which address they're authenticating to.
+    </span>
+  </label>
+
+  <!-- Match mode: select instead of free-text, since the server
+       rejects anything outside {strict, host} (empty also accepted
+       as "strict"). -->
+  <label class="flex flex-col gap-1 text-sm sm:col-span-2">
+    <span class="font-medium text-text-secondary">URL match mode</span>
+    <select
+      name="relay_url_match"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text"
+    >
+      {{/* Treat empty as "strict" so the legacy default shows up
+           pre-selected without forcing operators to re-pick it. */}}
+      {{$mode := .RelayURLMatch}}
+      {{if eq $mode ""}}{{$mode = "strict"}}{{end}}
+      <option value="strict" {{if eq $mode "strict"}}selected{{end}}>strict — path is significant</option>
+      <option value="host"   {{if eq $mode "host"}}selected{{end}}>host — any path on the right host</option>
+    </select>
+    <span class="text-xs text-text-secondary">
+      <span class="font-mono">strict</span> matches the full canonicalized URL;
+      <span class="font-mono">host</span> accepts any path so long as the host matches.
+    </span>
+  </label>
+</form>
+{{end}}
