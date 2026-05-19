@@ -21,8 +21,12 @@
         Require NIP-42 AUTH
       </span>
       <span class="block mt-1 text-xs text-text-secondary">
-        When enabled, every WebSocket session must complete a signed
-        AUTH challenge before EVENT or REQ are accepted.
+        When required, every WebSocket session must complete a signed
+        AUTH challenge before EVENT or REQ are accepted — this gates
+        read and write access to the relay. It is <strong>not</strong>
+        the gate for specific NIP actions that themselves request AUTH
+        (e.g. a NIP-70 protected event); those are always enforced
+        regardless of this setting.
       </span>
     </span>
   </label>

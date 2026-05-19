@@ -137,7 +137,10 @@ rate_limit:
   req_burst: 30 # Allowed burst of REQs
   max_event_size: 524288 # 512KB — reasonable for most Nostr events; applies to both event validation AND the WebSocket message buffer
 
-  # Size limits for specific event kinds
+  # Size limits for specific event kinds. Aligned with the
+  # "suggested" chips in the admin dashboard's Rate Limit section
+  # — same numbers, so a fresh deploy gets sensible defaults
+  # before the operator ever opens /admin.
   kind_size_limits:
     - kind: 0 # User metadata (profile info)
       max_size: 8192 # 8KB - sufficient for detailed profiles with images
@@ -147,6 +150,10 @@ rate_limit:
       max_size: 65536 # 64KB - allows large Follow lists (1000+ Follows)
     - kind: 7 # Reactions (likes, etc.)
       max_size: 512 # 512B - reactions should be tiny
+    - kind: 9735 # Zap receipts (NIP-57)
+      max_size: 4096 # 4KB - small structured payload + LN proof
+    - kind: 30023 # Long-form content (NIP-23)
+      max_size: 262144 # 256KB - articles can be big; tighten if seeing abuse
 
   # Rate limits for different event categories
   category_limits:
@@ -163,21 +170,27 @@ rate_limit:
       limit: 3 # 3 events per second - often larger content
       burst: 8 # Moderate burst for content creation sessions
 
-  # Rate limits for specific event kinds. Overrides category_limits for the
-  # listed kinds. Add an entry only when you want that kind to be tighter or
-  # looser than its category default. Example shapes (commented out — uncomment
-  # and tune for your traffic):
+  # Rate limits for specific event kinds. Overrides category_limits
+  # for the listed kinds. Default is empty so operators opt in to
+  # per-kind tightening; the admin dashboard's "suggested" chips
+  # pre-fill these exact values for one-click adds.
   #
   # kind_limits:
-  #   - kind: 0       # Profile metadata — tight by default since it's an identity update
+  #   - kind: 0       # Profile metadata — tight; identity updates should be rare
   #     limit: 1
   #     burst: 2
-  #   - kind: 1       # Text notes — tighter than the regular category for spam control
+  #   - kind: 1       # Text notes — tighter than regular category for spam control
   #     limit: 5
   #     burst: 12
-  #   - kind: 7       # Reactions — looser; high volume but tiny
+  #   - kind: 6       # Reposts — same tightness as notes
+  #     limit: 5
+  #     burst: 12
+  #   - kind: 7       # Reactions — loose; high volume but tiny
   #     limit: 20
   #     burst: 40
+  #   - kind: 9735    # Zap receipts — moderate; payment flows can spike
+  #     limit: 10
+  #     burst: 20
   #   - kind: 30023   # Long-form articles — usually authored slowly
   #     limit: 1
   #     burst: 3

@@ -1,0 +1,545 @@
+{{define "admin-rate_limit"}}
+<!-- Rate limit section. Enclosing <details> supplies
+     data-section="rate_limit" and data-method="grain_updateratelimit".
+     Dot is RateLimitSectionData (Config + reference catalogs).
+
+     Compound shapes (categories map, per-kind size list, per-kind
+     rate list) ride through data-shape="json" hidden inputs.
+     Section JS owns marshalling — admin.js just round-trips on
+     save and rehydrate. -->
+{{with .Config}}
+<form class="flex flex-col gap-5 mt-3" autocomplete="off">
+
+  <!-- ─── Global per-client rates ─────────────────────────────── -->
+  <fieldset class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Global per-client rates</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      Applied to every active WebSocket session, regardless of event
+      kind. <strong>Limit</strong> is the sustained per-second rate;
+      <strong>burst</strong> is how many actions can fire back-to-back
+      before the limit kicks in. Burst is usually 2–3× the limit for
+      bursty workloads.
+    </p>
+    <div class="grid gap-3 sm:grid-cols-3">
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">WS messages /sec</span>
+        <input type="number" name="ws_limit" data-shape="number" min="0" step="any" value="{{.WsLimit}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">All frames: EVENT, REQ, CLOSE, AUTH.</span>
+      </label>
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">WS burst</span>
+        <input type="number" name="ws_burst" data-shape="number" min="0" step="1" value="{{.WsBurst}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+      </label>
+      <span></span>
+
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">EVENT /sec</span>
+        <input type="number" name="event_limit" data-shape="number" min="0" step="any" value="{{.EventLimit}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">Only published events; below this the category/kind rates apply.</span>
+      </label>
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">EVENT burst</span>
+        <input type="number" name="event_burst" data-shape="number" min="0" step="1" value="{{.EventBurst}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+      </label>
+      <span></span>
+
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">REQ /sec</span>
+        <input type="number" name="req_limit" data-shape="number" min="0" step="any" value="{{.ReqLimit}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">Clients fire several REQs at startup; don't set too tight.</span>
+      </label>
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">REQ burst</span>
+        <input type="number" name="req_burst" data-shape="number" min="0" step="1" value="{{.ReqBurst}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+      </label>
+    </div>
+  </fieldset>
+
+  <!-- ─── Max event size ──────────────────────────────────────── -->
+  <fieldset data-rl-mes class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Max event size</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      Applied to event validation AND the WebSocket message buffer —
+      events bigger than this get rejected at ingest.
+      <br />
+      <span class="text-text-secondary">Reference:</span> a signed
+      kind-1 short note with &lt;100 characters of content is roughly
+      <span class="font-mono">400&nbsp;bytes</span>. Default
+      <span class="font-mono">512&nbsp;KB</span> easily fits the
+      largest realistic events (long follow lists, profile metadata
+      with embedded images as data URIs); tighten it if you see abuse.
+    </p>
+    <div class="flex items-end gap-2">
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Size</span>
+        <input type="number" data-rl-mes-n data-no-submit min="0" step="1"
+          class="w-32 px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+      </label>
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Unit</span>
+        <select data-rl-mes-unit data-no-submit
+          class="px-3 py-2 rounded bg-surface border border-border text-text">
+          <option value="B">bytes</option>
+          <option value="KB">KB</option>
+          <option value="MB">MB</option>
+        </select>
+      </label>
+    </div>
+    <input type="hidden" name="max_event_size" data-shape="number" value="{{.MaxEventSize}}" />
+  </fieldset>
+
+  <!-- ─── Category limits ─────────────────────────────────────── -->
+  <fieldset data-rl-cat class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Per-category rates</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      Override the global EVENT rate for whole NIP-01 ranges. Enable a
+      category to make its limit/burst kick in; leave disabled to use
+      the global EVENT rate above. Sensible defaults pre-fill on enable.
+    </p>
+    <div class="grid gap-3 sm:grid-cols-2">
+      {{$cur := .CategoryLimits}}
+      {{range $cat := $.RateLimitCategories}}
+      <div data-rl-cat-row data-cat="{{$cat}}" class="p-3 rounded bg-surface border border-border">
+        <label class="flex items-center gap-2 mb-2">
+          <input type="checkbox" data-rl-cat-enabled data-no-submit class="w-4 h-4 accent-accent" />
+          <span class="font-mono text-sm font-medium text-text">{{$cat}}</span>
+        </label>
+        <div data-rl-cat-body class="grid grid-cols-2 gap-2">
+          <label class="flex flex-col gap-1 text-xs">
+            <span class="text-text-secondary">limit (/sec)</span>
+            <input type="number" data-rl-cat-limit data-no-submit min="0" step="any"
+              class="px-2 py-1 rounded bg-surface-elevated border border-border text-text font-mono" />
+          </label>
+          <label class="flex flex-col gap-1 text-xs">
+            <span class="text-text-secondary">burst</span>
+            <input type="number" data-rl-cat-burst data-no-submit min="0" step="1"
+              class="px-2 py-1 rounded bg-surface-elevated border border-border text-text font-mono" />
+          </label>
+        </div>
+      </div>
+      {{end}}
+    </div>
+    <input type="hidden" name="category_limits" data-shape="json" value="" />
+  </fieldset>
+
+  <!-- ─── Per-kind size limits ────────────────────────────────── -->
+  <fieldset data-rl-ksl class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Per-kind size limits</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      Override <span class="font-mono">max_event_size</span> for specific
+      kinds. Quick-add chips drop sensible starting values into the
+      add row — review and click Add.
+    </p>
+    <div data-rl-ksl-rows class="flex flex-col gap-2 mb-3"></div>
+
+    <!-- Chip row -->
+    <div class="flex flex-wrap gap-1.5 items-center mb-2">
+      <span class="text-xs text-text-secondary">suggested:</span>
+      {{range $.KindSizePresets}}
+      <button
+        type="button"
+        data-rl-ksl-chip
+        data-kind="{{.Kind}}"
+        data-bytes="{{.Bytes}}"
+        class="px-2 py-0.5 text-xs font-mono rounded border border-border-strong text-text hover:bg-surface-hover"
+      ></button>
+      {{end}}
+    </div>
+
+    <!-- Add row -->
+    <div class="flex flex-wrap gap-2 items-end">
+      <label class="flex flex-col gap-1 text-xs">
+        <span class="text-text-secondary">kind</span>
+        <input type="number" data-rl-ksl-add-kind data-no-submit min="0" step="1"
+          class="w-24 px-2 py-1.5 rounded bg-surface border border-border text-text font-mono" />
+      </label>
+      <label class="flex flex-col gap-1 text-xs">
+        <span class="text-text-secondary">max size</span>
+        <input type="number" data-rl-ksl-add-size data-no-submit min="0" step="1"
+          class="w-32 px-2 py-1.5 rounded bg-surface border border-border text-text font-mono" />
+      </label>
+      <label class="flex flex-col gap-1 text-xs">
+        <span class="text-text-secondary">unit</span>
+        <select data-rl-ksl-add-unit data-no-submit
+          class="px-2 py-1.5 rounded bg-surface border border-border text-text">
+          <option value="B">bytes</option>
+          <option value="KB">KB</option>
+          <option value="MB">MB</option>
+        </select>
+      </label>
+      <button type="button" data-rl-ksl-add
+        class="px-3 py-1.5 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover">Add</button>
+    </div>
+    <input type="hidden" name="kind_size_limits" data-shape="json" value="" />
+  </fieldset>
+
+  <!-- ─── Per-kind rate limits ────────────────────────────────── -->
+  <fieldset data-rl-kl class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Per-kind rates</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      Override the category rate for individual kinds. Chips pre-fill
+      sensible defaults — most operators only need a few of these.
+    </p>
+    <div data-rl-kl-rows class="flex flex-col gap-2 mb-3"></div>
+
+    <div class="flex flex-wrap gap-1.5 items-center mb-2">
+      <span class="text-xs text-text-secondary">suggested:</span>
+      {{range $.KindRatePresets}}
+      <button
+        type="button"
+        data-rl-kl-chip
+        data-kind="{{.Kind}}"
+        data-limit="{{.Limit}}"
+        data-burst="{{.Burst}}"
+        class="px-2 py-0.5 text-xs font-mono rounded border border-border-strong text-text hover:bg-surface-hover"
+      ></button>
+      {{end}}
+    </div>
+
+    <div class="flex flex-wrap gap-2 items-end">
+      <label class="flex flex-col gap-1 text-xs">
+        <span class="text-text-secondary">kind</span>
+        <input type="number" data-rl-kl-add-kind data-no-submit min="0" step="1"
+          class="w-24 px-2 py-1.5 rounded bg-surface border border-border text-text font-mono" />
+      </label>
+      <label class="flex flex-col gap-1 text-xs">
+        <span class="text-text-secondary">limit (/sec)</span>
+        <input type="number" data-rl-kl-add-limit data-no-submit min="0" step="any"
+          class="w-24 px-2 py-1.5 rounded bg-surface border border-border text-text font-mono" />
+      </label>
+      <label class="flex flex-col gap-1 text-xs">
+        <span class="text-text-secondary">burst</span>
+        <input type="number" data-rl-kl-add-burst data-no-submit min="0" step="1"
+          class="w-24 px-2 py-1.5 rounded bg-surface border border-border text-text font-mono" />
+      </label>
+      <button type="button" data-rl-kl-add
+        class="px-3 py-1.5 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover">Add</button>
+    </div>
+    <input type="hidden" name="kind_limits" data-shape="json" value="" />
+  </fieldset>
+</form>
+
+<!-- Bootstrap data. CategoryDefaults is the pre-fill on enable. -->
+<span
+  data-rl-initial
+  data-cat='{{.CategoryLimits | rateLimitJSON}}'
+  data-ksl='{{.KindSizeLimits | rateLimitJSON}}'
+  data-kl='{{.KindLimits | rateLimitJSON}}'
+  data-cat-defaults='{{$.CategoryDefaults | rateLimitJSON}}'
+  hidden
+></span>
+
+<script>
+  (function () {
+    "use strict";
+    const panel = document.querySelector('[data-section="rate_limit"]');
+    if (!panel) return;
+
+    const toast = window.adminToast || function () {};
+
+    // ── Byte<->display helpers ───────────────────────────────
+
+    function bytesToDisplay(bytes) {
+      bytes = parseInt(bytes, 10);
+      if (!Number.isFinite(bytes) || bytes <= 0) return { n: 0, unit: "B" };
+      const MB = 1024 * 1024;
+      if (bytes >= MB && bytes % MB === 0) return { n: bytes / MB, unit: "MB" };
+      if (bytes >= 1024 && bytes % 1024 === 0) return { n: bytes / 1024, unit: "KB" };
+      return { n: bytes, unit: "B" };
+    }
+
+    function displayToBytes(n, unit) {
+      n = parseFloat(n);
+      if (!Number.isFinite(n) || n < 0) return 0;
+      if (unit === "KB") return Math.round(n * 1024);
+      if (unit === "MB") return Math.round(n * 1024 * 1024);
+      return Math.round(n);
+    }
+
+    function labelFor(kind) {
+      return (window.NOSTR_KIND_LABELS && window.NOSTR_KIND_LABELS[kind]) || "";
+    }
+
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    // ── Bootstrap JSON from server data attrs ────────────────
+
+    const initial = panel.querySelector("[data-rl-initial]");
+    const categoryDefaults = JSON.parse((initial && initial.dataset.catDefaults) || "{}");
+
+    // ── Max event size: visible inputs ↔ hidden bytes ────────
+
+    const mesEl = panel.querySelector("[data-rl-mes]");
+    const mesHidden = mesEl.querySelector('[name="max_event_size"]');
+    const mesN = mesEl.querySelector("[data-rl-mes-n]");
+    const mesUnit = mesEl.querySelector("[data-rl-mes-unit]");
+
+    function rehydrateMes() {
+      const d = bytesToDisplay(mesHidden.value);
+      mesN.value = d.n > 0 ? d.n : "";
+      mesUnit.value = d.unit;
+    }
+    function syncMes() {
+      mesHidden.value = String(displayToBytes(mesN.value, mesUnit.value));
+      mesHidden.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    mesN.addEventListener("input", syncMes);
+    mesUnit.addEventListener("change", syncMes);
+
+    // ── Categories ───────────────────────────────────────────
+
+    const catEl = panel.querySelector("[data-rl-cat]");
+    const catJSON = catEl.querySelector('[name="category_limits"]');
+
+    function rehydrateCats() {
+      const cur = JSON.parse(initial.dataset.cat || "{}") || {};
+      catEl.querySelectorAll("[data-rl-cat-row]").forEach((row) => {
+        const name = row.dataset.cat;
+        const enabled = !!cur[name];
+        const enabledBox = row.querySelector("[data-rl-cat-enabled]");
+        const limitInput = row.querySelector("[data-rl-cat-limit]");
+        const burstInput = row.querySelector("[data-rl-cat-burst]");
+        enabledBox.checked = enabled;
+        if (enabled) {
+          limitInput.value = cur[name].limit != null ? cur[name].limit : "";
+          burstInput.value = cur[name].burst != null ? cur[name].burst : "";
+        } else {
+          limitInput.value = "";
+          burstInput.value = "";
+        }
+        applyCatEnabledStyling(row, enabled);
+      });
+      syncCats();
+    }
+
+    function applyCatEnabledStyling(row, enabled) {
+      const body = row.querySelector("[data-rl-cat-body]");
+      if (enabled) {
+        body.classList.remove("opacity-50", "pointer-events-none");
+      } else {
+        body.classList.add("opacity-50", "pointer-events-none");
+      }
+    }
+
+    function syncCats() {
+      const out = {};
+      catEl.querySelectorAll("[data-rl-cat-row]").forEach((row) => {
+        const name = row.dataset.cat;
+        const enabled = row.querySelector("[data-rl-cat-enabled]").checked;
+        if (!enabled) return;
+        const limit = parseFloat(row.querySelector("[data-rl-cat-limit]").value);
+        const burst = parseInt(row.querySelector("[data-rl-cat-burst]").value, 10);
+        out[name] = {
+          kind: 0,
+          limit: Number.isFinite(limit) ? limit : 0,
+          burst: Number.isFinite(burst) ? burst : 0,
+        };
+      });
+      catJSON.value = JSON.stringify(out);
+      catJSON.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    catEl.addEventListener("change", (ev) => {
+      const box = ev.target.closest("[data-rl-cat-enabled]");
+      if (box) {
+        const row = box.closest("[data-rl-cat-row]");
+        applyCatEnabledStyling(row, box.checked);
+        if (box.checked) {
+          // Pre-fill with sensible defaults if inputs are empty.
+          const name = row.dataset.cat;
+          const def = categoryDefaults[name] || {};
+          const limitInput = row.querySelector("[data-rl-cat-limit]");
+          const burstInput = row.querySelector("[data-rl-cat-burst]");
+          if (!limitInput.value) limitInput.value = def.limit != null ? def.limit : 0;
+          if (!burstInput.value) burstInput.value = def.burst != null ? def.burst : 0;
+        }
+      }
+      syncCats();
+    });
+    catEl.addEventListener("input", () => syncCats());
+
+    // ── Per-kind size limits ─────────────────────────────────
+
+    const kslEl = panel.querySelector("[data-rl-ksl]");
+    const kslJSON = kslEl.querySelector('[name="kind_size_limits"]');
+    const kslRows = kslEl.querySelector("[data-rl-ksl-rows]");
+
+    function renderKsl(list) {
+      kslRows.innerHTML = list
+        .map((entry) => {
+          const lbl = labelFor(entry.kind);
+          const d = bytesToDisplay(entry.max_size);
+          return (
+            '<div data-rl-ksl-row class="flex flex-wrap items-center gap-2 py-1 px-2 rounded bg-surface text-sm" ' +
+            'data-kind="' + entry.kind + '" data-max-size="' + entry.max_size + '">' +
+            '<span class="font-mono text-text">kind ' + entry.kind + '</span>' +
+            (lbl ? '<span class="text-text-secondary text-xs">— ' + escHtml(lbl) + '</span>' : '') +
+            '<span class="text-text-secondary ml-2">→</span>' +
+            '<span class="font-mono text-text">' + d.n + ' ' + d.unit + '</span>' +
+            '<button type="button" data-rl-ksl-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>' +
+            '</div>'
+          );
+        })
+        .join("");
+    }
+
+    function readKsl() {
+      return Array.from(kslRows.querySelectorAll("[data-rl-ksl-row]")).map((r) => ({
+        kind: parseInt(r.dataset.kind, 10),
+        max_size: parseInt(r.dataset.maxSize, 10),
+      }));
+    }
+    function syncKsl() {
+      kslJSON.value = JSON.stringify(readKsl());
+      kslJSON.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    function rehydrateKsl() {
+      const list = JSON.parse(initial.dataset.ksl || "[]") || [];
+      renderKsl(list);
+      syncKsl();
+    }
+
+    // Chips: prefill the add-row inputs (don't add directly — let the
+    // operator review/tweak first).
+    kslEl.querySelectorAll("[data-rl-ksl-chip]").forEach((chip) => {
+      const k = parseInt(chip.dataset.kind, 10);
+      const bytes = parseInt(chip.dataset.bytes, 10);
+      const d = bytesToDisplay(bytes);
+      const lbl = labelFor(k);
+      chip.textContent = "kind " + k + " — " + d.n + " " + d.unit + (lbl ? " (" + lbl.split(" (")[0] + ")" : "");
+      chip.addEventListener("click", () => {
+        kslEl.querySelector("[data-rl-ksl-add-kind]").value = k;
+        kslEl.querySelector("[data-rl-ksl-add-size]").value = d.n;
+        kslEl.querySelector("[data-rl-ksl-add-unit]").value = d.unit;
+      });
+    });
+
+    kslEl.querySelector("[data-rl-ksl-add]").addEventListener("click", () => {
+      const ki = kslEl.querySelector("[data-rl-ksl-add-kind]");
+      const si = kslEl.querySelector("[data-rl-ksl-add-size]");
+      const ui = kslEl.querySelector("[data-rl-ksl-add-unit]");
+      const kind = parseInt(ki.value, 10);
+      const bytes = displayToBytes(si.value, ui.value);
+      if (!Number.isFinite(kind) || kind < 0) { toast("kind must be a non-negative integer", "error"); return; }
+      if (bytes <= 0) { toast("size must be positive", "error"); return; }
+      const list = readKsl();
+      const found = list.find((e) => e.kind === kind);
+      if (found) found.max_size = bytes;
+      else list.push({ kind: kind, max_size: bytes });
+      renderKsl(list);
+      ki.value = ""; si.value = "";
+      syncKsl();
+    });
+    kslRows.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-rl-ksl-remove]");
+      if (!btn) return;
+      btn.closest("[data-rl-ksl-row]").remove();
+      syncKsl();
+    });
+
+    // ── Per-kind rates ───────────────────────────────────────
+
+    const klEl = panel.querySelector("[data-rl-kl]");
+    const klJSON = klEl.querySelector('[name="kind_limits"]');
+    const klRows = klEl.querySelector("[data-rl-kl-rows]");
+
+    function renderKl(list) {
+      klRows.innerHTML = list
+        .map((entry) => {
+          const lbl = labelFor(entry.kind);
+          return (
+            '<div data-rl-kl-row class="flex flex-wrap items-center gap-2 py-1 px-2 rounded bg-surface text-sm" ' +
+            'data-kind="' + entry.kind + '" data-limit="' + entry.limit + '" data-burst="' + entry.burst + '">' +
+            '<span class="font-mono text-text">kind ' + entry.kind + '</span>' +
+            (lbl ? '<span class="text-text-secondary text-xs">— ' + escHtml(lbl) + '</span>' : '') +
+            '<span class="text-text-secondary ml-2">limit</span>' +
+            '<span class="font-mono text-text">' + entry.limit + '/s</span>' +
+            '<span class="text-text-secondary">burst</span>' +
+            '<span class="font-mono text-text">' + entry.burst + '</span>' +
+            '<button type="button" data-rl-kl-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>' +
+            '</div>'
+          );
+        })
+        .join("");
+    }
+    function readKl() {
+      return Array.from(klRows.querySelectorAll("[data-rl-kl-row]")).map((r) => ({
+        kind: parseInt(r.dataset.kind, 10),
+        limit: parseFloat(r.dataset.limit),
+        burst: parseInt(r.dataset.burst, 10),
+      }));
+    }
+    function syncKl() {
+      klJSON.value = JSON.stringify(readKl());
+      klJSON.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    function rehydrateKl() {
+      const list = JSON.parse(initial.dataset.kl || "[]") || [];
+      renderKl(list);
+      syncKl();
+    }
+
+    klEl.querySelectorAll("[data-rl-kl-chip]").forEach((chip) => {
+      const k = parseInt(chip.dataset.kind, 10);
+      const lim = parseFloat(chip.dataset.limit);
+      const bur = parseInt(chip.dataset.burst, 10);
+      const lbl = labelFor(k);
+      chip.textContent = "kind " + k + " — " + lim + "/s, burst " + bur + (lbl ? " (" + lbl.split(" (")[0] + ")" : "");
+      chip.addEventListener("click", () => {
+        klEl.querySelector("[data-rl-kl-add-kind]").value = k;
+        klEl.querySelector("[data-rl-kl-add-limit]").value = lim;
+        klEl.querySelector("[data-rl-kl-add-burst]").value = bur;
+      });
+    });
+
+    klEl.querySelector("[data-rl-kl-add]").addEventListener("click", () => {
+      const ki = klEl.querySelector("[data-rl-kl-add-kind]");
+      const li = klEl.querySelector("[data-rl-kl-add-limit]");
+      const bi = klEl.querySelector("[data-rl-kl-add-burst]");
+      const kind = parseInt(ki.value, 10);
+      const limit = parseFloat(li.value);
+      const burst = parseInt(bi.value, 10);
+      if (!Number.isFinite(kind) || kind < 0) { toast("kind must be a non-negative integer", "error"); return; }
+      if (!Number.isFinite(limit) || limit < 0) { toast("limit must be >= 0", "error"); return; }
+      if (!Number.isFinite(burst) || burst < 0) { toast("burst must be >= 0", "error"); return; }
+      const list = readKl();
+      const found = list.find((e) => e.kind === kind);
+      if (found) { found.limit = limit; found.burst = burst; }
+      else list.push({ kind: kind, limit: limit, burst: burst });
+      renderKl(list);
+      ki.value = ""; li.value = ""; bi.value = "";
+      syncKl();
+    });
+    klRows.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-rl-kl-remove]");
+      if (!btn) return;
+      btn.closest("[data-rl-kl-row]").remove();
+      syncKl();
+    });
+
+    // ── Initial rehydrate + hook registration ───────────────
+
+    function rehydrateAll() {
+      rehydrateMes();
+      rehydrateCats();
+      rehydrateKsl();
+      rehydrateKl();
+    }
+    rehydrateAll();
+
+    window.adminSectionHooks = window.adminSectionHooks || {};
+    window.adminSectionHooks.rate_limit = { rehydrate: rehydrateAll };
+  })();
+</script>
+{{end}}
+{{end}}

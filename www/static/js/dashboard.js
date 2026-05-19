@@ -650,21 +650,24 @@ const dashboardManager = {
   createSystemConfigContent(authData, backupData) {
     let content = "";
 
-    // Authentication configuration
+    // Authentication configuration.
+    // Wire field is `required` (not `enabled`); old typo always
+    // rendered "Disabled" regardless of the actual setting.
     if (authData) {
+      const authOn = !!authData.required;
       content += `
       <div class="flex justify-between items-center">
         <span class="text-text-secondary">Authentication</span>
         <div class="text-right">
           <div class="inline-flex px-2 py-1 text-xs font-medium ${
-            authData.enabled
+            authOn
               ? "bg-success-dim text-success"
               : "bg-surface-elevated text-text-secondary"
           } rounded-full">
-            ${authData.enabled ? "Enabled" : "Disabled"}
+            ${authOn ? "Enabled" : "Disabled"}
           </div>
           ${
-            authData.enabled && authData.relay_url
+            authOn && authData.relay_url
               ? `
             <div class="text-xs text-text-secondary mt-1">${this.escapeHtml(
               authData.relay_url
@@ -677,8 +680,15 @@ const dashboardManager = {
     `;
     }
 
-    // Backup Relay configuration
+    // Backup Relay configuration.
+    // Wire field is `urls` (string array) since the multi-backup
+    // commit; old single `url` field is gone, so reading it now
+    // renders undefined. Show the first URL inline, count any
+    // extras — minimal change, not a restyle.
     if (backupData) {
+      const urls = Array.isArray(backupData.urls) ? backupData.urls : [];
+      const showURLs = backupData.enabled && urls.length > 0;
+      const extra = urls.length > 1 ? ` (+${urls.length - 1} more)` : "";
       content += `
       <div class="flex justify-between items-center">
         <span class="text-text-secondary">Backup Relay</span>
@@ -691,11 +701,11 @@ const dashboardManager = {
             ${backupData.enabled ? "Enabled" : "Disabled"}
           </div>
           ${
-            backupData.enabled && backupData.url
+            showURLs
               ? `
             <div class="text-xs text-text-secondary mt-1">${this.escapeHtml(
-              backupData.url
-            )}</div>
+              urls[0]
+            )}${extra}</div>
           `
               : ""
           }

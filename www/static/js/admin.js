@@ -75,6 +75,10 @@
     toastHost.appendChild(el);
     setTimeout(() => el.remove(), 4000);
   }
+  // Sections need to surface validation errors too; expose the
+  // toast helper so per-section inline JS can use it without
+  // re-implementing the host.
+  window.adminToast = toast;
 
   // ── Modal (confirm + spinner states) ─────────────────────────
   //
@@ -223,6 +227,19 @@
         ).map((c) => String(c.value));
         return;
       }
+      if (el.dataset.shape === "json") {
+        // The hidden input's value IS a JSON document. Section JS
+        // owns marshalling — admin.js just round-trips. Used for
+        // compound shapes (rate_limit's per-kind/per-category
+        // limit lists) where every row has multiple fields and
+        // the array-of-objects has no clean flat form.
+        try {
+          blob[el.name] = JSON.parse(el.value || "null");
+        } catch (_) {
+          blob[el.name] = null;
+        }
+        return;
+      }
       if (el.dataset.shape === "map_bool") {
         // Multi-checkbox group whose value is a {key: bool} map.
         // Every member of the group contributes a key; checked
@@ -366,6 +383,11 @@
         handled.add(el.name);
       } else if (groupShape === "ints") {
         el.value = Array.isArray(v) ? v.join("\n") : "";
+      } else if (groupShape === "json") {
+        // Stringify so the hidden input value reflects the
+        // snapshot. The section's rehydrate hook then re-parses
+        // and re-renders the visible compound UI.
+        el.value = v == null ? "" : JSON.stringify(v);
       } else if (groupShape === "int_names" || groupShape === "string_names") {
         // Rebuild the list widget from the snapshot. The
         // container's data-list-shape tells listRender which item

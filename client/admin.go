@@ -29,7 +29,7 @@ import (
 
 // adminTemplateFuncs are the template helpers admin pages need.
 // Lives here (not in templateEngine.go) so it doesn't bleed into
-// every page render — admin's the only page using toJS today.
+// every page render — admin's the only page using these today.
 var adminTemplateFuncs = template.FuncMap{
 	// toJS marshals any value to JSON and returns it as
 	// template.JS so the renderer doesn't HTML-escape the
@@ -41,6 +41,17 @@ var adminTemplateFuncs = template.FuncMap{
 			return template.JS("null")
 		}
 		return template.JS(b)
+	},
+	// rateLimitJSON returns JSON as a plain string. Used inside
+	// HTML attributes where html/template's auto-escaping takes
+	// care of quoting. (toJS would bypass escaping — wrong choice
+	// for attribute context.)
+	"rateLimitJSON": func(v any) string {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return "null"
+		}
+		return string(b)
 	},
 }
 
@@ -89,6 +100,81 @@ var commonPurgeKinds = []QuickKind{
 	{Kind: 9735, Label: "zap receipts"},
 	{Kind: 1059, Label: "gift-wrap (NIP-17)"},
 	{Kind: 16, Label: "generic repost"},
+}
+
+// RateLimitSectionData is the per-section template data for the
+// rate_limit form. Carries the typed config plus reference
+// catalogs the form needs (category list for deterministic order,
+// suggested per-kind size and rate presets for the quick-add
+// chip rows).
+type RateLimitSectionData struct {
+	Config              cfgType.RateLimitConfig
+	RateLimitCategories []string
+	CategoryDefaults    map[string]map[string]float64 // category → {limit, burst}
+	KindSizePresets     []KindSizePreset
+	KindRatePresets     []KindRatePreset
+}
+
+// KindSizePreset is one suggested kind→max_size pairing on the
+// per-kind size limits quick-add row. Sizes here are operator-
+// friendly defaults — operators can edit before clicking Add.
+type KindSizePreset struct {
+	Kind  int
+	Bytes int
+}
+
+// KindRatePreset is one suggested kind→{limit, burst} on the
+// per-kind rate quick-add row.
+type KindRatePreset struct {
+	Kind  int
+	Limit float64
+	Burst int
+}
+
+// categoryDefaultsForRateLimit is what we pre-populate when an
+// operator flips a category's Enable toggle ON for a category that
+// has no entry on disk yet. Matches the rule-of-thumb numbers in
+// the example config.
+var categoryDefaultsForRateLimit = map[string]map[string]float64{
+	"regular":     {"limit": 8, "burst": 16},
+	"replaceable": {"limit": 5, "burst": 10},
+	"ephemeral":   {"limit": 50, "burst": 100},
+	"addressable": {"limit": 3, "burst": 8},
+}
+
+// kindSizePresets / kindRatePresets are the chips operators click
+// to pre-fill the add-row inputs. Sizes/rates here are
+// rule-of-thumb starting points, not policy — operators tweak
+// before clicking Add.
+var kindSizePresets = []KindSizePreset{
+	{Kind: 0, Bytes: 8 * 1024},       // User Metadata
+	{Kind: 1, Bytes: 4 * 1024},       // Short Text Note
+	{Kind: 3, Bytes: 64 * 1024},      // Follow List
+	{Kind: 7, Bytes: 512},            // Reactions
+	{Kind: 9735, Bytes: 4 * 1024},    // Zap Receipts
+	{Kind: 30023, Bytes: 256 * 1024}, // Long-form Content
+}
+
+var kindRatePresets = []KindRatePreset{
+	{Kind: 0, Limit: 1, Burst: 2},      // Profile metadata — tight
+	{Kind: 1, Limit: 5, Burst: 12},     // Notes — tighter than category
+	{Kind: 6, Limit: 5, Burst: 12},     // Reposts
+	{Kind: 7, Limit: 20, Burst: 40},    // Reactions — loose, tiny
+	{Kind: 9735, Limit: 10, Burst: 20}, // Zap receipts
+	{Kind: 30023, Limit: 1, Burst: 3},  // Long-form — slow authored
+}
+
+// rateLimitCategories is the fixed display order for the
+// per-category rates form. Matches the four named keys in the
+// example config + the upstream category enums in
+// server/db/nostrdb/purge.go:purgeCategoryForKind. The "unknown"
+// and "deprecated" categories don't apply here because per-event
+// rate-limiting buckets unknown kinds with "regular".
+var rateLimitCategories = []string{
+	"regular",
+	"replaceable",
+	"addressable",
+	"ephemeral",
 }
 
 // purgeCategories is the subset of purgeCategoryForKind's enum
@@ -163,7 +249,14 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 			}},
 		{ID: "event_time_constraints", Title: "Event time constraints", Icon: "⏱️", Method: "grain_updateeventtimeconstraints", Config: cfg.EventTimeConstraints},
 		{ID: "backup_relay", Title: "Backup relay", Icon: "🪞", Method: "grain_updatebackuprelay", Config: cfg.BackupRelay},
-		{ID: "rate_limit", Title: "Rate limit", Icon: "🚦", Method: "grain_updateratelimit", Config: cfg.RateLimit},
+		{ID: "rate_limit", Title: "Rate limit", Icon: "🚦", Method: "grain_updateratelimit",
+			Config: RateLimitSectionData{
+				Config:              cfg.RateLimit,
+				RateLimitCategories: rateLimitCategories,
+				CategoryDefaults:    categoryDefaultsForRateLimit,
+				KindSizePresets:     kindSizePresets,
+				KindRatePresets:     kindRatePresets,
+			}},
 		{ID: "resource_limits", Title: "Resource limits", Icon: "📦", Method: "grain_updateresourcelimits", Config: cfg.ResourceLimits},
 		{ID: "server", Title: "Server", Icon: "🖥️", Method: "grain_updateserver", Config: cfg.Server},
 		{ID: "whitelist", Title: "Whitelist", Icon: "✅", Method: "grain_updatewhitelistconfig", Config: wl},
