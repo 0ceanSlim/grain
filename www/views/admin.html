@@ -58,6 +58,8 @@
           {{template "admin-backup_relay" .Config}}
         {{else if eq .ID "rate_limit"}}
           {{template "admin-rate_limit" .Config}}
+        {{else if eq .ID "resource_limits"}}
+          {{template "admin-resource_limits" .Config}}
         {{else if .Config}}
         <!-- Stub until this section's partial lands. -->
         <pre

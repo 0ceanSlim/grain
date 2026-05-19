@@ -1,0 +1,77 @@
+{{define "admin-resource_limits"}}
+<!-- Resource limits. Enclosing <details> supplies
+     data-section="resource_limits" and
+     data-method="grain_updateresourcelimits". Dot is
+     cfgType.ResourceLimits.
+
+     All three values are applied at startup by
+     config/setResourceLimit.go (GOMAXPROCS, debug.SetMemoryLimit,
+     and a memory-usage monitor goroutine). Editing them stages
+     the new values to disk but doesn't change the running process
+     — operators have to Apply (= grain_reloadconfig) for the new
+     limits to take effect. -->
+<form class="grid gap-4 mt-3 sm:grid-cols-2" autocomplete="off">
+  <div class="sm:col-span-2 p-3 rounded border border-info bg-info-dim text-info text-sm">
+    These limits are applied <strong>only at startup</strong>. Saving
+    here writes to disk; the running process picks them up on the
+    next restart (the Apply button at the bottom does that).
+  </div>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">CPU cores</span>
+    <input
+      type="number"
+      name="cpu_cores"
+      data-shape="number"
+      min="0"
+      step="1"
+      value="{{.CPUCores}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+    <span class="text-xs text-text-secondary">
+      Sets <span class="font-mono">GOMAXPROCS</span>. Caps how many OS
+      threads the Go scheduler will run in parallel. <span class="font-mono">0</span>
+      means "use all available cores" — the default Go behavior.
+    </span>
+  </label>
+
+  <span class="hidden sm:block"></span>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Memory ceiling (MB)</span>
+    <input
+      type="number"
+      name="memory_mb"
+      data-shape="number"
+      min="0"
+      step="1"
+      value="{{.MemoryMB}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+    <span class="text-xs text-text-secondary">
+      RSS the relay <em>monitors</em> against (logs when exceeded). Not a
+      hard kill switch — the OS still owns OOM. Production grain at
+      moderate load runs ~1 GB; 2048 leaves headroom.
+    </span>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Heap soft target (MB)</span>
+    <input
+      type="number"
+      name="heap_size_mb"
+      data-shape="number"
+      min="0"
+      step="1"
+      value="{{.HeapSizeMB}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+    <span class="text-xs text-text-secondary">
+      Go GC soft target via <span class="font-mono">debug.SetMemoryLimit</span>.
+      Should be ~half of the memory ceiling so the runtime has room
+      for stacks, mmap'd LMDB pages, and goroutine state.
+      <span class="font-mono">0</span> disables the limit.
+    </span>
+  </label>
+</form>
+{{end}}
