@@ -98,8 +98,13 @@ auth:
   relay_url_match: "strict"
 
 backup_relay:
-  enabled: false # Set to true to enable sending events to the backup relay
-  url: "wss://some-relay.com" # URL of the backup relay
+  enabled: false # Set to true to enable sending events to the backup relays
+  urls: [] # Each accepted event is fanned out (in parallel) to every URL.
+          # Common patterns:
+          #   - a public blaster / broadcaster that re-publishes to many relays
+          #   - a private archival relay you control
+          #   - a peer relay you've paired with for federation
+          # Each entry must start with ws:// or wss://.
 
 event_purge:
   enabled: false # Toggle to enable/disable event purging

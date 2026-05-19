@@ -54,6 +54,8 @@
           {{template "admin-event_purge" .Config}}
         {{else if eq .ID "event_time_constraints"}}
           {{template "admin-event_time_constraints" .Config}}
+        {{else if eq .ID "backup_relay"}}
+          {{template "admin-backup_relay" .Config}}
         {{else if .Config}}
         <!-- Stub until this section's partial lands. -->
         <pre

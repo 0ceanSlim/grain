@@ -37,9 +37,13 @@ type ServerSettings struct {
 // BackupRelayConfig is the upstream-mirror destination. Same
 // promotion reason — the NIP-86 update method needs a name to
 // decode JSON into.
+// BackupRelayConfig holds the upstream relays grain mirrors
+// accepted events to. Renamed from a single-URL field as of the
+// admin dashboard work — operators commonly want both a public
+// blaster + a private archival relay simultaneously.
 type BackupRelayConfig struct {
-	Enabled bool   `yaml:"enabled" json:"enabled"`
-	URL     string `yaml:"url" json:"url"`
+	Enabled bool     `yaml:"enabled" json:"enabled"`
+	URLs    []string `yaml:"urls" json:"urls"`
 }
 
 type ServerConfig struct {

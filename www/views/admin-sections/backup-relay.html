@@ -1,0 +1,102 @@
+{{define "admin-backup_relay"}}
+<!-- Backup relay forwarding. Enclosing <details> supplies
+     data-section="backup_relay" and data-method="grain_updatebackuprelay".
+     Dot is cfgType.BackupRelayConfig.
+
+     When enabled, every event accepted by this relay is dialed
+     out (in parallel goroutines, one per URL) to every URL in the
+     URLs list — see server/handlers/event.go. Server-side rejects
+     Enabled=true + empty URLs and any non-ws/wss URL up-front so
+     the operator finds out at save time, not in a flood of relay
+     dial errors. -->
+<form class="grid gap-4 mt-3 sm:grid-cols-2" autocomplete="off">
+  <label class="flex items-start gap-3 sm:col-span-2 p-3 rounded bg-surface-elevated">
+    <input
+      type="checkbox"
+      name="enabled"
+      data-shape="bool"
+      {{if .Enabled}}checked{{end}}
+      class="w-4 h-4 mt-0.5 accent-accent"
+    />
+    <span class="flex-1">
+      <span class="block text-sm font-medium text-text">Enable backup relays</span>
+      <span class="block mt-1 text-xs text-text-secondary">
+        Every event this relay accepts is also pushed to each URL below.
+        Forwarding stops immediately on reload when disabled.
+      </span>
+    </span>
+  </label>
+
+  <div class="flex flex-col gap-2 text-sm sm:col-span-2">
+    <span class="font-medium text-text-secondary">
+      Backup URLs
+      <span class="font-normal text-warning">(at least one required when enabled)</span>
+    </span>
+
+    <!-- Use-case hint. Three common patterns; pick whichever fits
+         your relay's purpose. -->
+    <div class="p-3 rounded border border-info bg-info-dim text-info text-xs">
+      <p class="font-medium mb-1">Common patterns:</p>
+      <ul class="space-y-0.5 list-disc list-inside">
+        <li>
+          A <strong>blaster / broadcaster</strong> relay that
+          re-publishes everything to many public relays — good for
+          general-purpose public relays that want their accepted
+          events to propagate widely.
+        </li>
+        <li>
+          A <strong>private archival relay</strong> you control —
+          keeps a personal mirror of everything your relay accepts.
+        </li>
+        <li>
+          A <strong>peer relay</strong> you've paired with — community
+          / topic-specific federation.
+        </li>
+      </ul>
+      <p class="mt-1">Mix and match — each accepted event is fanned out to all URLs in parallel.</p>
+    </div>
+
+    <!-- List widget: text input + Add, then live list of URLs.
+         data-list-shape="ws_url" tells admin.js to validate
+         entries as ws:// / wss:// strings. -->
+    <div
+      data-list="urls"
+      data-list-shape="ws_url"
+      class="flex flex-col gap-2"
+    >
+      <div class="flex gap-2">
+        <input
+          type="text"
+          data-list-input
+          placeholder="wss://backup.example.com"
+          class="flex-1 px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+        />
+        <button
+          type="button"
+          data-list-add
+          class="px-3 py-2 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover"
+        >Add</button>
+      </div>
+
+      <div data-list-items class="flex flex-col gap-1">
+        {{range .URLs}}
+        <div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface-elevated">
+          <input type="hidden" name="urls" data-shape="string_names" value="{{.}}" />
+          <span class="font-mono text-sm text-text truncate flex-1">{{.}}</span>
+          <button
+            type="button"
+            data-list-remove
+            class="ml-auto px-2 text-text-secondary hover:text-danger"
+            title="Remove"
+          >✕</button>
+        </div>
+        {{end}}
+      </div>
+
+      <span class="text-xs text-text-secondary">
+        Each URL must start with <span class="font-mono">ws://</span> or <span class="font-mono">wss://</span>.
+      </span>
+    </div>
+  </div>
+</form>
+{{end}}

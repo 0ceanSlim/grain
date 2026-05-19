@@ -215,6 +215,14 @@
           .filter((n) => Number.isFinite(n));
         return;
       }
+      if (el.dataset.shape === "string_names") {
+        // Same as int_names but values stay strings. Used by URL
+        // lists (backup_relay), domain whitelists, etc.
+        blob[el.name] = Array.from(
+          form.querySelectorAll('[name="' + cssEscape(el.name) + '"]')
+        ).map((c) => String(c.value));
+        return;
+      }
       if (el.dataset.shape === "map_bool") {
         // Multi-checkbox group whose value is a {key: bool} map.
         // Every member of the group contributes a key; checked
@@ -358,10 +366,10 @@
         handled.add(el.name);
       } else if (groupShape === "ints") {
         el.value = Array.isArray(v) ? v.join("\n") : "";
-      } else if (groupShape === "int_names") {
-        // Rebuild the list-of-kinds UI from the snapshot. The
-        // group's container has data-list="<name>", which is what
-        // listRender looks up.
+      } else if (groupShape === "int_names" || groupShape === "string_names") {
+        // Rebuild the list widget from the snapshot. The
+        // container's data-list-shape tells listRender which item
+        // template to use.
         const list = form.querySelector('[data-list="' + cssEscape(el.name) + '"]');
         if (list) listRender(list, Array.isArray(v) ? v : []);
         handled.add(el.name);
@@ -489,12 +497,28 @@
     return "(no description)";
   }
 
-  function listItemHTML(name, kind) {
-    const label = listLabelFor(kind);
+  // listItemHTML renders one row of a list widget. Shape decides
+  // hidden-input data-shape + the row's display layout:
+  //   "int"    — value is a kind number; label looked up from
+  //              NOSTR_KIND_LABELS; hidden input data-shape="int_names"
+  //   "ws_url" — value is a WebSocket URL; hidden input
+  //              data-shape="string_names"
+  function listItemHTML(name, value, shape) {
+    if (shape === "ws_url") {
+      return (
+        '<div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface-elevated text-sm">' +
+        '<input type="hidden" name="' + name + '" data-shape="string_names" value="' + escapeHTML(String(value)) + '" />' +
+        '<span class="font-mono text-text truncate flex-1">' + escapeHTML(String(value)) + '</span>' +
+        '<button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>' +
+        "</div>"
+      );
+    }
+    // Default: int / kind row.
+    const label = listLabelFor(value);
     return (
       '<div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface-elevated text-sm">' +
-      '<input type="hidden" name="' + name + '" data-shape="int_names" value="' + kind + '" />' +
-      '<span class="font-mono text-text">' + kind + '</span>' +
+      '<input type="hidden" name="' + name + '" data-shape="int_names" value="' + value + '" />' +
+      '<span class="font-mono text-text">' + value + '</span>' +
       '<span class="text-text-secondary truncate">— ' + escapeHTML(label) + '</span>' +
       '<button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>' +
       "</div>"
@@ -516,33 +540,59 @@
     const items = list.querySelector("[data-list-items]");
     if (!items) return;
     const name = list.dataset.list;
+    const shape = list.dataset.listShape || "int";
     items.innerHTML = values
-      .map((v) => listItemHTML(name, v))
+      .map((v) => listItemHTML(name, v, shape))
       .join("");
   }
 
-  // listAddValue appends an integer to a list-of-kinds widget,
-  // skipping if already present. Shared between the Add button
-  // (reads from the input) and the quick-add chips (read value
-  // straight from data-quick-add). Returns true on append.
-  function listAddValue(list, n) {
+  // listAddValue appends a value to a list widget, skipping if
+  // already present. Shape-aware: parses int / validates ws_url.
+  // Shared between the Add button (reads from the input) and the
+  // quick-add chips (read value straight from data-quick-add).
+  // Returns true on append, false otherwise (toasts on validation
+  // failure so the caller doesn't have to).
+  function listAddValue(list, raw) {
     const items = list.querySelector("[data-list-items]");
     const name = list.dataset.list;
+    const shape = list.dataset.listShape || "int";
     if (!items || !name) return false;
-    if (!Number.isFinite(n) || n < 0) return false;
+
+    let stored; // value as it'll be compared/serialized
+    if (shape === "ws_url") {
+      stored = String(raw).trim();
+      if (stored === "") return false;
+      if (!stored.startsWith("ws://") && !stored.startsWith("wss://")) {
+        toast("url must start with ws:// or wss://", "error");
+        return false;
+      }
+    } else {
+      const n = parseInt(raw, 10);
+      if (!Number.isFinite(n) || n < 0 || String(n) !== String(raw).trim()) {
+        toast("must be a non-negative integer", "error");
+        return false;
+      }
+      stored = n;
+    }
+
+    // Dedupe against existing hidden inputs.
     const existing = items.querySelectorAll(
       '[name="' + cssEscape(name) + '"]'
     );
     for (let i = 0; i < existing.length; i++) {
-      if (parseInt(existing[i].value, 10) === n) return false;
+      const eq =
+        shape === "ws_url"
+          ? existing[i].value === stored
+          : parseInt(existing[i].value, 10) === stored;
+      if (eq) return false;
     }
-    items.insertAdjacentHTML("beforeend", listItemHTML(name, n));
+    items.insertAdjacentHTML("beforeend", listItemHTML(name, stored, shape));
     items.dispatchEvent(new Event("input", { bubbles: true }));
     return true;
   }
 
-  // Add button: read sibling input, validate as a non-negative
-  // integer, dedupe via listAddValue.
+  // Add button: read sibling input, hand the raw string to
+  // listAddValue (which handles shape-specific validation).
   document.addEventListener("click", (ev) => {
     const addBtn =
       ev.target && ev.target.closest && ev.target.closest("[data-list-add]");
@@ -554,13 +604,7 @@
 
     const raw = input.value.trim();
     if (raw === "") return;
-    const n = parseInt(raw, 10);
-    if (!Number.isFinite(n) || n < 0 || String(n) !== raw) {
-      toast("must be a non-negative integer", "error");
-      return;
-    }
-    listAddValue(list, n);
-    input.value = "";
+    if (listAddValue(list, raw)) input.value = "";
   });
 
   // Quick-add chips: trigger the same list-add path. Chip carries
@@ -578,8 +622,7 @@
       '[data-list="' + cssEscape(target) + '"]'
     );
     if (!list) return;
-    const n = parseInt(chip.dataset.quickAdd, 10);
-    if (Number.isFinite(n)) listAddValue(list, n);
+    listAddValue(list, chip.dataset.quickAdd);
   });
 
   // Remove button: drop the parent list-item.

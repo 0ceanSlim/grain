@@ -195,7 +195,29 @@ func UpdateAuthConfig(au cfgType.AuthConfig) error {
 // UpdateBackupRelayConfig stages the backup-relay forwarding
 // settings. The backup-relay goroutine reads these at startup; a
 // reload reinitializes it.
+//
+// Hard validation: when Enabled is true, URLs must be non-empty
+// and every entry must be a WebSocket URL (ws:// or wss://).
+// SendToBackupRelay does a websocket.Dial per URL and will log +
+// return an error every event if any URL is malformed; we reject
+// the write up-front so the operator finds out at save time, not
+// in a flood of relay logs.
 func UpdateBackupRelayConfig(br cfgType.BackupRelayConfig) error {
+	cleaned := br.URLs[:0]
+	for _, u := range br.URLs {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			continue
+		}
+		if !strings.HasPrefix(u, "ws://") && !strings.HasPrefix(u, "wss://") {
+			return fmt.Errorf("each url must start with ws:// or wss:// (got %q)", u)
+		}
+		cleaned = append(cleaned, u)
+	}
+	br.URLs = cleaned
+	if br.Enabled && len(br.URLs) == 0 {
+		return fmt.Errorf("at least one url must be set when backup relay is enabled")
+	}
 	ConfigMu.Lock()
 	defer ConfigMu.Unlock()
 	c := GetConfig()

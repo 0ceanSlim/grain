@@ -203,21 +203,26 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 		OnEventStored(evt)
 	}
 
-	// Send to backup relay
+	// Send to backup relay(s). Fan out in parallel goroutines —
+	// one slow upstream shouldn't block the others, and the
+	// ingestion path has already completed (this is purely
+	// best-effort forwarding).
 	if cfg.BackupRelay.Enabled {
-		go func() {
-			err := utils.SendToBackupRelay(cfg.BackupRelay.URL, evt)
-			if err != nil {
-				log.Event().Error("Failed to send event to backup relay",
-					"event_id", evt.ID,
-					"relay_url", cfg.BackupRelay.URL,
-					"error", err)
-			} else {
-				log.Event().Info("Event sent to backup relay",
-					"event_id", evt.ID,
-					"relay_url", cfg.BackupRelay.URL)
-			}
-		}()
+		for _, url := range cfg.BackupRelay.URLs {
+			url := url // capture per-iteration for the goroutine
+			go func() {
+				if err := utils.SendToBackupRelay(url, evt); err != nil {
+					log.Event().Error("Failed to send event to backup relay",
+						"event_id", evt.ID,
+						"relay_url", url,
+						"error", err)
+				} else {
+					log.Event().Info("Event sent to backup relay",
+						"event_id", evt.ID,
+						"relay_url", url)
+				}
+			}()
+		}
 	}
 
 	log.Event().Info("Event processing completed",

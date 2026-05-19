@@ -11,8 +11,8 @@ import (
 
 // BackupRelayConfigResponse represents the backup relay configuration response
 type BackupRelayConfigResponse struct {
-	Enabled bool   `json:"enabled"`
-	URL     string `json:"url"`
+	Enabled bool     `json:"enabled"`
+	URLs    []string `json:"urls"`
 }
 
 // GetBackupRelayConfig handles the request to return backup relay configuration
@@ -41,7 +41,7 @@ func GetBackupRelayConfig(w http.ResponseWriter, r *http.Request) {
 	// Prepare response with backup relay configuration
 	response := BackupRelayConfigResponse{
 		Enabled: cfg.BackupRelay.Enabled,
-		URL:     cfg.BackupRelay.URL,
+		URLs:    cfg.BackupRelay.URLs,
 	}
 
 	// Set response headers
