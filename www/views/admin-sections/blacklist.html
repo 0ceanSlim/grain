@@ -305,6 +305,7 @@
       if (!raw) return;
       addBtn.disabled = true;
       try {
+        if (window.adminEnsureSigner) await window.adminEnsureSigner();
         await window.grainNIP86.submit("blockip", [raw]);
         rows.insertAdjacentHTML("beforeend", rowHTML(raw));
         input.value = "";
@@ -324,6 +325,7 @@
       if (!ip) return;
       btn.disabled = true;
       try {
+        if (window.adminEnsureSigner) await window.adminEnsureSigner();
         await window.grainNIP86.submit("unblockip", [ip]);
         row.remove();
         toast(ip + " unblocked");

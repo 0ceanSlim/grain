@@ -75,6 +75,15 @@ func GetRelayOwnerPubkey() string {
 	return relayMetadata.Pubkey
 }
 
+// GetRelayMetadataCopy returns a value copy of the parsed
+// relay_metadata.json so callers can read fields (name, description,
+// icon, contact, …) without sharing internal state. The admin
+// dashboard's ops section uses this to pre-fill the relay-identity
+// edit form; tests use it to assert post-update state.
+func GetRelayMetadataCopy() RelayMetadata {
+	return relayMetadata
+}
+
 // allZerosPubkey is the sentinel the example relay_metadata.json
 // ships with — a 32-byte all-zeros key, which isn't a valid secp256k1
 // point and can never be signed against, making it a safe "no owner"
@@ -191,6 +200,42 @@ func OverrideRelayOwnerInMemory(pubkey string) {
 	ownerClaimMu.Lock()
 	defer ownerClaimMu.Unlock()
 	relayMetadata.Pubkey = pubkey
+}
+
+// SetRelayMetadataField writes a single top-level field to
+// relay_metadata.json and reloads the in-memory copy. Used by the
+// generic NIP-86 changerelay* handlers — same atomic write +
+// watcher suppression pipeline as UpdateRelayMetadata but without
+// the per-field pointer-arg ceremony, so new metadata fields
+// (contact, posting_policy, etc.) can be added by extending the
+// handler's allow-list rather than the function signature.
+//
+// The field name is the JSON key as it lives on disk. Caller is
+// responsible for validation (empty / URL / etc.) — this helper
+// just persists.
+func SetRelayMetadataField(field, value string) error {
+	raw, err := os.ReadFile(relayMetadataWritePath)
+	if err != nil {
+		return fmt.Errorf("read relay metadata: %w", err)
+	}
+	var patched map[string]any
+	if err := json.Unmarshal(raw, &patched); err != nil {
+		return fmt.Errorf("parse relay metadata: %w", err)
+	}
+	patched[field] = value
+
+	out, err := json.MarshalIndent(patched, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal relay metadata: %w", err)
+	}
+	if err := suppressAndWrite(relayMetadataWritePath, out, 0644); err != nil {
+		return err
+	}
+	if err := LoadRelayMetadata(relayMetadataWritePath); err != nil {
+		log.Util().Warn("Failed to reload relay metadata after field write",
+			"field", field, "error", err)
+	}
+	return nil
 }
 
 // UpdateRelayMetadata applies non-nil patches to relay_metadata.json

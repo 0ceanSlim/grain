@@ -177,6 +177,22 @@ var kindRatePresets = []KindRatePreset{
 	{Kind: 30023, Limit: 1, Burst: 3},  // Long-form — slow authored
 }
 
+// OpsSectionData is the per-section template data for ops. The
+// dashboard renders the current relay identity (name/description/
+// icon/banner/contact + policy URLs) so an operator can edit them
+// in place, plus a stats area fetched live via grain_stats_overview.
+// Cache refresh and config reload run via separate buttons.
+type OpsSectionData struct {
+	RelayName           string
+	RelayDescription    string
+	RelayIcon           string
+	RelayBanner         string
+	RelayContact        string
+	RelayPrivacyPolicy  string
+	RelayTermsOfService string
+	RelayPostingPolicy  string
+}
+
 // BlacklistSectionData wraps BlacklistConfig with the same
 // unified pubkey treatment the whitelist gets: hex + npub merge
 // into one display list, mutelist authors render with profile
@@ -411,7 +427,20 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 					BrokenMutelistAuthors: brokenMute,
 				}
 			}()},
-		{ID: "ops", Title: "Operations", Icon: "🛠️", Method: "", Config: nil},
+		{ID: "ops", Title: "Operations", Icon: "🛠️", Method: "",
+			Config: func() OpsSectionData {
+				m := utils.GetRelayMetadataCopy()
+				return OpsSectionData{
+					RelayName:           m.Name,
+					RelayDescription:    m.Description,
+					RelayIcon:           m.Icon,
+					RelayBanner:         m.Banner,
+					RelayContact:        m.Contact,
+					RelayPrivacyPolicy:  m.PrivacyPolicy,
+					RelayTermsOfService: m.TermsOfService,
+					RelayPostingPolicy:  m.PostingPolicy,
+				}
+			}()},
 	}
 
 	data := AdminPageData{

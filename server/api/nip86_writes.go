@@ -201,40 +201,44 @@ func runUnblockIP(params []any, signer string) (any, string) {
 
 // ─── relay metadata writes ───────────────────────────────────────
 
-// runChangeRelayMetadata handles changerelayname / changerelay-
-// description / changerelayicon as a single helper — they only
-// differ in which field gets patched. The dispatcher passes the
-// field name; this function pulls the value from params[0] and
-// routes it to the right pointer arg of utils.UpdateRelayMetadata.
+// runChangeRelayMetadata handles every changerelay<field> NIP-86
+// method through a single helper. The dispatcher passes the JSON
+// field name (matching relay_metadata.json's top-level keys); we
+// validate per-field then persist via utils.SetRelayMetadataField.
+//
+// Validation rules:
+//   - name              non-empty
+//   - icon / banner     URL-parseable (empty allowed to clear)
+//   - description / contact / privacy_policy / terms_of_service /
+//     posting_policy    free-form string; empty allowed to clear
+//
+// To add a new editable single-string field: add a case to the
+// switch + a dispatcher case in nip86.go. Multi-value fields
+// (RelayCountries, LanguageTags, Tags) need their own methods.
 func runChangeRelayMetadata(params []any, signer, field string) (any, string) {
 	value, ok := paramString(params, 0)
 	if !ok {
 		return nil, "missing value"
 	}
-	var name, description, icon, banner *string
 	switch field {
 	case "name":
 		if value == "" {
 			return nil, "name cannot be empty"
 		}
-		name = &value
-	case "description":
-		// Empty description is allowed; some operators clear it.
-		description = &value
-	case "icon":
+	case "icon", "banner":
 		if value != "" && !isParseableURL(value) {
-			return nil, "invalid icon URL"
+			return nil, "invalid " + field + " URL"
 		}
-		icon = &value
-	case "banner":
-		if value != "" && !isParseableURL(value) {
-			return nil, "invalid banner URL"
-		}
-		banner = &value
+	case "description",
+		"contact",
+		"privacy_policy",
+		"terms_of_service",
+		"posting_policy":
+		// free-form text; empty allowed to clear.
 	default:
 		return nil, "unknown relay-metadata field: " + field
 	}
-	if err := utils.UpdateRelayMetadata(name, description, icon, banner); err != nil {
+	if err := utils.SetRelayMetadataField(field, value); err != nil {
 		return nil, err.Error()
 	}
 	log.RelayAPI().Info("NIP-86 changerelay*", "signer", signer, "field", field, "value", value)

@@ -1,0 +1,320 @@
+{{define "admin-ops"}}
+<!-- Ops section. The only section without a single grain_update*
+     method — every action here calls its own NIP-86 method:
+       - relay-identity inputs:  changerelayname / changerelaydescription / changerelayicon
+       - refresh button:          grain_refreshcache
+       - stats area is read-only via grain_stats_overview
+     Each Save / Refresh fires one signed call directly; the
+     section ignores the page-level Save / Apply / pending bar. -->
+<div class="flex flex-col gap-5 mt-3">
+  <!-- ─── Live stats ─────────────────────────────────────────── -->
+  <fieldset class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Live stats</legend>
+    <div data-ops-stats class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
+      <div class="text-text-secondary">Loading…</div>
+    </div>
+    <div class="flex justify-end mt-2">
+      <button
+        type="button"
+        data-ops-stats-refresh
+        class="px-3 py-1.5 text-xs rounded border border-border-strong text-text-secondary hover:bg-surface-hover"
+      >↻ refresh</button>
+    </div>
+  </fieldset>
+
+  <!-- ─── Relay identity ────────────────────────────────────── -->
+  <fieldset class="p-3 rounded bg-surface-elevated" data-ops-identity>
+    <legend class="px-2 text-sm font-medium text-text">Relay identity</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      These fields are written to <span class="font-mono">relay_metadata.json</span>
+      and surfaced over NIP-11. Each Save fires one
+      <span class="font-mono">changerelay*</span> NIP-86 call — only changed
+      fields are sent, so the operator signs once per edited field.
+    </p>
+
+    <div class="grid gap-3 sm:grid-cols-2">
+      <label class="flex flex-col gap-1 text-sm sm:col-span-2">
+        <span class="font-medium text-text-secondary">Name</span>
+        <input
+          type="text"
+          data-ops-name
+          data-initial="{{.RelayName}}"
+          value="{{.RelayName}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text"
+        />
+      </label>
+
+      <label class="flex flex-col gap-1 text-sm sm:col-span-2">
+        <span class="font-medium text-text-secondary">Description</span>
+        <textarea
+          rows="3"
+          data-ops-description
+          data-initial="{{.RelayDescription}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text"
+        >{{.RelayDescription}}</textarea>
+      </label>
+
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Icon URL</span>
+        <input
+          type="text"
+          data-ops-icon
+          data-initial="{{.RelayIcon}}"
+          value="{{.RelayIcon}}"
+          placeholder="https://relay.example.com/icon.png"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono"
+        />
+      </label>
+
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Banner URL</span>
+        <input
+          type="text"
+          data-ops-banner
+          data-initial="{{.RelayBanner}}"
+          value="{{.RelayBanner}}"
+          placeholder="https://relay.example.com/banner.jpg"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono"
+        />
+      </label>
+
+      <label class="flex flex-col gap-1 text-sm sm:col-span-2">
+        <span class="font-medium text-text-secondary">Contact</span>
+        <input
+          type="text"
+          data-ops-contact
+          data-initial="{{.RelayContact}}"
+          value="{{.RelayContact}}"
+          placeholder="mailto:admin@example.com  or  https://..."
+          class="px-3 py-2 rounded bg-surface border border-border text-text"
+        />
+        <span class="text-xs text-text-secondary">
+          Free-form: an email (<span class="font-mono">mailto:</span>), URL,
+          or a NIP-05 / npub. Surfaced over NIP-11.
+        </span>
+      </label>
+
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Privacy policy URL</span>
+        <input
+          type="text"
+          data-ops-privacy-policy
+          data-initial="{{.RelayPrivacyPolicy}}"
+          value="{{.RelayPrivacyPolicy}}"
+          placeholder="https://relay.example.com/privacy"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono"
+        />
+      </label>
+
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Terms of service URL</span>
+        <input
+          type="text"
+          data-ops-terms-of-service
+          data-initial="{{.RelayTermsOfService}}"
+          value="{{.RelayTermsOfService}}"
+          placeholder="https://relay.example.com/terms"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono"
+        />
+      </label>
+
+      <label class="flex flex-col gap-1 text-sm sm:col-span-2">
+        <span class="font-medium text-text-secondary">Posting policy URL</span>
+        <input
+          type="text"
+          data-ops-posting-policy
+          data-initial="{{.RelayPostingPolicy}}"
+          value="{{.RelayPostingPolicy}}"
+          placeholder="https://relay.example.com/posting-policy"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono"
+        />
+      </label>
+    </div>
+
+    <div class="flex justify-end mt-3">
+      <button
+        type="button"
+        data-ops-identity-save
+        class="px-3 py-1.5 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover"
+      >Save changed fields</button>
+    </div>
+  </fieldset>
+
+  <!-- ─── Maintenance ───────────────────────────────────────── -->
+  <fieldset class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Maintenance</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      One-shot operations that don't require a restart.
+    </p>
+
+    <div class="flex flex-wrap gap-2">
+      <button
+        type="button"
+        data-ops-refresh-cache
+        class="px-3 py-1.5 text-sm rounded border border-border-strong text-text hover:bg-surface-hover"
+      >Refresh whitelist + blacklist caches</button>
+      <span class="text-xs text-text-secondary self-center">
+        Forces an immediate re-pull of domain memberships and mutelist authors.
+      </span>
+    </div>
+  </fieldset>
+</div>
+
+<script>
+  (function () {
+    "use strict";
+    const panel = document.querySelector('[data-section="ops"]');
+    if (!panel) return;
+    const toast = window.adminToast || function () {};
+
+    // ── Live stats ───────────────────────────────────────────
+
+    const statsEl = panel.querySelector("[data-ops-stats]");
+    const statsBtn = panel.querySelector("[data-ops-stats-refresh]");
+
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    function fmtUptime(secs) {
+      secs = Number(secs) || 0;
+      const d = Math.floor(secs / 86400);
+      const h = Math.floor((secs % 86400) / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      if (d > 0) return d + "d " + h + "h";
+      if (h > 0) return h + "h " + m + "m";
+      return m + "m";
+    }
+
+    function tile(label, value) {
+      return (
+        '<div class="p-2 rounded bg-surface">' +
+        '<div class="text-xs text-text-secondary">' + escHtml(label) + '</div>' +
+        '<div class="font-mono text-text">' + escHtml(String(value)) + '</div>' +
+        '</div>'
+      );
+    }
+
+    async function loadStats() {
+      statsEl.innerHTML = '<div class="text-text-secondary">Loading…</div>';
+      try {
+        if (window.adminEnsureSigner) await window.adminEnsureSigner();
+        const res = await window.grainNIP86.submit("grain_stats_overview", []);
+        const srv = res.server || {};
+        const wl = res.whitelist || {};
+        const bl = res.blacklist || {};
+        const cache = res.cache || {};
+        statsEl.innerHTML =
+          tile("active connections", srv.active_connections ?? 0) +
+          tile("total messages sent", srv.total_messages_sent ?? 0) +
+          tile("uptime", fmtUptime(srv.uptime_seconds)) +
+          tile("version", srv.version || "?") +
+          tile("whitelist", wl.enabled ? "enforced" : "off") +
+          tile("blacklist", bl.enabled ? "enforced" : "off") +
+          tile("whitelist pubkeys", (wl.pubkeys ?? 0) + (wl.npubs ?? 0)) +
+          tile("whitelist domains", wl.domains ?? 0) +
+          tile("blacklist pubkeys", (bl.pubkeys ?? 0) + (bl.npubs ?? 0)) +
+          tile("ip blocks", bl.ip_blocks ?? 0) +
+          tile("cache age (s)", cache.whitelist_age_seconds ?? "?") +
+          tile("git commit", srv.git_commit || "?");
+      } catch (err) {
+        statsEl.innerHTML =
+          '<div class="text-danger text-sm">Stats fetch failed: ' +
+          escHtml(err.message || String(err)) + '</div>';
+      }
+    }
+
+    statsBtn.addEventListener("click", loadStats);
+    // nip86-submit.js loads AFTER the section's inline script
+    // (script tags at end of admin.html, vs partial body in <main>).
+    // Defer the first fetch until DOM is ready so window.grainNIP86
+    // exists when we call submit().
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", loadStats);
+    } else {
+      // Already past DOMContentLoaded — admin.js may have run, but
+      // it's still safe to fire immediately.
+      Promise.resolve().then(loadStats);
+    }
+
+    // ── Relay identity (diff + per-field changerelay* call) ──
+
+    const FIELDS = [
+      { sel: "[data-ops-name]",              method: "changerelayname" },
+      { sel: "[data-ops-description]",       method: "changerelaydescription" },
+      { sel: "[data-ops-icon]",              method: "changerelayicon" },
+      { sel: "[data-ops-banner]",            method: "changerelaybanner" },
+      { sel: "[data-ops-contact]",           method: "changerelaycontact" },
+      { sel: "[data-ops-privacy-policy]",    method: "changerelayprivacypolicy" },
+      { sel: "[data-ops-terms-of-service]",  method: "changerelaytermsofservice" },
+      { sel: "[data-ops-posting-policy]",    method: "changerelaypostingpolicy" },
+    ];
+
+    panel.querySelector("[data-ops-identity-save]").addEventListener("click", async (ev) => {
+      const btn = ev.currentTarget;
+      // Diff first so we don't need the signer at all when nothing
+      // changed. Avoids surprise mill-modal pops on a clean Save click.
+      const dirty = [];
+      for (const f of FIELDS) {
+        const el = panel.querySelector(f.sel);
+        if (!el) continue;
+        // Normalize: trim trailing whitespace introduced by template
+        // indentation inside <textarea>. The initial-attr keeps the
+        // value as-is so trimming both is consistent.
+        const initial = String(el.dataset.initial || "");
+        const current = String(el.value);
+        if (initial.trim() === current.trim()) continue;
+        dirty.push({ field: f, initial, current });
+      }
+      if (dirty.length === 0) {
+        toast("no changes to save");
+        return;
+      }
+
+      btn.disabled = true;
+      let changed = 0;
+      let failed = 0;
+      try {
+        if (window.adminEnsureSigner) await window.adminEnsureSigner();
+        for (const d of dirty) {
+          try {
+            await window.grainNIP86.submit(d.field.method, [d.current.trim()]);
+            const el = panel.querySelector(d.field.sel);
+            if (el) el.dataset.initial = d.current;
+            changed++;
+          } catch (err) {
+            toast(d.field.method + ": " + (err.message || String(err)), "error");
+            failed++;
+          }
+        }
+        if (changed > 0 && failed === 0) {
+          toast(changed + " field(s) saved");
+        } else if (changed > 0) {
+          toast(changed + " saved, " + failed + " failed", "error");
+        }
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ── Refresh cache ────────────────────────────────────────
+
+    panel.querySelector("[data-ops-refresh-cache]").addEventListener("click", async (ev) => {
+      const btn = ev.currentTarget;
+      btn.disabled = true;
+      try {
+        if (window.adminEnsureSigner) await window.adminEnsureSigner();
+        await window.grainNIP86.submit("grain_refreshcache", []);
+        toast("caches refreshed");
+        loadStats();
+      } catch (err) {
+        toast(err.message || String(err), "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  })();
+</script>
+{{end}}

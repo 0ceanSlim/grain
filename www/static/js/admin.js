@@ -444,6 +444,11 @@
     }
     throw new Error("signer not connected — try again");
   }
+  // Exposed so section-scoped inline scripts (ops, blacklist
+  // live-edit, future sections) can gate their direct
+  // grainNIP86.submit calls behind the same auto-open-mill flow
+  // saveSection uses.
+  window.adminEnsureSigner = ensureSigner;
 
   // expandDotted converts a flat blob with keys like
   // "pubkey_whitelist.enabled" into a nested object the server's

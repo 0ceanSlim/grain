@@ -130,4 +130,47 @@
 
   window.showAuthModal = showAuthModal;
   window.hideAuthModal = hideAuthModal;
+
+  // Auto-reconnect: window.grainSigner is a runtime JS object and
+  // doesn't survive a page reload, but the server session cookie
+  // does. For browser-extension sign-ins (NIP-07) we can transparently
+  // rebuild a signer from window.nostr on every page load, so the
+  // operator doesn't have to re-open mill every time they reload
+  // /admin. Other methods (bunker / encrypted-key / amber) have
+  // their own session state and would need a mill-side rehydrate
+  // hook to do the same — left for follow-up.
+  function tryAutoReconnect() {
+    if (window.grainSigner && typeof window.grainSigner.signEvent === "function") return;
+    if (!window.nostr || typeof window.nostr.signEvent !== "function") return;
+    // Only auto-reconnect when /api/v1/session says we have a
+    // matching session — otherwise we'd silently attach a NIP-07
+    // signer to a logged-out browser, which is confusing.
+    fetch("/api/v1/session", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(async (sess) => {
+        if (!sess || !sess.publicKey) return;
+        if (sess.signingMethod !== "browser_extension") return;
+        try {
+          const ext = await window.nostr.getPublicKey();
+          if (!ext || ext.toLowerCase() !== sess.publicKey.toLowerCase()) return;
+          // Wrap window.nostr in a grainSigner-compatible shape.
+          window.grainSigner = {
+            getPublicKey: () => window.nostr.getPublicKey(),
+            signEvent: (evt) => window.nostr.signEvent(evt),
+            disconnect: () => {},
+          };
+          window.grainSignerMethod = "nip07";
+        } catch (_) {
+          // Extension declined / locked — fall back to the mill
+          // modal on first save attempt.
+        }
+      })
+      .catch(() => {});
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", tryAutoReconnect);
+  } else {
+    tryAutoReconnect();
+  }
 })();
