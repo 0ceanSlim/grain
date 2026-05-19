@@ -1,0 +1,540 @@
+{{define "admin-whitelist"}}
+<!-- Whitelist section. Enclosing <details> supplies
+     data-section="whitelist" and
+     data-method="grain_updatewhitelistconfig". Dot is
+     WhitelistSectionData (Config + UnifiedPubkeys + KindLabels +
+     KindPresets).
+
+     Memory note: the whitelist is grain's "elevated users"
+     registry. Pubkeys/npubs/domains in the lists contribute to
+     features like purge protection regardless of the per-block
+     "Enforce" enforcement flag. Only the toggle changes whether
+     non-listed users get rejected at AUTH-write time.
+
+     Pubkey/Npub unification: the form shows one row per pubkey
+     with both forms. On save all entries go to Pubkeys (hex);
+     the Npubs array on the wire is emptied. Server-side
+     buildUnifiedPubkeys merges both back for display so an
+     operator who hand-edited whitelist.yml with npubs sees them
+     in the dashboard. -->
+<form class="flex flex-col gap-5 mt-3" autocomplete="off">
+  <div class="p-3 rounded border border-info bg-info-dim text-info text-sm">
+    <p>
+      <strong>Enforce on</strong> effectively flips the relay from
+      <strong>public</strong> to <strong>private</strong>: only listed
+      users can write events. Use this for community relays,
+      app-specific relays, or any deployment that should reject
+      strangers at the door.
+    </p>
+    <p class="mt-2">
+      <strong>Enforce off</strong> leaves the relay public, but the
+      whitelist is still grain's <strong>"elevated users"
+      registry</strong> — listed pubkeys/npubs/domain members get
+      privileged treatment in other features (e.g. purge protection).
+      So a list with Enforce off isn't useless; it's just not the
+      access gate.
+    </p>
+  </div>
+
+  <!-- ─── Pubkey whitelist ────────────────────────────────────── -->
+  {{with .Config}}
+  <fieldset class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Pubkey whitelist</legend>
+
+    <label class="flex items-start gap-3 my-2 p-2 rounded bg-surface">
+      <input
+        type="checkbox"
+        name="pubkey_whitelist.enabled"
+        data-shape="bool"
+        {{if .PubkeyWhitelist.Enabled}}checked{{end}}
+        class="w-4 h-4 mt-0.5 accent-accent"
+      />
+      <span class="flex-1">
+        <span class="block text-sm font-medium text-text">Enforce</span>
+        <span class="block mt-1 text-xs text-text-secondary">
+          When on, only events authored by listed pubkeys (or members of
+          listed domains) are accepted. When off, the lists still
+          contribute to non-enforcement features like purge protection.
+        </span>
+      </span>
+    </label>
+
+    <label class="flex flex-col gap-1 text-sm mb-3">
+      <span class="font-medium text-text-secondary">Cache refresh (minutes)</span>
+      <input
+        type="number"
+        name="pubkey_whitelist.cache_refresh_minutes"
+        data-shape="number"
+        min="0"
+        step="1"
+        value="{{.PubkeyWhitelist.CacheRefreshMinutes}}"
+        class="w-32 px-3 py-2 rounded bg-surface border border-border text-text font-mono"
+      />
+      <span class="text-xs text-text-secondary">
+        How often grain re-resolves domain memberships into the pubkey
+        cache. Doesn't affect static pubkey/npub entries.
+      </span>
+    </label>
+
+    <!-- Unified hex+npub list. The single visible input accepts
+         either form; on Add, the JS calls
+         /api/v1/keys/convert/public/<value> to canonicalize to
+         hex and capture the other form for display. Wire shape
+         on save: every entry goes to pubkey_whitelist.pubkeys
+         (hex); pubkey_whitelist.npubs is shipped empty. The
+         empty hidden Npubs input below ensures the server sees
+         an empty Npubs array on save (otherwise stale ones from
+         whitelist.yml would silently survive). -->
+    <div data-list="pubkey_whitelist.pubkeys" data-list-shape="pubkey_unified" class="flex flex-col gap-2">
+      <span class="text-sm font-medium text-text-secondary">Pubkeys</span>
+      <div class="flex gap-2">
+        <input type="text" data-list-input placeholder="hex or npub1…"
+          class="flex-1 px-3 py-2 rounded bg-surface border border-border text-text font-mono text-xs" />
+        <button type="button" data-list-add
+          class="px-3 py-2 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover">Add</button>
+      </div>
+      <div data-list-items class="flex flex-col gap-1">
+        {{range $.UnifiedPubkeys}}
+        <div
+          data-list-item
+          data-pubkey-row
+          data-hex="{{.Hex}}"
+          data-npub="{{.Npub}}"
+          class="flex items-center gap-2 py-1 px-2 rounded bg-surface text-sm"
+        >
+          <input type="hidden" name="pubkey_whitelist.pubkeys" data-shape="string_names" value="{{.Hex}}" />
+          <!-- Profile slot. Filled lazily by JS via /api/v1/user/profile.
+               Falls back to a generic avatar circle when no profile. -->
+          <div data-profile-pic class="flex-shrink-0 w-8 h-8 rounded-full bg-surface-overlay flex items-center justify-center text-text-secondary text-sm">👤</div>
+          <div class="flex-1 min-w-0">
+            <div data-profile-name class="text-sm text-text truncate">Loading…</div>
+            {{if .Npub}}<div class="font-mono text-text-secondary text-xs truncate" title="{{.Npub}}">{{.Npub}}</div>{{end}}
+          </div>
+          <button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>
+        </div>
+        {{end}}
+      </div>
+
+      {{if $.BrokenPubkeys}}
+      <!-- Unparseable entries that survived in whitelist.yml — empty
+           rows / typos / wrong-length hex / bad-checksum npubs.
+           They aren't included in the form's saved blob, so the
+           first Save through the dashboard cleans them up. Surfaced
+           here so the operator isn't surprised when whitelist.yml
+           contains entries the dashboard doesn't show. -->
+      <div class="mt-2 p-3 rounded border border-warning bg-warning-dim text-warning text-xs">
+        <p class="font-medium">⚠ {{len $.BrokenPubkeys}} entry(ies) in whitelist.yml couldn't be parsed</p>
+        <ul class="mt-1 space-y-0.5 list-disc list-inside font-mono break-all">
+          {{range $.BrokenPubkeys}}<li>{{.}}</li>{{end}}
+        </ul>
+        <p class="mt-2 not-italic">
+          They're not included in the form above. Saving once through the
+          dashboard drops them; fix them in whitelist.yml directly if you
+          meant them to stay.
+        </p>
+      </div>
+      {{end}}
+      <span class="text-xs text-text-secondary">
+        Accepts <span class="font-mono">hex</span> or
+        <span class="font-mono">npub1…</span> — both forms are stored.
+      </span>
+    </div>
+
+    <!-- Sentinel: ensures the npubs array round-trips as empty
+         on every save (the unified UI canonicalizes everything
+         to hex). Without this hidden field the server-side merge
+         could see a stale npubs list. -->
+    <input type="hidden" name="pubkey_whitelist.npubs" data-shape="json" value="[]" />
+  </fieldset>
+
+  <!-- ─── Kind whitelist ──────────────────────────────────────── -->
+  <fieldset class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Kind whitelist</legend>
+
+    <p class="mt-1 text-xs text-text-secondary">
+      Common patterns:
+    </p>
+    <ul class="mt-1 mb-3 text-xs text-text-secondary list-disc list-inside space-y-0.5">
+      <li>
+        <strong>Indexing relay</strong>: allow only
+        <span class="font-mono">0</span> (metadata),
+        <span class="font-mono">3</span> (follow list),
+        <span class="font-mono">10002</span> (relay list metadata) —
+        clients use this to discover identities and routing.
+      </li>
+      <li>
+        <strong>App-specific relay</strong>: allow only the kind(s) your
+        app uses. Useful for custom kinds in the 40000+ range.
+      </li>
+      <li>
+        <strong>General-purpose relay</strong>: leave Enforce off so any
+        kind is accepted; the whitelist still contributes to other
+        features.
+      </li>
+    </ul>
+
+    <label class="flex items-start gap-3 my-2 p-2 rounded bg-surface">
+      <input
+        type="checkbox"
+        name="kind_whitelist.enabled"
+        data-shape="bool"
+        {{if .KindWhitelist.Enabled}}checked{{end}}
+        class="w-4 h-4 mt-0.5 accent-accent"
+      />
+      <span class="flex-1">
+        <span class="block text-sm font-medium text-text">Enforce</span>
+        <span class="block mt-1 text-xs text-text-secondary">
+          When on, only events with a kind in the list below are accepted.
+          Empty list with Enforce on rejects every event — usually a misconfig.
+        </span>
+      </span>
+    </label>
+
+    <div data-list="kind_whitelist.kinds" data-list-shape="kind_str" class="flex flex-col gap-2">
+      <span class="text-sm font-medium text-text-secondary">Allowed kinds</span>
+
+      <!-- Quick-add chip row -->
+      <div class="flex flex-wrap gap-1.5 items-center">
+        <span class="text-xs text-text-secondary">suggested:</span>
+        {{range $.KindPresets}}
+        <button
+          type="button"
+          data-quick-add="{{.Kind}}"
+          data-list-target="kind_whitelist.kinds"
+          class="px-2 py-0.5 text-xs font-mono rounded border border-border-strong text-text hover:bg-surface-hover"
+          title="{{.Label}}"
+        >{{.Kind}} <span class="text-text-secondary">{{.Label}}</span></button>
+        {{end}}
+      </div>
+
+      <div class="flex gap-2">
+        <input type="number" data-list-input min="0" step="1" placeholder="kind number"
+          class="flex-1 px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <button type="button" data-list-add
+          class="px-3 py-2 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover">Add</button>
+      </div>
+
+      <div data-list-items class="flex flex-col gap-1">
+        {{range .KindWhitelist.Kinds}}
+        {{$lbl := . | kindLabelStr}}
+        <div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface text-sm">
+          <input type="hidden" name="kind_whitelist.kinds" data-shape="string_names" value="{{.}}" />
+          <span class="font-mono text-text">{{.}}</span>
+          {{if $lbl}}<span class="text-text-secondary text-xs truncate">— {{$lbl}}</span>{{end}}
+          <button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>
+        </div>
+        {{end}}
+      </div>
+    </div>
+  </fieldset>
+
+  <!-- ─── Domain whitelist ────────────────────────────────────── -->
+  <fieldset class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Domain whitelist</legend>
+
+    <label class="flex items-start gap-3 my-2 p-2 rounded bg-surface">
+      <input
+        type="checkbox"
+        name="domain_whitelist.enabled"
+        data-shape="bool"
+        {{if .DomainWhitelist.Enabled}}checked{{end}}
+        class="w-4 h-4 mt-0.5 accent-accent"
+      />
+      <span class="flex-1">
+        <span class="block text-sm font-medium text-text">Enforce</span>
+        <span class="block mt-1 text-xs text-text-secondary">
+          When on, grain periodically resolves the NIP-05 list for each
+          domain and treats every member as whitelisted. Combine with
+          Pubkey whitelist Enforce for full coverage.
+        </span>
+      </span>
+    </label>
+
+    <label class="flex flex-col gap-1 text-sm mb-3">
+      <span class="font-medium text-text-secondary">Cache refresh (minutes)</span>
+      <input
+        type="number"
+        name="domain_whitelist.cache_refresh_minutes"
+        data-shape="number"
+        min="0"
+        step="1"
+        value="{{.DomainWhitelist.CacheRefreshMinutes}}"
+        class="w-32 px-3 py-2 rounded bg-surface border border-border text-text font-mono"
+      />
+      <span class="text-xs text-text-secondary">
+        How often the NIP-05 lookup is refreshed for each domain.
+      </span>
+    </label>
+
+    <div data-list="domain_whitelist.domains" data-list-shape="domain" class="flex flex-col gap-2" data-domain-preview>
+      <span class="text-sm font-medium text-text-secondary">Domains</span>
+      <div class="flex gap-2">
+        <input type="text" data-list-input placeholder="example.com"
+          class="flex-1 px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <button type="button" data-list-add
+          class="px-3 py-2 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover">Add</button>
+      </div>
+      <div data-list-items class="flex flex-col gap-1">
+        {{range .DomainWhitelist.Domains}}
+        <div data-list-item data-domain-row data-domain="{{.}}" class="flex flex-col gap-1 py-1 px-2 rounded bg-surface text-sm">
+          <div class="flex items-center gap-2">
+            <input type="hidden" name="domain_whitelist.domains" data-shape="string_names" value="{{.}}" />
+            <span class="font-mono text-text truncate flex-1">{{.}}</span>
+            <button type="button" data-domain-toggle class="text-xs text-text-secondary hover:text-text">show keys ▾</button>
+            <button type="button" data-list-remove class="px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>
+          </div>
+          <div data-domain-keys class="hidden mt-1 text-xs"></div>
+        </div>
+        {{end}}
+      </div>
+      <p class="text-xs text-text-secondary">
+        Limitation: only works if the domain's
+        <span class="font-mono">/.well-known/nostr.json</span> returns the
+        full <span class="font-mono">names</span> map.
+        Per-name-lookup support is tracked in
+        <a href="https://github.com/0ceanSlim/grain/issues/79" target="_blank" class="underline">issue #79</a>.
+      </p>
+    </div>
+  </fieldset>
+  {{end}}
+</form>
+
+<script>
+  // Per-domain key preview. Click "show keys" → fetches
+  // /api/v1/admin/domain-keys?domain=<...>, lists the name→pubkey
+  // pairs inline. Cached per session to avoid re-fetching on
+  // repeated toggles.
+  (function () {
+    "use strict";
+    const panel = document.querySelector('[data-section="whitelist"]');
+    if (!panel) return;
+    const cache = new Map();
+
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    async function loadDomain(row) {
+      const domain = row.dataset.domain;
+      const keysEl = row.querySelector("[data-domain-keys]");
+      if (!keysEl) return;
+      if (cache.has(domain)) {
+        keysEl.innerHTML = cache.get(domain);
+        return;
+      }
+      keysEl.innerHTML = '<div class="text-text-secondary">Loading…</div>';
+      try {
+        const r = await fetch("/api/v1/admin/domain-keys?domain=" + encodeURIComponent(domain));
+        const body = await r.json();
+        if (!r.ok || body.error) {
+          const html = '<div class="text-warning">Couldn't fetch: ' + escHtml(body.error || r.statusText) + '</div>';
+          keysEl.innerHTML = html;
+          cache.set(domain, html);
+          return;
+        }
+        const names = body.names || {};
+        const entries = Object.entries(names);
+        if (entries.length === 0) {
+          const html = '<div class="text-warning">Domain returned no names — either privacy-scoped (per-name lookups only, see #79) or genuinely empty.</div>';
+          keysEl.innerHTML = html;
+          cache.set(domain, html);
+          return;
+        }
+        const html =
+          '<div class="text-text-secondary mb-1">' + entries.length + ' name(s):</div>' +
+          '<ul class="space-y-0.5 max-h-48 overflow-y-auto">' +
+          entries.map(([name, hex]) => (
+            '<li class="flex gap-2 items-baseline">' +
+            '<span class="text-text font-medium">' + escHtml(name) + '</span>' +
+            '<span class="font-mono text-text-secondary truncate" title="' + escHtml(hex) + '">' + escHtml(hex.slice(0, 10) + "…" + hex.slice(-6)) + '</span>' +
+            '</li>'
+          )).join("") + '</ul>';
+        keysEl.innerHTML = html;
+        cache.set(domain, html);
+      } catch (e) {
+        keysEl.innerHTML = '<div class="text-warning">Fetch failed: ' + escHtml(e.message || String(e)) + '</div>';
+      }
+    }
+
+    // Toggle handler — delegated so it works for both server-rendered
+    // and dynamically-added rows.
+    panel.addEventListener("click", (ev) => {
+      const btn = ev.target.closest && ev.target.closest("[data-domain-toggle]");
+      if (!btn) return;
+      const row = btn.closest("[data-domain-row]");
+      if (!row) return;
+      const keysEl = row.querySelector("[data-domain-keys]");
+      if (!keysEl) return;
+      if (keysEl.classList.contains("hidden")) {
+        keysEl.classList.remove("hidden");
+        btn.textContent = "hide keys ▴";
+        loadDomain(row);
+      } else {
+        keysEl.classList.add("hidden");
+        btn.textContent = "show keys ▾";
+      }
+    });
+
+    // Newly-added rows via the list widget don't have the toggle
+    // markup; upgrade them on insert via MutationObserver so the
+    // preview affordance is consistent.
+    const items = panel.querySelector('[data-list="domain_whitelist.domains"] [data-list-items]');
+    if (items) {
+      const upgrade = (n) => {
+        if (!(n instanceof Element)) return;
+        if (n.dataset.domainRow !== undefined) return;
+        const hidden = n.querySelector('input[type="hidden"]');
+        const domain = hidden && hidden.value;
+        if (!domain) return;
+        n.setAttribute("data-domain-row", "");
+        n.setAttribute("data-domain", domain);
+        // Wrap the existing row content into the two-line layout
+        // the server-rendered rows use.
+        const removeBtn = n.querySelector("[data-list-remove]");
+        const span = n.querySelector("span");
+        if (!span || !removeBtn) return;
+        n.classList.add("flex-col", "gap-1");
+        n.classList.remove("items-center");
+        const row = document.createElement("div");
+        row.className = "flex items-center gap-2";
+        row.appendChild(hidden);
+        row.appendChild(span);
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.setAttribute("data-domain-toggle", "");
+        toggle.className = "text-xs text-text-secondary hover:text-text";
+        toggle.textContent = "show keys ▾";
+        row.appendChild(toggle);
+        row.appendChild(removeBtn);
+        const keys = document.createElement("div");
+        keys.setAttribute("data-domain-keys", "");
+        keys.className = "hidden mt-1 text-xs";
+        n.innerHTML = "";
+        n.appendChild(row);
+        n.appendChild(keys);
+      };
+      const obs = new MutationObserver((muts) => {
+        muts.forEach((m) => m.addedNodes.forEach(upgrade));
+      });
+      obs.observe(items, { childList: true });
+    }
+  })();
+</script>
+
+<script>
+  (function () {
+    "use strict";
+    // Lazy profile lookups for whitelist pubkey rows. Calls
+    // /api/v1/user/profile?pubkey=<hex> for each row at most once,
+    // session-scoped cache. Failures fall through to the
+    // already-rendered generic avatar + Loading… → "(no profile)"
+    // so a row never goes stale-empty.
+    const panel = document.querySelector('[data-section="whitelist"]');
+    if (!panel) return;
+
+    const cache = new Map();
+    const inflight = new Map();
+
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    async function fetchProfile(hex) {
+      if (cache.has(hex)) return cache.get(hex);
+      if (inflight.has(hex)) return inflight.get(hex);
+      const p = (async () => {
+        try {
+          const r = await fetch("/api/v1/user/profile?pubkey=" + encodeURIComponent(hex));
+          if (!r.ok) return null;
+          const data = await r.json();
+          if (!data) return null;
+          let profile = {};
+          if (typeof data.content === "string" && data.content) {
+            try { profile = JSON.parse(data.content); } catch (_) {}
+          } else if (data.display_name || data.name || data.picture) {
+            profile = data;
+          }
+          cache.set(hex, profile);
+          return profile;
+        } catch (_) {
+          return null;
+        }
+      })();
+      inflight.set(hex, p);
+      try { return await p; } finally { inflight.delete(hex); }
+    }
+
+    function renderProfile(row, profile) {
+      const nameEl = row.querySelector("[data-profile-name]");
+      const picEl = row.querySelector("[data-profile-pic]");
+      if (!nameEl || !picEl) return;
+      const display =
+        (profile && (profile.display_name || profile.name)) || "";
+      const picture = profile && profile.picture;
+
+      nameEl.textContent = display || "(no profile)";
+      if (display) nameEl.classList.remove("text-text-secondary");
+
+      if (picture) {
+        picEl.innerHTML =
+          '<img src="' + escHtml(picture) + '" alt="" class="w-8 h-8 rounded-full object-cover" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'), {textContent:\'👤\'}))" />';
+      }
+    }
+
+    function processRow(row) {
+      if (row.dataset.profileLoaded === "1") return;
+      row.dataset.profileLoaded = "1";
+      const hex = row.dataset.hex;
+      if (!hex) return;
+      fetchProfile(hex).then((p) => renderProfile(row, p));
+    }
+
+    // Initial pass for server-rendered rows.
+    panel.querySelectorAll("[data-pubkey-row]").forEach(processRow);
+
+    // Watch for rows added via the JS Add button (mutation observer
+    // on the items container). Cheap — only fires when the
+    // list-items inner HTML changes.
+    const items = panel.querySelector('[data-list="pubkey_whitelist.pubkeys"] [data-list-items]');
+    if (items) {
+      // The Add path inserts a row via listItemHTML with shape
+      // pubkey_unified. That template doesn't include the profile
+      // slot — we upgrade the row on insert by injecting the slot
+      // and triggering processRow.
+      const observer = new MutationObserver((muts) => {
+        muts.forEach((m) => {
+          m.addedNodes.forEach((n) => {
+            if (n.nodeType !== 1) return;
+            const hidden = n.querySelector && n.querySelector('input[type="hidden"]');
+            const hex = hidden && hidden.value;
+            if (!hex) return;
+            n.dataset.pubkeyRow = "";
+            n.dataset.hex = hex;
+            // Inject profile slot at the start of the row, replacing
+            // the current text-only layout with the profile-aware one.
+            const left = n.querySelector(".flex-1");
+            if (left && !n.querySelector("[data-profile-pic]")) {
+              const pic = document.createElement("div");
+              pic.setAttribute("data-profile-pic", "");
+              pic.className = "flex-shrink-0 w-8 h-8 rounded-full bg-surface-overlay flex items-center justify-center text-text-secondary text-sm";
+              pic.textContent = "👤";
+              n.insertBefore(pic, left);
+              const name = document.createElement("div");
+              name.setAttribute("data-profile-name", "");
+              name.className = "text-sm text-text truncate";
+              name.textContent = "Loading…";
+              left.insertBefore(name, left.firstChild);
+            }
+            processRow(n);
+          });
+        });
+      });
+      observer.observe(items, { childList: true });
+    }
+  })();
+</script>
+{{end}}

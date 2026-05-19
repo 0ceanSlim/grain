@@ -18,8 +18,10 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 
+	"github.com/0ceanslim/grain/client/core/tools"
 	"github.com/0ceanslim/grain/client/session"
 	"github.com/0ceanslim/grain/config"
 	cfgType "github.com/0ceanslim/grain/config/types"
@@ -52,6 +54,17 @@ var adminTemplateFuncs = template.FuncMap{
 			return "null"
 		}
 		return string(b)
+	},
+	// kindLabelStr resolves a stringified kind ("30023") to its
+	// human label via the curated KindLabels map. Empty string
+	// when the kind isn't catalogued — caller can decide whether
+	// to suppress the label or show "(no description)".
+	"kindLabelStr": func(s string) string {
+		k, err := strconv.Atoi(strings.TrimSpace(s))
+		if err != nil {
+			return ""
+		}
+		return KindLabels[k]
 	},
 }
 
@@ -164,6 +177,106 @@ var kindRatePresets = []KindRatePreset{
 	{Kind: 30023, Limit: 1, Burst: 3},  // Long-form — slow authored
 }
 
+// WhitelistSectionData wraps WhitelistConfig with a unified
+// pubkey view + the kind catalog needed by the form. The
+// dashboard renders one row per UnifiedPubkey showing both hex
+// and npub regardless of which form the operator originally
+// entered; the wire shape (Pubkeys vs Npubs) is collapsed on
+// save into Pubkeys-only by the JS submit path.
+type WhitelistSectionData struct {
+	Config         cfgType.WhitelistConfig
+	UnifiedPubkeys []UnifiedPubkey
+	BrokenPubkeys  []string // raw entries from the YAML that didn't parse
+	KindLabels     map[int]string
+	KindPresets    []QuickKind
+}
+
+// UnifiedPubkey is one row of the merged hex+npub display. Both
+// forms are precomputed server-side so the page doesn't have to
+// fan out N convert-API calls on first render.
+type UnifiedPubkey struct {
+	Hex  string
+	Npub string
+}
+
+// whitelistKindPresets are the chips on the kind-whitelist input.
+// Common scenarios:
+//   - indexing relay: 0, 3, 10002
+//   - general public relay: 1, 7, 30023
+//   - app-specific: operator types their custom kind in the int input
+var whitelistKindPresets = []QuickKind{
+	{Kind: 0, Label: "metadata"},
+	{Kind: 1, Label: "notes"},
+	{Kind: 3, Label: "follow list"},
+	{Kind: 7, Label: "reactions"},
+	{Kind: 10002, Label: "relay list"},
+	{Kind: 30023, Label: "long-form"},
+}
+
+// buildUnifiedPubkeys merges the wire shape's hex Pubkeys + bech32
+// Npubs into a single deduplicated slice. Entries that fail to
+// parse (bad hex length, undecodable npub) get surfaced separately
+// via the second return so the dashboard can warn the operator
+// rather than silently dropping them. Saving through the dashboard
+// always drops the broken ones from the file — but the operator
+// at least knows what was there.
+func buildUnifiedPubkeys(hexes, npubs []string) ([]UnifiedPubkey, []string) {
+	seen := make(map[string]bool, len(hexes)+len(npubs))
+	out := make([]UnifiedPubkey, 0, len(hexes)+len(npubs))
+	broken := make([]string, 0)
+	for _, h := range hexes {
+		raw := h
+		h = strings.ToLower(strings.TrimSpace(h))
+		if h == "" {
+			continue
+		}
+		if len(h) != 64 || !isLowerHexAll(h) {
+			broken = append(broken, raw)
+			continue
+		}
+		if seen[h] {
+			continue
+		}
+		seen[h] = true
+		np, _ := tools.EncodePubkey(h)
+		out = append(out, UnifiedPubkey{Hex: h, Npub: np})
+	}
+	for _, n := range npubs {
+		raw := n
+		n = strings.TrimSpace(n)
+		if n == "" {
+			continue
+		}
+		hex, err := tools.DecodeNpub(n)
+		if err != nil || hex == "" {
+			broken = append(broken, raw)
+			continue
+		}
+		if seen[hex] {
+			continue
+		}
+		seen[hex] = true
+		out = append(out, UnifiedPubkey{Hex: hex, Npub: n})
+	}
+	return out, broken
+}
+
+// isLowerHexAll is duplicated from setup.go's identical helper to
+// avoid cross-package import; whitelist-side hex validation runs
+// on operator-supplied YAML data so we want our own copy.
+func isLowerHexAll(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= '0' && c <= '9':
+		case c >= 'a' && c <= 'f':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // rateLimitCategories is the fixed display order for the
 // per-category rates form. Matches the four named keys in the
 // example config + the upstream category enums in
@@ -259,7 +372,17 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 			}},
 		{ID: "resource_limits", Title: "Resource limits", Icon: "📦", Method: "grain_updateresourcelimits", Config: cfg.ResourceLimits},
 		{ID: "server", Title: "Server", Icon: "🖥️", Method: "grain_updateserver", Config: cfg.Server},
-		{ID: "whitelist", Title: "Whitelist", Icon: "✅", Method: "grain_updatewhitelistconfig", Config: wl},
+		{ID: "whitelist", Title: "Whitelist", Icon: "✅", Method: "grain_updatewhitelistconfig",
+			Config: func() WhitelistSectionData {
+				unified, broken := buildUnifiedPubkeys(wl.PubkeyWhitelist.Pubkeys, wl.PubkeyWhitelist.Npubs)
+				return WhitelistSectionData{
+					Config:         *wl,
+					UnifiedPubkeys: unified,
+					BrokenPubkeys:  broken,
+					KindLabels:     KindLabels,
+					KindPresets:    whitelistKindPresets,
+				}
+			}()},
 		{ID: "blacklist", Title: "Blacklist", Icon: "⛔", Method: "grain_updateblacklistconfig", Config: cfg.Blacklist},
 		{ID: "ops", Title: "Operations", Icon: "🛠️", Method: "", Config: nil},
 	}

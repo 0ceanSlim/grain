@@ -1,29 +1,28 @@
 # GRAIN Whitelist Configuration Example
-# Enable these sections to restrict relay access to specific users/content
+# Enable these sections to restrict relay access to specific users/content.
+# The whitelist is also grain's "elevated users" registry — pubkeys/npubs
+# here drive features like purge protection regardless of whether
+# enforcement is enabled. The dashboard at /admin renders this file.
 
 pubkey_whitelist:
-  enabled: false # Enable to allow only whitelisted pubkeys
-  pubkeys: # Hex format public keys
-    - "0000000000000000000000000000000000000000000000000000000000000000"
-    - "1111111111111111111111111111111111111111111111111111111111111111"
-  npubs: # Bech32 format public keys (alternative to hex)
-    - "npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
-    - "npub1zyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
-  cache_refresh_minutes: 60 # Refresh whitelist cache every hour
+  enabled: false # Enforce: only listed pubkeys/npubs can publish events.
+  # Hex (64-char lowercase) and npub (bech32) lists merge at runtime.
+  # Empty by default; the dashboard's pubkey panel accepts either form
+  # on Add and canonicalizes to hex on save.
+  pubkeys: []
+  npubs: []
+  cache_refresh_minutes: 60 # How often domain-resolved members are re-pulled into the cache.
 
 kind_whitelist:
-  enabled: false # Enable to allow only specific event kinds
-  kinds: # Allowed event kinds (numbers as strings)
-    - "0" # User metadata
-    - "1" # Text notes
-    - "3" # Contact lists
-    - "7" # Reactions
+  enabled: false # Enforce: only events with these kinds are accepted.
+  # Kinds are stored as strings so YAML parsers don't strip leading zeros.
+  # Empty by default. Common patterns:
+  #   - Indexing relay:  "0" (metadata), "3" (follow list), "10002" (relay list)
+  #   - General relay:   "0", "1", "3", "7", "30023"
+  #   - App-specific:    your custom kind(s)
+  kinds: []
 
 domain_whitelist:
-  enabled: false # Enable to verify users from specific NIP-05 domains
-  # Allowed NIP-05 domains. Empty by default; populate with the domains whose
-  # users you want to admit. Examples (commented out):
-  domains: []
-    # - "yourdomain.example"
-    # - "anotherdomain.example"
-  cache_refresh_minutes: 120 # Refresh domain cache every 2 hours
+  enabled: false # Enforce: members of these NIP-05 domains are auto-whitelisted.
+  domains: [] # e.g. "example.com"
+  cache_refresh_minutes: 120

@@ -57,8 +57,27 @@ func FetchPubkeysFromDomains(domains []string) ([]string, error) {
 	return allPubkeys, nil
 }
 
+// FetchDomainNames returns the parsed names map from a single
+// domain's .well-known/nostr.json. Exported for the admin
+// dashboard's domain-preview endpoint — the cache refresher uses
+// fetchDomainPubkeys instead (which throws away the names).
+func FetchDomainNames(domain string) (map[string]string, error) {
+	pubkeys, names, err := fetchDomainBoth(domain)
+	_ = pubkeys
+	return names, err
+}
+
 // fetchDomainPubkeys fetches pubkeys from a single domain's .well-known/nostr.json
 func fetchDomainPubkeys(domain string) ([]string, error) {
+	pubkeys, _, err := fetchDomainBoth(domain)
+	return pubkeys, err
+}
+
+// fetchDomainBoth does the actual HTTP fetch + parse, returning
+// both the flat pubkey list (for the cache refresher) and the
+// name→pubkey map (for the admin dashboard's per-domain preview).
+// One implementation; two callers with different needs.
+func fetchDomainBoth(domain string) ([]string, map[string]string, error) {
 	url := fmt.Sprintf("https://%s/.well-known/nostr.json", domain)
 
 	log.Util().Debug("Fetching nostr.json",
@@ -73,25 +92,25 @@ func fetchDomainPubkeys(domain string) ([]string, error) {
 	// Make HTTP request
 	resp, err := client.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("HTTP request failed: %w", err)
+		return nil, nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
+		return nil, nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
 	}
 
 	// Read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	// Parse JSON
 	var nostrData NostrJSON
 	if err := json.Unmarshal(body, &nostrData); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON (size: %d bytes): %w", len(body), err)
+		return nil, nil, fmt.Errorf("failed to parse JSON (size: %d bytes): %w", len(body), err)
 	}
 
 	// Extract pubkeys
@@ -112,5 +131,5 @@ func fetchDomainPubkeys(domain string) ([]string, error) {
 			"names_count", len(nostrData.Names))
 	}
 
-	return pubkeys, nil
+	return pubkeys, nostrData.Names, nil
 }

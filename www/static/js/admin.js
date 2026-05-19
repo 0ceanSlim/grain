@@ -445,6 +445,32 @@
     throw new Error("signer not connected — try again");
   }
 
+  // expandDotted converts a flat blob with keys like
+  // "pubkey_whitelist.enabled" into a nested object the server's
+  // typed struct can JSON-unmarshal. Sections without dotted
+  // names round-trip unchanged. Leaf values pass through as-is
+  // (objects, arrays, primitives all opaque to the path walk).
+  function expandDotted(blob) {
+    const out = {};
+    for (const key in blob) {
+      if (!Object.prototype.hasOwnProperty.call(blob, key)) continue;
+      const parts = key.split(".");
+      if (parts.length === 1) {
+        out[key] = blob[key];
+        continue;
+      }
+      let cur = out;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!cur[parts[i]] || typeof cur[parts[i]] !== "object") {
+          cur[parts[i]] = {};
+        }
+        cur = cur[parts[i]];
+      }
+      cur[parts[parts.length - 1]] = blob[key];
+    }
+    return out;
+  }
+
   async function saveSection(panel) {
     const id = panel.dataset.section;
     const method = panel.dataset.method;
@@ -461,10 +487,13 @@
 
     try {
       await ensureSigner();
-      const blob = blobFromForm(form);
-      await window.grainNIP86.submit(method, [blob]);
-      // Re-snapshot so the form is "clean" against its new baseline.
-      initial.set(id, JSON.stringify(blob));
+      const flat = blobFromForm(form);
+      // Snapshot stays flat — discard restores by walking [name]
+      // elements one-by-one, which matches the flat shape. The
+      // wire blob is the nested expansion.
+      const wire = expandDotted(flat);
+      await window.grainNIP86.submit(method, [wire]);
+      initial.set(id, JSON.stringify(flat));
       refreshSaveBar(panel);
       setPending(id, true);
       toast(id + " saved — apply to activate");
@@ -520,17 +549,62 @@
   }
 
   // listItemHTML renders one row of a list widget. Shape decides
-  // hidden-input data-shape + the row's display layout:
-  //   "int"    — value is a kind number; label looked up from
-  //              NOSTR_KIND_LABELS; hidden input data-shape="int_names"
-  //   "ws_url" — value is a WebSocket URL; hidden input
-  //              data-shape="string_names"
+  // hidden-input data-shape (the wire type) plus the row's display
+  // layout. All "string-wire" shapes share data-shape="string_names";
+  // they differ in how they validate on Add and how the row reads
+  // to the operator.
   function listItemHTML(name, value, shape) {
-    if (shape === "ws_url") {
+    const v = String(value);
+    if (shape === "ws_url" || shape === "domain") {
       return (
         '<div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface-elevated text-sm">' +
-        '<input type="hidden" name="' + name + '" data-shape="string_names" value="' + escapeHTML(String(value)) + '" />' +
-        '<span class="font-mono text-text truncate flex-1">' + escapeHTML(String(value)) + '</span>' +
+        '<input type="hidden" name="' + name + '" data-shape="string_names" value="' + escapeHTML(v) + '" />' +
+        '<span class="font-mono text-text truncate flex-1">' + escapeHTML(v) + '</span>' +
+        '<button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>' +
+        "</div>"
+      );
+    }
+    if (shape === "hex_pubkey" || shape === "npub") {
+      // Truncate long identifiers for display; full value lives
+      // in the hidden input.
+      const display = v.length > 24 ? v.slice(0, 12) + "…" + v.slice(-8) : v;
+      return (
+        '<div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface-elevated text-sm">' +
+        '<input type="hidden" name="' + name + '" data-shape="string_names" value="' + escapeHTML(v) + '" />' +
+        '<span class="font-mono text-text truncate flex-1" title="' + escapeHTML(v) + '">' + escapeHTML(display) + '</span>' +
+        '<button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>' +
+        "</div>"
+      );
+    }
+    if (shape === "pubkey_unified") {
+      // value is the hex form (canonical). The row's data-npub
+      // attribute carries the bech32 form for display, and the
+      // hidden input ships the hex. Add path resolves the other
+      // form via /api/v1/keys/convert/public before calling this.
+      const hex = v;
+      const npub = (arguments.length > 3 && arguments[3]) || "";
+      const shortHex = hex.length > 16 ? hex.slice(0, 10) + "…" + hex.slice(-6) : hex;
+      const shortNpub = npub.length > 24 ? npub.slice(0, 12) + "…" + npub.slice(-8) : npub;
+      return (
+        '<div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface-elevated text-sm" data-npub="' + escapeHTML(npub) + '">' +
+        '<input type="hidden" name="' + name + '" data-shape="string_names" value="' + escapeHTML(hex) + '" />' +
+        '<div class="flex-1 min-w-0">' +
+        (npub ? '<div class="font-mono text-text text-xs truncate" title="' + escapeHTML(npub) + '">' + escapeHTML(shortNpub) + '</div>' : '') +
+        '<div class="font-mono text-text-secondary text-xs truncate" title="' + escapeHTML(hex) + '">' + escapeHTML(shortHex) + '</div>' +
+        '</div>' +
+        '<button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>' +
+        "</div>"
+      );
+    }
+    if (shape === "kind_str") {
+      // Kind stored as string on the wire but rendered like an
+      // int kind (with NIP label).
+      const label = listLabelFor(parseInt(v, 10));
+      return (
+        '<div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface-elevated text-sm">' +
+        '<input type="hidden" name="' + name + '" data-shape="string_names" value="' + escapeHTML(v) + '" />' +
+        '<span class="font-mono text-text">' + escapeHTML(v) + '</span>' +
+        (label ? '<span class="text-text-secondary truncate">— ' + escapeHTML(label) + '</span>' : '') +
         '<button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>' +
         "</div>"
       );
@@ -574,7 +648,7 @@
   // quick-add chips (read value straight from data-quick-add).
   // Returns true on append, false otherwise (toasts on validation
   // failure so the caller doesn't have to).
-  function listAddValue(list, raw) {
+  async function listAddValue(list, raw) {
     const items = list.querySelector("[data-list-items]");
     const name = list.dataset.list;
     const shape = list.dataset.listShape || "int";
@@ -588,6 +662,67 @@
         toast("url must start with ws:// or wss://", "error");
         return false;
       }
+    } else if (shape === "hex_pubkey") {
+      stored = String(raw).trim().toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(stored)) {
+        toast("pubkey must be 64-char lowercase hex", "error");
+        return false;
+      }
+    } else if (shape === "npub") {
+      stored = String(raw).trim();
+      if (!/^npub1[02-9ac-hj-np-z]+$/i.test(stored) || stored.length < 60) {
+        toast("must be a valid npub (bech32 string starting with npub1)", "error");
+        return false;
+      }
+    } else if (shape === "domain") {
+      stored = String(raw).trim().toLowerCase();
+      // Loose check — actual DNS validation lives upstream of the
+      // whitelist resolver. Catches typos like leading "@" or
+      // missing dots without rejecting punycode/IDN.
+      if (!stored || !stored.includes(".") || /\s/.test(stored)) {
+        toast("must look like a domain (e.g. example.com)", "error");
+        return false;
+      }
+    } else if (shape === "pubkey_unified") {
+      // Accept either hex or npub on input; canonicalize to hex
+      // by calling /api/v1/keys/convert/public/<input>.
+      stored = String(raw).trim();
+      if (stored === "") return false;
+      try {
+        const resp = await fetch(
+          "/api/v1/keys/convert/public/" + encodeURIComponent(stored)
+        );
+        if (!resp.ok) throw new Error("convert " + resp.status);
+        const body = await resp.json();
+        // Endpoint returns {public_key} for npub-in, {npub} for hex-in.
+        if (body.public_key) stored = body.public_key; // came in as npub
+        const npub = body.npub || (stored === String(raw).trim() ? null : String(raw).trim());
+        // Dedupe + insert with both forms.
+        const items = list.querySelector("[data-list-items]");
+        const name = list.dataset.list;
+        const existing = items.querySelectorAll('[name="' + cssEscape(name) + '"]');
+        for (let i = 0; i < existing.length; i++) {
+          if (existing[i].value === stored) return false;
+        }
+        // Use the helper directly with the npub too.
+        items.insertAdjacentHTML(
+          "beforeend",
+          listItemHTML(name, stored, "pubkey_unified", npub || "")
+        );
+        items.dispatchEvent(new Event("input", { bubbles: true }));
+        return true;
+      } catch (e) {
+        toast("couldn't validate pubkey: " + (e.message || e), "error");
+        return false;
+      }
+    } else if (shape === "kind_str") {
+      // Wire shape is string but we validate as non-negative int.
+      const n = parseInt(raw, 10);
+      if (!Number.isFinite(n) || n < 0 || String(n) !== String(raw).trim()) {
+        toast("kind must be a non-negative integer", "error");
+        return false;
+      }
+      stored = String(n);
     } else {
       const n = parseInt(raw, 10);
       if (!Number.isFinite(n) || n < 0 || String(n) !== String(raw).trim()) {
@@ -601,11 +736,12 @@
     const existing = items.querySelectorAll(
       '[name="' + cssEscape(name) + '"]'
     );
+    const stringShape = shape === "ws_url" || shape === "hex_pubkey" ||
+      shape === "npub" || shape === "domain" || shape === "kind_str";
     for (let i = 0; i < existing.length; i++) {
-      const eq =
-        shape === "ws_url"
-          ? existing[i].value === stored
-          : parseInt(existing[i].value, 10) === stored;
+      const eq = stringShape
+        ? existing[i].value === stored
+        : parseInt(existing[i].value, 10) === stored;
       if (eq) return false;
     }
     items.insertAdjacentHTML("beforeend", listItemHTML(name, stored, shape));
@@ -614,8 +750,9 @@
   }
 
   // Add button: read sibling input, hand the raw string to
-  // listAddValue (which handles shape-specific validation).
-  document.addEventListener("click", (ev) => {
+  // listAddValue (which handles shape-specific validation —
+  // including async paths that hit the convert API).
+  document.addEventListener("click", async (ev) => {
     const addBtn =
       ev.target && ev.target.closest && ev.target.closest("[data-list-add]");
     if (!addBtn) return;
@@ -626,14 +763,14 @@
 
     const raw = input.value.trim();
     if (raw === "") return;
-    if (listAddValue(list, raw)) input.value = "";
+    if (await listAddValue(list, raw)) input.value = "";
   });
 
   // Quick-add chips: trigger the same list-add path. Chip carries
   // data-quick-add (the value) and data-list-target (the list's
   // wire name). The container [data-list="<target>"] anywhere in
   // the same form is the destination.
-  document.addEventListener("click", (ev) => {
+  document.addEventListener("click", async (ev) => {
     const chip = ev.target && ev.target.closest && ev.target.closest("[data-quick-add]");
     if (!chip) return;
     const target = chip.dataset.listTarget;
@@ -644,7 +781,7 @@
       '[data-list="' + cssEscape(target) + '"]'
     );
     if (!list) return;
-    listAddValue(list, chip.dataset.quickAdd);
+    await listAddValue(list, chip.dataset.quickAdd);
   });
 
   // Remove button: drop the parent list-item.

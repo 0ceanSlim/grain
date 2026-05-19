@@ -62,6 +62,8 @@
           {{template "admin-resource_limits" .Config}}
         {{else if eq .ID "server"}}
           {{template "admin-server" .Config}}
+        {{else if eq .ID "whitelist"}}
+          {{template "admin-whitelist" .Config}}
         {{else if .Config}}
         <!-- Stub until this section's partial lands. -->
         <pre

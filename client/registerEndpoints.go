@@ -81,6 +81,11 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	// shared template engine; the per-section grain_* writes the page
 	// issues go to the NIP-86 dispatcher on the relay side.
 	mux.HandleFunc("/admin", HandleAdmin)
+	// Owner-gated proxy for the admin dashboard's domain-key
+	// preview. Lets the whitelist section show the actual names
+	// at a domain's NIP-05 endpoint without giving the browser
+	// direct cross-origin access.
+	mux.HandleFunc("/api/v1/admin/domain-keys", HandleAdminDomainKeys)
 
 	// First-run owner provisioning. GET shows the claim form (or
 	// the "already claimed" panel); POST is the actual claim. The
