@@ -1,0 +1,436 @@
+{{define "admin-blacklist"}}
+<!-- Blacklist section. Enclosing <details> supplies
+     data-section="blacklist" and
+     data-method="grain_updateblacklistconfig". Dot is
+     BlacklistSectionData (Config + unified pubkey views).
+
+     Dual-source split ([[project_blacklist_dual_source]]):
+       - Pubkey / word / mutelist fields live in blacklist.yml.
+       - IP scalars (max temp bans, durations, thresholds) live
+         in config.yml's blacklist: section. As of this commit
+         UpdateBlacklistConfig writes both, so the form's
+         Save covers everything.
+       - IP LIST (PermanentBlockedIPs) is edited LIVE via the
+         granular blockip / unblockip NIP-86 methods — NOT
+         through the bulk save, so multiple operators (or the
+         rate-limit promoter) can't clobber each other's edits.
+         The IP list section has its own +/− buttons that fire
+         calls directly. -->
+{{with .Config}}
+<form class="flex flex-col gap-5 mt-3" autocomplete="off">
+  <!-- ─── Enforce toggle ──────────────────────────────────────── -->
+  <label class="flex items-start gap-3 p-3 rounded bg-surface-elevated">
+    <input
+      type="checkbox"
+      name="enabled"
+      data-shape="bool"
+      {{if .Enabled}}checked{{end}}
+      class="w-4 h-4 mt-0.5 accent-accent"
+    />
+    <span class="flex-1">
+      <span class="block text-sm font-medium text-text">Enforce</span>
+      <span class="block mt-1 text-xs text-text-secondary">
+        When on, events authored by listed pubkeys / containing banned
+        words / from blocked IPs are rejected at ingest. When off the
+        rules are still tracked but not applied — useful when staging
+        a policy you're not ready to enforce yet.
+      </span>
+    </span>
+  </label>
+
+  <!-- ─── Word bans ───────────────────────────────────────────── -->
+  <fieldset class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Word bans</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      Substring match against event content. Words in
+      <strong>permanent</strong> always block. Words in
+      <strong>temp</strong> count toward the per-pubkey accumulator;
+      once an author trips the threshold they're escalated to a
+      time-boxed pubkey ban.
+    </p>
+
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div data-list="permanent_ban_words" data-list-shape="domain" class="flex flex-col gap-2">
+        <span class="text-sm font-medium text-text-secondary">Permanent ban words</span>
+        <div class="flex gap-2">
+          <input type="text" data-list-input placeholder="word or phrase"
+            class="flex-1 px-3 py-2 rounded bg-surface border border-border text-text font-mono text-xs" />
+          <button type="button" data-list-add
+            class="px-3 py-2 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover">Add</button>
+        </div>
+        <div data-list-items class="flex flex-col gap-1">
+          {{range .PermanentBanWords}}
+          <div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface text-sm">
+            <input type="hidden" name="permanent_ban_words" data-shape="string_names" value="{{.}}" />
+            <span class="text-text truncate flex-1">{{.}}</span>
+            <button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>
+          </div>
+          {{end}}
+        </div>
+      </div>
+
+      <div data-list="temp_ban_words" data-list-shape="domain" class="flex flex-col gap-2">
+        <span class="text-sm font-medium text-text-secondary">Temp ban words</span>
+        <div class="flex gap-2">
+          <input type="text" data-list-input placeholder="word or phrase"
+            class="flex-1 px-3 py-2 rounded bg-surface border border-border text-text font-mono text-xs" />
+          <button type="button" data-list-add
+            class="px-3 py-2 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover">Add</button>
+        </div>
+        <div data-list-items class="flex flex-col gap-1">
+          {{range .TempBanWords}}
+          <div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface text-sm">
+            <input type="hidden" name="temp_ban_words" data-shape="string_names" value="{{.}}" />
+            <span class="text-text truncate flex-1">{{.}}</span>
+            <button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>
+          </div>
+          {{end}}
+        </div>
+      </div>
+    </div>
+
+    <div class="grid gap-3 mt-3 sm:grid-cols-2">
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Max temp bans before promotion</span>
+        <input type="number" name="max_temp_bans" data-shape="number" min="0" step="1" value="{{.MaxTempBans}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">
+          Number of temp-word hits an author can accumulate before they're
+          escalated to a temp pubkey ban.
+        </span>
+      </label>
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Temp ban duration (seconds)</span>
+        <input type="number" name="temp_ban_duration" data-shape="number" min="0" step="1" value="{{.TempBanDuration}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">
+          How long a temp pubkey ban lasts before it expires (or counts
+          as a strike on the next promotion).
+        </span>
+      </label>
+    </div>
+  </fieldset>
+
+  <!-- ─── Pubkey bans ────────────────────────────────────────── -->
+  <fieldset class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Banned pubkeys</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      Permanent bans — events authored by these pubkeys are always
+      rejected. Accepts hex or npub; canonicalized to hex on save.
+    </p>
+
+    <div data-list="permanent_blacklist_pubkeys" data-list-shape="pubkey_unified" class="flex flex-col gap-2">
+      <div class="flex gap-2">
+        <input type="text" data-list-input placeholder="hex or npub1…"
+          class="flex-1 px-3 py-2 rounded bg-surface border border-border text-text font-mono text-xs" />
+        <button type="button" data-list-add
+          class="px-3 py-2 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover">Add</button>
+      </div>
+      <div data-list-items class="flex flex-col gap-1">
+        {{range $.UnifiedPubkeys}}
+        <div data-list-item data-pubkey-row data-hex="{{.Hex}}" data-npub="{{.Npub}}"
+          class="flex items-center gap-2 py-1 px-2 rounded bg-surface text-sm">
+          <input type="hidden" name="permanent_blacklist_pubkeys" data-shape="string_names" value="{{.Hex}}" />
+          <div data-profile-pic class="flex-shrink-0 w-8 h-8 rounded-full bg-surface-overlay flex items-center justify-center text-text-secondary text-sm">👤</div>
+          <div class="flex-1 min-w-0">
+            <div data-profile-name class="text-sm text-text truncate">Loading…</div>
+            {{if .Npub}}<div class="font-mono text-text-secondary text-xs truncate" title="{{.Npub}}">{{.Npub}}</div>{{end}}
+          </div>
+          <button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>
+        </div>
+        {{end}}
+      </div>
+    </div>
+
+    <!-- Sentinel: ensures npubs list ships empty on save. -->
+    <input type="hidden" name="permanent_blacklist_npubs" data-shape="json" value="[]" />
+
+    {{if $.BrokenPubkeys}}
+    <div class="mt-2 p-3 rounded border border-warning bg-warning-dim text-warning text-xs">
+      <p class="font-medium">⚠ {{len $.BrokenPubkeys}} entry(ies) in blacklist.yml couldn't be parsed</p>
+      <ul class="mt-1 space-y-0.5 list-disc list-inside font-mono break-all">
+        {{range $.BrokenPubkeys}}<li>{{.}}</li>{{end}}
+      </ul>
+      <p class="mt-2">Saving once through the dashboard drops them.</p>
+    </div>
+    {{end}}
+  </fieldset>
+
+  <!-- ─── Mutelist authors ───────────────────────────────────── -->
+  <fieldset class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">Mutelist authors</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      Pubkeys whose published mutelist (kind 10000) is treated as a
+      ban source. Anyone they mute is also banned on this relay —
+      effectively outsourcing moderation to trusted curators.
+    </p>
+
+    <div data-list="mutelist_authors" data-list-shape="pubkey_unified" class="flex flex-col gap-2">
+      <div class="flex gap-2">
+        <input type="text" data-list-input placeholder="hex or npub1…"
+          class="flex-1 px-3 py-2 rounded bg-surface border border-border text-text font-mono text-xs" />
+        <button type="button" data-list-add
+          class="px-3 py-2 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover">Add</button>
+      </div>
+      <div data-list-items class="flex flex-col gap-1">
+        {{range $.MutelistAuthors}}
+        <div data-list-item data-pubkey-row data-hex="{{.Hex}}" data-npub="{{.Npub}}"
+          class="flex items-center gap-2 py-1 px-2 rounded bg-surface text-sm">
+          <input type="hidden" name="mutelist_authors" data-shape="string_names" value="{{.Hex}}" />
+          <div data-profile-pic class="flex-shrink-0 w-8 h-8 rounded-full bg-surface-overlay flex items-center justify-center text-text-secondary text-sm">👤</div>
+          <div class="flex-1 min-w-0">
+            <div data-profile-name class="text-sm text-text truncate">Loading…</div>
+            {{if .Npub}}<div class="font-mono text-text-secondary text-xs truncate" title="{{.Npub}}">{{.Npub}}</div>{{end}}
+          </div>
+          <button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>
+        </div>
+        {{end}}
+      </div>
+    </div>
+
+    <label class="flex flex-col gap-1 text-sm mt-3 max-w-md">
+      <span class="font-medium text-text-secondary">Mutelist cache refresh (minutes)</span>
+      <input type="number" name="mutelist_cache_refresh_minutes" data-shape="number" min="0" step="1" value="{{.MutelistCacheRefreshMinutes}}"
+        class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+      <span class="text-xs text-text-secondary">How often each author's kind-10000 is re-pulled.</span>
+    </label>
+
+    {{if $.BrokenMutelistAuthors}}
+    <div class="mt-2 p-3 rounded border border-warning bg-warning-dim text-warning text-xs">
+      <p class="font-medium">⚠ {{len $.BrokenMutelistAuthors}} mutelist author entry(ies) couldn't be parsed</p>
+      <ul class="mt-1 space-y-0.5 list-disc list-inside font-mono break-all">
+        {{range $.BrokenMutelistAuthors}}<li>{{.}}</li>{{end}}
+      </ul>
+    </div>
+    {{end}}
+  </fieldset>
+
+  <!-- ─── IP scalars (bulk-saved alongside the rest) ─────────── -->
+  <fieldset class="p-3 rounded bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-text">IP ban scalars</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      The thresholds and durations driving IP-level temp bans
+      (issue #62). These live in config.yml's blacklist: section
+      and ride through the section's Save.
+    </p>
+    <div class="grid gap-3 sm:grid-cols-3">
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Max IP temp bans</span>
+        <input type="number" name="ip_max_temp_bans" data-shape="number" min="0" step="1" value="{{.IPMaxTempBans}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">Temp bans accumulated before promotion to permanent.</span>
+      </label>
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">IP temp ban duration (s)</span>
+        <input type="number" name="ip_temp_ban_duration" data-shape="number" min="0" step="1" value="{{.IPTempBanDuration}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+      </label>
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Rate-violation threshold</span>
+        <input type="number" name="ip_rate_violation_threshold" data-shape="number" min="0" step="1" value="{{.IPRateViolationThreshold}}"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">Rate-limit violations before triggering one temp ban.</span>
+      </label>
+    </div>
+  </fieldset>
+
+  <!-- ─── IP blocklist (LIVE editing — bypasses Save) ────────── -->
+  <fieldset data-bl-ip class="p-3 rounded border-2 border-dashed border-warning bg-surface-elevated">
+    <legend class="px-2 text-sm font-medium text-warning">Permanent IP blocks (live)</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      Per-row edits go through <span class="font-mono">blockip</span> /
+      <span class="font-mono">unblockip</span> immediately — they are NOT
+      part of the section's Save. Each Add or Remove is its own
+      signed NIP-86 call. Accepts a single IP
+      (<span class="font-mono">203.0.113.5</span>) or a CIDR
+      (<span class="font-mono">203.0.113.0/24</span>).
+    </p>
+
+    <div class="flex gap-2 mb-3">
+      <input
+        type="text"
+        data-bl-ip-input
+        placeholder="203.0.113.0/24"
+        class="flex-1 px-3 py-2 rounded bg-surface border border-border text-text font-mono text-sm"
+      />
+      <button type="button" data-bl-ip-add
+        class="px-3 py-2 text-sm rounded bg-danger text-danger-fg hover:opacity-90">Block</button>
+    </div>
+
+    <div data-bl-ip-rows class="flex flex-col gap-1">
+      {{range .PermanentBlockedIPs}}
+      <div data-bl-ip-row data-ip="{{.}}" class="flex items-center gap-2 py-1 px-2 rounded bg-surface text-sm">
+        <span class="font-mono text-text truncate flex-1">{{.}}</span>
+        <button type="button" data-bl-ip-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Unblock">✕</button>
+      </div>
+      {{end}}
+    </div>
+  </fieldset>
+</form>
+
+<script>
+  (function () {
+    "use strict";
+    // Live-edit IP blocklist. Each Add fires blockip; each
+    // Remove fires unblockip. Both need a signed envelope so
+    // ensureSigner gets called via grainNIP86.submit's signer
+    // call. This bypasses the section's snapshot/discard flow —
+    // there's no "draft" state for IPs.
+    const panel = document.querySelector('[data-section="blacklist"]');
+    if (!panel) return;
+    const ipEl = panel.querySelector("[data-bl-ip]");
+    if (!ipEl) return;
+    const rows = ipEl.querySelector("[data-bl-ip-rows]");
+    const input = ipEl.querySelector("[data-bl-ip-input]");
+    const addBtn = ipEl.querySelector("[data-bl-ip-add]");
+    const toast = window.adminToast || function () {};
+
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    function rowHTML(ip) {
+      return (
+        '<div data-bl-ip-row data-ip="' + escHtml(ip) + '" class="flex items-center gap-2 py-1 px-2 rounded bg-surface text-sm">' +
+        '<span class="font-mono text-text truncate flex-1">' + escHtml(ip) + '</span>' +
+        '<button type="button" data-bl-ip-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Unblock">✕</button>' +
+        '</div>'
+      );
+    }
+
+    addBtn.addEventListener("click", async () => {
+      const raw = input.value.trim();
+      if (!raw) return;
+      addBtn.disabled = true;
+      try {
+        await window.grainNIP86.submit("blockip", [raw]);
+        rows.insertAdjacentHTML("beforeend", rowHTML(raw));
+        input.value = "";
+        toast(raw + " blocked");
+      } catch (err) {
+        toast(err.message || String(err), "error");
+      } finally {
+        addBtn.disabled = false;
+      }
+    });
+
+    rows.addEventListener("click", async (ev) => {
+      const btn = ev.target.closest("[data-bl-ip-remove]");
+      if (!btn) return;
+      const row = btn.closest("[data-bl-ip-row]");
+      const ip = row && row.dataset.ip;
+      if (!ip) return;
+      btn.disabled = true;
+      try {
+        await window.grainNIP86.submit("unblockip", [ip]);
+        row.remove();
+        toast(ip + " unblocked");
+      } catch (err) {
+        toast(err.message || String(err), "error");
+        btn.disabled = false;
+      }
+    });
+
+    // Sentinel: ship empty permanent_blocked_ips in the bulk save
+    // so the wire blob is shape-stable even though the server-side
+    // preserve logic ignores the field. Lives in JS because adding
+    // it as a hidden input in the form would risk being read by
+    // accident.
+    panel
+      .querySelector("form")
+      ?.insertAdjacentHTML(
+        "beforeend",
+        '<input type="hidden" name="permanent_blocked_ips" data-shape="json" value="[]" />'
+      );
+  })();
+
+  // Reuse the whitelist's profile-lookup script. The blacklist
+  // pubkey rows share the same [data-pubkey-row] markup, so a
+  // copy of the loader here surfaces display names + pictures.
+  (function () {
+    "use strict";
+    const panel = document.querySelector('[data-section="blacklist"]');
+    if (!panel) return;
+    const cache = new Map();
+    const inflight = new Map();
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+    async function fetchProfile(hex) {
+      if (cache.has(hex)) return cache.get(hex);
+      if (inflight.has(hex)) return inflight.get(hex);
+      const p = (async () => {
+        try {
+          const r = await fetch("/api/v1/user/profile?pubkey=" + encodeURIComponent(hex));
+          if (!r.ok) return null;
+          const data = await r.json();
+          let profile = {};
+          if (typeof data.content === "string" && data.content) {
+            try { profile = JSON.parse(data.content); } catch (_) {}
+          } else if (data.display_name || data.name || data.picture) {
+            profile = data;
+          }
+          cache.set(hex, profile);
+          return profile;
+        } catch (_) { return null; }
+      })();
+      inflight.set(hex, p);
+      try { return await p; } finally { inflight.delete(hex); }
+    }
+    function renderProfile(row, profile) {
+      const nameEl = row.querySelector("[data-profile-name]");
+      const picEl = row.querySelector("[data-profile-pic]");
+      if (!nameEl || !picEl) return;
+      const display = (profile && (profile.display_name || profile.name)) || "";
+      const picture = profile && profile.picture;
+      nameEl.textContent = display || "(no profile)";
+      if (picture) {
+        picEl.innerHTML = '<img src="' + escHtml(picture) + '" alt="" class="w-8 h-8 rounded-full object-cover" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'), {textContent:\'👤\'}))" />';
+      }
+    }
+    function processRow(row) {
+      if (row.dataset.profileLoaded === "1") return;
+      row.dataset.profileLoaded = "1";
+      const hex = row.dataset.hex;
+      if (!hex) return;
+      fetchProfile(hex).then((p) => renderProfile(row, p));
+    }
+    panel.querySelectorAll("[data-pubkey-row]").forEach(processRow);
+
+    // Upgrade newly-inserted rows (Add path) to include profile
+    // slots, mirroring the whitelist behaviour.
+    panel.querySelectorAll('[data-list-shape="pubkey_unified"] [data-list-items]').forEach((items) => {
+      const obs = new MutationObserver((muts) => {
+        muts.forEach((m) => m.addedNodes.forEach((n) => {
+          if (!(n instanceof Element)) return;
+          const hidden = n.querySelector('input[type="hidden"]');
+          const hex = hidden && hidden.value;
+          if (!hex) return;
+          n.dataset.pubkeyRow = "";
+          n.dataset.hex = hex;
+          const left = n.querySelector(".flex-1");
+          if (left && !n.querySelector("[data-profile-pic]")) {
+            const pic = document.createElement("div");
+            pic.setAttribute("data-profile-pic", "");
+            pic.className = "flex-shrink-0 w-8 h-8 rounded-full bg-surface-overlay flex items-center justify-center text-text-secondary text-sm";
+            pic.textContent = "👤";
+            n.insertBefore(pic, left);
+            const name = document.createElement("div");
+            name.setAttribute("data-profile-name", "");
+            name.className = "text-sm text-text truncate";
+            name.textContent = "Loading…";
+            left.insertBefore(name, left.firstChild);
+          }
+          processRow(n);
+        }));
+      });
+      obs.observe(items, { childList: true });
+    });
+  })();
+</script>
+{{end}}
+{{end}}

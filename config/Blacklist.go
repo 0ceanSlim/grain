@@ -334,18 +334,20 @@ func RemoveFromPermanentBlacklist(pubkey string) error {
 }
 
 // UpdateBlacklistConfig stages the standalone blacklist.yml — the
-// pubkey/npub/word/mutelist surface. Used by NIP-86's
-// grain_updateblacklistconfig.
+// pubkey/npub/word/mutelist surface — and also persists the IP
+// SCALARS (max-temp-bans, durations, thresholds) to config.yml's
+// blacklist: section so the dashboard can edit them via the same
+// bulk save. The IP LIST (PermanentBlockedIPs) is preserved from
+// the live in-memory state: it has its own granular write path via
+// blockip / unblockip, and round-tripping the list through the
+// bulk save would race against per-IP edits.
 //
-// The IP fields (PermanentBlockedIPs, IPMaxTempBans, etc.) on the
-// supplied struct are intentionally ignored here: production IP
-// enforcement reads its state from config.yml's blacklist: section
-// (see [[project-whitelist-semantics]] for the equivalent gate-vs-
-// registry split). Honouring IP fields on this path would clobber
-// config.yml-owned state with whatever blacklist.yml happens to
-// hold (typically empty), wiping admin-curated IP blocks on every
-// dashboard save. Per-IP edits go through blockip / unblockip,
-// which target config.yml directly.
+// Cross-file write rationale: BlacklistConfig is dual-source — the
+// type is one struct but two files own different slices of it
+// ([[project-blacklist-dual-source]]). UpdateBlacklistConfig has
+// always written blacklist.yml; this commit extends it to also
+// write the IP scalars to config.yml so the admin dashboard's
+// "Save" affordance covers the full operator-tunable surface.
 func UpdateBlacklistConfig(cfg cfgType.BlacklistConfig) error {
 	ConfigMu.Lock()
 	defer ConfigMu.Unlock()
@@ -354,17 +356,32 @@ func UpdateBlacklistConfig(cfg cfgType.BlacklistConfig) error {
 	if current == nil {
 		return fmt.Errorf("blacklist configuration is not loaded")
 	}
-	// Preserve the IP-related fields the standalone file doesn't
-	// own. The on-disk blacklist.yml already has empties for these;
-	// this just keeps the in-memory copy honest if anyone reads
-	// GetBlacklistConfig().PermanentBlockedIPs.
+	// Preserve the IP LIST — its source of truth is config.yml plus
+	// the temp-ban tracker, both managed via blockip / unblockip.
+	// Round-tripping the list here would clobber per-IP edits the
+	// operator (or rate-limit promoter) made between snapshot and
+	// save.
 	cfg.PermanentBlockedIPs = current.PermanentBlockedIPs
-	cfg.IPMaxTempBans = current.IPMaxTempBans
-	cfg.IPTempBanDuration = current.IPTempBanDuration
-	cfg.IPRateViolationThreshold = current.IPRateViolationThreshold
 	*current = cfg
+
+	if err := saveBlacklistConfig(cfg); err != nil {
+		return err
+	}
+
+	// IP scalars live in config.yml's blacklist: section. Mirror
+	// them there so the bulk save the dashboard fires covers
+	// everything the form lets an operator edit.
+	if sc := GetConfig(); sc != nil {
+		sc.Blacklist.IPMaxTempBans = cfg.IPMaxTempBans
+		sc.Blacklist.IPTempBanDuration = cfg.IPTempBanDuration
+		sc.Blacklist.IPRateViolationThreshold = cfg.IPRateViolationThreshold
+		if err := saveServerConfig(*sc); err != nil {
+			return err
+		}
+	}
+
 	log.Config().Info("Updated blacklist configuration (full)")
-	return saveBlacklistConfig(cfg)
+	return nil
 }
 
 // saveBlacklistConfig marshals + writes blacklist.yml. Suppresses

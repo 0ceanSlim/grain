@@ -64,6 +64,8 @@
           {{template "admin-server" .Config}}
         {{else if eq .ID "whitelist"}}
           {{template "admin-whitelist" .Config}}
+        {{else if eq .ID "blacklist"}}
+          {{template "admin-blacklist" .Config}}
         {{else if .Config}}
         <!-- Stub until this section's partial lands. -->
         <pre

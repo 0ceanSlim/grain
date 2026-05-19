@@ -177,6 +177,21 @@ var kindRatePresets = []KindRatePreset{
 	{Kind: 30023, Limit: 1, Burst: 3},  // Long-form — slow authored
 }
 
+// BlacklistSectionData wraps BlacklistConfig with the same
+// unified pubkey treatment the whitelist gets: hex + npub merge
+// into one display list, mutelist authors render with profile
+// previews. IP scalars ride through the bulk save now that
+// UpdateBlacklistConfig writes them to config.yml. The IP LIST
+// is edited live (per-row blockip/unblockip) rather than via the
+// section Save, so it has no snapshot-replay path.
+type BlacklistSectionData struct {
+	Config                cfgType.BlacklistConfig
+	UnifiedPubkeys        []UnifiedPubkey
+	BrokenPubkeys         []string // bad entries from blacklist.yml's pubkeys/npubs
+	MutelistAuthors       []UnifiedPubkey
+	BrokenMutelistAuthors []string
+}
+
 // WhitelistSectionData wraps WhitelistConfig with a unified
 // pubkey view + the kind catalog needed by the form. The
 // dashboard renders one row per UnifiedPubkey showing both hex
@@ -383,7 +398,19 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 					KindPresets:    whitelistKindPresets,
 				}
 			}()},
-		{ID: "blacklist", Title: "Blacklist", Icon: "⛔", Method: "grain_updateblacklistconfig", Config: cfg.Blacklist},
+		{ID: "blacklist", Title: "Blacklist", Icon: "⛔", Method: "grain_updateblacklistconfig",
+			Config: func() BlacklistSectionData {
+				bl := cfg.Blacklist
+				unified, broken := buildUnifiedPubkeys(bl.PermanentBlacklistPubkeys, bl.PermanentBlacklistNpubs)
+				mute, brokenMute := buildUnifiedPubkeys(bl.MuteListAuthors, nil)
+				return BlacklistSectionData{
+					Config:                bl,
+					UnifiedPubkeys:        unified,
+					BrokenPubkeys:         broken,
+					MutelistAuthors:       mute,
+					BrokenMutelistAuthors: brokenMute,
+				}
+			}()},
 		{ID: "ops", Title: "Operations", Icon: "🛠️", Method: "", Config: nil},
 	}
 
