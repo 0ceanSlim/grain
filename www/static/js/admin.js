@@ -167,6 +167,18 @@
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
     }
+    if (shape === "ints") {
+      // Same as "lines" but coerce each entry to an integer.
+      // Non-numeric entries are dropped — server would reject them
+      // anyway, and silently dropping is friendlier than erroring on
+      // every Save while the operator is mid-typing.
+      return field.value
+        .split("\n")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+        .map((s) => parseInt(s, 10))
+        .filter((n) => Number.isFinite(n));
+    }
     return field.value;
   }
 
@@ -184,6 +196,33 @@
         blob[el.name] = Array.from(
           form.querySelectorAll('[name="' + cssEscape(el.name) + '"]:checked')
         ).map((c) => c.value);
+        return;
+      }
+      if (el.dataset.shape === "int_names") {
+        // Multi-hidden-input group: every member contributes its
+        // value, parsed as int. Used by list-of-kinds UIs where
+        // each saved entry is a hidden input + a remove button.
+        blob[el.name] = Array.from(
+          form.querySelectorAll('[name="' + cssEscape(el.name) + '"]')
+        )
+          .map((c) => parseInt(c.value, 10))
+          .filter((n) => Number.isFinite(n));
+        return;
+      }
+      if (el.dataset.shape === "map_bool") {
+        // Multi-checkbox group whose value is a {key: bool} map.
+        // Every member of the group contributes a key; checked
+        // becomes true, unchecked stays false. Server-side an
+        // explicit-false is meaningful (operators communicating
+        // "don't purge this category" deliberately), so we don't
+        // drop unchecked entries.
+        const obj = {};
+        form
+          .querySelectorAll('[name="' + cssEscape(el.name) + '"]')
+          .forEach((c) => {
+            obj[c.value] = !!c.checked;
+          });
+        blob[el.name] = obj;
         return;
       }
       blob[el.name] = coerce(el);
@@ -273,9 +312,15 @@
     const blob = JSON.parse(snap);
     const handled = new Set();
     form.querySelectorAll("[name]").forEach((el) => {
-      if (handled.has(el.name) && el.dataset.shape === "names") return;
+      const groupShape = el.dataset.shape;
+      if (
+        handled.has(el.name) &&
+        (groupShape === "names" || groupShape === "map_bool")
+      ) {
+        return;
+      }
       const v = blob[el.name];
-      if (el.dataset.shape === "names") {
+      if (groupShape === "names") {
         // Multi-checkbox group: tick each checkbox whose value
         // appears in the snapshot's array, untick the rest. We
         // iterate ALL members of the group on the first hit and
@@ -286,6 +331,25 @@
           .forEach((c) => {
             c.checked = wanted.has(c.value);
           });
+        handled.add(el.name);
+      } else if (groupShape === "map_bool") {
+        // Multi-checkbox map: restore each key's bool from the
+        // snapshot object. Missing keys default to false.
+        const obj = v && typeof v === "object" ? v : {};
+        form
+          .querySelectorAll('[name="' + cssEscape(el.name) + '"]')
+          .forEach((c) => {
+            c.checked = !!obj[c.value];
+          });
+        handled.add(el.name);
+      } else if (groupShape === "ints") {
+        el.value = Array.isArray(v) ? v.join("\n") : "";
+      } else if (groupShape === "int_names") {
+        // Rebuild the list-of-kinds UI from the snapshot. The
+        // group's container has data-list="<name>", which is what
+        // listRender looks up.
+        const list = form.querySelector('[data-list="' + cssEscape(el.name) + '"]');
+        if (list) listRender(list, Array.isArray(v) ? v : []);
         handled.add(el.name);
       } else if (el.dataset.shape === "bool") {
         el.checked = !!v;
@@ -383,6 +447,142 @@
     if (!panel) return;
     if (action === "save") saveSection(panel);
     else discardSection(panel);
+  });
+
+  // ── List-of-values UI (e.g. kinds_to_purge) ─────────────────
+  //
+  // Convention: a container with
+  //   data-list="<wire-name>"       — the form field name to serialize
+  //   data-list-shape="int"          — values are integers (extends later)
+  // contains:
+  //   <input data-list-input> + <button data-list-add>     (add row)
+  //   <div data-list-items>                                (live list)
+  // Each list item is a small DOM block holding a hidden input
+  //   <input type="hidden" name="<wire-name>" data-shape="int_names" value="N">
+  // plus a "kind — label" line and a remove button [data-list-remove].
+  // blobFromForm picks up the values by name + data-shape.
+
+  function listLabelFor(kind) {
+    if (window.NOSTR_KIND_LABELS && window.NOSTR_KIND_LABELS[kind]) {
+      return window.NOSTR_KIND_LABELS[kind];
+    }
+    return "(no description)";
+  }
+
+  function listItemHTML(name, kind) {
+    const label = listLabelFor(kind);
+    return (
+      '<div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface-elevated text-sm">' +
+      '<input type="hidden" name="' + name + '" data-shape="int_names" value="' + kind + '" />' +
+      '<span class="font-mono text-text">' + kind + '</span>' +
+      '<span class="text-text-secondary truncate">— ' + escapeHTML(label) + '</span>' +
+      '<button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>' +
+      "</div>"
+    );
+  }
+
+  function escapeHTML(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  // listRender replaces the list-items container with rows for the
+  // given values. Used by discardSection to restore snapshot state.
+  function listRender(list, values) {
+    const items = list.querySelector("[data-list-items]");
+    if (!items) return;
+    const name = list.dataset.list;
+    items.innerHTML = values
+      .map((v) => listItemHTML(name, v))
+      .join("");
+  }
+
+  // listAddValue appends an integer to a list-of-kinds widget,
+  // skipping if already present. Shared between the Add button
+  // (reads from the input) and the quick-add chips (read value
+  // straight from data-quick-add). Returns true on append.
+  function listAddValue(list, n) {
+    const items = list.querySelector("[data-list-items]");
+    const name = list.dataset.list;
+    if (!items || !name) return false;
+    if (!Number.isFinite(n) || n < 0) return false;
+    const existing = items.querySelectorAll(
+      '[name="' + cssEscape(name) + '"]'
+    );
+    for (let i = 0; i < existing.length; i++) {
+      if (parseInt(existing[i].value, 10) === n) return false;
+    }
+    items.insertAdjacentHTML("beforeend", listItemHTML(name, n));
+    items.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  }
+
+  // Add button: read sibling input, validate as a non-negative
+  // integer, dedupe via listAddValue.
+  document.addEventListener("click", (ev) => {
+    const addBtn =
+      ev.target && ev.target.closest && ev.target.closest("[data-list-add]");
+    if (!addBtn) return;
+    const list = addBtn.closest("[data-list]");
+    if (!list) return;
+    const input = list.querySelector("[data-list-input]");
+    if (!input) return;
+
+    const raw = input.value.trim();
+    if (raw === "") return;
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 0 || String(n) !== raw) {
+      toast("must be a non-negative integer", "error");
+      return;
+    }
+    listAddValue(list, n);
+    input.value = "";
+  });
+
+  // Quick-add chips: trigger the same list-add path. Chip carries
+  // data-quick-add (the value) and data-list-target (the list's
+  // wire name). The container [data-list="<target>"] anywhere in
+  // the same form is the destination.
+  document.addEventListener("click", (ev) => {
+    const chip = ev.target && ev.target.closest && ev.target.closest("[data-quick-add]");
+    if (!chip) return;
+    const target = chip.dataset.listTarget;
+    if (!target) return;
+    const form = chip.closest("form");
+    if (!form) return;
+    const list = form.querySelector(
+      '[data-list="' + cssEscape(target) + '"]'
+    );
+    if (!list) return;
+    const n = parseInt(chip.dataset.quickAdd, 10);
+    if (Number.isFinite(n)) listAddValue(list, n);
+  });
+
+  // Remove button: drop the parent list-item.
+  document.addEventListener("click", (ev) => {
+    const btn =
+      ev.target && ev.target.closest && ev.target.closest("[data-list-remove]");
+    if (!btn) return;
+    const item = btn.closest("[data-list-item]");
+    if (!item) return;
+    const parent = item.parentNode;
+    item.remove();
+    parent && parent.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  // Enter inside the add-input acts as Add.
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter") return;
+    const input = ev.target;
+    if (!input || !input.matches || !input.matches("[data-list-input]")) return;
+    ev.preventDefault();
+    const list = input.closest("[data-list]");
+    const add = list && list.querySelector("[data-list-add]");
+    if (add) add.click();
   });
 
   // Suppress the default GET-the-form behavior in case anyone presses

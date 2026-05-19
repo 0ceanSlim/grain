@@ -13,6 +13,7 @@
 package client
 
 import (
+	"encoding/json"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -26,6 +27,23 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
+// adminTemplateFuncs are the template helpers admin pages need.
+// Lives here (not in templateEngine.go) so it doesn't bleed into
+// every page render — admin's the only page using toJS today.
+var adminTemplateFuncs = template.FuncMap{
+	// toJS marshals any value to JSON and returns it as
+	// template.JS so the renderer doesn't HTML-escape the
+	// resulting literal. Safe for inline <script> use because the
+	// input here is a small, static map we control.
+	"toJS": func(v any) template.JS {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return template.JS("null")
+		}
+		return template.JS(b)
+	},
+}
+
 // LoggingSectionData is the per-section template data for the
 // logging form. We can't render the suppress-components UI from
 // just LogConfig — the form needs the full set of known component
@@ -36,6 +54,56 @@ import (
 type LoggingSectionData struct {
 	Config        cfgType.LogConfig
 	AllComponents []string
+}
+
+// EventPurgeSectionData is the per-section template data for the
+// event_purge form. The form renders one checkbox per known purge
+// category (the v0.4-compat names from
+// server/db/nostrdb/purge.go:purgeCategoryForKind); rather than
+// teach the template to construct a literal slice, we hand it the
+// list directly. CommonKinds drives the quick-add chip row above
+// the kinds_to_purge textarea.
+type EventPurgeSectionData struct {
+	Config      cfgType.EventPurgeConfig
+	Categories  []string
+	CommonKinds []QuickKind
+	// KindLabels duplicated here from the page-level data because
+	// Go templates lose access to the outer dot once a sub-template
+	// is invoked. Cheap to pass — it's a single map reference.
+	KindLabels map[int]string
+}
+
+// QuickKind is one entry in the kinds_to_purge quick-add chip row.
+type QuickKind struct {
+	Kind  int
+	Label string
+}
+
+// commonPurgeKinds is the suggested-purge starter set: high-volume
+// kinds that operators most often want to evict. Curated rather
+// than exhaustive — chips are an affordance, not a catalog. The
+// textarea accepts any non-negative integer.
+var commonPurgeKinds = []QuickKind{
+	{Kind: 7, Label: "reactions"},
+	{Kind: 6, Label: "reposts"},
+	{Kind: 9735, Label: "zap receipts"},
+	{Kind: 1059, Label: "gift-wrap (NIP-17)"},
+	{Kind: 16, Label: "generic repost"},
+}
+
+// purgeCategories is the subset of purgeCategoryForKind's enum
+// that the form exposes. "deprecated" (kind 2) and "ephemeral"
+// (20000-29999) are dropped at ingest in store.go and never reach
+// the purger, so toggling them in the form would have no effect.
+// "unknown" stays because those kinds (gaps in NIP-01 ranges +
+// 40000+ experimental) ARE stored as regular and an operator may
+// want to purge them separately. Keep this list and
+// purgeCategoryForKind in sync as new ranges are added.
+var purgeCategories = []string{
+	"replaceable",
+	"regular",
+	"parameterized_replaceable",
+	"unknown",
 }
 
 // AdminSection is one panel in the accordion. Config is the typed
@@ -52,10 +120,11 @@ type AdminSection struct {
 
 // AdminPageData is what admin.html renders against.
 type AdminPageData struct {
-	Title    string
-	Theme    string
-	Owner    string
-	Sections []AdminSection
+	Title      string
+	Theme      string
+	Owner      string
+	Sections   []AdminSection
+	KindLabels map[int]string
 }
 
 // HandleAdmin renders the dashboard for the relay owner only.
@@ -85,7 +154,13 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 		{ID: "logging", Title: "Logging", Icon: "📜", Method: "grain_updatelogging",
 			Config: LoggingSectionData{Config: cfg.Logging, AllComponents: log.GetAllComponents()}},
 		{ID: "auth", Title: "Auth", Icon: "🔐", Method: "grain_updateauth", Config: cfg.Auth},
-		{ID: "event_purge", Title: "Event purge", Icon: "🧹", Method: "grain_updateeventpurge", Config: cfg.EventPurge},
+		{ID: "event_purge", Title: "Event purge", Icon: "🧹", Method: "grain_updateeventpurge",
+			Config: EventPurgeSectionData{
+				Config:      cfg.EventPurge,
+				Categories:  purgeCategories,
+				CommonKinds: commonPurgeKinds,
+				KindLabels:  KindLabels,
+			}},
 		{ID: "event_time_constraints", Title: "Event time constraints", Icon: "⏱️", Method: "grain_updateeventtimeconstraints", Config: cfg.EventTimeConstraints},
 		{ID: "backup_relay", Title: "Backup relay", Icon: "🪞", Method: "grain_updatebackuprelay", Config: cfg.BackupRelay},
 		{ID: "rate_limit", Title: "Rate limit", Icon: "🚦", Method: "grain_updateratelimit", Config: cfg.RateLimit},
@@ -97,9 +172,10 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := AdminPageData{
-		Title:    "🌾 grain — admin",
-		Owner:    owner,
-		Sections: sections,
+		Title:      "🌾 grain — admin",
+		Owner:      owner,
+		Sections:   sections,
+		KindLabels: KindLabels,
 	}
 	renderAdmin(w, data)
 }
@@ -127,7 +203,7 @@ func renderAdmin(w http.ResponseWriter, data AdminPageData) {
 	patterns := append(layoutPatterns(), viewTemplate)
 	patterns = append(patterns, componentTemplates...)
 	patterns = append(patterns, sectionTemplates...)
-	tmpl, err := template.New("").Funcs(template.FuncMap{}).ParseFS(wwwFS, patterns...)
+	tmpl, err := template.New("").Funcs(adminTemplateFuncs).ParseFS(wwwFS, patterns...)
 	if err != nil {
 		http.Error(w, "Error parsing templates: "+err.Error(), http.StatusInternalServerError)
 		return

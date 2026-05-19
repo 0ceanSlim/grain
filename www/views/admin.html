@@ -50,6 +50,8 @@
           {{template "admin-logging" .Config}}
         {{else if eq .ID "auth"}}
           {{template "admin-auth" .Config}}
+        {{else if eq .ID "event_purge"}}
+          {{template "admin-event_purge" .Config}}
         {{else if .Config}}
         <!-- Stub until this section's partial lands. -->
         <pre
@@ -124,6 +126,12 @@
     </div>
   </div>
 </main>
+
+<!-- Kind labels bridged from client/nostr_kinds.go so list widgets
+     can render "7 — Reaction (NIP-25)" without an extra fetch. -->
+<script>
+  window.NOSTR_KIND_LABELS = {{.KindLabels | toJS}};
+</script>
 
 <!-- nip86-submit.js is intentionally a separate file with no DOM
      dependencies so it can be lifted into the grain client library

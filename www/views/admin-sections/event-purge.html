@@ -1,0 +1,223 @@
+{{define "admin-event_purge"}}
+<!-- Event purge section. Enclosing <details> supplies
+     data-section="event_purge" and data-method="grain_updateeventpurge".
+     Dot is EventPurgeSectionData (.Config + .Categories).
+
+     Wire shape: snake_case JSON keys matching the struct's json
+     tags. Two non-trivial shapes:
+       - purge_by_category: {category: bool} map. The form uses
+         data-shape="map_bool" so unchecked categories serialize
+         as explicit false (not omitted) — that's what the v0.4
+         compat code in server/db/nostrdb/purge.go expects.
+       - kinds_to_purge: []int. data-shape="ints" parses each
+         non-empty line. -->
+{{with .Config}}
+<form class="grid gap-4 mt-3 sm:grid-cols-2" autocomplete="off">
+  <!-- Master toggle — affects everything below; we don't disable
+       the rest of the form when off, since operators sometimes
+       want to stage settings without enabling the purger. -->
+  <label class="flex items-start gap-3 sm:col-span-2 p-3 rounded bg-surface-elevated">
+    <input
+      type="checkbox"
+      name="enabled"
+      data-shape="bool"
+      {{if .Enabled}}checked{{end}}
+      class="w-4 h-4 mt-0.5 accent-accent"
+    />
+    <span class="flex-1">
+      <span class="block text-sm font-medium text-text">Enable scheduled purging</span>
+      <span class="block mt-1 text-xs text-text-secondary">
+        Master switch. Off = the background purger never runs and old events stay.
+      </span>
+    </span>
+  </label>
+
+  <label class="flex items-start gap-3 sm:col-span-2 p-3 rounded bg-surface-elevated">
+    <input
+      type="checkbox"
+      name="disable_at_startup"
+      data-shape="bool"
+      {{if .DisableAtStartup}}checked{{end}}
+      class="w-4 h-4 mt-0.5 accent-accent"
+    />
+    <span class="flex-1">
+      <span class="block text-sm font-medium text-text">Skip the first purge after startup</span>
+      <span class="block mt-1 text-xs text-text-secondary">
+        Useful while debugging — the relay won't start sweeping events the moment it boots.
+      </span>
+    </span>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Keep interval (hours)</span>
+    <input
+      type="number"
+      name="keep_interval_hours"
+      data-shape="number"
+      min="0"
+      value="{{.KeepIntervalHours}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text"
+    />
+    <span class="text-xs text-text-secondary">Events older than this are eligible for purging.</span>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Purge interval (minutes)</span>
+    <input
+      type="number"
+      name="purge_interval_minutes"
+      data-shape="number"
+      min="1"
+      value="{{.PurgeIntervalMinutes}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text"
+    />
+    <span class="text-xs text-text-secondary">How often the background purger wakes up.</span>
+  </label>
+
+  <!-- Categories: the keys are the v0.4-compatible category names
+       from purgeCategoryForKind. Each checkbox value is the
+       category key; checked = "purge this category". data-shape
+       map_bool serializes the whole group as a {key:bool} object
+       so unchecked categories arrive explicitly false. -->
+  <fieldset class="sm:col-span-2">
+    <legend class="text-sm font-medium text-text-secondary">
+      Purge by category
+      <span class="text-text-secondary">(checked = purge events in this category)</span>
+    </legend>
+    <p class="mt-1 text-xs text-text-secondary">
+      Ephemeral (20000–29999) and deprecated (kind 2) events are dropped at
+      ingest and never reach the purger, so they aren't listed here.
+      <span class="font-mono">unknown</span> covers kinds outside NIP-01's
+      defined ranges (mostly 40000+ experimental NIPs) which are stored as
+      regular.
+    </p>
+    {{$cur := .PurgeByCategory}}
+    <div class="grid grid-cols-2 gap-2 mt-2 sm:grid-cols-3">
+      {{range $.Categories}}
+      {{$cat := .}}
+      <label class="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="purge_by_category"
+          data-shape="map_bool"
+          value="{{$cat}}"
+          {{if index $cur $cat}}checked{{end}}
+          class="w-4 h-4 accent-accent"
+        />
+        <span class="font-mono text-text">{{$cat}}</span>
+      </label>
+      {{end}}
+    </div>
+  </fieldset>
+
+  <label class="flex items-start gap-3 sm:col-span-2 p-3 rounded bg-surface-elevated">
+    <input
+      type="checkbox"
+      name="purge_by_kind_enabled"
+      data-shape="bool"
+      {{if .PurgeByKindEnabled}}checked{{end}}
+      class="w-4 h-4 mt-0.5 accent-accent"
+    />
+    <span class="flex-1">
+      <span class="block text-sm font-medium text-text">Enable per-kind purge list</span>
+      <span class="block mt-1 text-xs text-text-secondary">
+        When on, only kinds listed below are purged (in addition to the category filter).
+      </span>
+    </span>
+  </label>
+
+  <!-- Kinds to purge: list UI driven by admin.js's
+       data-list / data-list-add / data-list-remove convention.
+       Each saved entry renders as a row with a hidden input that
+       serializes back through data-shape="int_names". Labels come
+       from window.NOSTR_KIND_LABELS, bridged from
+       client/nostr_kinds.go. -->
+  <div class="flex flex-col gap-2 text-sm sm:col-span-2">
+    <span class="font-medium text-text-secondary">Kinds to purge</span>
+
+    <!-- Add row: integer input + button. Enter in the input also
+         triggers Add (admin.js keydown handler). -->
+    <div
+      data-list="kinds_to_purge"
+      data-list-shape="int"
+      class="flex flex-col gap-2"
+    >
+      <div class="flex gap-2">
+        <input
+          type="number"
+          min="0"
+          step="1"
+          data-list-input
+          placeholder="kind number"
+          class="flex-1 px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+        />
+        <button
+          type="button"
+          data-list-add
+          class="px-3 py-2 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover"
+        >Add</button>
+      </div>
+
+      <!-- Quick-add suggestions: same Add path, just a one-click
+           way to populate with common high-volume kinds. -->
+      <div class="flex flex-wrap gap-1.5 items-center">
+        <span class="text-xs text-text-secondary">suggested:</span>
+        {{range $.CommonKinds}}
+        <button
+          type="button"
+          data-quick-add="{{.Kind}}"
+          data-list-target="kinds_to_purge"
+          class="px-2 py-0.5 text-xs font-mono rounded border border-border-strong text-text hover:bg-surface-hover"
+          title="{{.Label}}"
+        >{{.Kind}} <span class="text-text-secondary">{{.Label}}</span></button>
+        {{end}}
+      </div>
+
+      <!-- Items container. Server-renders the saved set; admin.js
+           appends/removes here, and the hidden inputs inside are
+           what blobFromForm collects on save. -->
+      <div data-list-items class="flex flex-col gap-1">
+        {{range .KindsToPurge}}
+        <div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface-elevated">
+          <input type="hidden" name="kinds_to_purge" data-shape="int_names" value="{{.}}" />
+          <span class="font-mono text-sm text-text">{{.}}</span>
+          {{$lbl := index $.KindLabels .}}
+          <span class="text-sm text-text-secondary truncate">— {{if $lbl}}{{$lbl}}{{else}}(no description){{end}}</span>
+          <button
+            type="button"
+            data-list-remove
+            class="ml-auto px-2 text-text-secondary hover:text-danger"
+            title="Remove"
+          >✕</button>
+        </div>
+        {{end}}
+      </div>
+
+      <span class="text-xs text-text-secondary">
+        Non-negative integers only. Labels come from the NIPs repo; "(no description)"
+        means the kind isn't in our table but is still valid to add.
+      </span>
+    </div>
+  </div>
+
+  <label class="flex items-start gap-3 sm:col-span-2 p-3 rounded bg-surface-elevated">
+    <input
+      type="checkbox"
+      name="exclude_whitelisted"
+      data-shape="bool"
+      {{if .ExcludeWhitelisted}}checked{{end}}
+      class="w-4 h-4 mt-0.5 accent-accent"
+    />
+    <span class="flex-1">
+      <span class="block text-sm font-medium text-text">Protect whitelisted pubkeys</span>
+      <span class="block mt-1 text-xs text-text-secondary">
+        Events authored by any pubkey in the configured whitelist are never
+        purged. This checkbox is the only gate — whitelist enforcement does
+        NOT need to be enabled. As long as the whitelist has entries and
+        this is checked, those authors' events are skipped by the purger.
+      </span>
+    </span>
+  </label>
+</form>
+{{end}}
+{{end}}
