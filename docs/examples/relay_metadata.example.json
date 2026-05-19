@@ -1,18 +1,20 @@
 {
   "_comment_pubkey": "Leave empty on a fresh deployment — first run will route operators to /setup to claim ownership via any Nostr signer. Or set GRAIN_OWNER_PUBKEY (hex or npub) in the environment to claim declaratively at startup without the UI step.",
   "_comment_version": "version is overlaid at NIP-11 response time from the running build; the placeholder below is fine to leave as-is.",
+  "_comment_ui": "Most string fields default to empty: name / description / banner / icon / contact / policy URLs are best edited via the /admin dashboard once the relay is running. The dashboard's Ops section fires the corresponding NIP-86 changerelay* methods.",
 
   "name": "🌾 GRAIN Relay",
   "description": "Go Relay Architecture for Implementing Nostr",
-  "banner": "https://example.com/banner.jpg",
-  "icon": "https://example.com/icon.png",
+  "banner": "",
+  "icon": "",
   "pubkey": "",
-  "contact": "mailto:admin@relay.com",
+  "contact": "",
   "supported_nips": [1, 7, 9, 11, 19, 40, 42, 45, 50, 55, 65, 70, 86, 98],
   "software": "https://github.com/0ceanslim/grain",
   "version": "0.0.0-dev",
-  "privacy_policy": "https://relay.com/privacy",
-  "terms_of_service": "https://relay.com/terms",
+  "privacy_policy": "",
+  "terms_of_service": "",
+  "posting_policy": "",
   "limitation": {
     "max_message_length": 524288,
     "max_content_length": 8196,
@@ -25,6 +27,5 @@
     "created_at_upper_limit": null
   },
   "language_tags": ["en", "en-US"],
-  "tags": ["open-access", "community"],
-  "posting_policy": "https://relay.com/posting-policy"
+  "tags": ["open-access", "community"]
 }
