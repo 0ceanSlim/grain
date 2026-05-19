@@ -1,0 +1,356 @@
+{{define "admin-event_time_constraints"}}
+<!-- Event time constraints. Enclosing <details> supplies
+     data-section="event_time_constraints" and
+     data-method="grain_updateeventtimeconstraints". Dot is
+     cfgType.EventTimeConstraints.
+
+     UI shape: three-mode picker (Default / Relative / Absolute)
+     per bound. The visible controls (radios, integer+unit dropdown,
+     datetime-local) are cosmetic; the section JS mirrors their
+     state into the two hidden inputs the server actually reads
+     (*_at numeric and *_string). data-no-submit on the radios
+     and visible inputs keeps them out of the wire blob.
+
+     Server precedence is unchanged: if *_string starts with "now",
+     it wins; else if numeric is non-zero, that wins; else the
+     validator falls back to its default (2020-01-01 for min, "now"
+     for max). UpdateEventTimeConstraints in config/admin_writes.go
+     server-side-validates the "now…" form so typos don't fall
+     through to defaults. -->
+<form class="flex flex-col gap-4 mt-3" autocomplete="off">
+  <!-- Semantic note. "Now" is evaluated PER EVENT — relative
+       bounds are recomputed each time an event arrives, not
+       baked in when you save these settings. -->
+  <div class="p-3 rounded border border-info bg-info-dim text-info text-sm">
+    <strong>"Now" means event-arrival time.</strong>
+    Relative bounds are evaluated when each event reaches the relay,
+    not when you save these settings. <span class="font-mono">5 minutes</span>
+    in Relative mode = "within 5 minutes of the moment each event arrives."
+  </div>
+
+  <!-- ─── Minimum ─── -->
+  <fieldset
+    data-etc-bound="min"
+    class="p-3 rounded bg-surface-elevated"
+  >
+    <legend class="px-2 text-sm font-medium text-text">Minimum created_at</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      Events with timestamps older than this bound are rejected.
+    </p>
+
+    <div class="flex flex-col gap-2 mb-3">
+      <label class="flex items-start gap-2 text-sm">
+        <input type="radio" name="min_mode" value="default" data-no-submit class="mt-0.5 accent-accent" />
+        <span>
+          <span class="font-medium text-text">Default</span>
+          <span class="text-text-secondary">— reject events from before <span class="font-mono">2020-11-07</span> (pre-Nostr).</span>
+        </span>
+      </label>
+      <label class="flex items-start gap-2 text-sm">
+        <input type="radio" name="min_mode" value="relative" data-no-submit class="mt-0.5 accent-accent" />
+        <span class="font-medium text-text">Relative — reject events older than this many units before they arrive.</span>
+      </label>
+      <label class="flex items-start gap-2 text-sm">
+        <input type="radio" name="min_mode" value="absolute" data-no-submit class="mt-0.5 accent-accent" />
+        <span class="font-medium text-text">Absolute — reject events with a timestamp before a specific date.</span>
+      </label>
+    </div>
+
+    <div data-mode-panel="relative" class="hidden flex flex-wrap items-center gap-2 text-sm pl-6">
+      <span class="text-text-secondary">Reject if older than</span>
+      <input
+        type="number"
+        data-rel-n
+        data-no-submit
+        min="0"
+        step="1"
+        class="w-24 px-3 py-1.5 rounded bg-surface border border-border text-text font-mono"
+      />
+      <select
+        data-rel-unit
+        data-no-submit
+        class="px-2 py-1.5 rounded bg-surface border border-border text-text"
+      >
+        <option value="s">seconds</option>
+        <option value="m">minutes</option>
+        <option value="h">hours</option>
+        <option value="d">days</option>
+      </select>
+      <span class="text-text-secondary">before arrival.</span>
+    </div>
+
+    <div data-mode-panel="absolute" class="hidden flex flex-wrap items-center gap-2 text-sm pl-6">
+      <span class="text-text-secondary">Reject if timestamp is before</span>
+      <input
+        type="datetime-local"
+        data-abs
+        data-no-submit
+        class="px-3 py-1.5 rounded bg-surface border border-border text-text font-mono"
+      />
+    </div>
+
+    <!-- Wire shape: hidden, written-to by the section JS. -->
+    <input type="hidden" name="min_created_at_string" value="{{.MinCreatedAtString}}" />
+    <input type="hidden" name="min_created_at" data-shape="number" value="{{if .MinCreatedAt}}{{.MinCreatedAt}}{{end}}" />
+  </fieldset>
+
+  <!-- ─── Maximum ─── -->
+  <fieldset
+    data-etc-bound="max"
+    class="p-3 rounded bg-surface-elevated"
+  >
+    <legend class="px-2 text-sm font-medium text-text">Maximum created_at</legend>
+    <p class="mt-1 mb-3 text-xs text-text-secondary">
+      Events newer than this bound are rejected. Catches accidentally
+      future-dated events and bad clocks. A small positive offset is
+      good practice — it tolerates client clock skew.
+    </p>
+
+    <div class="flex flex-col gap-2 mb-3">
+      <label class="flex items-start gap-2 text-sm">
+        <input type="radio" name="max_mode" value="default" data-no-submit class="mt-0.5 accent-accent" />
+        <span>
+          <span class="font-medium text-text">Default</span>
+          <span class="text-text-secondary">— reject events more than <span class="font-mono">5 minutes</span> in the future (clock-skew tolerance).</span>
+        </span>
+      </label>
+      <label class="flex items-start gap-2 text-sm">
+        <input type="radio" name="max_mode" value="relative" data-no-submit class="mt-0.5 accent-accent" />
+        <span class="font-medium text-text">Relative — reject events further than this many units after they arrive.</span>
+      </label>
+      <label class="flex items-start gap-2 text-sm">
+        <input type="radio" name="max_mode" value="absolute" data-no-submit class="mt-0.5 accent-accent" />
+        <span class="font-medium text-text">Absolute — reject events with a timestamp after a specific date.</span>
+      </label>
+    </div>
+
+    <div data-mode-panel="relative" class="hidden flex flex-wrap items-center gap-2 text-sm pl-6">
+      <span class="text-text-secondary">Reject if newer than</span>
+      <input
+        type="number"
+        data-rel-n
+        data-no-submit
+        min="0"
+        step="1"
+        class="w-24 px-3 py-1.5 rounded bg-surface border border-border text-text font-mono"
+      />
+      <select
+        data-rel-unit
+        data-no-submit
+        class="px-2 py-1.5 rounded bg-surface border border-border text-text"
+      >
+        <option value="s">seconds</option>
+        <option value="m">minutes</option>
+        <option value="h">hours</option>
+        <option value="d">days</option>
+      </select>
+      <span class="text-text-secondary">after arrival.</span>
+    </div>
+
+    <div data-mode-panel="absolute" class="hidden flex flex-wrap items-center gap-2 text-sm pl-6">
+      <span class="text-text-secondary">Reject if timestamp is after</span>
+      <input
+        type="datetime-local"
+        data-abs
+        data-no-submit
+        class="px-3 py-1.5 rounded bg-surface border border-border text-text font-mono"
+      />
+    </div>
+
+    <input type="hidden" name="max_created_at_string" value="{{.MaxCreatedAtString}}" />
+    <input type="hidden" name="max_created_at" data-shape="number" value="{{if .MaxCreatedAt}}{{.MaxCreatedAt}}{{end}}" />
+  </fieldset>
+</form>
+
+<script>
+  // Section-scoped logic for event_time_constraints. Keeps the
+  // cosmetic UI (radios, integer+unit, datetime-local) in sync
+  // with the two hidden inputs per bound that admin.js's
+  // blobFromForm reads on save. See the partial's top comment
+  // for the precedence rules.
+  (function () {
+    "use strict";
+
+    // ── Conversions ──────────────────────────────────────────
+
+    // Compact representation: cascade up (60s → 1m → 1h → 1d) when
+    // the count divides cleanly, so 720h displays as "30 days"
+    // rather than "720 hours."
+    function pickUnit(n, unit) {
+      if (n <= 0) return { n: 0, unit: unit };
+      if (unit === "s" && n % 60 === 0) return pickUnit(n / 60, "m");
+      if (unit === "m" && n % 60 === 0) return pickUnit(n / 60, "h");
+      if (unit === "h" && n % 24 === 0) return { n: n / 24, unit: "d" };
+      return { n: n, unit: unit };
+    }
+
+    // Days expand to hours on the wire because Go's
+    // time.ParseDuration doesn't know "d".
+    function unitOnWire(n, unit) {
+      if (unit === "d") return n * 24 + "h";
+      return n + unit;
+    }
+
+    // Parse "now", "now-5m", "now+30s", "now-720h" — returns
+    // {sign:"+"|"-", n:int, unit:"s"|"m"|"h"} or null if it
+    // doesn't match. Days never appear on the wire (always
+    // expanded to hours); display layer re-collapses them.
+    function parseNow(str) {
+      if (typeof str !== "string") return null;
+      str = str.trim();
+      if (str === "now") return { sign: "+", n: 0, unit: "s" };
+      const m = str.match(/^now([+-])(\d+)([smh])$/);
+      if (!m) return null;
+      return { sign: m[1], n: parseInt(m[2], 10), unit: m[3] };
+    }
+
+    function unixToDatetimeLocal(unix) {
+      if (!unix) return "";
+      const d = new Date(unix * 1000);
+      const pad = (x) => String(x).padStart(2, "0");
+      return (
+        d.getFullYear() +
+        "-" + pad(d.getMonth() + 1) +
+        "-" + pad(d.getDate()) +
+        "T" + pad(d.getHours()) +
+        ":" + pad(d.getMinutes())
+      );
+    }
+
+    function datetimeLocalToUnix(s) {
+      if (!s) return 0;
+      const t = new Date(s).getTime();
+      if (!Number.isFinite(t)) return 0;
+      return Math.floor(t / 1000);
+    }
+
+    // ── Per-bound state machine ──────────────────────────────
+
+    function detectMode(stringVal, numericVal) {
+      if (parseNow(stringVal)) return "relative";
+      const n = parseInt(numericVal, 10);
+      if (Number.isFinite(n) && n > 0) return "absolute";
+      return "default";
+    }
+
+    function showPanel(bound, mode) {
+      bound.querySelectorAll("[data-mode-panel]").forEach((p) => {
+        // Tailwind's hidden + flex coexist when we toggle; use
+        // classList to flip cleanly.
+        if (p.dataset.modePanel === mode) {
+          p.classList.remove("hidden");
+        } else {
+          p.classList.add("hidden");
+        }
+      });
+    }
+
+    // Read the bound's visible state, write to hidden inputs.
+    function syncHidden(bound) {
+      const which = bound.dataset.etcBound; // "min" or "max"
+      const sign = which === "min" ? "-" : "+";
+      const stringInput = bound.querySelector('[name$="_string"]');
+      const numericInput = bound.querySelector('[name$="_at"]');
+      const mode = bound.querySelector(
+        'input[name$="_mode"]:checked'
+      );
+      if (!stringInput || !numericInput || !mode) return;
+
+      if (mode.value === "default") {
+        stringInput.value = "";
+        numericInput.value = "";
+      } else if (mode.value === "relative") {
+        const n = parseInt(
+          bound.querySelector("[data-rel-n]").value,
+          10
+        );
+        const unit = bound.querySelector("[data-rel-unit]").value;
+        if (!Number.isFinite(n) || n <= 0) {
+          // Empty / zero / negative collapses to bare "now".
+          stringInput.value = "now";
+        } else {
+          stringInput.value = "now" + sign + unitOnWire(n, unit);
+        }
+        numericInput.value = "";
+      } else if (mode.value === "absolute") {
+        const abs = bound.querySelector("[data-abs]").value;
+        const unix = datetimeLocalToUnix(abs);
+        stringInput.value = "";
+        numericInput.value = unix > 0 ? String(unix) : "";
+      }
+      // Fire input on the wire fields so admin.js's dirty
+      // tracking notices the change.
+      stringInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    // Read the hidden inputs and render the visible UI to match.
+    // Used on initial load AND when admin.js's discardSection
+    // restores snapshot values.
+    function rehydrate(bound) {
+      const stringInput = bound.querySelector('[name$="_string"]');
+      const numericInput = bound.querySelector('[name$="_at"]');
+      const mode = detectMode(stringInput.value, numericInput.value);
+
+      // Radios
+      const modeRadios = bound.querySelectorAll('input[name$="_mode"]');
+      modeRadios.forEach((r) => {
+        r.checked = r.value === mode;
+      });
+      showPanel(bound, mode);
+
+      // Relative inputs
+      const relN = bound.querySelector("[data-rel-n]");
+      const relUnit = bound.querySelector("[data-rel-unit]");
+      const parsed = parseNow(stringInput.value);
+      if (parsed) {
+        const display = pickUnit(parsed.n, parsed.unit);
+        relN.value = display.n > 0 ? String(display.n) : "";
+        relUnit.value = display.unit;
+      } else {
+        relN.value = "";
+        relUnit.value = "m"; // sensible default
+      }
+
+      // Absolute input
+      const abs = bound.querySelector("[data-abs]");
+      const unix = parseInt(numericInput.value, 10);
+      abs.value = Number.isFinite(unix) && unix > 0 ? unixToDatetimeLocal(unix) : "";
+    }
+
+    // ── Wire-up ──────────────────────────────────────────────
+
+    const panel = document.querySelector('[data-section="event_time_constraints"]');
+    if (!panel) return;
+    const bounds = panel.querySelectorAll("[data-etc-bound]");
+
+    bounds.forEach((bound) => {
+      rehydrate(bound);
+
+      // Radio change → switch panel + sync.
+      bound.querySelectorAll('input[name$="_mode"]').forEach((r) => {
+        r.addEventListener("change", () => {
+          showPanel(bound, r.value);
+          syncHidden(bound);
+        });
+      });
+
+      // Visible-input change → sync.
+      ["[data-rel-n]", "[data-rel-unit]", "[data-abs]"].forEach((sel) => {
+        const el = bound.querySelector(sel);
+        if (!el) return;
+        el.addEventListener("input", () => syncHidden(bound));
+        el.addEventListener("change", () => syncHidden(bound));
+      });
+    });
+
+    // Register the rehydrate hook so admin.js's discardSection
+    // can replay the visible state after restoring hidden inputs.
+    window.adminSectionHooks = window.adminSectionHooks || {};
+    window.adminSectionHooks.event_time_constraints = {
+      rehydrate: function (panel) {
+        panel.querySelectorAll("[data-etc-bound]").forEach(rehydrate);
+      },
+    };
+  })();
+</script>
+{{end}}

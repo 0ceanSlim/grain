@@ -9,6 +9,20 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
+// DefaultMinCreatedAt is the fallback lower bound when no operator
+// config specifies one. 2020-11-07 ≈ Nostr's first public proposal
+// (fiatjaf's initial sketch + earliest commits to
+// nostr-protocol/nips). No legitimate Nostr event can predate this,
+// so it's safe to reject anything older as garbage.
+var defaultMinCreatedAt = time.Date(2020, 11, 7, 0, 0, 0, 0, time.UTC).Unix()
+
+// defaultMaxOffset is how far into the future an event is allowed
+// to be when no operator config specifies a max. Tolerates client
+// clock skew without accepting plausibly-malicious far-future
+// timestamps. 5 min is the historical "AUTH challenge expiry"
+// ballpark.
+var defaultMaxOffset = 5 * time.Minute
+
 func ValidateEventTimestamp(evt nostr.Event, cfg *cfgType.ServerConfig) bool {
 	if cfg == nil {
 		log.Validation().Error("Server configuration is not loaded")
@@ -24,13 +38,12 @@ func ValidateEventTimestamp(evt nostr.Event, cfg *cfgType.ServerConfig) bool {
 		duration, err := time.ParseDuration(offset)
 		if err != nil {
 			log.Validation().Error("Invalid time offset for min_created_at", "offset", offset, "error", err)
-			minCreatedAt = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+			minCreatedAt = defaultMinCreatedAt
 		} else {
 			minCreatedAt = now.Add(duration).Unix()
 		}
 	} else if cfg.EventTimeConstraints.MinCreatedAt == 0 {
-		// Use January 1, 2020, as the default minimum timestamp
-		minCreatedAt = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+		minCreatedAt = defaultMinCreatedAt
 	} else {
 		minCreatedAt = cfg.EventTimeConstraints.MinCreatedAt
 	}
@@ -41,13 +54,12 @@ func ValidateEventTimestamp(evt nostr.Event, cfg *cfgType.ServerConfig) bool {
 		duration, err := time.ParseDuration(offset)
 		if err != nil {
 			log.Validation().Error("Invalid time offset for max_created_at", "offset", offset, "error", err)
-			maxCreatedAt = now.Unix() // Default to now if parsing fails
+			maxCreatedAt = now.Add(defaultMaxOffset).Unix()
 		} else {
 			maxCreatedAt = now.Add(duration).Unix()
 		}
 	} else if cfg.EventTimeConstraints.MaxCreatedAt == 0 {
-		// Default to the current time if not set
-		maxCreatedAt = now.Unix()
+		maxCreatedAt = now.Add(defaultMaxOffset).Unix()
 	} else {
 		maxCreatedAt = cfg.EventTimeConstraints.MaxCreatedAt
 	}

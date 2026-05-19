@@ -52,6 +52,8 @@
           {{template "admin-auth" .Config}}
         {{else if eq .ID "event_purge"}}
           {{template "admin-event_purge" .Config}}
+        {{else if eq .ID "event_time_constraints"}}
+          {{template "admin-event_time_constraints" .Config}}
         {{else if .Config}}
         <!-- Stub until this section's partial lands. -->
         <pre

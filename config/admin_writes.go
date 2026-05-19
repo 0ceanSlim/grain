@@ -40,6 +40,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/utils/log"
@@ -222,7 +223,20 @@ func UpdateResourceLimits(rl cfgType.ResourceLimits) error {
 // UpdateEventTimeConstraints stages the min/max created_at window.
 // The validator reads from GetConfig() per event, so this is
 // effectively live.
+//
+// Rejects relative-time strings that won't parse. The validator
+// silently falls back to a default when its time.ParseDuration call
+// fails, so a typo like "now-5moo" would otherwise "save" but
+// quietly behave as if unset — surprising for the operator. We
+// validate here so the form shows the error before the bad value
+// hits disk.
 func UpdateEventTimeConstraints(etc cfgType.EventTimeConstraints) error {
+	if err := validateRelativeTimeString(etc.MinCreatedAtString, "min_created_at_string"); err != nil {
+		return err
+	}
+	if err := validateRelativeTimeString(etc.MaxCreatedAtString, "max_created_at_string"); err != nil {
+		return err
+	}
 	ConfigMu.Lock()
 	defer ConfigMu.Unlock()
 	c := GetConfig()
@@ -231,6 +245,29 @@ func UpdateEventTimeConstraints(etc cfgType.EventTimeConstraints) error {
 	}
 	c.EventTimeConstraints = etc
 	return saveServerConfig(*c)
+}
+
+// validateRelativeTimeString returns an error if s is non-empty
+// and not parseable by the validator. Empty is allowed (falls back
+// to the numeric field or default). Non-empty must start with
+// "now" and have a valid Go duration suffix (e.g. "now-5m",
+// "now+30s"); anything else, the validator would silently ignore.
+func validateRelativeTimeString(s, fieldName string) error {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	if !strings.HasPrefix(s, "now") {
+		return fmt.Errorf("%s must be empty or start with \"now\" (got %q)", fieldName, s)
+	}
+	offset := strings.TrimPrefix(s, "now")
+	if offset == "" {
+		return nil // "now" alone is valid: zero offset
+	}
+	if _, err := time.ParseDuration(offset); err != nil {
+		return fmt.Errorf("%s: invalid duration %q: %w", fieldName, offset, err)
+	}
+	return nil
 }
 
 // UpdateServerConfig stages the HTTP server block (timeouts,

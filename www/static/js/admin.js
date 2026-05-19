@@ -187,6 +187,12 @@
     const handled = new Set();
     form.querySelectorAll("[name]").forEach((el) => {
       if (el.disabled) return;
+      // data-no-submit opts a named element out of the wire blob.
+      // Used by sections that have radios / cosmetic inputs whose
+      // values shouldn't be serialized — e.g. the mode-picker
+      // radios in event_time_constraints. The visible state is
+      // mirrored into a separate hidden input by the section's JS.
+      if (el.dataset.noSubmit !== undefined) return;
       if (handled.has(el.name)) return;
       handled.add(el.name);
       if (el.dataset.shape === "names") {
@@ -304,6 +310,14 @@
   // because that only reverts to HTML attribute defaults — for
   // dynamically-rendered server values, the snapshot blob is the
   // truth.
+  // Section hooks let a partial's inline JS rehydrate its
+  // cosmetic UI after admin.js restores hidden inputs. Section
+  // registers like:
+  //   window.adminSectionHooks.event_time_constraints =
+  //     { rehydrate: function(panel) { ... } }
+  // admin.js calls it after discardSection finishes its work.
+  window.adminSectionHooks = window.adminSectionHooks || {};
+
   function discardSection(panel) {
     const id = panel.dataset.section;
     const form = panel.querySelector("form");
@@ -361,6 +375,12 @@
         el.value = v == null ? "" : String(v);
       }
     });
+    // Let the section sync its cosmetic UI with the restored
+    // hidden values. No-op if the section didn't register a hook.
+    const hook = window.adminSectionHooks[panel.dataset.section];
+    if (hook && typeof hook.rehydrate === "function") {
+      hook.rehydrate(panel);
+    }
     refreshSaveBar(panel);
   }
 
