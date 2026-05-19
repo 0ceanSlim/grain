@@ -414,41 +414,77 @@
     refreshSaveBar(panel);
   }
 
-  // ensureSigner makes window.grainSigner available before we try to
-  // sign a NIP-86 envelope. The signer is a runtime JS object set
-  // by mill-bridge's onConnected; it does NOT survive page reloads,
-  // even when the server-side session cookie does. So an operator
-  // who reloaded /admin (or got here from /setup) is "logged in"
-  // server-side but has no signer client-side — and gets "signer
-  // unavailable" on the first save. We fix it by transparently
-  // re-opening mill, then polling until the bridge re-attaches the
-  // signer. Same auth UX as login; just deferred to the first save.
+  // ensureSigner makes window.grainSigner available before we try
+  // to sign a NIP-86 envelope. The signer is a runtime JS object
+  // set by mill-bridge's onConnected; it does NOT survive page
+  // reloads even when the server-side session cookie does.
+  //
+  // Strategy:
+  //   1. If grainSigner already exists, return.
+  //   2. If the session uses NIP-07 (browser extension), try to
+  //      reconnect on-demand — extensions are usually present and
+  //      this should be silent.
+  //   3. Otherwise fall back to showing a "reconnect signer"
+  //      indicator (not auto-popping mill) and rejecting the
+  //      current action. Operator clicks the indicator when ready
+  //      to re-link. Avoids the surprise-modal-mid-edit UX.
   async function ensureSigner() {
     if (window.grainSigner && typeof window.grainSigner.signEvent === "function") {
       return;
     }
-    if (typeof window.showAuthModal !== "function") {
-      throw new Error("auth modal unavailable — reload the page");
+    // NIP-07 path: try a silent reconnect first.
+    if (typeof window.tryReconnectNIP07 === "function") {
+      const ok = await window.tryReconnectNIP07();
+      if (ok) return;
     }
-    toast("link your signer to save changes");
-    window.showAuthModal();
-    const deadline = Date.now() + 5 * 60 * 1000;
-    while (Date.now() < deadline) {
-      if (
-        window.grainSigner &&
-        typeof window.grainSigner.signEvent === "function"
-      ) {
-        return;
-      }
-      await new Promise((r) => setTimeout(r, 250));
-    }
-    throw new Error("signer not connected — try again");
+    // Non-NIP-07 (or NIP-07 with extension unavailable): show the
+    // reconnect indicator and refuse this action. The indicator
+    // wires its own click → showAuthModal.
+    showReconnectIndicator(true);
+    throw new Error("signer not connected — click the Reconnect indicator");
   }
-  // Exposed so section-scoped inline scripts (ops, blacklist
-  // live-edit, future sections) can gate their direct
-  // grainNIP86.submit calls behind the same auto-open-mill flow
-  // saveSection uses.
   window.adminEnsureSigner = ensureSigner;
+
+  // ── Reconnect indicator ─────────────────────────────────────
+  //
+  // A persistent pill in the page chrome that glows when the
+  // signer is missing. Click opens mill once. Replaces the old
+  // auto-pop-mill-mid-edit behavior, which was surprising.
+  function showReconnectIndicator(needed) {
+    let pill = document.getElementById("admin-reconnect-pill");
+    if (!pill) {
+      pill = document.createElement("button");
+      pill.id = "admin-reconnect-pill";
+      pill.type = "button";
+      pill.className =
+        "fixed top-16 right-4 z-40 hidden px-3 py-1.5 text-xs font-medium rounded-full " +
+        "bg-warning-dim text-warning border border-warning hover:bg-warning hover:text-warning-fg shadow";
+      pill.textContent = "🔑 Reconnect signer";
+      pill.addEventListener("click", async () => {
+        // Try the silent path first — covers the case where the
+        // extension just woke up between page load and click.
+        if (typeof window.tryReconnectNIP07 === "function") {
+          const ok = await window.tryReconnectNIP07();
+          if (ok) {
+            showReconnectIndicator(false);
+            toast("signer reconnected");
+            return;
+          }
+        }
+        if (typeof window.showAuthModal === "function") {
+          window.showAuthModal();
+        }
+      });
+      document.body.appendChild(pill);
+    }
+    pill.classList.toggle("hidden", !needed);
+  }
+
+  // Hide the indicator when mill-bridge fires the signer-ready
+  // event from a successful reconnect.
+  window.addEventListener("grain:signer-ready", () => {
+    showReconnectIndicator(false);
+  });
 
   // expandDotted converts a flat blob with keys like
   // "pubkey_whitelist.enabled" into a nested object the server's

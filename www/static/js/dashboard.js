@@ -951,8 +951,8 @@ const dashboardManager = {
                     ([category, limits]) => `
                   <tr class="border-b border-border/30">
                     <td class="py-1 text-text text-xs capitalize">${category}</td>
-                    <td class="py-1 text-right text-success font-mono text-xs">${limits.Limit}/s</td>
-                    <td class="py-1 text-right text-text-secondary text-xs">${limits.Burst}</td>
+                    <td class="py-1 text-right text-success font-mono text-xs">${limits.limit}/s</td>
+                    <td class="py-1 text-right text-text-secondary text-xs">${limits.burst}</td>
                   </tr>
                 `
                   )
@@ -984,9 +984,9 @@ const dashboardManager = {
                   .map(
                     (kindLimit) => `
                   <tr class="border-b border-border/30">
-                    <td class="py-1 text-text text-xs">Kind ${kindLimit.Kind}</td>
-                    <td class="py-1 text-right text-success font-mono text-xs">${kindLimit.Limit}/s</td>
-                    <td class="py-1 text-right text-text-secondary text-xs">${kindLimit.Burst}</td>
+                    <td class="py-1 text-text text-xs">Kind ${kindLimit.kind}</td>
+                    <td class="py-1 text-right text-success font-mono text-xs">${kindLimit.limit}/s</td>
+                    <td class="py-1 text-right text-text-secondary text-xs">${kindLimit.burst}</td>
                   </tr>
                 `
                   )
@@ -1046,10 +1046,10 @@ const dashboardManager = {
                     (sizeLimit) => `
                   <tr class="border-b border-border/30">
                     <td class="py-1 text-text text-xs">Kind ${
-                      sizeLimit.Kind
+                      sizeLimit.kind
                     }</td>
                     <td class="py-1 text-right text-accent font-mono text-xs">${formatBytes(
-                      sizeLimit.MaxSize
+                      sizeLimit.max_size
                     )}</td>
                   </tr>
                 `

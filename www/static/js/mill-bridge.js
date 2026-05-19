@@ -64,6 +64,12 @@
     // result: { method, pubkey, signer, perms?, bunkerUrl?, nsec? }
     window.grainSigner = result.signer || null;
     window.grainSignerMethod = result.method;
+    // Tell listeners (admin dashboard reconnect indicator, etc.)
+    // the signer is back. Fires for fresh logins AND on-demand
+    // mill reconnects.
+    if (window.grainSigner) {
+      window.dispatchEvent(new CustomEvent("grain:signer-ready"));
+    }
 
     const signingMethod = METHOD_MAP[result.method] ?? "none";
     const requestedMode = result.method === "readonly" ? "read_only" : "write";
@@ -131,46 +137,78 @@
   window.showAuthModal = showAuthModal;
   window.hideAuthModal = hideAuthModal;
 
-  // Auto-reconnect: window.grainSigner is a runtime JS object and
-  // doesn't survive a page reload, but the server session cookie
-  // does. For browser-extension sign-ins (NIP-07) we can transparently
-  // rebuild a signer from window.nostr on every page load, so the
-  // operator doesn't have to re-open mill every time they reload
-  // /admin. Other methods (bunker / encrypted-key / amber) have
-  // their own session state and would need a mill-side rehydrate
-  // hook to do the same — left for follow-up.
-  function tryAutoReconnect() {
-    if (window.grainSigner && typeof window.grainSigner.signEvent === "function") return;
-    if (!window.nostr || typeof window.nostr.signEvent !== "function") return;
-    // Only auto-reconnect when /api/v1/session says we have a
-    // matching session — otherwise we'd silently attach a NIP-07
-    // signer to a logged-out browser, which is confusing.
-    fetch("/api/v1/session", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then(async (sess) => {
-        if (!sess || !sess.publicKey) return;
-        if (sess.signingMethod !== "browser_extension") return;
-        try {
-          const ext = await window.nostr.getPublicKey();
-          if (!ext || ext.toLowerCase() !== sess.publicKey.toLowerCase()) return;
-          // Wrap window.nostr in a grainSigner-compatible shape.
-          window.grainSigner = {
-            getPublicKey: () => window.nostr.getPublicKey(),
-            signEvent: (evt) => window.nostr.signEvent(evt),
-            disconnect: () => {},
-          };
-          window.grainSignerMethod = "nip07";
-        } catch (_) {
-          // Extension declined / locked — fall back to the mill
-          // modal on first save attempt.
-        }
-      })
-      .catch(() => {});
+  // ── Auto-reconnect ──────────────────────────────────────────
+  //
+  // window.grainSigner is a runtime JS object and doesn't survive
+  // a page reload, but the server session cookie does. For NIP-07
+  // sign-ins we can transparently rebuild a signer from
+  // window.nostr — extensions are always present once the page is
+  // loaded.
+  //
+  // Two complications make this trickier than a single DOMContentLoaded
+  // hook:
+  //   1. Extensions inject window.nostr asynchronously. On a fast
+  //      page load it may not be there yet. We poll for a few
+  //      seconds after DOMContentLoaded.
+  //   2. tryReconnectNIP07 also needs to be callable on-demand by
+  //      grain's ensureSigner so first-save-after-reload doesn't
+  //      need a retry from above. Exposed via window.tryReconnectNIP07.
+  //
+  // Other methods (bunker / encrypted / amber) keep their state
+  // in mill — restoring them needs a mill-side rehydrate, tracked
+  // in issue #81.
+
+  let sessionCache = null;
+  async function getCachedSession() {
+    if (sessionCache !== null) return sessionCache;
+    try {
+      const r = await fetch("/api/v1/session", { cache: "no-store" });
+      sessionCache = r.ok ? await r.json() : false;
+    } catch (_) {
+      sessionCache = false;
+    }
+    return sessionCache;
+  }
+
+  async function tryReconnectNIP07() {
+    if (window.grainSigner && typeof window.grainSigner.signEvent === "function") return true;
+    if (!window.nostr || typeof window.nostr.signEvent !== "function") return false;
+    const sess = await getCachedSession();
+    if (!sess || !sess.publicKey) return false;
+    if (sess.signingMethod !== "browser_extension") return false;
+    try {
+      const ext = await window.nostr.getPublicKey();
+      if (!ext || ext.toLowerCase() !== sess.publicKey.toLowerCase()) return false;
+      window.grainSigner = {
+        getPublicKey: () => window.nostr.getPublicKey(),
+        signEvent: (evt) => window.nostr.signEvent(evt),
+        disconnect: () => {},
+      };
+      window.grainSignerMethod = "nip07";
+      // Notify listeners (admin dashboard's reconnect indicator)
+      // that the signer is back without a mill round-trip.
+      window.dispatchEvent(new CustomEvent("grain:signer-ready"));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+  window.tryReconnectNIP07 = tryReconnectNIP07;
+
+  // Initial reconnect loop: poll a few times so a slow-injecting
+  // extension still gets caught. Total budget: ~3s with backoff.
+  async function autoReconnectLoop() {
+    if (await tryReconnectNIP07()) return;
+    const delays = [100, 200, 400, 800, 1500];
+    for (const d of delays) {
+      await new Promise((r) => setTimeout(r, d));
+      if (await tryReconnectNIP07()) return;
+    }
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", tryAutoReconnect);
+    document.addEventListener("DOMContentLoaded", autoReconnectLoop);
   } else {
-    tryAutoReconnect();
+    autoReconnectLoop();
   }
 })();
