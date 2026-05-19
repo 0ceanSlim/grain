@@ -297,6 +297,18 @@ func validateRelativeTimeString(s, fieldName string) error {
 // http.Server can't be changed in place; reload picks up new
 // values.
 func UpdateServerConfig(srv cfgType.ServerSettings) error {
+	// Port must look like ":8181" or "host:8181". Catching this
+	// at save time spares operators a confusing restart loop —
+	// http.Server's ListenAndServe rejects bad addrs at startup,
+	// and once that happens the relay won't come back without a
+	// hand-edit to config.yml.
+	srv.Port = strings.TrimSpace(srv.Port)
+	if srv.Port == "" {
+		return fmt.Errorf("port must be set (e.g. \":8181\")")
+	}
+	if !strings.Contains(srv.Port, ":") {
+		return fmt.Errorf("port must include \":\" (e.g. \":8181\" or \"0.0.0.0:8181\"), got %q", srv.Port)
+	}
 	ConfigMu.Lock()
 	defer ConfigMu.Unlock()
 	c := GetConfig()

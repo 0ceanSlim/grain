@@ -1,0 +1,159 @@
+{{define "admin-server"}}
+<!-- Server settings. Enclosing <details> supplies
+     data-section="server" and data-method="grain_updateserver".
+     Dot is cfgType.ServerSettings.
+
+     Most of these are http.Server timeouts that take effect on
+     restart (Apply triggers grain_reloadconfig which restarts the
+     instance). Port changes especially need a full restart since
+     the listener can't be hot-swapped. -->
+<form class="grid gap-4 mt-3 sm:grid-cols-2" autocomplete="off">
+  <div class="sm:col-span-2 p-3 rounded border border-info bg-info-dim text-info text-sm">
+    Most of these are HTTP server settings (timeouts, listener
+    address). Saving stages the change; the running process picks
+    them up on the next Apply, which restarts the relay.
+    <strong>Port changes</strong> always require a restart — the
+    listener can't be hot-swapped.
+  </div>
+
+  <label class="flex flex-col gap-1 text-sm sm:col-span-2">
+    <span class="font-medium text-text-secondary">Listen address</span>
+    <input
+      type="text"
+      name="port"
+      value="{{.Port}}"
+      placeholder=":8181"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+    <span class="text-xs text-text-secondary">
+      Format <span class="font-mono">":port"</span> (any interface) or
+      <span class="font-mono">"host:port"</span> (e.g.
+      <span class="font-mono">127.0.0.1:8181</span> for loopback-only).
+      Behind a reverse proxy you almost always want
+      <span class="font-mono">:8181</span> or similar.
+    </span>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Read timeout (seconds)</span>
+    <input
+      type="number"
+      name="read_timeout"
+      data-shape="number"
+      min="0"
+      step="1"
+      value="{{.ReadTimeout}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+    <span class="text-xs text-text-secondary">
+      Max time to read a single WebSocket frame from a client.
+      Too low rejects legitimate slow uploads.
+    </span>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Write timeout (seconds)</span>
+    <input
+      type="number"
+      name="write_timeout"
+      data-shape="number"
+      min="0"
+      step="1"
+      value="{{.WriteTimeout}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+    <span class="text-xs text-text-secondary">
+      Max time to send a frame to a client. Slow consumers hit
+      this and get disconnected.
+    </span>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Idle timeout (seconds)</span>
+    <input
+      type="number"
+      name="idle_timeout"
+      data-shape="number"
+      min="0"
+      step="1"
+      value="{{.IdleTimeout}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+    <span class="text-xs text-text-secondary">
+      Connection-level inactivity timeout. <span class="font-mono">0</span> disables.
+      Long-lived subscriptions need a generous value (20 min is typical).
+    </span>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Max connections</span>
+    <input
+      type="number"
+      name="max_connections"
+      data-shape="number"
+      min="0"
+      step="1"
+      value="{{.MaxConnections}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+    <span class="text-xs text-text-secondary">
+      Hard cap on concurrent WebSocket clients. <span class="font-mono">0</span> disables the
+      gate (unlimited). <strong>Set this on every production deploy</strong> —
+      without it a single attacker can exhaust your sockets.
+    </span>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Max subscriptions / client</span>
+    <input
+      type="number"
+      name="max_subscriptions_per_client"
+      data-shape="number"
+      min="0"
+      step="1"
+      value="{{.MaxSubscriptionsPerClient}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+    <span class="text-xs text-text-secondary">
+      Most clients open a handful at most (one per filter shape);
+      10 is generous. Lower if individual clients are abusing.
+    </span>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Implicit REQ limit</span>
+    <input
+      type="number"
+      name="implicit_req_limit"
+      data-shape="number"
+      min="0"
+      step="1"
+      value="{{.ImplicitReqLimit}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+    <span class="text-xs text-text-secondary">
+      Cap applied to a REQ filter that doesn't specify a
+      <span class="font-mono">limit</span> field. Stops greedy clients from
+      asking for the whole DB.
+    </span>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Per-IP connection rate (per minute)</span>
+    <input
+      type="number"
+      name="connection_rate_limit_per_ip"
+      data-shape="number"
+      min="0"
+      step="1"
+      value="{{.ConnectionRateLimitPerIP}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+    <span class="text-xs text-text-secondary">
+      Connection-attempt rate per IP. Rejected before WS upgrade
+      with HTTP 429. <span class="font-mono">0</span> disables. Useful against
+      connection-storm attacks.
+    </span>
+  </label>
+</form>
+{{end}}
