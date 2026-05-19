@@ -101,14 +101,24 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Initialize user data: fetch mailboxes, set app relays, get metadata from outboxes, cache everything
-	log.ClientAPI().Debug("Fetching and caching user data", "pubkey", loginReq.PublicKey)
-
-	if err := data.FetchAndCacheUserDataWithCoreClient(loginReq.PublicKey); err != nil {
-		log.ClientAPI().Warn("Failed to fetch user data, proceeding with session creation",
-			"pubkey", loginReq.PublicKey, "error", err)
-		// Continue with session creation even if fetch fails - user might be new or relays unavailable
-	}
+	// Kick off user-data discovery in the background. The fetch
+	// goes out to the user's outbox relays for mailboxes + kind-0
+	// metadata — that's network-bound and routinely takes several
+	// seconds, sometimes a minute on cold relays. Synchronously
+	// blocking the login response on it made signing in feel
+	// broken; the session cookie + signer registration are the
+	// load-bearing parts of login. User data populates in the
+	// cache as the relays respond; the dashboard already handles
+	// "metadata not yet available" gracefully via the lazy
+	// /api/v1/user/profile path.
+	go func() {
+		pubkey := loginReq.PublicKey
+		log.ClientAPI().Debug("Fetching user data in background", "pubkey", pubkey)
+		if err := data.FetchAndCacheUserDataWithCoreClient(pubkey); err != nil {
+			log.ClientAPI().Warn("Background user-data fetch failed",
+				"pubkey", pubkey, "error", err)
+		}
+	}()
 
 	// Create session with the fetched/cached data and remember how they logged in
 	userSession, err := session.CreateUserSession(w, loginReq)
