@@ -58,7 +58,13 @@ services:
       - GRAIN_ENV=test
     volumes:
       - ../docker/configs/blacklist.yml:/app/testdata/config.yml:ro
-      - ../docker/configs/blacklist-rules.yml:/app/testdata/blacklist.yml:ro
+      # blacklist.yml is :rw because the permanent-ban-word path
+      # writes the offending pubkey to disk via
+      # AddToPermanentBlacklist (#78 covers the fixture-mutation
+      # cleanup story; the bind-mount-rename issue is handled by
+      # AtomicWriteFile's in-place fallback).
+      - ../docker/configs/blacklist-rules.yml:/app/testdata/blacklist.yml
+
     restart: on-failure:3
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8184 > /dev/null 2>&1 || exit 1"]

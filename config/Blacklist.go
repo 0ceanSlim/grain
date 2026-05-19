@@ -47,7 +47,15 @@ func CheckBlacklistCached(pubkey, eventContent string) (bool, string) {
 					"pubkey", pubkey,
 					"word", word,
 					"error", err)
-				return true, fmt.Sprintf("pubkey %s is permanently banned and failed to save: %v", pubkey, err)
+				// The ban decision is already made in memory — we DO
+				// reject this event. The disk persistence failure is
+				// recoverable (next event will retry / operator can fix
+				// disk perms). Honest reject reason for the client
+				// keeps the NIP-01 OK-machine-readable prefix intact so
+				// downstream handling (including tests) sees a real
+				// blocked: response, with the underlying cause noted
+				// after.
+				return true, fmt.Sprintf("blocked: permanent ban (save to disk failed: %v)", err)
 			}
 
 			// Trigger immediate blacklist refresh to include this pubkey
