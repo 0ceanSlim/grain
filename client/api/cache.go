@@ -36,24 +36,33 @@ func GetCacheHandler(w http.ResponseWriter, r *http.Request) {
 	// Get cached data
 	cachedData, found := cache.GetUserData(publicKey)
 	if !found {
-		log.ClientAPI().Info("Cache miss, rebuilding from session key", "pubkey", publicKey)
+		// Don't block the response on a network fetch — cold outbox relays
+		// can take many seconds, and users without a published kind-0 never
+		// resolve at all. Kick a deduplicated background fetch and return a
+		// lightweight "pending" response immediately; the client renders the
+		// logged-in state right away and hydrates the profile as the data
+		// lands (polling /api/v1/cache). See login flow + grain #87 (SSE).
+		log.ClientAPI().Info("Cache miss, fetching in background", "pubkey", publicKey)
+		data.EnsureBackgroundFetch(publicKey)
 
-		// Attempt to rebuild cache
-		if err := data.FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
-			log.ClientAPI().Error("Failed to rebuild cache", "pubkey", publicKey, "error", err)
-			http.Error(w, "Failed to load user data", http.StatusInternalServerError)
+		npub, err := tools.EncodePubkey(publicKey)
+		if err != nil {
+			log.ClientAPI().Error("Failed to encode npub", "pubkey", publicKey, "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
-		// Try to get cache again after rebuild
-		cachedData, found = cache.GetUserData(publicKey)
-		if !found {
-			log.ClientAPI().Error("Cache still empty after rebuild", "pubkey", publicKey)
-			http.Error(w, "Failed to load user data", http.StatusInternalServerError)
-			return
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"publicKey":     publicKey,
+			"npub":          npub,
+			"pending":       true,
+			"sessionMode":   userSession.Mode,
+			"signingMethod": userSession.SigningMethod,
+		}); err != nil {
+			log.ClientAPI().Error("Failed to encode pending cache response", "pubkey", publicKey, "error", err)
 		}
-
-		log.ClientAPI().Info("Cache rebuilt successfully", "pubkey", publicKey)
+		return
 	}
 
 	// Parse metadata

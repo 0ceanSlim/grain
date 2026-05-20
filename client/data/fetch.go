@@ -2,12 +2,34 @@ package data
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/0ceanslim/grain/client/cache"
 	"github.com/0ceanslim/grain/client/connection"
 	"github.com/0ceanslim/grain/client/core"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
+
+// inFlightFetches dedupes concurrent background user-data fetches so that
+// repeated cache-miss requests (e.g. a client polling /api/v1/cache while the
+// profile hydrates) trigger at most one outbox fetch per pubkey.
+var inFlightFetches sync.Map // pubkey -> struct{}
+
+// EnsureBackgroundFetch starts a single background user-data fetch for the
+// pubkey if one isn't already running. It returns immediately and never
+// blocks the caller — login and the cache endpoint use it so neither waits on
+// cold outbox relays. Safe to call repeatedly.
+func EnsureBackgroundFetch(publicKey string) {
+	if _, loaded := inFlightFetches.LoadOrStore(publicKey, struct{}{}); loaded {
+		return // a fetch for this pubkey is already in flight
+	}
+	go func() {
+		defer inFlightFetches.Delete(publicKey)
+		if err := FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
+			log.ClientData().Warn("Background user-data fetch failed", "pubkey", publicKey, "error", err)
+		}
+	}()
+}
 
 // FetchAndCacheUserDataWithCoreClient fetches user data using the core client
 func FetchAndCacheUserDataWithCoreClient(publicKey string) error {

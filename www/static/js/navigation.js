@@ -132,10 +132,32 @@
         content: parseProfileContent(data.metadata),
         npub: data.npub || null,
         pubkey: data.publicKey || null,
+        pending: !!data.pending,
       };
     } catch (e) {
       console.warn("[nav] failed to fetch profile", e);
       return null;
+    }
+  }
+
+  // Progressive profile hydration. /api/v1/cache returns immediately with
+  // { pending: true } while the background outbox fetch runs, so this never
+  // blocks the logged-in render. Render the npub straight away, then poll a
+  // few times and upgrade to the real display name / pfp once metadata lands.
+  // Users with no published kind-0 simply keep the npub display.
+  async function hydrateProfile() {
+    const delays = [0, 600, 1200, 2500, 4000]; // ~8s budget, then give up
+    for (const d of delays) {
+      if (d) await new Promise((r) => setTimeout(r, d));
+      const info = await fetchProfile();
+      if (!info) return;
+      if (info.content) {
+        renderLoggedIn(info.content, info.npub);
+        return;
+      }
+      // No metadata yet — show the npub fallback so the button isn't stuck
+      // on the generic "User" label while we wait.
+      if (info.npub) renderLoggedIn(null, info.npub);
     }
   }
 
@@ -236,16 +258,17 @@
 
   async function maybeRevealAdminLink(sessionPubkey) {
     const link = document.getElementById("user-dropdown-admin");
-    if (!link || !sessionPubkey) return;
-    const owner = await getRelayOwnerPubkey();
-    if (
-      owner &&
+    if (!link) return;
+    const owner = sessionPubkey ? await getRelayOwnerPubkey() : "";
+    const isOwner =
+      !!owner &&
       owner !== ALL_ZEROS_PUBKEY &&
-      owner.toLowerCase() === sessionPubkey.toLowerCase()
-    ) {
-      link.classList.remove("hidden");
-      link.classList.add("flex");
-    }
+      !!sessionPubkey &&
+      owner.toLowerCase() === sessionPubkey.toLowerCase();
+    // Deterministic: reveal for the owner, hide otherwise — so the link
+    // can't linger when a different account logs in on the same browser.
+    link.classList.toggle("hidden", !isOwner);
+    link.classList.toggle("flex", isOwner);
   }
 
   function applyDropdownProfile(info) {
@@ -300,11 +323,17 @@
         return;
       }
       window.__grainLoggedIn = true;
-      // Render with what we know from /session first (instant feedback)
-      // then upgrade with metadata from /cache.
+      // Reveal the admin link from the session pubkey directly — it
+      // only needs pubkey-vs-relay-owner and must NOT depend on the
+      // profile cache, which 500s for users with no published kind-0.
+      try {
+        const sess = await resp.clone().json();
+        if (sess && sess.publicKey) maybeRevealAdminLink(sess.publicKey);
+      } catch (_) {}
+      // Render the logged-in state immediately (instant feedback), then
+      // hydrate the profile metadata progressively without blocking.
       renderLoggedIn(null, null);
-      const info = await fetchProfile();
-      if (info) renderLoggedIn(info.content, info.npub);
+      hydrateProfile();
     } catch (e) {
       console.error("[nav] updateNavigation error", e);
       window.__grainLoggedIn = false;
@@ -324,9 +353,13 @@
         if (r.ok) {
           window.__grainLoggedIn = true;
           renderLoggedIn(null, null);
-          return fetchProfile().then((info) => {
-            if (info) renderLoggedIn(info.content, info.npub);
-          });
+          // Reveal admin link from the session pubkey, independent of
+          // the profile cache.
+          r.clone().json().then((sess) => {
+            if (sess && sess.publicKey) maybeRevealAdminLink(sess.publicKey);
+          }).catch(() => {});
+          // Hydrate profile metadata progressively (non-blocking).
+          return hydrateProfile();
         } else {
           window.__grainLoggedIn = false;
           renderLoggedOut();

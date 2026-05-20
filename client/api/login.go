@@ -111,14 +111,8 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// cache as the relays respond; the dashboard already handles
 	// "metadata not yet available" gracefully via the lazy
 	// /api/v1/user/profile path.
-	go func() {
-		pubkey := loginReq.PublicKey
-		log.ClientAPI().Debug("Fetching user data in background", "pubkey", pubkey)
-		if err := data.FetchAndCacheUserDataWithCoreClient(pubkey); err != nil {
-			log.ClientAPI().Warn("Background user-data fetch failed",
-				"pubkey", pubkey, "error", err)
-		}
-	}()
+	log.ClientAPI().Debug("Fetching user data in background", "pubkey", loginReq.PublicKey)
+	data.EnsureBackgroundFetch(loginReq.PublicKey)
 
 	// Create session with the fetched/cached data and remember how they logged in
 	userSession, err := session.CreateUserSession(w, loginReq)
