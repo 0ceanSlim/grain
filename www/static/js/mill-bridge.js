@@ -50,6 +50,9 @@
       // Initial paint uses mill's grain theme; the CSS bridge takes
       // over once the element is in the DOM and renders.
       theme: "grain",
+      // Name shown to the user's remote signer / bunker when authorizing,
+      // instead of mill's default. Ignored by mill < 1.2.0.
+      appName: "grain",
       amberCallback:
         window.location.origin + "/api/v1/auth/amber-callback",
       onConnected: handleConnected,
