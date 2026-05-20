@@ -39,20 +39,39 @@
   // The login-button template invokes `showAuthModal()` inline on
   // click. Keep that surface so we don't have to edit templates;
   // route it through mill.
-  function showAuthModal() {
+  // The app name shown to the user's remote signer / bunker when authorizing
+  // comes from this relay's NIP-11 `name` field, so each deployment identifies
+  // itself (e.g. "🌾 GRAIN Relay") rather than a generic label. Cached after
+  // the first fetch; pre-warmed on load so it's ready by the time the operator
+  // clicks login.
+  let relayNameCache = null;
+  async function getRelayName() {
+    if (relayNameCache !== null) return relayNameCache;
+    try {
+      const r = await fetch("/", { headers: { Accept: "application/nostr+json" } });
+      const info = r.ok ? await r.json() : null;
+      relayNameCache = (info && info.name) || "";
+    } catch (_) {
+      relayNameCache = "";
+    }
+    return relayNameCache;
+  }
+  getRelayName(); // pre-warm
+
+  async function showAuthModal() {
     if (!window.MILL) {
       console.error(
         "[mill-bridge] MILL global not loaded — check /static/mill/mill.umd.min.js"
       );
       return;
     }
+    const appName = (await getRelayName()) || document.title || "grain";
     window.MILL.open({
       // Initial paint uses mill's grain theme; the CSS bridge takes
       // over once the element is in the DOM and renders.
       theme: "grain",
-      // Name shown to the user's remote signer / bunker when authorizing,
-      // instead of mill's default. Ignored by mill < 1.2.0.
-      appName: "grain",
+      // Name the remote signer / bunker shows when authorizing (mill >= 1.2.0).
+      appName,
       amberCallback:
         window.location.origin + "/api/v1/auth/amber-callback",
       onConnected: handleConnected,

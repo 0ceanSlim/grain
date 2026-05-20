@@ -189,7 +189,7 @@ jobs:
           # nostr-mill: the <nostr-signer> login web component.
           # Pinned to match the Dockerfile so test and release builds
           # ship the same bundle.
-          MILL_VERSION=1.1.0
+          MILL_VERSION=1.2.0
           mkdir -p www/static/mill
           curl -fsSL -o www/static/mill/mill.umd.min.js \
             "https://cdn.jsdelivr.net/npm/nostr-mill@${MILL_VERSION}/dist/mill.umd.min.js"
