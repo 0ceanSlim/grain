@@ -146,7 +146,10 @@
   // few times and upgrade to the real display name / pfp once metadata lands.
   // Users with no published kind-0 simply keep the npub display.
   async function hydrateProfile() {
-    const delays = [0, 600, 1200, 2500, 4000]; // ~8s budget, then give up
+    // Poll with backoff for ~30s — the background outbox fetch can take a
+    // while on cold relays, and metadata that lands after a short window used
+    // to require a hard refresh to appear.
+    const delays = [0, 500, 1000, 2000, 3000, 5000, 7000, 10000];
     for (const d of delays) {
       if (d) await new Promise((r) => setTimeout(r, d));
       const info = await fetchProfile();
@@ -287,6 +290,9 @@
     npubEl.textContent = info.npub
       ? info.npub.slice(0, 14) + "…" + info.npub.slice(-4)
       : "";
+    // Keep the header button in sync — if the dropdown's fetch is the first to
+    // see real metadata, update the button too so it doesn't lag behind.
+    if (info.content) renderLoggedIn(info.content, info.npub);
     if (c.picture) {
       pfpWrap.innerHTML =
         '<img src="' +

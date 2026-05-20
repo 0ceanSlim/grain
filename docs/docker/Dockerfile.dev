@@ -44,7 +44,7 @@ RUN curl -fsSL -o /tmp/tailwindcss \
 
 # Mill (the <nostr-signer> web component) — required by /setup and
 # the header login flow.
-ARG MILL_VERSION=1.2.0
+ARG MILL_VERSION=1.5.0
 RUN mkdir -p www/static/mill \
     && curl -fsSL -o www/static/mill/mill.umd.min.js \
         "https://cdn.jsdelivr.net/npm/nostr-mill@${MILL_VERSION}/dist/mill.umd.min.js"
