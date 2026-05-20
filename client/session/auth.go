@@ -210,11 +210,6 @@ func ValidateSessionRequest(req SessionInitRequest) error {
 		if !validMethods[req.SigningMethod] {
 			return &SessionError{Message: "invalid signing method for write mode"}
 		}
-
-		// If using encrypted key, private key must be provided
-		if req.SigningMethod == EncryptedKey && req.PrivateKey == "" {
-			return &SessionError{Message: "private key required for encrypted key signing method"}
-		}
 	} else {
 		// Read-only mode should use NoSigning
 		if req.SigningMethod == "" {

@@ -42,9 +42,6 @@ type UserSession struct {
 
 	// Connection info (app-level relays, not user-specific)
 	ConnectedRelays []string `json:"connected_relays"`
-
-	// Session security
-	EncryptedPrivateKey string `json:"encrypted_private_key,omitempty"` // Only if using EncryptedKey method
 }
 
 // IsReadOnly returns true if the session is in read-only mode
@@ -67,7 +64,6 @@ type SessionInitRequest struct {
 	PublicKey     string                 `json:"public_key"`
 	RequestedMode SessionInteractionMode `json:"requested_mode"`
 	SigningMethod SigningMethod          `json:"signing_method,omitempty"`
-	PrivateKey    string                 `json:"private_key,omitempty"` // Only for encrypted key method
 }
 
 // Response represents the response after successful login

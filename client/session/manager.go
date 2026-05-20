@@ -65,12 +65,6 @@ func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRe
 		SigningMethod: req.SigningMethod,
 	}
 
-	// Store encrypted private key if provided
-	if req.PrivateKey != "" && req.SigningMethod == EncryptedKey {
-		// In a real implementation, this should be properly encrypted
-		session.EncryptedPrivateKey = req.PrivateKey
-	}
-
 	sm.sessionMutex.Lock()
 	sm.sessions[token] = session
 	sm.sessionMutex.Unlock()
