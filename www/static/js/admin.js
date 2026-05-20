@@ -421,9 +421,9 @@
   //
   // Strategy:
   //   1. If grainSigner already exists, return.
-  //   2. If the session uses NIP-07 (browser extension), try to
-  //      reconnect on-demand — extensions are usually present and
-  //      this should be silent.
+  //   2. Try a silent restore via mill (restoreSigner rebuilds the
+  //      signer for the session's method from mill's persisted
+  //      state — works for every method, not just NIP-07).
   //   3. Otherwise fall back to showing a "reconnect signer"
   //      indicator (not auto-popping mill) and rejecting the
   //      current action. Operator clicks the indicator when ready
@@ -432,14 +432,15 @@
     if (window.grainSigner && typeof window.grainSigner.signEvent === "function") {
       return;
     }
-    // NIP-07 path: try a silent reconnect first.
-    if (typeof window.tryReconnectNIP07 === "function") {
-      const ok = await window.tryReconnectNIP07();
+    // Silent restore for any method (NIP-07 from window.nostr,
+    // bunker/encrypted/amber from mill's persisted state).
+    if (typeof window.restoreSigner === "function") {
+      const ok = await window.restoreSigner();
       if (ok) return;
     }
-    // Non-NIP-07 (or NIP-07 with extension unavailable): show the
-    // reconnect indicator and refuse this action. The indicator
-    // wires its own click → showAuthModal.
+    // Restore not possible (no persisted state, extension missing,
+    // etc.): show the reconnect indicator and refuse this action.
+    // The indicator wires its own click → restore/showAuthModal.
     showReconnectIndicator(true);
     throw new Error("signer not connected — click the Reconnect indicator");
   }
@@ -461,10 +462,12 @@
         "bg-warning-dim text-warning border border-warning hover:bg-warning hover:text-warning-fg shadow";
       pill.textContent = "🔑 Reconnect signer";
       pill.addEventListener("click", async () => {
-        // Try the silent path first — covers the case where the
-        // extension just woke up between page load and click.
-        if (typeof window.tryReconnectNIP07 === "function") {
-          const ok = await window.tryReconnectNIP07();
+        // Try the silent restore first — covers the case where mill's
+        // persisted state is available (or the extension just woke up
+        // between page load and click). Only open the picker if that
+        // fails.
+        if (typeof window.restoreSigner === "function") {
+          const ok = await window.restoreSigner();
           if (ok) {
             showReconnectIndicator(false);
             toast("signer reconnected");
