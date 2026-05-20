@@ -10,25 +10,44 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// inFlightFetches dedupes concurrent background user-data fetches so that
-// repeated cache-miss requests (e.g. a client polling /api/v1/cache while the
-// profile hydrates) trigger at most one outbox fetch per pubkey.
-var inFlightFetches sync.Map // pubkey -> struct{}
+// Single-flight dedup for user-data fetches. Concurrent callers for the same
+// pubkey (e.g. session creation + a client polling /api/v1/cache while the
+// profile hydrates) collapse onto one outbox fetch instead of stampeding cold
+// relays.
+var (
+	flightMu sync.Mutex
+	flights  = map[string]chan struct{}{}
+)
 
-// EnsureBackgroundFetch starts a single background user-data fetch for the
-// pubkey if one isn't already running. It returns immediately and never
-// blocks the caller — login and the cache endpoint use it so neither waits on
-// cold outbox relays. Safe to call repeatedly.
-func EnsureBackgroundFetch(publicKey string) {
-	if _, loaded := inFlightFetches.LoadOrStore(publicKey, struct{}{}); loaded {
-		return // a fetch for this pubkey is already in flight
+// FetchUserDataDeduped fetches + caches the user's data, collapsing concurrent
+// calls for the same pubkey into a single fetch. It BLOCKS until the in-flight
+// fetch finishes, so call it from a goroutine when you don't want to wait.
+func FetchUserDataDeduped(publicKey string) {
+	flightMu.Lock()
+	if ch, ok := flights[publicKey]; ok {
+		flightMu.Unlock()
+		<-ch // a fetch is already running — wait for it
+		return
 	}
-	go func() {
-		defer inFlightFetches.Delete(publicKey)
-		if err := FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
-			log.ClientData().Warn("Background user-data fetch failed", "pubkey", publicKey, "error", err)
-		}
-	}()
+	ch := make(chan struct{})
+	flights[publicKey] = ch
+	flightMu.Unlock()
+
+	if err := FetchAndCacheUserDataWithCoreClient(publicKey); err != nil {
+		log.ClientData().Warn("User-data fetch failed", "pubkey", publicKey, "error", err)
+	}
+
+	flightMu.Lock()
+	delete(flights, publicKey)
+	flightMu.Unlock()
+	close(ch)
+}
+
+// EnsureBackgroundFetch kicks a deduplicated user-data fetch and returns
+// immediately — login and the cache endpoint use it so neither blocks on cold
+// outbox relays. Safe to call repeatedly.
+func EnsureBackgroundFetch(publicKey string) {
+	go FetchUserDataDeduped(publicKey)
 }
 
 // FetchAndCacheUserDataWithCoreClient fetches user data using the core client

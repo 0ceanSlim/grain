@@ -27,54 +27,37 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSess
 		"mode", req.RequestedMode,
 		"signing_method", req.SigningMethod)
 
-	// Ensure user data is cached (this populates metadata + mailboxes in cache)
-	// This function handles fetching from Nostr network if not cached
-	_, _, err := data.GetUserDataForSession(req.PublicKey)
-	if err != nil {
-		log.ClientSession().Warn("Failed to get user data for session, continuing anyway",
-			"pubkey", req.PublicKey,
-			"error", err)
-		// Don't fail the session creation - user can still login without cached data
-	} else {
-		log.ClientSession().Info("User data cached successfully for session",
-			"pubkey", req.PublicKey)
-
-		// IMPORTANT: After caching user data, set client relays from cached mailboxes
-		// This ensures user's preferred relays REPLACE default app relays
-		if err := cache.SetUserClientRelaysFromMailboxes(req.PublicKey); err != nil {
-			log.ClientSession().Warn("Failed to set client relays from mailboxes",
-				"pubkey", req.PublicKey,
-				"error", err)
-		} else {
-			log.ClientSession().Info("Client relays set from user mailboxes",
-				"pubkey", req.PublicKey)
-
-			// NEW: Switch the core client to use user's relays instead of default app relays
-			if err := switchCoreClientToUserRelays(req.PublicKey); err != nil {
-				log.ClientSession().Warn("Failed to switch core client to user relays",
-					"pubkey", req.PublicKey,
-					"error", err)
-				// Don't fail session creation, but log the issue
-			} else {
-				log.ClientSession().Info("Core client switched to user relays",
-					"pubkey", req.PublicKey)
-			}
-		}
-	}
-
-	// Create lightweight session (no user data stored in session)
+	// Create lightweight session (no user data stored in session) FIRST so
+	// login returns immediately. Fetching the user's metadata + mailboxes
+	// from outbox relays is network-bound (seconds on cold relays, longer if
+	// the user has no published relay list) — it must NOT block sign-in.
 	session, err := SessionMgr.CreateSession(w, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
-	// Set connected relays to current core client relays (which should now be user's relays)
+	// Snapshot the currently-connected relays for the session record.
 	coreClient := connection.GetCoreClient()
 	if coreClient != nil {
 		session.ConnectedRelays = coreClient.GetConnectedRelays()
 	} else {
 		session.ConnectedRelays = connection.GetIndexRelays() // fallback
 	}
+
+	// In the background: fetch + cache the user's data (deduped, so a client
+	// polling /api/v1/cache shares this one fetch), then point the core client
+	// at the user's own relays. All best-effort — login already succeeded and
+	// the client hydrates the profile from the cache as it lands.
+	go func() {
+		data.FetchUserDataDeduped(req.PublicKey)
+		if err := cache.SetUserClientRelaysFromMailboxes(req.PublicKey); err != nil {
+			log.ClientSession().Debug("No mailbox relays to set for user", "pubkey", req.PublicKey, "error", err)
+			return
+		}
+		if err := switchCoreClientToUserRelays(req.PublicKey); err != nil {
+			log.ClientSession().Warn("Failed to switch core client to user relays", "pubkey", req.PublicKey, "error", err)
+		}
+	}()
 
 	log.ClientSession().Info("User session created successfully",
 		"pubkey", req.PublicKey,

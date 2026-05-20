@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/0ceanslim/grain/client/cache"
-	"github.com/0ceanslim/grain/client/data"
 	"github.com/0ceanslim/grain/client/session"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -101,20 +100,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Kick off user-data discovery in the background. The fetch
-	// goes out to the user's outbox relays for mailboxes + kind-0
-	// metadata — that's network-bound and routinely takes several
-	// seconds, sometimes a minute on cold relays. Synchronously
-	// blocking the login response on it made signing in feel
-	// broken; the session cookie + signer registration are the
-	// load-bearing parts of login. User data populates in the
-	// cache as the relays respond; the dashboard already handles
-	// "metadata not yet available" gracefully via the lazy
-	// /api/v1/user/profile path.
-	log.ClientAPI().Debug("Fetching user data in background", "pubkey", loginReq.PublicKey)
-	data.EnsureBackgroundFetch(loginReq.PublicKey)
-
-	// Create session with the fetched/cached data and remember how they logged in
+	// Create the session and remember how they logged in. Session creation
+	// returns immediately and kicks off user-data discovery in the background
+	// (deduped) — login never blocks on outbox relays.
 	userSession, err := session.CreateUserSession(w, loginReq)
 	if err != nil {
 		log.ClientAPI().Error("Failed to create session", "error", err)
