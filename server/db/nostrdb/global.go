@@ -17,7 +17,7 @@ func SetGlobalDB(db *NDB) {
 	globalMu.Lock()
 	defer globalMu.Unlock()
 	globalDB = db
-	log.GetLogger("db").Info("Global nostrdb instance set")
+	log.DB().Info("Global nostrdb instance set")
 }
 
 // GetDB returns the global nostrdb instance.

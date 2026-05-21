@@ -71,7 +71,7 @@ func (txn *Txn) Query(filters []nostr.Filter, limit int) ([]nostr.Event, error) 
 		return nil, fmt.Errorf("ndb_query failed")
 	}
 
-	log.GetLogger("db-query").Debug("Query executed",
+	log.DBQuery().Debug("Query executed",
 		"filter_count", len(filters),
 		"results", int(count),
 		"limit", limit)
@@ -122,7 +122,7 @@ func (db *NDB) CheckDuplicateEvent(evt nostr.Event) (bool, error) {
 	txn, err := db.BeginQuery()
 	if err != nil {
 		// If we can't query, allow the event through
-		log.GetLogger("db").Warn("Failed to begin query for duplicate check, allowing event",
+		log.DB().Warn("Failed to begin query for duplicate check, allowing event",
 			"event_id", evt.ID, "error", err)
 		return false, nil
 	}
@@ -144,7 +144,7 @@ func (db *NDB) CheckDuplicateEvent(evt nostr.Event) (bool, error) {
 	)
 
 	if note != nil {
-		log.GetLogger("db").Info("Duplicate event found",
+		log.DB().Info("Duplicate event found",
 			"event_id", evt.ID, "kind", evt.Kind, "pubkey", evt.PubKey)
 		return true, nil
 	}
@@ -160,7 +160,7 @@ func (db *NDB) GetAllAuthors() []string {
 
 	events, err := db.Query(filters, limit)
 	if err != nil {
-		log.GetLogger("db").Error("Failed to query events for author list", "error", err)
+		log.DB().Error("Failed to query events for author list", "error", err)
 		return nil
 	}
 
@@ -174,7 +174,7 @@ func (db *NDB) GetAllAuthors() []string {
 		authors = append(authors, pk)
 	}
 
-	log.GetLogger("db").Info("Fetched unique authors", "count", len(authors))
+	log.DB().Info("Fetched unique authors", "count", len(authors))
 	return authors
 }
 

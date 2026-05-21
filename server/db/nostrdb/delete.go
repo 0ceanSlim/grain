@@ -25,7 +25,7 @@ import (
 // tag is still processed. The kind-5 is always ingested at the end so that a
 // client querying for it still sees it, even if none of its targets existed.
 func (db *NDB) ProcessDeletion(ctx context.Context, evt nostr.Event) error {
-	log.GetLogger("db-store").Info("Processing deletion event",
+	log.DBStore().Info("Processing deletion event",
 		"event_id", evt.ID,
 		"pubkey", evt.PubKey,
 		"tag_count", len(evt.Tags))
@@ -39,7 +39,7 @@ func (db *NDB) ProcessDeletion(ctx context.Context, evt nostr.Event) error {
 		case "e":
 			// Author requested delete of a specific event by ID.
 			if err := db.verifyAndDeleteByID(tag[1], evt.PubKey, evt.CreatedAt); err != nil {
-				log.GetLogger("db-store").Error("Failed to delete event by ID",
+				log.DBStore().Error("Failed to delete event by ID",
 					"target_event_id", tag[1],
 					"event_id", evt.ID,
 					"error", err)
@@ -50,7 +50,7 @@ func (db *NDB) ProcessDeletion(ctx context.Context, evt nostr.Event) error {
 			// "kind:pubkey:d-tag". NIP-09 requires the coordinate's pubkey
 			// to match the deleter, same as the `e` tag ownership rule.
 			if err := db.verifyAndDeleteByAddr(tag[1], evt.PubKey, evt.CreatedAt); err != nil {
-				log.GetLogger("db-store").Error("Failed to delete addressable event",
+				log.DBStore().Error("Failed to delete addressable event",
 					"coord", tag[1],
 					"event_id", evt.ID,
 					"error", err)
@@ -64,7 +64,7 @@ func (db *NDB) ProcessDeletion(ctx context.Context, evt nostr.Event) error {
 		return fmt.Errorf("failed to store deletion event: %w", err)
 	}
 
-	log.GetLogger("db-store").Info("Deletion event processed", "event_id", evt.ID)
+	log.DBStore().Info("Deletion event processed", "event_id", evt.ID)
 	return nil
 }
 
@@ -86,13 +86,13 @@ func (db *NDB) verifyAndDeleteByID(eventID, requesterPubKey string, deleteCreate
 	}
 
 	if target == nil {
-		log.GetLogger("db-store").Debug("Deletion target not found", "event_id", eventID)
+		log.DBStore().Debug("Deletion target not found", "event_id", eventID)
 		return nil
 	}
 
 	// NIP-09: deletion only applies to events by the same author.
 	if target.PubKey != requesterPubKey {
-		log.GetLogger("db-store").Warn("Deletion rejected - pubkey mismatch",
+		log.DBStore().Warn("Deletion rejected - pubkey mismatch",
 			"event_id", eventID,
 			"event_pubkey", target.PubKey,
 			"requester_pubkey", requesterPubKey)
@@ -102,7 +102,7 @@ func (db *NDB) verifyAndDeleteByID(eventID, requesterPubKey string, deleteCreate
 	// NIP-09 is past-only: a deletion request cannot remove an event that
 	// was created after the deletion event's own created_at.
 	if target.CreatedAt > deleteCreatedAt {
-		log.GetLogger("db-store").Debug("Deletion skipped - target is newer than delete event",
+		log.DBStore().Debug("Deletion skipped - target is newer than delete event",
 			"event_id", eventID,
 			"target_created_at", target.CreatedAt,
 			"delete_created_at", deleteCreatedAt)
@@ -120,7 +120,7 @@ func (db *NDB) verifyAndDeleteByID(eventID, requesterPubKey string, deleteCreate
 		return fmt.Errorf("ndb delete failed: %w", err)
 	}
 
-	log.GetLogger("db-store").Info("Event deleted",
+	log.DBStore().Info("Event deleted",
 		"event_id", eventID, "pubkey", requesterPubKey)
 	return nil
 }
@@ -144,7 +144,7 @@ func (db *NDB) verifyAndDeleteByAddr(coord, requesterPubKey string, deleteCreate
 
 	// NIP-09 same-author rule for addressable deletes.
 	if coordPubkey != requesterPubKey {
-		log.GetLogger("db-store").Warn("Addressable deletion rejected - pubkey mismatch",
+		log.DBStore().Warn("Addressable deletion rejected - pubkey mismatch",
 			"coord", coord,
 			"coord_pubkey", coordPubkey,
 			"requester_pubkey", requesterPubKey)
@@ -176,21 +176,21 @@ func (db *NDB) verifyAndDeleteByAddr(coord, requesterPubKey string, deleteCreate
 		}
 		idBytes, err := hexToBytes32(m.ID)
 		if err != nil {
-			log.GetLogger("db-store").Warn("Skipping bad id in coord match",
+			log.DBStore().Warn("Skipping bad id in coord match",
 				"coord", coord, "id", m.ID, "error", err)
 			continue
 		}
 		var id32 [32]byte
 		copy(id32[:], idBytes)
 		if err := db.DeleteNoteByID(id32); err != nil {
-			log.GetLogger("db-store").Error("Addressable delete failed",
+			log.DBStore().Error("Addressable delete failed",
 				"coord", coord, "event_id", m.ID, "error", err)
 			continue
 		}
 		deleted++
 	}
 
-	log.GetLogger("db-store").Info("Addressable events deleted",
+	log.DBStore().Info("Addressable events deleted",
 		"coord", coord,
 		"deleted", deleted,
 		"scanned", len(matches))

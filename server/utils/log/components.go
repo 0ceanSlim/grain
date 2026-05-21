@@ -2,20 +2,27 @@ package log
 
 import "log/slog"
 
-// All logging components defined in one place
+// Logging components, defined in one place. Each function names the component
+// it logs under; GetAllComponents below MUST list exactly these names (it
+// drives the dashboard's per-component suppression and the config validation).
+//
+// DB components: "db" is general nostrdb lifecycle (open/close/duplicate
+// checks), "db-store" writes/deletes, "db-query" reads (incl. search + count),
+// "db-purge" retention (scheduled purge + expiration). The nostrdb package
+// calls these functions — there are no ad-hoc GetLogger("...") component
+// strings outside this file, so this list is authoritative.
 func Startup() *slog.Logger          { return GetLogger("startup") }
 func DB() *slog.Logger               { return GetLogger("db") }
 func RelayClient() *slog.Logger      { return GetLogger("relay-client") }
 func RelayConnection() *slog.Logger  { return GetLogger("relay-connection") }
 func RelayAPI() *slog.Logger         { return GetLogger("relay-api") }
-func Log() *slog.Logger              { return GetLogger("log") }
+func Log() *slog.Logger              { return GetLogger("log") } // the logger reporting on itself (rotation, write errors)
 func Config() *slog.Logger           { return GetLogger("config") }
 func Util() *slog.Logger             { return GetLogger("util") }
 func Validation() *slog.Logger       { return GetLogger("event-validation") }
 func DBQuery() *slog.Logger          { return GetLogger("db-query") }
 func DBStore() *slog.Logger          { return GetLogger("db-store") }
 func DBPurge() *slog.Logger          { return GetLogger("db-purge") }
-func EventStore() *slog.Logger       { return GetLogger("event-store") }
 func Event() *slog.Logger            { return GetLogger("event-handler") }
 func Req() *slog.Logger              { return GetLogger("req-handler") }
 func Auth() *slog.Logger             { return GetLogger("auth-handler") }
@@ -29,7 +36,9 @@ func ClientConnection() *slog.Logger { return GetLogger("client-connection") }
 func ClientSession() *slog.Logger    { return GetLogger("client-session") }
 func ClientCache() *slog.Logger      { return GetLogger("client-cache") }
 
-// GetAllComponents returns a slice of all component names used by the logger functions
+// GetAllComponents returns every component name emitted by the functions
+// above. Keep this in sync with them — it's the source the dashboard and
+// config validation read.
 func GetAllComponents() []string {
 	return []string{
 		"startup",           // Startup()
@@ -44,7 +53,6 @@ func GetAllComponents() []string {
 		"db-query",          // DBQuery()
 		"db-store",          // DBStore()
 		"db-purge",          // DBPurge()
-		"event-store",       // EventStore()
 		"event-handler",     // Event()
 		"req-handler",       // Req()
 		"auth-handler",      // Auth()

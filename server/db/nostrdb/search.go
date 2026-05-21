@@ -71,7 +71,7 @@ func (txn *Txn) TextSearch(query string, base nostr.Filter, limit int) ([]nostr.
 	}
 
 	count := int(results.num_results)
-	log.GetLogger("db-search").Debug("Text search executed",
+	log.DBQuery().Debug("Text search executed",
 		"query", query, "results", count, "limit", limit)
 
 	events := make([]nostr.Event, 0, count)

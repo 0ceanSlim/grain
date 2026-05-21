@@ -64,7 +64,7 @@ func OpenWithFlags(dbDir string, mapSizeMB int, ingestThreads int, flags int) (*
 		return nil, fmt.Errorf("ndb_init failed for directory %s", dbDir)
 	}
 
-	log.GetLogger("db").Info("nostrdb opened",
+	log.DB().Info("nostrdb opened",
 		"path", dbDir,
 		"map_size_mb", mapSizeMB,
 		"ingest_threads", ingestThreads)
@@ -80,7 +80,7 @@ func (db *NDB) Close() {
 	if db.ndb != nil {
 		C.ndb_destroy(db.ndb)
 		db.ndb = nil
-		log.GetLogger("db").Info("nostrdb closed")
+		log.DB().Info("nostrdb closed")
 	}
 }
 

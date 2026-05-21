@@ -153,7 +153,7 @@ func (db *NDB) BootstrapExpirations() error {
 		return nil
 	}
 
-	logger := log.GetLogger("db-expiration")
+	logger := log.DBPurge()
 	logger.Info("Bootstrapping NIP-40 expiration heap")
 
 	const pageSize = 5000
@@ -238,7 +238,7 @@ func (db *NDB) RunExpirationSweeper(ctx context.Context) {
 		return
 	}
 
-	logger := log.GetLogger("db-expiration")
+	logger := log.DBPurge()
 	logger.Info("Starting NIP-40 expiration sweeper")
 
 	const idleSleep = 5 * time.Minute

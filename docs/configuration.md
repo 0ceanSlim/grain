@@ -174,13 +174,13 @@ Available components for `suppress_components`:
 | `util`                | Utility functions             | ✅ Low importance           |
 | `log`                 | Logging system operations     | ✅ Meta-logging noise       |
 | **Database**          |                               |                             |
-| `db-query`            | nostrdb query operations      | ✅ Can be very verbose      |
-| `db-store`            | nostrdb storage operations    | ✅ High frequency           |
-| `db-purge`            | Event purging                 | ❌ Keep for maintenance     |
+| `db`                  | nostrdb lifecycle (open/close, duplicate checks) | ❌ Keep, low volume |
+| `db-query`            | nostrdb reads (query, search, count) | ✅ Can be very verbose      |
+| `db-store`            | nostrdb writes + deletes      | ✅ High frequency           |
+| `db-purge`            | Event purging + expiration    | ❌ Keep for maintenance     |
 | **Event Processing**  |                               |                             |
 | `event-handler`       | Event processing coordination | ❌ Keep for monitoring      |
 | `event-validation`    | Event signature validation    | ❌ Keep for security        |
-| `event-store`         | Event storage operations      | ✅ High frequency           |
 | **Message Handlers**  |                               |                             |
 | `req-handler`         | REQ subscription handling     | ❌ Keep for monitoring      |
 | `auth-handler`        | AUTH message handling         | ❌ Keep for security        |

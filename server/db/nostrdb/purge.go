@@ -19,7 +19,7 @@ import (
 // keeps member content forever while aging out drive-by events.
 func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys []string) int {
 	if !cfg.Enabled {
-		log.GetLogger("db-purge").Debug("Event purging is disabled")
+		log.DBPurge().Debug("Event purging is disabled")
 		return 0
 	}
 
@@ -27,7 +27,7 @@ func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys 
 	cutoff := currentTime - int64(cfg.KeepIntervalHours*3600)
 	cutoffTime := time.Unix(cutoff, 0)
 
-	log.GetLogger("db-purge").Info("Starting event purge",
+	log.DBPurge().Info("Starting event purge",
 		"keep_hours", cfg.KeepIntervalHours,
 		"cutoff_time", cutoffTime.Format(time.RFC3339))
 
@@ -53,7 +53,7 @@ func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys 
 
 	events, err := db.Query(filters, limit)
 	if err != nil {
-		log.GetLogger("db-purge").Error("Failed to query events for purging", "error", err)
+		log.DBPurge().Error("Failed to query events for purging", "error", err)
 		return 0
 	}
 
@@ -80,7 +80,7 @@ func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys 
 
 		idBytes, err := hexToBytes32(evt.ID)
 		if err != nil {
-			log.GetLogger("db-purge").Warn("Skipping malformed event id",
+			log.DBPurge().Warn("Skipping malformed event id",
 				"event_id", evt.ID, "error", err)
 			failCount++
 			continue
@@ -88,7 +88,7 @@ func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys 
 		var id32 [32]byte
 		copy(id32[:], idBytes)
 		if err := db.DeleteNoteByID(id32); err != nil {
-			log.GetLogger("db-purge").Error("Delete failed during purge",
+			log.DBPurge().Error("Delete failed during purge",
 				"event_id", evt.ID, "error", err)
 			failCount++
 			continue
@@ -96,7 +96,7 @@ func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys 
 		purgeCount++
 	}
 
-	log.GetLogger("db-purge").Info("Purge completed",
+	log.DBPurge().Info("Purge completed",
 		"events_scanned", len(events),
 		"deleted", purgeCount,
 		"failed", failCount)
@@ -107,12 +107,12 @@ func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys 
 // ScheduleEventPurging runs periodic event purging at the configured interval.
 func (db *NDB) ScheduleEventPurging(cfg *cfgType.ServerConfig, getWhitelistedPubkeys func() []string) {
 	if !cfg.EventPurge.Enabled {
-		log.GetLogger("db-purge").Info("Event purging is disabled in configuration")
+		log.DBPurge().Info("Event purging is disabled in configuration")
 		return
 	}
 
 	purgeInterval := time.Duration(cfg.EventPurge.PurgeIntervalMinutes) * time.Minute
-	log.GetLogger("db-purge").Info("Starting scheduled event purging",
+	log.DBPurge().Info("Starting scheduled event purging",
 		"interval_minutes", cfg.EventPurge.PurgeIntervalMinutes,
 		"keep_hours", cfg.EventPurge.KeepIntervalHours)
 
@@ -121,14 +121,14 @@ func (db *NDB) ScheduleEventPurging(cfg *cfgType.ServerConfig, getWhitelistedPub
 
 	// Run initial purge if not disabled
 	if !cfg.EventPurge.DisableAtStartup {
-		log.GetLogger("db-purge").Info("Running initial purge at startup")
+		log.DBPurge().Info("Running initial purge at startup")
 		db.PurgeOldEvents(&cfg.EventPurge, getWhitelistedPubkeys())
 	}
 
 	for range ticker.C {
-		log.GetLogger("db-purge").Info("Running scheduled purge")
+		log.DBPurge().Info("Running scheduled purge")
 		purged := db.PurgeOldEvents(&cfg.EventPurge, getWhitelistedPubkeys())
-		log.GetLogger("db-purge").Info("Scheduled purging completed", "purged", purged)
+		log.DBPurge().Info("Scheduled purging completed", "purged", purged)
 	}
 }
 

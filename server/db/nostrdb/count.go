@@ -33,7 +33,7 @@ func (db *NDB) CountFiltered(filters []nostr.Filter) (int, bool, error) {
 		return 0, false, nil
 	}
 
-	logger := log.GetLogger("db-count")
+	logger := log.DBQuery()
 	approximate := len(filters) > 1
 	total := 0
 

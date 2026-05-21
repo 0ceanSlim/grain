@@ -138,8 +138,10 @@ func InitializeLoggers(cfg *cfgType.ServerConfig) {
 	Registry.suppressedComponents = suppressedComponents
 	Registry.mu.Unlock()
 
-	// Now that we've released the lock, we can safely log
-	GetLogger("main").Info("Logger system initialized",
+	// Now that we've released the lock, we can safely log. Use the
+	// "startup" component (a registered one) rather than an ad-hoc "main"
+	// so this line is managed/suppressible like every other component.
+	GetLogger("startup").Info("Logger system initialized",
 		"level", cfg.Logging.Level,
 		"file", logFilePath,
 		"structured", cfg.Logging.Structure,

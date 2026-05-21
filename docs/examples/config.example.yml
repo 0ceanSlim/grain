@@ -19,10 +19,9 @@ logging:
   # default. Add components here only if you confirm they're spamming.
   suppress_components:
     - "util" # generic helper logs
-    - "log" # the logger reporting on itself
-    - "db-query" # one INFO per query — extremely noisy under load
-    - "db-store" # one INFO per ingested event
-    - "event-store" # event-pipeline tracing
+    - "log" # the logger reporting on itself (rotation, write errors)
+    - "db-query" # one INFO per query/search/count — extremely noisy under load
+    - "db-store" # one INFO per ingested/deleted event
     - "close-handler" # subscription teardown noise
     - "client-main"
     - "client-api"

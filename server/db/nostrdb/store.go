@@ -20,7 +20,7 @@ import (
 func (db *NDB) StoreEvent(ctx context.Context, evt nostr.Event) error {
 	category := determineEventCategory(evt.Kind)
 
-	log.GetLogger("db-store").Debug("Processing event for storage",
+	log.DBStore().Debug("Processing event for storage",
 		"event_id", evt.ID,
 		"kind", evt.Kind,
 		"category", category,
@@ -29,12 +29,12 @@ func (db *NDB) StoreEvent(ctx context.Context, evt nostr.Event) error {
 	switch {
 	case evt.Kind == 2:
 		// Deprecated event kind
-		log.GetLogger("db-store").Debug("Ignoring deprecated event kind 2", "event_id", evt.ID)
+		log.DBStore().Debug("Ignoring deprecated event kind 2", "event_id", evt.ID)
 		return nil
 
 	case evt.Kind >= 20000 && evt.Kind < 30000:
 		// Ephemeral events are not stored
-		log.GetLogger("db-store").Info("Ephemeral event received and ignored",
+		log.DBStore().Info("Ephemeral event received and ignored",
 			"event_id", evt.ID, "kind", evt.Kind)
 		return nil
 
@@ -67,7 +67,7 @@ func (db *NDB) ingestEvent(evt nostr.Event) error {
 	// No-op if the event has no expiration tag or the tracker isn't set.
 	db.trackIfExpiring(evt)
 
-	log.GetLogger("db-store").Info("Event stored",
+	log.DBStore().Info("Event stored",
 		"event_id", evt.ID, "kind", evt.Kind, "pubkey", evt.PubKey)
 	return nil
 }
@@ -99,7 +99,7 @@ func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event) error {
 		old := existing[0]
 		// Reject if existing is newer, or same timestamp with lower ID (NIP-01 tiebreak)
 		if old.CreatedAt > evt.CreatedAt || (old.CreatedAt == evt.CreatedAt && old.ID < evt.ID) {
-			log.GetLogger("db-store").Info("Rejecting replaceable event - newer version exists",
+			log.DBStore().Info("Rejecting replaceable event - newer version exists",
 				"event_id", evt.ID, "existing_id", old.ID, "kind", evt.Kind)
 			return fmt.Errorf("blocked: a newer replaceable event of kind %d already exists for this pubkey", evt.Kind)
 		}
@@ -108,7 +108,7 @@ func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event) error {
 		// stale kinds. Delete BEFORE ingest so a power loss mid-op leaves
 		// the old version in place (worst case) rather than neither.
 		if err := db.deleteByHexID(old.ID); err != nil {
-			log.GetLogger("db-store").Warn("Failed to remove superseded replaceable",
+			log.DBStore().Warn("Failed to remove superseded replaceable",
 				"old_id", old.ID, "new_id", evt.ID, "kind", evt.Kind, "error", err)
 		}
 	}
@@ -156,7 +156,7 @@ func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event) error {
 	if len(existing) > 0 {
 		old := existing[0]
 		if old.CreatedAt > evt.CreatedAt || (old.CreatedAt == evt.CreatedAt && old.ID < evt.ID) {
-			log.GetLogger("db-store").Info("Rejecting addressable event - newer version exists",
+			log.DBStore().Info("Rejecting addressable event - newer version exists",
 				"event_id", evt.ID, "existing_id", old.ID,
 				"kind", evt.Kind, "d_tag", dTag)
 			return fmt.Errorf("blocked: a newer addressable event of kind %d with d-tag %q already exists for this pubkey", evt.Kind, dTag)
@@ -164,7 +164,7 @@ func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event) error {
 		// Physically remove the superseded addressable version — see the
 		// comment in storeReplaceable for the ordering rationale.
 		if err := db.deleteByHexID(old.ID); err != nil {
-			log.GetLogger("db-store").Warn("Failed to remove superseded addressable",
+			log.DBStore().Warn("Failed to remove superseded addressable",
 				"old_id", old.ID, "new_id", evt.ID,
 				"kind", evt.Kind, "d_tag", dTag, "error", err)
 		}
