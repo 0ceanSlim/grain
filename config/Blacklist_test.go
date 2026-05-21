@@ -1,10 +1,77 @@
 package config
 
 import (
+	"sync/atomic"
 	"testing"
+	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
 )
+
+// TestFetchAuthorsConcurrently_Coverage asserts every input author lands in the
+// result map, including authors whose fetch returns no pubkeys (#63 — the
+// dashboard relies on configured-but-empty authors staying visible).
+func TestFetchAuthorsConcurrently_Coverage(t *testing.T) {
+	authors := []string{"a", "b", "c", "d", "e"}
+	got := fetchAuthorsConcurrently(authors, func(author string) []string {
+		if author == "b" || author == "d" {
+			return nil // unreachable / encrypted-only: still must be recorded
+		}
+		return []string{author + "-pk"}
+	})
+
+	if len(got) != len(authors) {
+		t.Fatalf("result map size: got %d, want %d", len(got), len(authors))
+	}
+	for _, a := range authors {
+		if _, ok := got[a]; !ok {
+			t.Errorf("author %q missing from result map", a)
+		}
+	}
+	if len(got["b"]) != 0 || len(got["d"]) != 0 {
+		t.Errorf("empty-fetch authors should map to no pubkeys, got b=%v d=%v", got["b"], got["d"])
+	}
+	if len(got["a"]) != 1 {
+		t.Errorf("author a: got %v, want one pubkey", got["a"])
+	}
+}
+
+// TestFetchAuthorsConcurrently_WallTime asserts the fan-out collapses wall time
+// to ~max(per-author) rather than the sequential sum (#63). With N authors each
+// sleeping perAuthor and a concurrency bound of muteListFetchConcurrency, the
+// total should be ~ceil(N/bound)*perAuthor, well under the sequential N*perAuthor.
+func TestFetchAuthorsConcurrently_WallTime(t *testing.T) {
+	const perAuthor = 50 * time.Millisecond
+	// One full batch: as many authors as the concurrency bound, so they all
+	// run in a single wave and total wall time stays near a single perAuthor.
+	authors := make([]string, muteListFetchConcurrency)
+	for i := range authors {
+		authors[i] = string(rune('a' + i))
+	}
+
+	var calls int32
+	start := time.Now()
+	got := fetchAuthorsConcurrently(authors, func(author string) []string {
+		atomic.AddInt32(&calls, 1)
+		time.Sleep(perAuthor)
+		return nil
+	})
+	elapsed := time.Since(start)
+
+	if int(calls) != len(authors) {
+		t.Errorf("fetch call count: got %d, want %d", calls, len(authors))
+	}
+	if len(got) != len(authors) {
+		t.Errorf("result map size: got %d, want %d", len(got), len(authors))
+	}
+	// Sequential would be len(authors)*perAuthor. Allow generous slack for
+	// scheduler jitter on CI but still prove parallelism: a single wave should
+	// finish in well under 2x one author's time.
+	if max := 2 * perAuthor; elapsed > max {
+		t.Errorf("wall time %v exceeded parallel bound %v (sequential would be %v)",
+			elapsed, max, time.Duration(len(authors))*perAuthor)
+	}
+}
 
 func TestFirstTagValue(t *testing.T) {
 	tags := [][]string{

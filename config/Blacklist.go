@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/0ceanslim/grain/client/connection"
@@ -438,6 +439,12 @@ var muteListKinds = []int{10000, 30000}
 // events to arrive after sending the REQ.
 const muteListFetchTimeout = 8 * time.Second
 
+// muteListFetchConcurrency bounds how many authors' mute lists are fetched in
+// parallel. Caps relay connection fan-out so a large mutelist_authors list
+// (someone configures 100 curators) can't open an unbounded number of
+// outbox connections at once (#63).
+const muteListFetchConcurrency = 4
+
 // FetchGroupedMuteListPubkeys returns public `p`-tag pubkeys from each configured
 // author's NIP-51 mute list events, grouped by author pubkey.
 //
@@ -468,24 +475,60 @@ func FetchGroupedMuteListPubkeys(authors []string) (map[string][]string, error) 
 		return result, nil
 	}
 
+	result = fetchAuthorsConcurrently(authors, func(author string) []string {
+		return fetchAuthorMuteListPubkeys(client, author)
+	})
+
 	withPubkeys := 0
-	for _, author := range authors {
-		// Always record the author in the result, even when zero public
-		// pubkeys were extracted — the dashboard otherwise loses sight of
-		// configured authors whose mute lists are encrypted or unreachable.
-		// Callers that count contributed pubkeys should iterate the values,
-		// not the keys.
-		pubkeys := fetchAuthorMuteListPubkeys(client, author)
-		result[author] = pubkeys
+	for _, pubkeys := range result {
 		if len(pubkeys) > 0 {
 			withPubkeys++
 		}
 	}
-
 	log.Config().Debug("Grouped mutelist fetch complete",
 		"authors_configured", len(authors),
 		"authors_with_pubkeys", withPubkeys)
 	return result, nil
+}
+
+// fetchAuthorsConcurrently runs fetch for each author in parallel, bounded at
+// muteListFetchConcurrency, and returns a map of author -> result. Every author
+// is recorded in the map even when fetch returns no pubkeys — the dashboard
+// otherwise loses sight of configured authors whose mute lists are encrypted or
+// unreachable, so callers that count contributed pubkeys must iterate values,
+// not keys.
+//
+// Each author can take ~13s to time out when unreachable (NIP-65 lookup + mute
+// list subscription); a sequential walk made wall time scale linearly with
+// author count (#63). Fanning out collapses that to ~max(per-author). The
+// concurrency bound caps relay connection fan-out so a large mutelist_authors
+// list can't open an unbounded number of outbox connections at once.
+//
+// The fetch func is a parameter rather than a hard-wired call so the
+// concurrency behaviour is unit-testable without a live core client.
+func fetchAuthorsConcurrently(authors []string, fetch func(string) []string) map[string][]string {
+	result := make(map[string][]string, len(authors))
+	var (
+		wg       sync.WaitGroup
+		resultMu sync.Mutex
+		sem      = make(chan struct{}, muteListFetchConcurrency)
+	)
+	for _, author := range authors {
+		wg.Add(1)
+		go func(author string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			pubkeys := fetch(author)
+
+			resultMu.Lock()
+			result[author] = pubkeys
+			resultMu.Unlock()
+		}(author)
+	}
+	wg.Wait()
+	return result
 }
 
 // fetchAuthorMuteListPubkeys runs the per-author outbox lookup + mute list

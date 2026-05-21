@@ -162,7 +162,15 @@
     <p class="mt-1 mb-3 text-xs text-text-secondary">
       Pubkeys whose published mutelist (kind 10000) is treated as a
       ban source. Anyone they mute is also banned on this relay —
-      effectively outsourcing moderation to trusted curators.
+      effectively outsourcing moderation to trusted curators. You can
+      list as many authors as you like; the relay folds each one's
+      <em>public</em> mute entries into the blacklist.
+      <br /><br />
+      Private mute entries live in the event's encrypted
+      <code>.content</code> and need the author's private key to read,
+      so the relay can't pull them. Only the <strong>relay owner's</strong>
+      own private mutelist can be synced — decrypted in your browser by
+      your signer and pushed to the relay.
     </p>
 
     <div data-list="mutelist_authors" data-list-shape="pubkey_unified" class="flex flex-col gap-2">

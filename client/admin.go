@@ -416,7 +416,20 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 			}()},
 		{ID: "blacklist", Title: "Blacklist", Icon: "⛔", Method: "grain_updateblacklistconfig",
 			Config: func() BlacklistSectionData {
+				// Read from blacklist.yml (the authoritative source for
+				// pubkeys/npubs/words/mutelist_authors), not cfg.Blacklist —
+				// config.yml's blacklist: section only carries the IP scalars,
+				// so reading the list fields from there renders them empty even
+				// when blacklist.yml holds entries (#85). Overlay the config.yml
+				// IP scalars on top, mirroring runGetBlacklistConfig's merge.
 				bl := cfg.Blacklist
+				if standalone := config.GetBlacklistConfig(); standalone != nil {
+					bl = *standalone
+					bl.PermanentBlockedIPs = cfg.Blacklist.PermanentBlockedIPs
+					bl.IPMaxTempBans = cfg.Blacklist.IPMaxTempBans
+					bl.IPTempBanDuration = cfg.Blacklist.IPTempBanDuration
+					bl.IPRateViolationThreshold = cfg.Blacklist.IPRateViolationThreshold
+				}
 				unified, broken := buildUnifiedPubkeys(bl.PermanentBlacklistPubkeys, bl.PermanentBlacklistNpubs)
 				mute, brokenMute := buildUnifiedPubkeys(bl.MuteListAuthors, nil)
 				return BlacklistSectionData{
