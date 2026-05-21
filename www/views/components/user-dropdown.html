@@ -61,6 +61,16 @@
       <span>⚙️</span> Settings
     </button>
 
+    <!-- API docs: a standalone Swagger UI page (not an htmx component),
+         so a plain full-page link like Admin, not hx-get. -->
+    <a
+      href="/api/docs"
+      class="flex items-center w-full gap-2 px-4 py-2 text-sm text-left hover:bg-surface-hover"
+      onclick="closeUserDropdown()"
+    >
+      <span>📚</span> API docs
+    </a>
+
     <!-- Admin link is hidden by default; navigation.js reveals it
          after comparing the session pubkey to the relay owner
          pubkey from NIP-11. /admin is server-rendered and

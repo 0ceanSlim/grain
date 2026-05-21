@@ -221,7 +221,7 @@ I welcome contributions, bug reports, and feature requests via GitHub.
 
 - **🔧 Development Guide** - _[Development Documentation](docs/development/readme.md)_
 - **🧪 Testing Guide** - _[Testing Documentation](tests/readme.md)_
-- **📚 API Documentation** - The running relay serves Swagger UI at `/api/docs` and the OpenAPI spec at `/api/docs/openapi.json`. See _[docs/api.md](docs/api.md)_ for regeneration instructions.
+- **📚 API Documentation** - Every running relay generates its own docs from the OpenAPI spec in the repo and serves Swagger UI at `/api/docs` (raw spec at `/api/docs/openapi.json`). Live example on the wheat dev relay: **[wheat.happytavern.co/api/docs](https://wheat.happytavern.co/api/docs)**. See _[docs/api.md](docs/api.md)_ for regeneration instructions.
 
 These guides cover setting up your development environment, code standards, testing procedures, client library usage, and contribution workflows.
 
