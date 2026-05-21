@@ -531,6 +531,44 @@ func fetchAuthorsConcurrently(authors []string, fetch func(string) []string) map
 	return result
 }
 
+// FetchAuthorMuteListEvents returns the winning (latest-per-kind/d) raw mute
+// list events for a single author — including the encrypted `.content` that
+// FetchGroupedMuteListPubkeys discards. It powers the admin private-mutelist
+// sync (#60): the relay can fetch the owner's kind:10000 + kind:30000(d:"mute")
+// events but can't decrypt them, so it hands the raw events to the owner's
+// browser, which decrypts `.content` with the owner's signer and posts the
+// resulting pubkeys back.
+//
+// Reuses the same outbox-resolution + subscription path as the public-tag
+// fetch; the only difference is it stops before extractMuteListPubkeys so the
+// caller sees full events.
+func FetchAuthorMuteListEvents(author string) ([]*nostr.Event, error) {
+	client := connection.GetCoreClient()
+	if client == nil {
+		return nil, fmt.Errorf("core client not initialized")
+	}
+
+	targets := resolveMuteListRelays(client, author)
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("no relays available for author")
+	}
+
+	_ = client.ConnectToRelays(targets)
+
+	filter := nostr.Filter{
+		Authors: []string{author},
+		Kinds:   muteListKinds,
+	}
+	sub, err := client.Subscribe([]nostr.Filter{filter}, targets)
+	if err != nil {
+		return nil, fmt.Errorf("subscribe failed: %w", err)
+	}
+	defer sub.Close()
+
+	events := collectMuteListEvents(sub, targets, muteListFetchTimeout)
+	return latestMuteListEventsPerKindD(events), nil
+}
+
 // fetchAuthorMuteListPubkeys runs the per-author outbox lookup + mute list
 // subscription described in FetchGroupedMuteListPubkeys.
 func fetchAuthorMuteListPubkeys(client *core.Client, author string) []string {

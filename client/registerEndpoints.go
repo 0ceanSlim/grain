@@ -87,6 +87,14 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	// direct cross-origin access.
 	mux.HandleFunc("/api/v1/admin/domain-keys", HandleAdminDomainKeys)
 
+	// Owner's private mute list sync (#60). The relay fetches the owner's
+	// NIP-51 mute events (fetch), the browser decrypts the .content with the
+	// owner's signer, and POSTs the plain pubkey set back (sync); the relay
+	// folds it into the blacklist. Both owner-gated (NIP-98) inside the
+	// handlers via RequireOwner.
+	mux.HandleFunc("/api/v1/relay/admin/mutelist/fetch", relay.FetchAdminMutelist)
+	mux.HandleFunc("/api/v1/relay/admin/mutelist/sync", relay.SyncAdminMutelist)
+
 	// First-run owner provisioning. GET shows the claim form (or
 	// the "already claimed" panel); POST is the actual claim. The
 	// /setup page is loud-banner-advertised on every page until an

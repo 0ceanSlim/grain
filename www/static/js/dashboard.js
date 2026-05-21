@@ -1645,6 +1645,11 @@ const dashboardManager = {
       // Count mutelist authors
       const mutelistAuthorCount = Object.keys(safeKeys.mutelist || {}).length;
 
+      // Owner's private mute list (#60): count only. The pubkeys are never
+      // sent to this public endpoint to avoid leaking who the owner muted,
+      // so all we can show is how many were folded into the blacklist.
+      const adminMutelistCount = safeKeys.admin_mutelist_count || 0;
+
       configContainer.innerHTML = `
         <div class="space-y-4">
           <!-- Status Section -->
@@ -1708,7 +1713,7 @@ const dashboardManager = {
           </div>
 
           <!-- User Counts Summary -->
-          <div class="grid grid-cols-3 gap-3 pt-3 border-t border-border-strong">
+          <div class="grid grid-cols-4 gap-3 pt-3 border-t border-border-strong">
             <div class="text-center">
               <div class="text-lg font-medium text-danger">${permanentCount}</div>
               <div class="text-xs text-text-secondary">Permanent</div>
@@ -1720,6 +1725,10 @@ const dashboardManager = {
             <div class="text-center">
               <div class="text-lg font-medium text-warning">${mutelistTotalCount}</div>
               <div class="text-xs text-text-secondary">Mutelist</div>
+            </div>
+            <div class="text-center" title="Pubkeys from the relay owner's private mute list. Kept private — count only.">
+              <div class="text-lg font-medium text-warning">${adminMutelistCount}</div>
+              <div class="text-xs text-text-secondary">Private mutes</div>
             </div>
           </div>
 

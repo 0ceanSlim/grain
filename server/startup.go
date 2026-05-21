@@ -283,6 +283,14 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 		return fmt.Errorf("client initialization failed: %w", err)
 	}
 
+	// Load the owner's synced private mute list (#60) BEFORE the cache init
+	// below — the initial blacklist refresh folds the sidecar in as a source,
+	// so loading it afterwards (as we used to) left the enforcement cache
+	// empty until the next scheduled refresh, even though the dashboard's
+	// in-memory count looked correct. Data dir is set in main before any of
+	// this runs.
+	config.LoadAdminMutelist()
+
 	// Initialize pubkey cache system (after client init — see comment above)
 	config.InitializePubkeyCache()
 

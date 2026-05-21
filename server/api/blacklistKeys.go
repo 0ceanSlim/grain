@@ -10,11 +10,18 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// BlacklistKeysResponse represents the blacklist keys response
+// BlacklistKeysResponse represents the blacklist keys response.
+//
+// AdminMutelistCount is a privacy-preserving COUNT, never the pubkeys: the
+// relay owner's private mute list (#60) is decrypted from their own NIP-51
+// content, and this endpoint is public + rendered on the public home page.
+// Listing those pubkeys would leak who the owner privately muted, so we only
+// surface how many were folded into the blacklist.
 type BlacklistKeysResponse struct {
-	Permanent []string                 `json:"permanent"`
-	Temporary []map[string]interface{} `json:"temporary"`
-	Mutelist  map[string][]string      `json:"mutelist"`
+	Permanent          []string                 `json:"permanent"`
+	Temporary          []map[string]interface{} `json:"temporary"`
+	Mutelist           map[string][]string      `json:"mutelist"`
+	AdminMutelistCount int                      `json:"admin_mutelist_count"`
 }
 
 // GetAllBlacklistedPubkeys handles the request to return all blacklisted pubkeys organized by source
@@ -63,11 +70,16 @@ func GetAllBlacklistedPubkeys(w http.ResponseWriter, r *http.Request) {
 	// fresh data from outbox relays.
 	mutelist := config.GetPubkeyCache().GetGroupedMutelist()
 
+	// Count-only of the owner's private mute contribution — never the
+	// pubkeys themselves (see BlacklistKeysResponse doc).
+	adminMutelistCount := len(config.AdminMutelistPubkeys())
+
 	// Prepare response
 	response := BlacklistKeysResponse{
-		Permanent: permanent,
-		Temporary: temporary,
-		Mutelist:  mutelist,
+		Permanent:          permanent,
+		Temporary:          temporary,
+		Mutelist:           mutelist,
+		AdminMutelistCount: adminMutelistCount,
 	}
 
 	// Set response headers
@@ -89,5 +101,6 @@ func GetAllBlacklistedPubkeys(w http.ResponseWriter, r *http.Request) {
 		"client_ip", utils.GetClientIP(r),
 		"permanent_count", len(permanent),
 		"temporary_count", len(temporary),
-		"mutelist_authors", len(mutelist))
+		"mutelist_authors", len(mutelist),
+		"admin_mutelist_count", adminMutelistCount)
 }

@@ -211,6 +211,52 @@
       </ul>
     </div>
     {{end}}
+
+    <!-- ─── Owner's private mute list sync (#60) ───────────────── -->
+    <!-- Bypasses the section Save: this is its own signed round trip
+         (fetch events → decrypt in-browser → POST pubkeys), not a
+         blacklist.yml field. Lives in <data_dir>/admin-mutelist-cache.json. -->
+    <div data-bl-mutesync class="mt-4 p-3 rounded border border-dashed border-accent bg-surface">
+      <p class="text-sm font-medium text-text">Your private mute list</p>
+      <p class="mt-1 mb-3 text-xs text-text-secondary">
+        Pulls your own kind-10000 / kind-30000 (<span class="font-mono">d:mute</span>)
+        events, decrypts the private entries in your browser with your signer,
+        and folds the muted pubkeys into this relay's blacklist. The relay never
+        sees your key — only the resulting pubkey list.
+      </p>
+      <div class="flex items-center gap-3 flex-wrap">
+        <button type="button" data-bl-mutesync-btn
+          class="px-3 py-2 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover">
+          Sync my private mute list
+        </button>
+        <span data-bl-mutesync-status class="text-xs text-text-secondary"
+          data-count="{{$.OwnerMutelistCount}}" data-synced="{{$.OwnerMutelistSynced}}">
+          {{if $.OwnerMutelistSynced}}Last synced: {{$.OwnerMutelistCount}} pubkey(s).{{else}}Never synced.{{end}}
+        </span>
+      </div>
+
+      <!-- Synced keys, with profiles. Owner-only page, so the actual pubkeys
+           are fine to show here. The blacklist profile loader below picks up
+           [data-pubkey-row] on load; the sync script re-renders this list
+           (and re-runs the loader) after a fresh sync. -->
+      <details class="mt-3" data-bl-mutesync-details {{if not $.OwnerMutelistPubkeys}}hidden{{end}}>
+        <summary class="text-xs text-text-secondary cursor-pointer select-none">
+          Show muted keys (<span data-bl-mutesync-count>{{$.OwnerMutelistCount}}</span>)
+        </summary>
+        <div data-bl-mutesync-list class="mt-2 flex flex-col gap-1 max-h-80 overflow-y-auto custom-scroll">
+          {{range $.OwnerMutelistPubkeys}}
+          <div data-pubkey-row data-hex="{{.Hex}}" data-npub="{{.Npub}}"
+            class="flex items-center gap-2 py-1 px-2 rounded bg-surface text-sm">
+            <div data-profile-pic class="flex-shrink-0 w-8 h-8 rounded-full bg-surface-overlay flex items-center justify-center text-text-secondary text-sm">👤</div>
+            <div class="flex-1 min-w-0">
+              <div data-profile-name class="text-sm text-text truncate">Loading…</div>
+              {{if .Npub}}<div class="font-mono text-text-secondary text-xs truncate" title="{{.Npub}}">{{.Npub}}</div>{{end}}
+            </div>
+          </div>
+          {{end}}
+        </div>
+      </details>
+    </div>
   </fieldset>
 
   <!-- ─── IP scalars (bulk-saved alongside the rest) ─────────── -->
@@ -411,6 +457,12 @@
     }
     panel.querySelectorAll("[data-pubkey-row]").forEach(processRow);
 
+    // Exposed so the private-mutelist sync script can load profiles for the
+    // rows it renders after a fresh sync (which the on-load pass above missed).
+    window.__blacklistLoadProfiles = function (root) {
+      (root || panel).querySelectorAll("[data-pubkey-row]").forEach(processRow);
+    };
+
     // Upgrade newly-inserted rows (Add path) to include profile
     // slots, mirroring the whitelist behaviour.
     panel.querySelectorAll('[data-list-shape="pubkey_unified"] [data-list-items]').forEach((items) => {
@@ -439,6 +491,185 @@
         }));
       });
       obs.observe(items, { childList: true });
+    });
+  })();
+
+  // Owner's private mute list sync (#60). Self-contained, like the IP
+  // live-edit above: the relay fetches the owner's raw NIP-51 mute events,
+  // the browser decrypts the private .content with the owner's signer
+  // (the key never leaves the browser), and POSTs the union of public +
+  // private muted pubkeys back. Both calls carry a NIP-98 envelope, built
+  // here the same way nip86-submit.js builds its own.
+  (function () {
+    "use strict";
+    const panel = document.querySelector('[data-section="blacklist"]');
+    if (!panel) return;
+    const wrap = panel.querySelector("[data-bl-mutesync]");
+    if (!wrap) return;
+    const btn = wrap.querySelector("[data-bl-mutesync-btn]");
+    const statusEl = wrap.querySelector("[data-bl-mutesync-status]");
+    const details = wrap.querySelector("[data-bl-mutesync-details]");
+    const list = wrap.querySelector("[data-bl-mutesync-list]");
+    const countEl = wrap.querySelector("[data-bl-mutesync-count]");
+    const toast = window.adminToast || function () {};
+
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    // Re-render the synced-keys list from the pubkeys we just computed, then
+    // ask the blacklist profile loader to fill in pictures + names. We only
+    // have hex here (npub display comes from the server-rendered pass on
+    // reload), which is enough for the profile lookup (it keys off data-hex).
+    function renderSyncedKeys(rawPubkeys) {
+      if (!list) return;
+      // Mirror the server's normalize: lowercase, 64-char hex, deduped.
+      const seen = new Set();
+      const pubkeys = [];
+      for (const pk of rawPubkeys) {
+        const h = String(pk).toLowerCase();
+        if (/^[0-9a-f]{64}$/.test(h) && !seen.has(h)) { seen.add(h); pubkeys.push(h); }
+      }
+      list.innerHTML = pubkeys.map((hex) =>
+        '<div data-pubkey-row data-hex="' + escHtml(hex) + '" ' +
+          'class="flex items-center gap-2 py-1 px-2 rounded bg-surface text-sm">' +
+          '<div data-profile-pic class="flex-shrink-0 w-8 h-8 rounded-full bg-surface-overlay flex items-center justify-center text-text-secondary text-sm">👤</div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<div data-profile-name class="text-sm text-text truncate">Loading…</div>' +
+            '<div class="font-mono text-text-secondary text-xs truncate" title="' + escHtml(hex) + '">' + escHtml(hex) + '</div>' +
+          '</div>' +
+        '</div>'
+      ).join("");
+      if (countEl) countEl.textContent = String(pubkeys.length);
+      if (details) {
+        details.hidden = pubkeys.length === 0;
+        details.open = true;
+      }
+      if (typeof window.__blacklistLoadProfiles === "function") {
+        window.__blacklistLoadProfiles(list);
+      }
+    }
+
+    const FETCH_URL = "/api/v1/relay/admin/mutelist/fetch";
+    const SYNC_URL = "/api/v1/relay/admin/mutelist/sync";
+
+    async function sha256Hex(str) {
+      const bytes = new TextEncoder().encode(str);
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      return Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    }
+
+    // NIP-98 Authorization header for method+url, binding the body hash
+    // when a body is present (POST). Empty body (GET) omits the payload tag.
+    async function nip98Auth(method, url, bodyString) {
+      const tags = [["u", url], ["method", method]];
+      if (bodyString) tags.push(["payload", await sha256Hex(bodyString)]);
+      const tmpl = {
+        kind: 27235,
+        created_at: Math.floor(Date.now() / 1000),
+        content: "",
+        tags: tags,
+      };
+      const signed = await window.grainSigner.signEvent(tmpl);
+      return "Nostr " + btoa(JSON.stringify(signed));
+    }
+
+    function pTagPubkeys(tags) {
+      const out = [];
+      for (const t of tags || []) {
+        if (Array.isArray(t) && t[0] === "p" && typeof t[1] === "string") {
+          out.push(t[1].toLowerCase());
+        }
+      }
+      return out;
+    }
+
+    // NIP-51 content is encrypted to the author themselves, so the peer
+    // pubkey is the event author (= owner). Try NIP-44 first, fall back to
+    // NIP-04, per NIP-51. Returns null if neither scheme is available/works.
+    async function decryptContent(signer, selfPubkey, content) {
+      if (signer.nip44 && signer.nip44.decrypt) {
+        try { return await signer.nip44.decrypt(selfPubkey, content); } catch (_) {}
+      }
+      if (signer.nip04 && signer.nip04.decrypt) {
+        try { return await signer.nip04.decrypt(selfPubkey, content); } catch (_) {}
+      }
+      return null;
+    }
+
+    async function runSync() {
+      const signer = window.grainSigner;
+      if (!signer || typeof signer.signEvent !== "function") {
+        throw new Error("signer unavailable — reconnect to continue");
+      }
+
+      // 1. Relay fetches the owner's raw mute events (incl. encrypted content).
+      const fetchAuth = await nip98Auth("GET", window.location.origin + FETCH_URL, "");
+      const fres = await fetch(FETCH_URL, { headers: { Authorization: fetchAuth } });
+      if (!fres.ok) throw new Error("fetch failed: " + ((await fres.text()) || fres.status));
+      const events = (await fres.json()).events || [];
+
+      // 2. Union public p-tags with the decrypted private entries.
+      const set = new Set();
+      let encrypted = 0, decrypted = 0;
+      for (const ev of events) {
+        pTagPubkeys(ev.tags).forEach((pk) => set.add(pk));
+        if (ev.content) {
+          encrypted++;
+          const plain = await decryptContent(signer, ev.pubkey, ev.content);
+          if (plain) {
+            decrypted++;
+            let inner = null;
+            try { inner = JSON.parse(plain); } catch (_) {}
+            if (Array.isArray(inner)) pTagPubkeys(inner).forEach((pk) => set.add(pk));
+          }
+        }
+      }
+      if (encrypted > 0 && decrypted === 0) {
+        throw new Error("your signer couldn't decrypt the private entries (NIP-44/04 unavailable)");
+      }
+
+      // 3. POST the union back; the relay persists + refreshes the blacklist.
+      const pubkeys = Array.from(set);
+      const body = JSON.stringify({ pubkeys: pubkeys });
+      const syncAuth = await nip98Auth("POST", window.location.origin + SYNC_URL, body);
+      const sres = await fetch(SYNC_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: syncAuth },
+        body: body,
+      });
+      if (!sres.ok) throw new Error("sync failed: " + ((await sres.text()) || sres.status));
+      const result = await sres.json();
+
+      if (statusEl) {
+        statusEl.dataset.count = String(result.count);
+        statusEl.dataset.synced = String(result.synced_at);
+        statusEl.textContent = "Last synced just now: " + result.count + " pubkey(s).";
+      }
+      // Show the freshly-synced keys with profiles, no reload needed. The
+      // server stored the normalized set, so render what we sent (the relay
+      // dedupes/validates identically).
+      renderSyncedKeys(pubkeys);
+      toast("Synced " + result.count + " muted pubkey(s) into the blacklist");
+    }
+
+    btn.addEventListener("click", async () => {
+      const prev = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Syncing…";
+      try {
+        if (window.adminEnsureSigner) await window.adminEnsureSigner();
+        await runSync();
+      } catch (err) {
+        toast(err.message || String(err), "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prev;
+      }
     });
   })();
 </script>

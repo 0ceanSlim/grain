@@ -356,6 +356,20 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 		}
 	}
 
+	// Fourth source: the relay owner's own private mute list, decrypted
+	// browser-side and pushed to the admin sync endpoint (#60). The relay
+	// can't read the encrypted `.content` of NIP-51 lists itself, so this
+	// is the only path by which the owner's private mutes reach the
+	// blacklist. Always applied, regardless of enabled state, matching the
+	// other sources above.
+	adminMuteCount := 0
+	for _, pubkey := range AdminMutelistPubkeys() {
+		if !newBlacklist[pubkey] {
+			newBlacklist[pubkey] = true
+			adminMuteCount++
+		}
+	}
+
 	// Update cache atomically
 	pc.mu.Lock()
 	pc.blacklistedPubkeys = newBlacklist
@@ -370,6 +384,7 @@ func (pc *PubkeyCache) RefreshBlacklist() error {
 		"direct_pubkeys", directCount,
 		"npub_pubkeys", npubCount,
 		"mutelist_pubkeys", mutelistCount,
+		"admin_mutelist_pubkeys", adminMuteCount,
 		"blacklist_enabled", blacklistCfg.Enabled)
 
 	return nil

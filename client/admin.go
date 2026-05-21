@@ -206,6 +206,17 @@ type BlacklistSectionData struct {
 	BrokenPubkeys         []string // bad entries from blacklist.yml's pubkeys/npubs
 	MutelistAuthors       []UnifiedPubkey
 	BrokenMutelistAuthors []string
+
+	// Owner's private mute list sync status (#60). Rendered so the owner
+	// knows when they last synced and how many pubkeys it contributed.
+	// Zero values mean "never synced".
+	OwnerMutelistCount  int
+	OwnerMutelistSynced int64 // unix seconds; 0 = never
+
+	// The owner's synced private-mute pubkeys, for in-panel display with
+	// profiles. Owner-only page, so showing the actual keys is fine here
+	// (the public endpoint stays count-only).
+	OwnerMutelistPubkeys []UnifiedPubkey
 }
 
 // WhitelistSectionData wraps WhitelistConfig with a unified
@@ -432,12 +443,26 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 				}
 				unified, broken := buildUnifiedPubkeys(bl.PermanentBlacklistPubkeys, bl.PermanentBlacklistNpubs)
 				mute, brokenMute := buildUnifiedPubkeys(bl.MuteListAuthors, nil)
+				// Owner's private mutelist sync status (#60), if they've synced.
+				var ownerCount int
+				var ownerSynced int64
+				for _, m := range config.GetAdminMutelistMeta() {
+					if strings.EqualFold(m.Pubkey, owner) {
+						ownerCount = m.Count
+						ownerSynced = m.SyncedAt
+						break
+					}
+				}
+				ownerMutes, _ := buildUnifiedPubkeys(config.GetAdminMutelistPubkeysFor(owner), nil)
 				return BlacklistSectionData{
 					Config:                bl,
 					UnifiedPubkeys:        unified,
 					BrokenPubkeys:         broken,
 					MutelistAuthors:       mute,
 					BrokenMutelistAuthors: brokenMute,
+					OwnerMutelistCount:    ownerCount,
+					OwnerMutelistSynced:   ownerSynced,
+					OwnerMutelistPubkeys:  ownerMutes,
 				}
 			}()},
 		{ID: "ops", Title: "Operations", Icon: "🛠️", Method: "",
