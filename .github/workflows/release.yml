@@ -334,6 +334,18 @@ jobs:
             -exec sed -i 's/\r$//' {} +
           bash build.sh
 
+      # main.go embeds docs/openapi/swagger.json via //go:embed; the file
+      # is gitignored and generated from swag annotations, so it must be
+      # produced before `go build` or the embed fails with "no matching
+      # files found". Mirrors tests/docker/Dockerfile (same pinned swag).
+      - name: Generate OpenAPI spec (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install github.com/swaggo/swag/cmd/swag@v1.16.4
+          "$(go env GOPATH)/bin/swag" init --parseDependency --parseInternal -g main.go -o docs/openapi -ot json
+
       - name: Build grain binary (Unix)
         if: runner.os != 'Windows'
         shell: bash
@@ -349,6 +361,14 @@ jobs:
           go build -buildvcs=false \
             -ldflags "-w -s -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
             -o "${{ matrix.binary }}" .
+
+      - name: Generate OpenAPI spec (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          go install github.com/swaggo/swag/cmd/swag@v1.16.4
+          "$(go env GOPATH)/bin/swag" init --parseDependency --parseInternal -g main.go -o docs/openapi -ot json
 
       - name: Build grain binary (Windows)
         if: runner.os == 'Windows'
