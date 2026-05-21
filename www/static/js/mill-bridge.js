@@ -66,7 +66,7 @@
       return;
     }
     const appName = (await getRelayName()) || document.title || "grain";
-    window.MILL.open({
+    const opts = {
       // Initial paint uses mill's grain theme; the CSS bridge takes
       // over once the element is in the DOM and renders.
       theme: "grain",
@@ -75,7 +75,16 @@
       amberCallback:
         window.location.origin + "/api/v1/auth/amber-callback",
       onConnected: handleConnected,
-    });
+    };
+    // NIP-55 (Amber) is an Android intent flow — the right same-device path
+    // on mobile, where NIP-46 over relays stalls (the backgrounded signer
+    // never foregrounds to approve). mill hides nip55 by default; surface it
+    // explicitly on Android, listed first. Passing `methods` overrides mill's
+    // default list, so we restate the full set rather than just adding one.
+    if (/android/i.test(navigator.userAgent)) {
+      opts.methods = ["nip55", "nip46", "privatekey", "newkey", "readonly"];
+    }
+    window.MILL.open(opts);
   }
 
   function hideAuthModal() {
