@@ -204,7 +204,7 @@ func main() {
 }
 ```
 
-> **Note**: A comprehensive Client Library Guide with complete examples and documentation will be available soon after all client methods are fully implemented.
+> **📖 See the _[Client Library Guide](docs/client-library-guide.md)_** for complete examples covering connection management, subscriptions, event building/signing, and authentication flows.
 
 ## License
 

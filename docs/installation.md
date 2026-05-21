@@ -166,8 +166,10 @@ Simply run the binary. On the first run, GRAIN will detect that no configuration
 
 If you are migrating from an older version of GRAIN that used MongoDB:
 
-1. Export your MongoDB events to a JSONL file.
-2. Import them into the new engine:
+1. Export your MongoDB events to a JSONL file using the `grain-migrate-mongo`
+   tool. It is no longer built from this repo — download the prebuilt binary
+   from the [v0.5.4 release](https://github.com/0ceanSlim/grain/releases/tag/v0.5.4).
+2. Import the JSONL into the embedded engine:
    ```bash
    ./grain --import events_export.jsonl
    ```
