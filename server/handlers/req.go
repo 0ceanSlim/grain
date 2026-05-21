@@ -90,6 +90,21 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		filters[i] = f
 	}
 
+	// NIP-17 DM privacy (#73): if a filter explicitly asks for a protected
+	// kind (gift wraps) but the connection isn't AUTHed, tell it to AUTH —
+	// the gift wraps are only served to the p-tagged recipient. Broad filters
+	// that merely *could* match a protected kind aren't rejected; their
+	// protected events are silently omitted by the post-query gate below.
+	if !IsAuthenticated(client) {
+		for _, f := range filters {
+			if FilterRequestsProtectedKind(f) {
+				log.Req().Info("REQ for protected kind requires auth", "sub_id", subID)
+				response.SendClosed(client, subID, "auth-required: authentication is required to read these events")
+				return
+			}
+		}
+	}
+
 	// Check if this is a duplicate subscription (same filters)
 	subscriptions := client.GetSubscriptions()
 	if existingFilters, exists := subscriptions[subID]; exists {
@@ -195,12 +210,20 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 	// alongside the background sweeper — guarantees expired events are
 	// never served even if a sweep hasn't yet reached them.
 	nowUnix := time.Now().Unix()
+	authedPubkey := GetAuthedPubkey(client)
 	delivered := 0
 	skippedExpired := 0
+	skippedProtected := 0
 	aborted := false
 	for _, evt := range queriedEvents {
 		if validation.IsExpired(evt, nowUnix) {
 			skippedExpired++
+			continue
+		}
+		// NIP-17 DM privacy (#73): never serve a gift wrap to anyone but the
+		// AUTHed p-tagged recipient, regardless of how the filter was shaped.
+		if !CanServeProtectedEvent(evt, authedPubkey) {
+			skippedProtected++
 			continue
 		}
 		if err := client.SendMessageBlocking([]interface{}{"EVENT", subID, evt}); err != nil {
@@ -226,6 +249,7 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		"sub_id", subID,
 		"historical_events_sent", delivered,
 		"skipped_expired", skippedExpired,
+		"skipped_protected", skippedProtected,
 		"status", "active")
 
 	// NOTE: Subscription remains ACTIVE after EOSE

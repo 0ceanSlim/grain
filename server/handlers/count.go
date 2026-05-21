@@ -79,6 +79,20 @@ func HandleCount(client nostr.ClientInterface, message []interface{}) {
 		// Filter `limit` is intentionally ignored for COUNT — NIP-45
 		// asks for total matches, not a paginated subset.
 
+		// NIP-17 DM privacy (#73): COUNT on protected kinds leaks message-
+		// volume metadata. If a filter explicitly counts gift wraps, require
+		// AUTH and constrain the count to the AUTHed pubkey's own p-tag, so a
+		// caller can only count their own inbox — never someone else's.
+		if FilterRequestsProtectedKind(f) {
+			authed := GetAuthedPubkey(client)
+			if authed == "" {
+				log.Req().Info("COUNT for protected kind requires auth", "sub_id", subID)
+				response.SendClosed(client, subID, "auth-required: authentication is required to count these events")
+				return
+			}
+			f.Tags["p"] = []string{authed}
+		}
+
 		filters[i] = f
 	}
 

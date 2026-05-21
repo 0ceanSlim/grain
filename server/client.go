@@ -830,8 +830,16 @@ func BroadcastEvent(evt nostr.Event) {
 	}
 	clientsMu.Unlock()
 
+	// NIP-17 DM privacy (#73): a gift wrap is broadcast only to the connection
+	// AUTHed as its p-tagged recipient. Resolve "is this event protected?"
+	// once here so the normal (non-DM) hot path skips the per-client auth
+	// lookup entirely; only gift wraps pay for the per-connection check.
+	protected := config.IsDMProtectedKind(evt.Kind)
 	for _, c := range snapshot {
 		if !c.IsConnected() {
+			continue
+		}
+		if protected && !handlers.CanServeProtectedEvent(evt, handlers.GetAuthedPubkey(c)) {
 			continue
 		}
 		c.ForEachSubscription(func(subID string, filters []nostr.Filter) {
