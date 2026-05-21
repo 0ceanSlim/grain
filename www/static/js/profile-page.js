@@ -437,6 +437,27 @@
     loadProfile();
   };
 
+  // Toggle the raw kind:0 event JSON in place (#75). Previously this button
+  // called refreshProfile(), which re-fetched and re-rendered the whole
+  // page instead of revealing the event — the opposite of "view event json".
+  window.toggleEventJson = function () {
+    const pre = document.getElementById("event-json");
+    const btn = document.getElementById("event-json-btn");
+    if (!pre) return;
+
+    if (pre.classList.contains("hidden")) {
+      const evt = profileData.profile;
+      pre.textContent = evt
+        ? JSON.stringify(evt, null, 2)
+        : "No event loaded yet.";
+      pre.classList.remove("hidden");
+      if (btn) btn.textContent = "hide event json";
+    } else {
+      pre.classList.add("hidden");
+      if (btn) btn.textContent = "view event json";
+    }
+  };
+
   // Utility functions
   function showElement(elementId) {
     const element = document.getElementById(elementId);

@@ -143,12 +143,17 @@
       <!-- View Event JSON Button -->
       <div class="text-center">
         <button
-          onclick="refreshProfile()"
+          id="event-json-btn"
+          onclick="toggleEventJson()"
           class="px-6 py-3 text-text transition-colors bg-surface-elevated rounded-lg hover:bg-surface-hover"
         >
           view event json
         </button>
       </div>
+      <pre
+        id="event-json"
+        class="hidden mt-4 p-4 overflow-x-auto text-xs text-left whitespace-pre-wrap break-all rounded-lg bg-surface-elevated text-text-secondary"
+      ></pre>
     </div>
   </div>
 </div>
