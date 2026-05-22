@@ -33,6 +33,9 @@ import (
 // Lives here (not in templateEngine.go) so it doesn't bleed into
 // every page render — admin's the only page using these today.
 var adminTemplateFuncs = template.FuncMap{
+	// assetVersion stamps static asset URLs in the shared layout;
+	// admin renders that layout too, so it must register the func.
+	"assetVersion": func() string { return assetVersion },
 	// toJS marshals any value to JSON and returns it as
 	// template.JS so the renderer doesn't HTML-escape the
 	// resulting literal. Safe for inline <script> use because the

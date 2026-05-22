@@ -85,7 +85,8 @@ RUN curl -fsSL -o /tmp/tailwindcss \
         https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64-musl \
     && chmod +x /tmp/tailwindcss \
     && (cd www/style && /tmp/tailwindcss -i input.css -o tailwind.min.css --minify) \
-    && sed -i 's|<script src="https://cdn.tailwindcss.com"></script>|<link rel="stylesheet" href="/style/tailwind.min.css">|g' www/views/templates/layout.html \
+    && sed -i 's|<script src="https://cdn.tailwindcss.com"></script>|<link rel="stylesheet" href="/style/tailwind.min.css?v={{assetVersion}}">|g' www/views/templates/layout.html \
+    && grep -q '\.bg-surface' www/style/tailwind.min.css \
     && rm /tmp/tailwindcss
 
 # Build the binary with CGO enabled for nostrdb

@@ -40,3 +40,8 @@ www/static/fonts/*
 # nostr-mill UMD bundle. Downloaded by Dockerfile / release workflow.
 www/static/mill/*
 !www/static/mill/.gitkeep
+
+# Compiled Tailwind CSS — generated from input.css by the Dockerfile /
+# release workflow. Committing it risks embedding a stale build; the
+# build always regenerates it from the current templates.
+www/style/tailwind.min.css

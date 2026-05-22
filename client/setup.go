@@ -140,7 +140,7 @@ func renderSetup(w http.ResponseWriter, data SetupPageData, view string) {
 	}
 	patterns := append(layoutPatterns(), viewTemplate)
 	patterns = append(patterns, componentTemplates...)
-	tmpl, err := template.New("").Funcs(template.FuncMap{}).ParseFS(wwwFS, patterns...)
+	tmpl, err := template.New("").Funcs(baseTemplateFuncs).ParseFS(wwwFS, patterns...)
 	if err != nil {
 		http.Error(w, "Error parsing templates: "+err.Error(), http.StatusInternalServerError)
 		return

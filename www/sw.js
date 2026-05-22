@@ -1,29 +1,44 @@
-const CACHE_NAME = "grain-v4"; // Updated version to force cache refresh
+const CACHE_NAME = "grain-v5"; // Bumped so activate purges poisoned older caches
 const STATIC_CACHE_URLS = [
   "/",
   "/static/js/navigation.js",
   "/static/js/routing.js",
   "/static/js/settings.js",
-  "/static/js/dropdown.js",
-  // Note: Auth scripts are deliberately excluded from caching
+  // Note: Auth scripts are deliberately excluded from caching.
+  // dropdown.js was removed in the v0.7 header restyle — do NOT add it
+  // back: a 404 here used to reject cache.addAll and block the new SW
+  // from ever activating, locking users on the stale shell.
 ];
 
-// Install event - cache only truly static resources
+// Install event - cache static resources, but resiliently: a single
+// missing/404 asset must never abort the install (that's what stranded
+// the old SW). Each URL is cached independently and failures are logged,
+// not thrown.
 self.addEventListener("install", (event) => {
-  console.log("[SW] Installing service worker v4 - Auth-aware");
+  console.log("[SW] Installing service worker", CACHE_NAME);
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => {
-        console.log("[SW] Caching static resources only");
-        return cache.addAll(STATIC_CACHE_URLS);
-      })
+      .then((cache) =>
+        Promise.all(
+          STATIC_CACHE_URLS.map((url) =>
+            cache
+              .add(url)
+              .catch((err) =>
+                console.warn("[SW] Skipped caching (non-fatal):", url, err)
+              )
+          )
+        )
+      )
       .then(() => {
         console.log("[SW] Skip waiting");
         return self.skipWaiting();
       })
       .catch((err) => {
-        console.error("[SW] Install failed:", err);
+        // Reaching here would only be an unexpected caches.open failure;
+        // still skip waiting so the new SW can take over.
+        console.error("[SW] Install error (continuing):", err);
+        return self.skipWaiting();
       })
   );
 });
@@ -113,6 +128,33 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // App shell (navigations to "/") is network-first: the HTML references
+  // version-stamped asset URLs, so the shell itself must stay fresh
+  // across releases or it keeps pointing at old ?v= URLs. Fall back to
+  // the cached shell only when offline.
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.status === 200 && response.type === "basic") {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put("/", copy));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match("/").then((cached) => {
+            if (cached) {
+              console.log("[SW] Offline — serving cached shell");
+              return cached;
+            }
+            return Response.error();
+          })
+        )
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
@@ -178,7 +220,6 @@ function shouldCache(url) {
       "/static/js/routing.js",
       "/static/js/profile.js",
       "/static/js/settings.js",
-      "/static/js/dropdown.js",
     ];
     return allowedScripts.includes(url.pathname);
   }

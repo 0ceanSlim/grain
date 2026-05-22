@@ -54,7 +54,7 @@
     <!-- Apply the saved theme BEFORE the body renders so the page
          doesn't flash the wrong palette during paint. theme.js
          exposes window.GrainTheme for the header swapper. -->
-    <script src="/static/js/theme.js"></script>
+    <script src="/static/js/theme.js?v={{assetVersion}}"></script>
 
     <!-- Load external libraries first. These will be replaced on build with local minified
      versions and the build step will replace the tailwind cdn and compile the full minified css -->
@@ -70,8 +70,8 @@
          exposes window.MILL. Bundled into the binary at build time;
          no runtime CDN dependency. The bridge that wires mill into
          grain's session API loads right after. -->
-    <script src="/static/mill/mill.umd.min.js"></script>
-    <script src="/static/js/mill-bridge.js" defer></script>
+    <script src="/static/mill/mill.umd.min.js?v={{assetVersion}}"></script>
+    <script src="/static/js/mill-bridge.js?v={{assetVersion}}" defer></script>
 
     <title>{{.Title}}</title>
     <style>
@@ -167,13 +167,13 @@
 
           // Load scripts in proper order - navigation FIRST
           const navigationScript = document.createElement("script");
-          navigationScript.src = "/static/js/navigation.js";
+          navigationScript.src = "/static/js/navigation.js?v={{assetVersion}}";
           navigationScript.onload = () => {
             console.log("✅ Navigation.js loaded");
 
             // Load routing after navigation
             const routingScript = document.createElement("script");
-            routingScript.src = "/static/js/routing.js";
+            routingScript.src = "/static/js/routing.js?v={{assetVersion}}";
             routingScript.onload = () => {
               console.log("✅ Routing.js loaded");
 
@@ -185,7 +185,7 @@
               // globals with the old "just toggle hidden" logic
               // that left the panel at fixed:(0,0).
               const otherScripts = [
-                "/static/js/search.js",
+                "/static/js/search.js?v={{assetVersion}}",
               ];
               otherScripts.forEach((src) => {
                 const script = document.createElement("script");

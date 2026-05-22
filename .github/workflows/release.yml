@@ -211,10 +211,27 @@ jobs:
           (cd www/style && /tmp/tailwindcss -i input.css -o tailwind.min.css --minify)
 
           # Rewrite layout template to use bundled assets instead of CDNs.
+          # The ?v={{assetVersion}} query is a Go template expression the
+          # binary fills with the build version at render time, so each
+          # release gets a fresh asset URL the CDN / browser / service
+          # worker can't stale-serve (see client.SetAssetVersion).
           LAYOUT=www/views/templates/layout.html
-          sed -i 's|<script src="https://cdn.tailwindcss.com"></script>|<link rel="stylesheet" href="/style/tailwind.min.css">|g' "${LAYOUT}"
-          sed -i 's|<script src="https://unpkg.com/hyperscript.org@[^"]*"></script>|<script src="/static/js/hyperscript.min.js"></script>|g' "${LAYOUT}"
-          perl -0pi -e 's|<script\s+src="https://unpkg\.com/htmx\.org@[^"]*"[^>]*>\s*</script>|<script src="/static/js/htmx.min.js"></script>|gs' "${LAYOUT}"
+          sed -i 's|<script src="https://cdn.tailwindcss.com"></script>|<link rel="stylesheet" href="/style/tailwind.min.css?v={{assetVersion}}">|g' "${LAYOUT}"
+          sed -i 's|<script src="https://unpkg.com/hyperscript.org@[^"]*"></script>|<script src="/static/js/hyperscript.min.js?v={{assetVersion}}"></script>|g' "${LAYOUT}"
+          perl -0pi -e 's|<script\s+src="https://unpkg\.com/htmx\.org@[^"]*"[^>]*>\s*</script>|<script src="/static/js/htmx.min.js?v={{assetVersion}}"></script>|gs' "${LAYOUT}"
+
+          # Fail loudly if the CDN rewrite didn't match — otherwise a
+          # reformatted layout would silently ship a CDN build (no tokens).
+          if grep -q "cdn.tailwindcss.com" "${LAYOUT}"; then
+            echo "ERROR: layout.html still references the Tailwind CDN after rewrite" >&2
+            exit 1
+          fi
+          # Fail loudly if the compiled CSS lacks the token utilities the
+          # templates actually use — catches a stale/empty/mis-scanned build.
+          if ! grep -q '\.bg-surface' www/style/tailwind.min.css; then
+            echo "ERROR: tailwind.min.css missing .bg-surface — CSS did not compile against current templates" >&2
+            exit 1
+          fi
 
       - name: Upload bundled www/
         uses: actions/upload-artifact@v4

@@ -72,6 +72,7 @@ func main() {
 	// Set embedded filesystems
 	config.SetEmbeddedExamples(embeddedExamples)
 	client.SetEmbeddedWWW(embeddedWWW)
+	client.SetAssetVersion(Version)
 	docs.SetSpec(embeddedOpenAPI)
 
 	// Handle --import flag: import events from JSONL file and exit
