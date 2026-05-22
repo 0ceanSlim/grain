@@ -329,7 +329,7 @@
         const r = await fetch("/api/v1/admin/domain-keys?domain=" + encodeURIComponent(domain));
         const body = await r.json();
         if (!r.ok || body.error) {
-          const html = '<div class="text-warning">Couldn't fetch: ' + escHtml(body.error || r.statusText) + '</div>';
+          const html = '<div class="text-warning">Could not fetch: ' + escHtml(body.error || r.statusText) + '</div>';
           keysEl.innerHTML = html;
           cache.set(domain, html);
           return;
