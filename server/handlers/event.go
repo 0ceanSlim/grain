@@ -20,6 +20,14 @@ import (
 // Set by the server package to broadcast events to active subscribers.
 var OnEventStored func(evt nostr.Event)
 
+// backupRelaySem bounds the number of concurrent best-effort backup-relay
+// forwards. Each forward holds a goroutine and a socket for up to the
+// dial+write timeout; without a cap, a slow or unreachable backup relay
+// accumulates unbounded goroutines and sockets under inbound event load —
+// the leak in #95. When the cap is reached the forward is dropped: the event
+// is already stored locally and backup forwarding is best-effort.
+var backupRelaySem = make(chan struct{}, 32)
+
 // HandleEvent processes an "EVENT" message
 func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	if len(message) != 2 {
@@ -210,18 +218,29 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	if cfg.BackupRelay.Enabled {
 		for _, url := range cfg.BackupRelay.URLs {
 			url := url // capture per-iteration for the goroutine
-			go func() {
-				if err := utils.SendToBackupRelay(url, evt); err != nil {
-					log.Event().Error("Failed to send event to backup relay",
-						"event_id", evt.ID,
-						"relay_url", url,
-						"error", err)
-				} else {
-					log.Event().Info("Event sent to backup relay",
-						"event_id", evt.ID,
-						"relay_url", url)
-				}
-			}()
+			select {
+			case backupRelaySem <- struct{}{}:
+				go func() {
+					defer func() { <-backupRelaySem }()
+					if err := utils.SendToBackupRelay(url, evt); err != nil {
+						log.Event().Error("Failed to send event to backup relay",
+							"event_id", evt.ID,
+							"relay_url", url,
+							"error", err)
+					} else {
+						log.Event().Info("Event sent to backup relay",
+							"event_id", evt.ID,
+							"relay_url", url)
+					}
+				}()
+			default:
+				// Concurrency cap reached — drop this forward (best-effort;
+				// the event is already stored locally). Debug-level so a
+				// sustained backup-relay stall doesn't spam the log (#95).
+				log.Event().Debug("Backup relay forward dropped: concurrency cap reached",
+					"event_id", evt.ID,
+					"relay_url", url)
+			}
 		}
 	}
 
