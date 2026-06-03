@@ -607,6 +607,14 @@ func clientReader(client *Client) {
 		// Mark as disconnected first
 		client.markDisconnected()
 
+		// Release per-connection auth state (NIP-42 challenge + session).
+		// Those maps live in the handlers package and are keyed by the
+		// client pointer; nothing else removes the entries, so skipping
+		// this pins the whole client object graph forever — see #92. This
+		// defer is the always-run teardown path, so it's the right home
+		// for the cleanup; the call is idempotent.
+		handlers.CleanupClient(client)
+
 		// Clean up tracking when function exits. The exists check pairs
 		// with the same check in CloseClient — see #67. Either path may
 		// fire first; the second observes the empty map slot and skips

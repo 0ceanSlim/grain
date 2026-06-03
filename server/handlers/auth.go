@@ -301,3 +301,24 @@ func GetAuthedPubkey(client nostr.ClientInterface) string {
 	defer authMu.Unlock()
 	return authSessions[client]
 }
+
+// CleanupClient releases all per-connection auth state for a client that has
+// disconnected. Both `challenges` and `authSessions` are keyed by the client
+// pointer, so failing to delete here pins the entire client object graph
+// (subscriptions, filter slices, the outbound channel, the rate limiter) in
+// memory for the life of the process — see #92.
+//
+// The `challenges` entry in particular leaks for EVERY connection, since one
+// is set unconditionally on connect (SetChallengeForConnection) but only
+// cleared on a successful AUTH — which most public-relay connections never do.
+//
+// Must be called once per connection on teardown. The canonical caller is the
+// clientReader defer in server/client.go, which is the cleanup path that runs
+// for every disconnect. Idempotent: deleting a missing key is a no-op, so a
+// redundant call is harmless.
+func CleanupClient(client nostr.ClientInterface) {
+	authMu.Lock()
+	defer authMu.Unlock()
+	delete(challenges, client)
+	delete(authSessions, client)
+}
