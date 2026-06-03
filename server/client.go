@@ -111,25 +111,31 @@ var (
 	totalMessagesSent int64
 )
 
-// PrintStats periodically logs messaging and connection statistics
-func PrintStats() {
+// PrintStats periodically logs messaging and connection statistics. It exits
+// when ctx is cancelled so it doesn't outlive its server instance (#93).
+func PrintStats(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		sent := atomic.LoadInt64(&totalMessagesSent)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sent := atomic.LoadInt64(&totalMessagesSent)
 
-		// Reset counters
-		atomic.StoreInt64(&totalMessagesSent, 0)
+			// Reset counters
+			atomic.StoreInt64(&totalMessagesSent, 0)
 
-		// Get memory statistics from connection manager
-		memStats := connManager.GetMemoryStats()
+			// Get memory statistics from connection manager
+			memStats := connManager.GetMemoryStats()
 
-		log.RelayClient().Info("Connection and message statistics",
-			"messages_sent", sent,
-			"active_connections", currentConnections.Load(),
-			"memory_used_pct", memStats["memory_used_percent"],
-			"estimated_mem_per_conn_mb", memStats["estimated_mem_per_conn_mb"])
+			log.RelayClient().Info("Connection and message statistics",
+				"messages_sent", sent,
+				"active_connections", currentConnections.Load(),
+				"memory_used_pct", memStats["memory_used_percent"],
+				"estimated_mem_per_conn_mb", memStats["estimated_mem_per_conn_mb"])
+		}
 	}
 }
 
@@ -861,8 +867,9 @@ func BroadcastEvent(evt nostr.Event) {
 	}
 }
 
-// Start stats monitoring
-func InitStatsMonitoring() {
-	go PrintStats()
-	startConnectionRejectionInfrastructure()
+// Start stats monitoring. ctx bounds all the spawned background goroutines to
+// the lifetime of the server instance (#93).
+func InitStatsMonitoring(ctx context.Context) {
+	go PrintStats(ctx)
+	startConnectionRejectionInfrastructure(ctx)
 }

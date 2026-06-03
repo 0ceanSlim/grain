@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"sort"
 	"sync"
@@ -80,22 +81,27 @@ func CheckIPConnectionRate(ip string, limitPerMinute int) bool {
 
 // startBucketCleanup runs in the background, evicting per-IP buckets idle
 // for more than 5 minutes. Bounds memory under address-space scanning.
-func startBucketCleanup() {
+func startBucketCleanup(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			cutoff := time.Now().Add(-5 * time.Minute)
-			ipBuckets.Range(func(k, v interface{}) bool {
-				b := v.(*ipBucket)
-				b.mu.Lock()
-				idle := b.lastSeen.Before(cutoff)
-				b.mu.Unlock()
-				if idle {
-					ipBuckets.Delete(k)
-				}
-				return true
-			})
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				cutoff := time.Now().Add(-5 * time.Minute)
+				ipBuckets.Range(func(k, v interface{}) bool {
+					b := v.(*ipBucket)
+					b.mu.Lock()
+					idle := b.lastSeen.Before(cutoff)
+					b.mu.Unlock()
+					if idle {
+						ipBuckets.Delete(k)
+					}
+					return true
+				})
+			}
 		}
 	}()
 }
@@ -153,12 +159,17 @@ func RecordIPViolation(ip string) {
 
 // startRejectionAggregator emits one summary WARN per minute. If no
 // rejections happened in the window, nothing is logged.
-func startRejectionAggregator() {
+func startRejectionAggregator(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			emitAndReset()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				emitAndReset()
+			}
 		}
 	}()
 }
@@ -220,9 +231,9 @@ func itoa(n int) string {
 // startConnectionRejectionInfrastructure starts the cleanup and
 // aggregator goroutines. Idempotent only insofar as InitStatsMonitoring
 // itself is called once at startup; do not call this directly.
-func startConnectionRejectionInfrastructure() {
-	startBucketCleanup()
-	startRejectionAggregator()
+func startConnectionRejectionInfrastructure(ctx context.Context) {
+	startBucketCleanup(ctx)
+	startRejectionAggregator(ctx)
 }
 
 // EnforceConnectionRateLimit is the HTTP middleware-style guard that runs

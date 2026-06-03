@@ -139,6 +139,12 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 		return
 	}
 
+	// Per-instance context. Cancelled when this instance tears down (config
+	// reload, restart, or signal), which stops every background goroutine the
+	// instance started instead of leaking a fresh set on each restart (#93).
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Initialize nostrdb database
 	dbPath := cfg.Database.Path
 	if dbPath == "" {
@@ -172,10 +178,19 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 	}()
 
 	// Initialize all subsystems
-	if err := initializeSubsystems(cfg); err != nil {
+	if err := initializeSubsystems(ctx, cfg); err != nil {
 		log.Startup().Error("Failed to initialize subsystems", "error", err)
 		return
 	}
+
+	// Tear down the client subsystem on instance stop. ctx cancellation stops
+	// the periodic client goroutines; this closes the core relay pool itself,
+	// which ctx can't reach (#93).
+	defer func() {
+		if err := client.ShutdownClient(); err != nil {
+			log.Startup().Warn("Error shutting down client subsystem", "error", err)
+		}
+	}()
 
 	// Setup HTTP server
 	httpServer := setupHTTPServer(cfg)
@@ -185,7 +200,7 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 	}()
 
 	// Start background services (pass DB availability status)
-	startBackgroundServices(cfg, dbAvailable)
+	startBackgroundServices(ctx, cfg, dbAvailable)
 
 	log.Startup().Info("Server instance started successfully",
 		"database_available", dbAvailable,
@@ -221,8 +236,9 @@ func loadAllConfigs() (*cfgType.ServerConfig, error) {
 	return cfg, nil
 }
 
-// initializeSubsystems sets up all server subsystems
-func initializeSubsystems(cfg *cfgType.ServerConfig) error {
+// initializeSubsystems sets up all server subsystems. ctx is the per-instance
+// context that bounds the background goroutines started here (#93).
+func initializeSubsystems(ctx context.Context, cfg *cfgType.ServerConfig) error {
 	log.Startup().Debug("Initializing server subsystems")
 
 	// Resolve log file path relative to data directory
@@ -278,7 +294,7 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 	// the first refresh produces an empty grouped-mutelist cache and the
 	// dashboard sees zero mutelist entries until the next scheduled refresh
 	// (mutelist_cache_refresh_minutes later — up to 30 min by default).
-	if err := client.InitializeClient(cfg); err != nil {
+	if err := client.InitializeClient(ctx, cfg); err != nil {
 		log.Startup().Error("Failed to initialize client package", "error", err)
 		return fmt.Errorf("client initialization failed: %w", err)
 	}
@@ -292,7 +308,7 @@ func initializeSubsystems(cfg *cfgType.ServerConfig) error {
 	config.LoadAdminMutelist()
 
 	// Initialize pubkey cache system (after client init — see comment above)
-	config.InitializePubkeyCache()
+	config.InitializePubkeyCache(ctx)
 
 	log.Startup().Info("Server subsystems initialized successfully")
 	return nil
@@ -326,26 +342,27 @@ func setupHTTPServer(cfg *cfgType.ServerConfig) *http.Server {
 	return server
 }
 
-// startBackgroundServices starts all background services
-func startBackgroundServices(cfg *cfgType.ServerConfig, dbAvailable bool) {
+// startBackgroundServices starts all background services. ctx bounds every
+// goroutine started here to the lifetime of the server instance (#93).
+func startBackgroundServices(ctx context.Context, cfg *cfgType.ServerConfig, dbAvailable bool) {
 	log.Startup().Debug("Starting background services",
 		"database_available", dbAvailable)
 
 	// Always start these services regardless of DB availability
 	// Start client statistics monitoring
-	go InitStatsMonitoring()
+	go InitStatsMonitoring(ctx)
 
 	// Load IP blocklist (admin + sidecar) and start the temp-ban
 	// expiry sweeper. See #62. Both safe to call before the DB is up.
 	config.LoadIPBlocklist(cfg.Blacklist)
-	config.StartIPBlocklistSweeper()
+	config.StartIPBlocklistSweeper(ctx)
 
 	// Only start DB-dependent services if database is available
 	if dbAvailable {
 		// Start event purging service
 		db := nostrdb.GetDB()
 		if db != nil {
-			go db.ScheduleEventPurging(cfg, func() []string {
+			go db.ScheduleEventPurging(ctx, cfg, func() []string {
 				pubkeyCache := config.GetPubkeyCache()
 				return pubkeyCache.GetWhitelistedPubkeys()
 			})
@@ -362,7 +379,7 @@ func startBackgroundServices(cfg *cfgType.ServerConfig, dbAvailable bool) {
 					log.Startup().Error("NIP-40 expiration bootstrap failed", "error", err)
 				}
 			}()
-			go db.RunExpirationSweeper(context.Background())
+			go db.RunExpirationSweeper(ctx)
 		}
 
 		log.Startup().Info("All background services started")

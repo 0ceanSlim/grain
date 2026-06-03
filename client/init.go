@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"time"
 
 	"github.com/0ceanslim/grain/client/cache"
@@ -10,8 +11,11 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// InitializeClient sets up the client package with server configuration
-func InitializeClient(serverCfg *cfgType.ServerConfig) error {
+// InitializeClient sets up the client package with server configuration. ctx
+// bounds the background goroutines (session cleanup, cache cleanup, relay
+// health check) to the lifetime of the server instance that started them, so
+// a config-reload restart cancels them instead of leaking a fresh set (#93).
+func InitializeClient(ctx context.Context, serverCfg *cfgType.ServerConfig) error {
 	log.ClientMain().Info("Initializing client package with configurable settings")
 
 	// Initialize session manager
@@ -42,13 +46,13 @@ func InitializeClient(serverCfg *cfgType.ServerConfig) error {
 	}
 
 	// Start background session cleanup
-	startSessionCleanup()
+	startSessionCleanup(ctx)
 
 	// Start cache cleanup
-	cache.StartCacheCleanup()
+	cache.StartCacheCleanup(ctx)
 
 	// Start relay connection health check (check every 5 minutes)
-	connection.StartRelayHealthCheck(5 * time.Minute)
+	connection.StartRelayHealthCheck(ctx, 5*time.Minute)
 
 	log.ClientMain().Info("Client package initialized successfully")
 	return nil
@@ -65,13 +69,19 @@ func initializeSessionManager() error {
 	return nil
 }
 
-// startSessionCleanup starts a background goroutine to clean up expired sessions
-func startSessionCleanup() {
+// startSessionCleanup starts a background goroutine to clean up expired
+// sessions. It exits when ctx is cancelled (#93).
+func startSessionCleanup(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(30 * time.Minute) // Clean up every 30 minutes
 		defer ticker.Stop()
 
-		for range ticker.C {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
 			if session.SessionMgr != nil {
 				// Clean up sessions older than 24 hours of inactivity
 				session.SessionMgr.CleanupSessions(24 * time.Hour)

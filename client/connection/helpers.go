@@ -1,6 +1,7 @@
 package connection
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -110,15 +111,23 @@ func GetCoreClientStatus() map[string]interface{} {
 	}
 }
 
-// StartRelayHealthCheck starts a background goroutine to maintain relay connections
-func StartRelayHealthCheck(interval time.Duration) {
+// StartRelayHealthCheck starts a background goroutine to maintain relay
+// connections. It exits when ctx is cancelled so it doesn't outlive the
+// server instance that started it (#93).
+func StartRelayHealthCheck(ctx context.Context, interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
 		log.ClientConnection().Info("Relay health check started", "interval", interval)
 
-		for range ticker.C {
+		for {
+			select {
+			case <-ctx.Done():
+				log.ClientConnection().Info("Relay health check stopping")
+				return
+			case <-ticker.C:
+			}
 			if coreClient == nil {
 				log.ClientConnection().Debug("Core client not initialized, skipping health check")
 				continue

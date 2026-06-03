@@ -6,6 +6,7 @@ package nostrdb
 */
 import "C"
 import (
+	"context"
 	"time"
 
 	cfgType "github.com/0ceanslim/grain/config/types"
@@ -105,7 +106,9 @@ func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys 
 }
 
 // ScheduleEventPurging runs periodic event purging at the configured interval.
-func (db *NDB) ScheduleEventPurging(cfg *cfgType.ServerConfig, getWhitelistedPubkeys func() []string) {
+// It returns when ctx is cancelled so the loop doesn't outlive the server
+// instance (and its now-closed DB handle) on a config-reload restart (#93).
+func (db *NDB) ScheduleEventPurging(ctx context.Context, cfg *cfgType.ServerConfig, getWhitelistedPubkeys func() []string) {
 	if !cfg.EventPurge.Enabled {
 		log.DBPurge().Info("Event purging is disabled in configuration")
 		return
@@ -125,10 +128,16 @@ func (db *NDB) ScheduleEventPurging(cfg *cfgType.ServerConfig, getWhitelistedPub
 		db.PurgeOldEvents(&cfg.EventPurge, getWhitelistedPubkeys())
 	}
 
-	for range ticker.C {
-		log.DBPurge().Info("Running scheduled purge")
-		purged := db.PurgeOldEvents(&cfg.EventPurge, getWhitelistedPubkeys())
-		log.DBPurge().Info("Scheduled purging completed", "purged", purged)
+	for {
+		select {
+		case <-ctx.Done():
+			log.DBPurge().Info("Event purging stopping")
+			return
+		case <-ticker.C:
+			log.DBPurge().Info("Running scheduled purge")
+			purged := db.PurgeOldEvents(&cfg.EventPurge, getWhitelistedPubkeys())
+			log.DBPurge().Info("Scheduled purging completed", "purged", purged)
+		}
 	}
 }
 

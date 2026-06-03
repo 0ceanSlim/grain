@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -50,8 +51,12 @@ func GetPubkeyCache() *PubkeyCache {
 	return globalPubkeyCache
 }
 
-// InitializePubkeyCache starts the cache system with initial refresh and background updates
-func InitializePubkeyCache() {
+// InitializePubkeyCache starts the cache system with initial refresh and
+// background updates. ctx bounds the background refresh goroutines to the
+// lifetime of the server instance that started them — on a config-reload
+// restart the previous instance's refreshers are cancelled instead of
+// accumulating (see #93).
+func InitializePubkeyCache(ctx context.Context) {
 	log.Config().Info("Initializing enhanced pubkey cache system")
 
 	// Set refresh intervals from config with defaults
@@ -87,7 +92,7 @@ func InitializePubkeyCache() {
 	}()
 
 	// Start background refresh routines
-	globalPubkeyCache.startBackgroundRefresh()
+	globalPubkeyCache.startBackgroundRefresh(ctx)
 
 	log.Config().Info("Enhanced pubkey cache system initialized",
 		"whitelist_interval_min", int(globalPubkeyCache.whitelistRefreshInterval.Minutes()),
@@ -473,16 +478,23 @@ func (pc *PubkeyCache) GetPubkeyCacheStats() map[string]interface{} {
 	return stats
 }
 
-// startBackgroundRefresh starts goroutines for periodic cache refresh
-func (pc *PubkeyCache) startBackgroundRefresh() {
+// startBackgroundRefresh starts goroutines for periodic cache refresh. Both
+// routines exit when ctx is cancelled so they don't outlive the server
+// instance that started them (see #93).
+func (pc *PubkeyCache) startBackgroundRefresh(ctx context.Context) {
 	// Whitelist refresh routine
 	go func() {
 		ticker := time.NewTicker(pc.whitelistRefreshInterval)
 		defer ticker.Stop()
 
-		for range ticker.C {
-			if err := pc.RefreshWhitelist(); err != nil {
-				log.Config().Error("Failed to refresh whitelist cache", "error", err)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := pc.RefreshWhitelist(); err != nil {
+					log.Config().Error("Failed to refresh whitelist cache", "error", err)
+				}
 			}
 		}
 	}()
@@ -492,9 +504,14 @@ func (pc *PubkeyCache) startBackgroundRefresh() {
 		ticker := time.NewTicker(pc.blacklistRefreshInterval)
 		defer ticker.Stop()
 
-		for range ticker.C {
-			if err := pc.RefreshBlacklist(); err != nil {
-				log.Config().Error("Failed to refresh blacklist cache", "error", err)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := pc.RefreshBlacklist(); err != nil {
+					log.Config().Error("Failed to refresh blacklist cache", "error", err)
+				}
 			}
 		}
 	}()

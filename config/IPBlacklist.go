@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/netip"
@@ -395,15 +396,21 @@ func SweepExpiredIPTempBans() {
 	}
 }
 
-// StartIPBlocklistSweeper kicks off the background goroutine that
-// expires temp bans every minute. Idempotent at the call site only —
-// don't call this more than once.
-func StartIPBlocklistSweeper() {
+// StartIPBlocklistSweeper kicks off the background goroutine that expires
+// temp bans every minute. The goroutine exits when ctx is cancelled, so it's
+// called once per server instance and the previous instance's sweeper stops
+// cleanly on a config-reload restart (see #93).
+func StartIPBlocklistSweeper(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			SweepExpiredIPTempBans()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				SweepExpiredIPTempBans()
+			}
 		}
 	}()
 }
