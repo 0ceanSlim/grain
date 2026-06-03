@@ -103,7 +103,7 @@ Shipped 2026-05-26. What was scoped as an "admin API layer" grew into the relay'
 
 **Theme:** GRAIN becomes a first-class Nostr citizen.
 
-The architectural prerequisite for WoT, and the current milestone. NIP-29 ships with a relay-owned keypair that gives GRAIN its own identity; the client library graduates from beta with full outbox-model routing. Folded in from v0.7: geo/region blocking, the nostrdb prefix-filter fix, and configurable NIP-50 indexed kinds.
+The architectural prerequisite for WoT, and the current milestone. NIP-29 ships with a relay-owned keypair that gives GRAIN its own identity; the client library graduates from beta with full outbox-model routing. Folded in from v0.7: geo/region blocking and the nostrdb prefix-filter fix.
 
 | # | Issue | Scope |
 |---|-------|-------|
@@ -111,7 +111,6 @@ The architectural prerequisite for WoT, and the current milestone. NIP-29 ships 
 | [#56](https://github.com/0ceanSlim/grain/issues/56) | Client library: outbox-model relay pool | Library GA |
 | [#64](https://github.com/0ceanSlim/grain/issues/64) | Geo/region blocking via GeoIP | Deferred from v0.7 |
 | [#72](https://github.com/0ceanSlim/grain/issues/72) | nostrdb author/id prefix-filter compliance | Deferred from v0.7 |
-| [#71](https://github.com/0ceanSlim/grain/issues/71) | NIP-50 configurable indexed kinds | Moved up from out-of-scope |
 
 📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/4)
 
@@ -127,6 +126,7 @@ Composable permission groups built from any combination of explicit whitelist, W
 |---|-------|-------|
 | [#14](https://github.com/0ceanSlim/grain/issues/14) | WoT / permission groups | Group model + scoring |
 | [#57](https://github.com/0ceanSlim/grain/issues/57) | Per-group rate-limit tiers | Built on the group model |
+| [#71](https://github.com/0ceanSlim/grain/issues/71) | NIP-50 configurable indexed kinds | Expand fulltext beyond kinds 1 & 30023 |
 
 📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/5)
 
@@ -167,4 +167,4 @@ These were considered and intentionally deferred:
 
 ---
 
-<sub>Last revised after shipping v0.7.0 (2026-05-26): closed milestones v0.5.x / v0.6 / v0.7, promoted v0.8 to current, deferred #64 / #72 from v0.7 into v0.8, and moved #71 up from out-of-scope. A v0.7.1 memory-leak audit patch (#92–#95) is queued.</sub>
+<sub>Last revised after shipping v0.7.0 (2026-05-26): closed milestones v0.5.x / v0.6 / v0.7, promoted v0.8 to current, deferred #64 / #72 from v0.7 into v0.8, and surfaced #71 (NIP-50 indexed kinds) under its v0.9 milestone. A v0.7.1 memory-leak audit patch (#92–#95) is queued.</sub>
