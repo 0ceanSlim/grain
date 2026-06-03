@@ -40,6 +40,7 @@ type RelayConnection struct {
 	mu            sync.RWMutex
 	writeChan     chan []byte
 	done          chan struct{}
+	closeOnce     sync.Once      // guards exactly-one close of done (#94)
 	messageRouter *MessageRouter // Add message router
 }
 
@@ -324,6 +325,10 @@ func (rp *RelayPool) Close() error {
 // writeHandler manages outgoing messages for a relay connection
 func (rc *RelayConnection) writeHandler() {
 	defer func() {
+		// Stop readHandler too if the write side dies first, then close the
+		// socket. signalDone is idempotent, so this is safe even when the
+		// read side or close() already fired (#94).
+		rc.signalDone()
 		if rc.Conn != nil {
 			rc.Conn.Close()
 		}
@@ -334,7 +339,7 @@ func (rc *RelayConnection) writeHandler() {
 		case data := <-rc.writeChan:
 			if err := websocket.Message.Send(rc.Conn, string(data)); err != nil {
 				log.ClientCore().Error("Failed to send message to relay", "relay", rc.URL, "error", err)
-				rc.Status = StatusError
+				rc.setStatus(StatusError)
 				return
 			}
 			log.ClientCore().Debug("Message sent to relay", "relay", rc.URL)
@@ -349,10 +354,14 @@ func (rc *RelayConnection) writeHandler() {
 // readHandler manages incoming messages from a relay connection
 func (rc *RelayConnection) readHandler() {
 	defer func() {
+		rc.setStatus(StatusDisconnected)
+		// Stop writeHandler too — a read-side disconnect must not leave the
+		// writer blocked on writeChan/done forever, which was the leak in
+		// #94. signalDone is idempotent.
+		rc.signalDone()
 		if rc.Conn != nil {
 			rc.Conn.Close()
 		}
-		rc.Status = StatusDisconnected
 		log.ClientCore().Debug("Read handler terminated", "relay", rc.URL)
 	}()
 
@@ -378,7 +387,7 @@ func (rc *RelayConnection) readHandler() {
 				// relays we have no control over, not grain bugs. Operators
 				// can opt in by lowering the log level when diagnosing.
 				log.ClientCore().Debug("Failed to read message from relay", "relay", rc.URL, "error", err)
-				rc.Status = StatusError
+				rc.setStatus(StatusError)
 				return
 			}
 
@@ -393,27 +402,57 @@ func (rc *RelayConnection) readHandler() {
 	}
 }
 
+// setStatus updates the connection status under the lock. All status writes
+// go through here (or hold rc.mu directly in close) so the read/write handlers
+// don't race each other on the field (#94).
+func (rc *RelayConnection) setStatus(s ConnectionStatus) {
+	rc.mu.Lock()
+	rc.Status = s
+	rc.mu.Unlock()
+}
+
+// signalDone closes the done channel exactly once, regardless of which path
+// initiates teardown: an explicit close(), a read-side error, or a write-side
+// error. Both handler goroutines select on done, so signalling it stops the
+// other one.
+//
+// This is the fix for #94: previously a read-side disconnect set
+// Status=Disconnected but never closed done, and close() then short-circuited
+// on that Status *before* its close(done) — leaving writeHandler blocked on
+// writeChan/done forever and pinning the RelayConnection.
+func (rc *RelayConnection) signalDone() {
+	rc.closeOnce.Do(func() {
+		close(rc.done)
+	})
+}
+
 // close terminates a relay connection
 func (rc *RelayConnection) close() error {
 	rc.mu.Lock()
-	defer rc.mu.Unlock()
+	alreadyDisconnected := rc.Status == StatusDisconnected
+	rc.Status = StatusDisconnected
+	conn := rc.Conn
+	rc.mu.Unlock()
 
-	if rc.Status == StatusDisconnected {
+	// Always signal the handlers to stop, even if Status was already
+	// Disconnected: a handler may have set that on its way out without having
+	// closed done yet, which is exactly the leak in #94. signalDone is
+	// idempotent.
+	rc.signalDone()
+
+	if alreadyDisconnected {
 		return nil
 	}
 
 	log.ClientCore().Debug("Closing relay connection", "relay", rc.URL)
-
-	close(rc.done)
-
-	if rc.Conn != nil {
-		if err := rc.Conn.Close(); err != nil {
-			log.ClientCore().Error("Error closing WebSocket connection", "relay", rc.URL, "error", err)
-			return err
+	if conn != nil {
+		// The handler defers may also close the socket; a double close is
+		// benign, so log it at debug rather than failing the close.
+		if err := conn.Close(); err != nil {
+			log.ClientCore().Debug("Relay socket close returned error (likely already closed)",
+				"relay", rc.URL, "error", err)
 		}
 	}
-
-	rc.Status = StatusDisconnected
 	log.ClientCore().Debug("Relay connection closed", "relay", rc.URL)
 	return nil
 }
