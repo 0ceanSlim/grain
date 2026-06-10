@@ -320,6 +320,13 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 	eventMap := make(map[string]*nostr.Event)
 	timeout := time.After(8 * time.Second)
 
+	// Track EOSE per relay so the query finishes the moment every relay has
+	// sent all its stored events, instead of always waiting out the 8s timeout.
+	// (sub.Done is only closed by sub.Close(); EOSE arrives on sub.EOSE — the
+	// same bug fixed for GetUserRelays in #77.)
+	eoseRelays := make(map[string]bool)
+	totalRelays := sub.GetRelayCount()
+
 	// Get the limit from the first filter (if any)
 	var requestedLimit int
 	if len(filters) > 0 && filters[0].Limit != nil {
@@ -356,10 +363,14 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 					"unique_count", len(eventMap))
 			}
 
-		case <-sub.Done:
-			// Subscription completed (EOSE received from all relays)
-			log.ClientAPI().Debug("Subscription completed (EOSE)", "unique_count", len(eventMap))
-			goto sendResponse
+		case relayURL := <-sub.EOSE:
+			// A relay has sent all its stored events. Finish once they all have.
+			eoseRelays[relayURL] = true
+			if len(eoseRelays) >= totalRelays {
+				log.ClientAPI().Debug("All relays sent EOSE",
+					"unique_count", len(eventMap), "eose_relays", len(eoseRelays))
+				goto sendResponse
+			}
 
 		case <-timeout:
 			log.ClientAPI().Debug("Query timeout reached", "unique_count", len(eventMap))

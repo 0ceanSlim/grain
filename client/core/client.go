@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
@@ -223,6 +224,54 @@ func (c *Client) ConnectToRelaysWithRetry(urls []string, maxRetries int) error {
 	return fmt.Errorf("failed to connect after %d attempts: %w", maxRetries, lastErr)
 }
 
+// collectLatestReplaceable drains a subscription and returns the newest event
+// (by created_at) as soon as any relay signals EOSE, once every target relay
+// has, or on timeout — whichever comes first. It returns nil when no matching
+// event arrived; callers decide what that means (a hard error for a required
+// profile, an empty result for an optional relay list).
+//
+// This is the shared core of GetUserProfile and GetUserRelays, and the fix for
+// the GetUserRelays latency bug (#77): that method used to wait on sub.Done —
+// which EOSE never closes — so every mailbox fetch burned the full timeout
+// instead of returning the moment a relay reported EOSE.
+func collectLatestReplaceable(sub *Subscription, totalRelays int, timeout time.Duration) *nostr.Event {
+	deadline := time.After(timeout)
+	eoseRelays := make(map[string]bool)
+	var latest *nostr.Event
+
+	for {
+		select {
+		case event := <-sub.Events:
+			if event == nil {
+				continue
+			}
+			// Keep the newest by created_at (these are replaceable events).
+			if latest == nil || event.CreatedAt > latest.CreatedAt {
+				latest = event
+			}
+
+		case relayURL := <-sub.EOSE:
+			eoseRelays[relayURL] = true
+			// Newest event in hand and a relay has nothing more to send.
+			if latest != nil {
+				return latest
+			}
+			// Every target relay reported end-of-stored-events; none had it.
+			if len(eoseRelays) >= totalRelays {
+				return nil
+			}
+
+		case err := <-sub.Errors:
+			// One relay failing isn't fatal — others may still answer.
+			log.ClientCore().Debug("Subscription error while collecting event",
+				"sub_id", sub.ID, "error", err)
+
+		case <-deadline:
+			return latest
+		}
+	}
+}
+
 func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Event, error) {
 	log.ClientCore().Debug("Fetching user profile", "pubkey", pubkey, "relay_hints", relayHints)
 
@@ -238,83 +287,24 @@ func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Even
 	if len(targetRelays) == 0 {
 		targetRelays = c.GetConnectedRelays()
 		log.ClientCore().Debug("No relay hints provided, using connected relays",
-			"pubkey", pubkey,
-			"connected_relays", targetRelays)
+			"pubkey", pubkey, "connected_relays", targetRelays)
 	}
 
-	// Subscribe with the specific relays
 	sub, err := c.Subscribe([]nostr.Filter{filter}, targetRelays)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create subscription: %w", err)
 	}
 	defer sub.Close()
 
-	// Wait for events with timeout
-	timeout := time.After(5 * time.Second)
-
-	// Track which relays have sent EOSE
-	eoseRelays := make(map[string]bool)
-	totalRelays := len(targetRelays)
-
-	// We might receive multiple events, keep the latest
-	var latestEvent *nostr.Event
-
-	for {
-		select {
-		case event := <-sub.Events:
-			log.ClientCore().Debug("Received profile event",
-				"pubkey", pubkey,
-				"event_id", event.ID,
-				"created_at", event.CreatedAt)
-			// Keep the latest event (highest created_at)
-			if latestEvent == nil || event.CreatedAt > latestEvent.CreatedAt {
-				latestEvent = event
-			}
-
-		case relayURL := <-sub.EOSE:
-			// Track EOSE from this relay
-			eoseRelays[relayURL] = true
-			log.ClientCore().Debug("EOSE received from relay",
-				"pubkey", pubkey,
-				"relay", relayURL,
-				"eose_count", len(eoseRelays),
-				"total_relays", totalRelays)
-
-			// If we have an event and at least one EOSE, we can return early
-			if latestEvent != nil {
-				log.ClientCore().Debug("Returning profile after EOSE",
-					"pubkey", pubkey,
-					"event_id", latestEvent.ID,
-					"eose_count", len(eoseRelays))
-				return latestEvent, nil
-			}
-
-			// If all relays have sent EOSE and no event found
-			if len(eoseRelays) >= totalRelays {
-				log.ClientCore().Debug("All relays sent EOSE, no profile found",
-					"pubkey", pubkey)
-				return nil, &ClientError{Message: "profile not found"}
-			}
-
-			// Continue waiting for events from other relays
-
-		case err := <-sub.Errors:
-			log.ClientCore().Error("Subscription error", "pubkey", pubkey, "error", err)
-			// Don't fail immediately on error, other relays might succeed
-
-		case <-timeout:
-			log.ClientCore().Warn("Timeout waiting for profile",
-				"pubkey", pubkey,
-				"eose_count", len(eoseRelays),
-				"total_relays", totalRelays,
-				"has_event", latestEvent != nil)
-			// If we got any event before timeout, return it
-			if latestEvent != nil {
-				return latestEvent, nil
-			}
-			return nil, &ClientError{Message: "timeout waiting for profile"}
-		}
+	event := collectLatestReplaceable(sub, len(targetRelays), 5*time.Second)
+	if event == nil {
+		log.ClientCore().Warn("No profile found", "pubkey", pubkey)
+		return nil, &ClientError{Message: "profile not found"}
 	}
+
+	log.ClientCore().Debug("Fetched user profile",
+		"pubkey", pubkey, "event_id", event.ID, "created_at", event.CreatedAt)
+	return event, nil
 }
 
 // GetUserRelays retrieves user relay list (kind 10002)
@@ -339,53 +329,19 @@ func (c *Client) GetUserRelays(pubkey string) (*Mailboxes, error) {
 	}
 	defer sub.Close()
 
-	timeout := time.After(5 * time.Second)
-
-	// Keep track of the latest relay list event
-	var latestEvent *nostr.Event
-
-	for {
-		select {
-		case event := <-sub.Events:
-			log.ClientCore().Debug("Received relay list event",
-				"pubkey", pubkey,
-				"event_id", event.ID,
-				"created_at", event.CreatedAt)
-			// Keep the latest event (highest created_at)
-			if latestEvent == nil || event.CreatedAt > latestEvent.CreatedAt {
-				latestEvent = event
-			}
-
-		case <-sub.Done:
-			// EOSE received - all stored events have been sent
-			log.ClientCore().Debug("EOSE received for relay list request", "pubkey", pubkey)
-			if latestEvent != nil {
-				mailboxes := parseMailboxEvent(latestEvent)
-				log.ClientCore().Debug("Parsed user relays", "pubkey", pubkey,
-					"read_count", len(mailboxes.Read),
-					"write_count", len(mailboxes.Write),
-					"both_count", len(mailboxes.Both))
-				return mailboxes, nil
-			}
-			// No relay list found (user might not have published one)
-			log.ClientCore().Debug("No relay list found for user", "pubkey", pubkey)
-			return &Mailboxes{}, nil
-
-		case err := <-sub.Errors:
-			log.ClientCore().Error("Subscription error", "pubkey", pubkey, "error", err)
-			return nil, err
-
-		case <-timeout:
-			log.ClientCore().Warn("Timeout waiting for relay list", "pubkey", pubkey)
-			// If we got any event before timeout, use it
-			if latestEvent != nil {
-				mailboxes := parseMailboxEvent(latestEvent)
-				return mailboxes, nil
-			}
-			// Return empty mailboxes on timeout (not an error - user might not have relay list)
-			return &Mailboxes{}, nil
-		}
+	event := collectLatestReplaceable(sub, len(connectedRelays), 5*time.Second)
+	if event == nil {
+		// Not an error: the user may simply not have published a kind-10002.
+		log.ClientCore().Debug("No relay list found for user", "pubkey", pubkey)
+		return &Mailboxes{}, nil
 	}
+
+	mailboxes := parseMailboxEvent(event)
+	log.ClientCore().Debug("Parsed user relays", "pubkey", pubkey,
+		"read_count", len(mailboxes.Read),
+		"write_count", len(mailboxes.Write),
+		"both_count", len(mailboxes.Both))
+	return mailboxes, nil
 }
 
 // PublishEvent publishes an event to specified relays
@@ -453,10 +409,15 @@ func (e *ClientError) Error() string {
 	return e.Message
 }
 
+// subSeq guarantees subscription IDs are unique even when two subscriptions are
+// created within the same microsecond — which happens now that login fetches
+// mailboxes and metadata concurrently (#77). A collision would cross-wire the
+// two subscriptions' events in the message router.
+var subSeq atomic.Uint64
+
 // generateSubscriptionID creates a unique subscription identifier
 func generateSubscriptionID() string {
-	// Simple time-based ID for now
-	return "sub_" + time.Now().Format("20060102150405.000000")
+	return fmt.Sprintf("sub_%s_%d", time.Now().Format("20060102150405.000000"), subSeq.Add(1))
 }
 
 // parseMailboxEvent parses a kind 10002 event into a Mailboxes struct

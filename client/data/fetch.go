@@ -7,6 +7,7 @@ import (
 	"github.com/0ceanslim/grain/client/cache"
 	"github.com/0ceanslim/grain/client/connection"
 	"github.com/0ceanslim/grain/client/core"
+	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -83,15 +84,38 @@ func FetchAndCacheUserDataWithCoreClient(publicKey string) error {
 		return fmt.Errorf("no relays available for fetching user data")
 	}
 
-	// Fetch user's mailboxes (kind 10002) first with better error handling
-	log.ClientData().Info("Fetching user mailboxes", "pubkey", publicKey, "relay_count", len(relaysForQueries))
-	mailboxes, err := coreClient.GetUserRelays(publicKey)
-	if err != nil {
+	// Fetch mailboxes (kind 10002) and metadata (kind 0) concurrently. They are
+	// independent queries, and running them serially was a dominant chunk of
+	// login latency (#77): each waits on its own relay round-trip, so back to
+	// back they doubled the worst case. Subscription IDs are unique per call
+	// (see generateSubscriptionID), so the two REQs don't cross-wire.
+	var (
+		mailboxes    *core.Mailboxes
+		userMetadata *nostr.Event
+		mailboxErr   error
+		profileErr   error
+		wg           sync.WaitGroup
+	)
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		log.ClientData().Info("Fetching user mailboxes", "pubkey", publicKey, "relay_count", len(relaysForQueries))
+		mailboxes, mailboxErr = coreClient.GetUserRelays(publicKey)
+	}()
+	go func() {
+		defer wg.Done()
+		log.ClientData().Debug("Fetching user metadata", "pubkey", publicKey)
+		userMetadata, profileErr = coreClient.GetUserProfile(publicKey, relaysForQueries)
+	}()
+	wg.Wait()
+
+	// Mailboxes are optional — the user may not have published a relay list.
+	if mailboxErr != nil {
 		log.ClientData().Warn("Failed to fetch mailboxes, user may not have relay list published",
 			"pubkey", publicKey,
-			"error", err,
+			"error", mailboxErr,
 			"relays_used", relaysForQueries)
-		// Set mailboxes to nil - this is not an error, user may not have published a relay list
 		mailboxes = nil
 	} else if mailboxes != nil {
 		totalRelays := len(mailboxes.Read) + len(mailboxes.Write) + len(mailboxes.Both)
@@ -103,13 +127,10 @@ func FetchAndCacheUserDataWithCoreClient(publicKey string) error {
 			"total_relays", totalRelays)
 	}
 
-	// Fetch user metadata (profile) using the same relays
-	log.ClientData().Debug("Fetching user metadata", "pubkey", publicKey)
-	userMetadata, err := coreClient.GetUserProfile(publicKey, relaysForQueries)
-	if err != nil || userMetadata == nil {
-		return fmt.Errorf("failed to fetch user metadata: %w", err)
+	// Metadata is required.
+	if profileErr != nil || userMetadata == nil {
+		return fmt.Errorf("failed to fetch user metadata: %w", profileErr)
 	}
-
 	log.ClientData().Info("Successfully fetched user metadata", "pubkey", publicKey, "event_id", userMetadata.ID)
 
 	// Cache the data using the cache package function
