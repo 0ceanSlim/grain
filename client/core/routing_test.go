@@ -82,3 +82,40 @@ func TestRoutePublishFallsBackToIndex(t *testing.T) {
 		t.Fatalf("RoutePublish with nothing resolved should fall back to index, got %v", got)
 	}
 }
+
+func TestFixedRelaysOffByDefault(t *testing.T) {
+	c := newClientWithStubDirectory(map[string]*UserRelays{})
+	if c.FixedRelaysEnabled() {
+		t.Fatal("fixed-relay override must be OFF by default")
+	}
+}
+
+// The fixed-relay opt-out replaces outbox routing entirely: reads use the
+// pinned read set and writes use the pinned write set, ignoring the directory.
+func TestFixedRelaysOverrideRouting(t *testing.T) {
+	c := newClientWithStubDirectory(map[string]*UserRelays{
+		"me":  {Outbox: []string{"wss://my-out"}},
+		"you": {Inbox: []string{"wss://your-in"}},
+	})
+
+	c.SetFixedRelays([]string{"wss://only-read"}, []string{"wss://only-write"})
+
+	if got := c.RouteFetch("you"); len(got) != 1 || got[0] != "wss://only-read" {
+		t.Fatalf("fixed RouteFetch = %v, want [wss://only-read]", got)
+	}
+	reply := &nostr.Event{PubKey: "me", Kind: 1, Tags: [][]string{{"p", "you"}}}
+	got := c.RoutePublish(reply)
+	if len(got) != 1 || got[0] != "wss://only-write" {
+		t.Fatalf("fixed RoutePublish = %v, want [wss://only-write] (outbox disabled)", got)
+	}
+	assertNotContains(t, got, "wss://your-in") // outbox is OFF — recipient inbox not used
+
+	// Clearing restores outbox routing.
+	c.ClearFixedRelays()
+	if c.FixedRelaysEnabled() {
+		t.Fatal("override should be cleared")
+	}
+	got = c.RoutePublish(reply)
+	assertHasRelay(t, got, "wss://my-out")
+	assertHasRelay(t, got, "wss://your-in")
+}

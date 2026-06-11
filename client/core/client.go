@@ -28,6 +28,14 @@ type Client struct {
 	// directory resolves and caches per-target users' event-derived relay roles
 	// (outbox / inbox / DM inbox) for outbox routing.
 	directory *RelayDirectory
+
+	// Fixed-relay override (opt-out, default OFF). When enabled, every read uses
+	// fixedRead and every write uses fixedWrite, bypassing outbox routing
+	// entirely — replies stop reaching other users' inboxes. Only for users who
+	// explicitly want a fixed-/single-relay client. Guarded by mu.
+	fixedMode  bool
+	fixedRead  []string
+	fixedWrite []string
 }
 
 // NewClient creates a new Nostr client instance
