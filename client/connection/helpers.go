@@ -102,12 +102,17 @@ func GetCoreClientStatus() map[string]interface{} {
 	}
 
 	connectedRelays := coreClient.GetConnectedRelays()
+	stats := coreClient.PoolStats()
 
 	return map[string]interface{}{
 		"initialized":      true,
 		"connected_relays": connectedRelays,
 		"connected_count":  len(connectedRelays),
 		"index_relays":     indexRelays,
+		"pool_total":       stats.Total,     // relays tracked in the pool
+		"pool_connected":   stats.Connected, // currently connected
+		"pool_pinned":      stats.Pinned,    // index/seed relays
+		"pool_leased":      stats.Leased,    // in active use
 	}
 }
 

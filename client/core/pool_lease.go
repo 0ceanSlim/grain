@@ -236,6 +236,38 @@ func (rp *RelayPool) evictIdle(now time.Time, idleTTL time.Duration) int {
 	return len(victims)
 }
 
+// PoolStats is a snapshot of the relay pool's connection counts, for status /
+// observability (e.g. an "x / y relays connected" dashboard indicator).
+type PoolStats struct {
+	Total     int `json:"total"`     // relays tracked in the pool
+	Connected int `json:"connected"` // currently connected
+	Pinned    int `json:"pinned"`    // index/seed relays kept alive
+	Leased    int `json:"leased"`    // connections with at least one active lease
+}
+
+// Stats returns a snapshot of the pool's connection counts.
+func (rp *RelayPool) Stats() PoolStats {
+	rp.mu.RLock()
+	defer rp.mu.RUnlock()
+	s := PoolStats{Total: len(rp.connections), Pinned: len(rp.pinned)}
+	for _, conn := range rp.connections {
+		conn.mu.RLock()
+		if conn.Status == StatusConnected {
+			s.Connected++
+		}
+		if conn.leases > 0 {
+			s.Leased++
+		}
+		conn.mu.RUnlock()
+	}
+	return s
+}
+
+// PoolStats returns a snapshot of the relay pool's connection counts.
+func (c *Client) PoolStats() PoolStats {
+	return c.relayPool.Stats()
+}
+
 // StartEvictionSweeper runs evictIdle on an interval until ctx is cancelled,
 // bounded to the caller's lifetime like the relay health check (#93).
 func (rp *RelayPool) StartEvictionSweeper(ctx context.Context, interval time.Duration) {

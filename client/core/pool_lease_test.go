@@ -234,6 +234,30 @@ func TestAcquireSoftCapEvictsIdle(t *testing.T) {
 	}
 }
 
+func TestPoolStats(t *testing.T) {
+	rp := newTestPool(0)
+	rp.connections["a"] = testConn("a", 1, time.Time{}) // connected, leased, pinned
+	rp.pinned["a"] = true
+	rp.connections["b"] = testConn("b", 0, time.Now()) // connected, idle
+	dead := testConn("c", 0, time.Now())
+	dead.Status = StatusDisconnected
+	rp.connections["c"] = dead // tracked but not connected
+
+	s := rp.Stats()
+	if s.Total != 3 {
+		t.Errorf("Total = %d, want 3", s.Total)
+	}
+	if s.Connected != 2 {
+		t.Errorf("Connected = %d, want 2", s.Connected)
+	}
+	if s.Pinned != 1 {
+		t.Errorf("Pinned = %d, want 1", s.Pinned)
+	}
+	if s.Leased != 1 {
+		t.Errorf("Leased = %d, want 1", s.Leased)
+	}
+}
+
 func TestPin(t *testing.T) {
 	rp := newTestPool(0)
 	rp.Pin("wss://a", "wss://b")

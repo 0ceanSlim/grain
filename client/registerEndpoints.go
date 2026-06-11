@@ -141,4 +141,7 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/client/relays", api.ClientRelaysHandler)
 	mux.HandleFunc("/api/v1/client/connect/", api.ClientConnectHandler)
 	mux.HandleFunc("/api/v1/client/disconnect/", api.ClientDisconnectHandler)
+
+	// Relay-pool status (total vs connected) for the dashboard indicator
+	mux.HandleFunc("/api/v1/client/status", api.ClientStatusHandler)
 }
