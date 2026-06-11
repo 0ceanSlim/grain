@@ -28,6 +28,17 @@ type RelayPool struct {
 	mu            sync.RWMutex
 	config        *Config
 	messageRouter *MessageRouter
+
+	// Outbox-pool lifecycle (#56). All guarded by mu except dialSem.
+	pinned    map[string]bool          // never idle-evicted (index/seed relays)
+	backoff   map[string]time.Time     // url -> earliest next dial attempt
+	failCount map[string]int           // url -> consecutive dial failures
+	dialing   map[string]chan struct{} // single-flight: in-progress dials, closed on completion
+	dialSem   chan struct{}            // bounds concurrent dials (held without mu)
+
+	// Test seams; NewRelayPool wires the real implementations.
+	dialFn      func(url string, timeout time.Duration) (*websocket.Conn, error)
+	startReader func(rc *RelayConnection)
 }
 
 // RelayConnection represents a single relay connection
@@ -42,6 +53,12 @@ type RelayConnection struct {
 	done          chan struct{}
 	closeOnce     sync.Once      // guards exactly-one close of done (#94)
 	messageRouter *MessageRouter // Add message router
+
+	// Lease accounting for the outbox pool (#56), guarded by mu. leases is the
+	// number of active Acquire holders; at zero the connection is idle-evictable
+	// and idleAt marks when it went idle.
+	leases int
+	idleAt time.Time
 }
 
 // MessageRouter handles routing messages to subscriptions
@@ -115,11 +132,28 @@ func (mr *MessageRouter) RouteMessage(subID string, messageType string, data int
 
 // NewRelayPool creates a new relay pool
 func NewRelayPool(config *Config) *RelayPool {
-	return &RelayPool{
+	dialConcurrency := config.DialConcurrency
+	if dialConcurrency <= 0 {
+		dialConcurrency = 16
+	}
+
+	rp := &RelayPool{
 		connections:   make(map[string]*RelayConnection),
 		config:        config,
 		messageRouter: NewMessageRouter(),
+		pinned:        make(map[string]bool),
+		backoff:       make(map[string]time.Time),
+		failCount:     make(map[string]int),
+		dialing:       make(map[string]chan struct{}),
+		dialSem:       make(chan struct{}, dialConcurrency),
 	}
+	// Real implementations; tests overwrite these seams before calling Acquire.
+	rp.dialFn = realDial
+	rp.startReader = func(rc *RelayConnection) {
+		go rc.writeHandler()
+		go rc.readHandler()
+	}
+	return rp
 }
 
 // Connect establishes a connection to a relay
