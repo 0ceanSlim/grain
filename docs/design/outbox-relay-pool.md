@@ -57,25 +57,28 @@ The built-in Go client (`client/core`) is the library grain ships to downstream 
 
 ## 3. Relay role taxonomy
 
-Two sources, per #56. **Event-derived** roles are *per target user* (relay X is user A's outbox but user B's inbox). **Locally-configured** roles are *per install* (same set for every user you interact with).
+Roles fall into three classes by where the relay set comes from. (Research §12 pinned down the concrete kinds — several roles the first draft called "local" actually have standard published list events.)
 
-| Role | Source | Resolved from | Notes |
-|---|---|---|---|
-| `Outbox` | event-derived | NIP-65 kind 10002 `write` | where to publish a user's notes / fetch their notes |
-| `Inbox` | event-derived | NIP-65 kind 10002 `read` | where replies/zaps to a user are delivered |
-| `DMInbox` | event-derived | NIP-17 kind **10050** | where a user receives gift-wrapped DMs |
-| `PrivateInbox` | event-derived | **research — kind TBD** | open question §11 |
-| `PrivateHome` | local | client config | stores events only the local user can see |
-| `Proxy` | local | client config | aggregator override — short-circuits outbox expansion |
-| `Broadcast` | local | client config | fan-out; own publishes mirror here |
-| `Indexer` | local | client config (seed list) | resolve anyone's NIP-65/NIP-17 lists; default 5 in [`config.go:30`](../../client/core/config.go) |
-| `Search` | local | client config | NIP-50 capable; possible list-event — research §11 |
-| `Local` | local | client config | same device/LAN; latency-preferred |
-| `Trusted` | local | client config | **only** relays we'll sign NIP-42 AUTH for |
-| `Favorite` | local | session UX | surfaced in UI; low priority |
-| `Blocked` | local | session UX | pool never dials these |
+- **Per-target event-derived** — resolved for *any* user you interact with, from their published events; these populate the per-target directory (§4.4).
+- **Self-only event-derived** — the *logged-in user's own* published preferences; hydrated into the session config (§4.3) on login (some need the user's signer to decrypt). Not fetched for other users.
+- **Local-only** — app/session config; no standard published kind.
 
-A single relay URL can hold several roles (NIP-65 "both" = Outbox+Inbox; an indexer can also be trusted). **"Source: local" does not mean install-global** — local roles are seeded from app defaults into each *session* (§4.3) and are user-editable there; only the not-logged-in path uses the raw app defaults.
+| Role | Kind / source | NIP | Class | Notes |
+|---|---|---|---|---|
+| `Outbox` | 10002 `write` | 65 | per-target | publish a user's notes / fetch their notes |
+| `Inbox` | 10002 `read` | 65 | per-target | replies / zaps to a user are delivered here |
+| `DMInbox` | **10050** | 17 | per-target | gift-wrapped DM delivery; `["relay", url]` tags, empty content |
+| `PrivateHome` | **10013** (NIP-44 encrypted) | 37 | self-only | "relays for private content" (draft wraps); owner-only — needs the user's signer to decrypt |
+| `Search` | **10007** | 51 | self-only (+ local) | NIP-50 search relays |
+| `Blocked` | **10006** | 51 | self-only (+ local) | pool never dials these |
+| `Favorite` | **10012** (+ 30002 sets) | 51 | self-only (+ local) | browsable favorites; surfaced in UI |
+| `Indexer` | client config (seed list) | — | local | resolve anyone's NIP-65/17 lists; default 5 in [`config.go`](../../client/core/config.go) |
+| `Broadcast` | client config | — | local | own publishes mirror here for wider fan-out |
+| `Proxy` | client config | — | local | aggregator override — short-circuits outbox expansion |
+| `Local` | client config | — | local | same device / LAN; latency-preferred |
+| `Trusted` | client config | — | local | **only** relays we'll sign NIP-42 AUTH for |
+
+`PrivateInbox` from the first draft is **dropped** — no standard "private inbox" kind exists; kind 10013 covers the private-relay need as `PrivateHome`. A single URL can hold several roles (NIP-65 "both" = Outbox+Inbox; an indexer can also be trusted). The per-target directory (§4.4) only ever needs Outbox/Inbox/DMInbox; the self-only roles load into the session config (§4.3) from the logged-in user's own kinds, with local config as override/fallback.
 
 ---
 
@@ -129,8 +132,9 @@ func (rp *RelayPool) Release(url string)                                    // l
 The per-user overlay that makes the client behave exactly how that user wants. On login it is **seeded** from §4.1 defaults (local roles) **plus** the user's resolved event-derived relays, then it is **editable and persisted in session cache**. This extends today's `cache.clientRelays[pubkey]` ([`cache/relays.go`](../../client/cache/relays.go)), which already stores a per-user relay list but only with `read`/`write` bools — enrich it to the full `Role` set below.
 
 It holds, per logged-in pubkey:
-- the user's own **event-derived** roles — `Outbox` / `Inbox` / `DMInbox` / `PrivateInbox`
-- **local** roles inherited from defaults — `Broadcast` / `Indexer` / `Search` / `Trusted` / `Proxy` / `Local` / `PrivateHome` — now user-overridable
+- the user's own **per-target-shaped** roles — `Outbox` / `Inbox` / `DMInbox` (also in the directory §4.4)
+- the user's own **self-only event-derived** roles, hydrated from their published lists — `Search` (10007) / `Blocked` (10006) / `Favorite` (10012) / `PrivateHome` (10013, decrypt with the user's signer)
+- **local** roles inherited from defaults — `Broadcast` / `Indexer` / `Proxy` / `Local` / `Trusted` — now user-overridable
 - user **constraints** that *narrow* the routed set — e.g. "only write to X", "only read from Y", per-relay enable/disable
 
 ```go
@@ -148,8 +152,7 @@ const (
     RoleOutbox Role = 1 << iota
     RoleInbox
     RoleDMInbox
-    RolePrivateInbox
-    RolePrivateHome
+    RolePrivateHome // NIP-37 kind 10013 (encrypted, self-only)
     RoleProxy
     RoleBroadcast
     RoleIndexer
@@ -167,12 +170,11 @@ When nobody is logged in, routing falls back to §4.1 defaults directly.
 
 ```go
 type UserRelays struct {
-    Outbox       []string
-    Inbox        []string
-    DMInbox      []string
-    PrivateInbox []string
-    FetchedAt    time.Time
-    Negative     bool // cached "no list published" — short TTL
+    Outbox    []string // NIP-65 kind 10002 write
+    Inbox     []string // NIP-65 kind 10002 read
+    DMInbox   []string // NIP-17 kind 10050
+    FetchedAt time.Time
+    Negative  bool // cached "no list published" — short TTL
 }
 
 type RelayDirectory struct {
@@ -308,13 +310,18 @@ grain's `client/api`, `client/data`, `client/session`, and the global `coreClien
 
 ---
 
-## 12. Open research questions
+## 12. Research questions — resolved
 
-- **NIP-17 DM relay list:** confirm kind **10050** shape before wiring `DMInbox`.
-- **`PrivateInbox`:** #56 says "possibly a new event list; needs research." Confirm kind exists or drop the role to local-only.
-- **`Search` list event:** is there a user-published search-relay list, or is it purely app-config? (#56 flags this.)
-- **Persist `RelayDirectory` across restarts?** Or always cold-resolve from indexers. Cold is simpler; revisit if indexer load is a problem.
-- **`MaxConnections` default** — 256 is a guess; needs a load sanity check.
+Settled against the specs (June 2026):
+
+- **DMInbox = NIP-17 kind 10050.** `["relay", url]` tags, empty content, replaceable. Per-target.
+- **`PrivateInbox` dropped.** No standard "private inbox" relay list exists. The private-relay need is met by **NIP-37 kind 10013** ("relays for private content" / draft wraps) — **NIP-44 encrypted**, so resolvable only for the logged-in user (needs their signer). Mapped to `PrivateHome` (self-only).
+- **Search relays = NIP-51 kind 10007** — a real user-published list. Also found alongside it: **10006 blocked**, **10012 favorite** (+ **30002** relay sets). So Search / Blocked / Favorite are *self-only event-derived* (hydrate the logged-in user's own lists), with local config as override — not local-only as the first draft assumed.
+- **Directory persistence: no.** Cold-resolve per-target lists from indexers on demand, protected by the TTL cache (§4.4) + single-flight. Optional persistence can come later via the `RelayListStore` seam (§11) if indexer load justifies it.
+
+Still open (not blocking — tune under load):
+
+- **`MaxConnections` default (256)** wants a real load sanity check.
 
 ---
 
