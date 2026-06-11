@@ -204,6 +204,20 @@
       </svg>
     </button>
 
+    <!-- Relay-pool indicator: how many relays the outbox pool has connected
+         out of the total it's tracking. Updated by the poller in the script
+         block below from /api/v1/client/status. Hidden on the narrowest
+         screens to keep the header uncluttered. -->
+    <div
+      id="relay-pool-status"
+      class="items-center hidden gap-1 px-2 py-1 font-mono text-xs rounded sm:flex text-text-secondary bg-surface-elevated"
+      title="Relays connected / total tracked by the outbox pool"
+    >
+      <span id="relay-pool-dot" class="text-text-secondary">●</span>
+      <span id="relay-pool-count">—/—</span>
+      <span class="hidden md:inline">relays</span>
+    </div>
+
     <!-- Login / profile button. Always present; content updated by
          navigation.js. -->
     <div id="profile-nav">{{template "login-button"}}</div>
@@ -253,6 +267,29 @@
       if (input) setTimeout(function () { input.focus(); }, 50);
     }
   };
+
+  // Relay-pool indicator. Polls /api/v1/client/status and shows
+  // connected/total relays the outbox pool is tracking. Best-effort: if the
+  // relay is unreachable the indicator just keeps its last value.
+  (function () {
+    var count = document.getElementById("relay-pool-count");
+    var dot = document.getElementById("relay-pool-dot");
+    if (!count) return;
+    function refresh() {
+      fetch("/api/v1/client/status")
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (s) {
+          if (!s || !s.initialized) return;
+          var connected = s.pool_connected || 0;
+          var total = s.pool_total || 0;
+          count.textContent = connected + "/" + total;
+          if (dot) dot.className = connected > 0 ? "text-success" : "text-text-secondary";
+        })
+        .catch(function () {});
+    }
+    refresh();
+    setInterval(refresh, 10000);
+  })();
 </script>
 
 <!-- Hidden template for navigation.js to swap the logged-out
