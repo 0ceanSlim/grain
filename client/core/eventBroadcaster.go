@@ -228,21 +228,11 @@ func PublishEvent(client *Client, signer *EventSigner, eventBuilder *EventBuilde
 		return nil, nil, fmt.Errorf("event validation failed: %w", err)
 	}
 
-	// Use provided relays or fall back to user's write relays
+	// Use provided relays, or route by the outbox model: the author's outbox
+	// plus every p-tagged recipient's inbox (so replies / mentions reach them).
 	relays := targetRelays
 	if len(relays) == 0 {
-		mailboxes, err := client.GetUserRelays(signer.GetPublicKey())
-		if err == nil && mailboxes != nil {
-			relays = mailboxes.Write
-			if len(relays) == 0 {
-				relays = mailboxes.Both
-			}
-		}
-
-		// Final fallback to index relays
-		if len(relays) == 0 {
-			relays = client.config.IndexRelays
-		}
+		relays = client.RoutePublish(event)
 	}
 
 	log.ClientCore().Info("Publishing event", "event_id", event.ID, "kind", event.Kind, "relay_count", len(relays))
@@ -280,21 +270,11 @@ func PublishEventWithRetry(client *Client, signer *EventSigner, eventBuilder *Ev
 		return nil, nil, fmt.Errorf("event validation failed: %w", err)
 	}
 
-	// Use provided relays or fall back to user's write relays
+	// Use provided relays, or route by the outbox model: the author's outbox
+	// plus every p-tagged recipient's inbox (so replies / mentions reach them).
 	relays := targetRelays
 	if len(relays) == 0 {
-		mailboxes, err := client.GetUserRelays(signer.GetPublicKey())
-		if err == nil && mailboxes != nil {
-			relays = mailboxes.Write
-			if len(relays) == 0 {
-				relays = mailboxes.Both
-			}
-		}
-
-		// Final fallback to index relays
-		if len(relays) == 0 {
-			relays = client.config.IndexRelays
-		}
+		relays = client.RoutePublish(event)
 	}
 
 	log.ClientCore().Info("Publishing event with retry", "event_id", event.ID, "kind", event.Kind, "relay_count", len(relays))

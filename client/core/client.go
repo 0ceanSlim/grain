@@ -294,12 +294,14 @@ func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Even
 		Limit:   &[]int{1}[0], // Get latest only
 	}
 
-	// Use relay hints if provided, otherwise use connected relays
+	// Use relay hints if provided, otherwise route to the author's outbox
+	// relays (falling back to index relays) per the outbox model, rather than
+	// blasting every connected relay.
 	targetRelays := relayHints
 	if len(targetRelays) == 0 {
-		targetRelays = c.GetConnectedRelays()
-		log.ClientCore().Debug("No relay hints provided, using connected relays",
-			"pubkey", pubkey, "connected_relays", targetRelays)
+		targetRelays = c.RouteFetch(pubkey)
+		log.ClientCore().Debug("No relay hints provided, routing to author outbox",
+			"pubkey", pubkey, "relays", targetRelays)
 	}
 
 	sub, err := c.Subscribe([]nostr.Filter{filter}, targetRelays)
