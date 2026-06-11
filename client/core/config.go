@@ -23,10 +23,12 @@ type Config struct {
 	// Outbox-pool lifecycle (#56). Zero values fall back to built-in defaults
 	// in NewRelayPool / the lease methods, so older callers that build a Config
 	// by hand keep working.
-	DialConcurrency int           `json:"dial_concurrency"` // max simultaneous dials
-	IdleTTL         time.Duration `json:"idle_ttl"`         // evict a 0-lease conn after this idle span
-	BackoffBase     time.Duration `json:"backoff_base"`     // first dial-retry backoff
-	BackoffMax      time.Duration `json:"backoff_max"`      // dial-retry backoff ceiling
+	DialConcurrency int           `json:"dial_concurrency"`   // max simultaneous dials
+	IdleTTL         time.Duration `json:"idle_ttl"`           // evict a 0-lease conn after this idle span
+	BackoffBase     time.Duration `json:"backoff_base"`       // first dial-retry backoff
+	BackoffMax      time.Duration `json:"backoff_max"`        // dial-retry backoff ceiling
+	RelayListTTL    time.Duration `json:"relay_list_ttl"`     // per-user relay-list directory cache TTL
+	RelayListNegTTL time.Duration `json:"relay_list_neg_ttl"` // shorter TTL for "no list published"
 }
 
 // DefaultConfig returns a sensible default configuration. The IndexRelays
@@ -54,6 +56,8 @@ func DefaultConfig() *Config {
 		IdleTTL:           120 * time.Second,
 		BackoffBase:       2 * time.Second,
 		BackoffMax:        60 * time.Second,
+		RelayListTTL:      time.Hour,
+		RelayListNegTTL:   time.Minute,
 	}
 }
 

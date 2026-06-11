@@ -24,6 +24,10 @@ type Client struct {
 	// released when the session switches relays or ends, so they can be
 	// idle-evicted — the outbox pool stays additive rather than torn down.
 	sessionRelays []string
+
+	// directory resolves and caches per-target users' event-derived relay roles
+	// (outbox / inbox / DM inbox) for outbox routing.
+	directory *RelayDirectory
 }
 
 // NewClient creates a new Nostr client instance
@@ -32,12 +36,13 @@ func NewClient(config *Config) *Client {
 		config = DefaultConfig()
 	}
 
-	return &Client{
+	c := &Client{
 		relayPool:     NewRelayPool(config),
 		subscriptions: make(map[string]*Subscription),
 		config:        config,
-		mu:            sync.RWMutex{},
 	}
+	c.directory = newRelayDirectory(config.RelayListTTL, config.RelayListNegTTL, c.fetchUserRelaysFromNetwork)
+	return c
 }
 
 // ConnectToRelays establishes connections to multiple relay URLs
