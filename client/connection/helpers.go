@@ -111,6 +111,19 @@ func GetCoreClientStatus() map[string]interface{} {
 	}
 }
 
+// StartRelayEvictionSweeper starts the core client's idle-connection sweeper,
+// bounded to ctx so it doesn't outlive the server instance (#93). Companion to
+// StartRelayHealthCheck: the health check keeps the pinned index relays up,
+// while the sweeper reclaims the per-user connections the outbox pool dials on
+// demand once they go idle.
+func StartRelayEvictionSweeper(ctx context.Context, interval time.Duration) {
+	if coreClient == nil {
+		log.ClientConnection().Warn("Core client not initialized; eviction sweeper not started")
+		return
+	}
+	coreClient.StartEvictionSweeper(ctx, interval)
+}
+
 // StartRelayHealthCheck starts a background goroutine to maintain relay
 // connections. It exits when ctx is cancelled so it doesn't outlive the
 // server instance that started it (#93).

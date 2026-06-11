@@ -54,6 +54,10 @@ func InitializeClient(ctx context.Context, serverCfg *cfgType.ServerConfig) erro
 	// Start relay connection health check (check every 5 minutes)
 	connection.StartRelayHealthCheck(ctx, 5*time.Minute)
 
+	// Start the outbox pool's idle-connection sweeper (reclaims per-user relays
+	// the pool dialed on demand once they go idle).
+	connection.StartRelayEvictionSweeper(ctx, time.Minute)
+
 	log.ClientMain().Info("Client package initialized successfully")
 	return nil
 }

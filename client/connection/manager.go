@@ -37,6 +37,10 @@ func InitializeCoreClient(serverCfg *cfgType.ServerConfig) error {
 	// Store relays for later use
 	indexRelays = config.IndexRelays
 
+	// Pin index/seed relays so the idle sweeper never evicts them — they must
+	// stay connected to resolve relay lists and metadata for arbitrary users.
+	coreClient.PinRelays(config.IndexRelays...)
+
 	// Connect to index relays asynchronously. Relay startup must never
 	// block on outbound network — when index relays are unreachable, the
 	// retry loop can take 30+ seconds and leave the HTTP server unable

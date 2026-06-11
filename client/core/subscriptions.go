@@ -21,6 +21,7 @@ type Subscription struct {
 	mu         sync.RWMutex
 	active     bool
 	eoseRelays map[string]bool // NEW: Track which relays sent EOSE
+	acquired   []string        // relays this sub holds a pool lease on (released on Close)
 }
 
 // NewSubscription creates a new subscription instance
@@ -63,6 +64,15 @@ func (s *Subscription) Start() error {
 	sent := 0
 
 	for _, relayURL := range s.Relays {
+		// Connect-on-demand and hold a lease for the subscription's lifetime so
+		// the connection isn't idle-evicted out from under an active sub.
+		if _, err := s.client.relayPool.Acquire(relayURL); err != nil {
+			log.ClientCore().Debug("Failed to acquire relay for subscription", "relay", relayURL, "sub_id", s.ID, "error", err)
+			lastErr = err
+			continue
+		}
+		s.acquired = append(s.acquired, relayURL)
+
 		if err := s.client.relayPool.SendMessage(relayURL, reqMessage); err != nil {
 			// Demoted to Debug: races with upstream disconnect are
 			// normal flakiness, not grain bugs. The subscription's
@@ -83,8 +93,12 @@ func (s *Subscription) Start() error {
 	}
 
 	if sent == 0 && lastErr != nil {
-		// Unregister since we failed to start
+		// Unregister and release any leases taken before bailing out.
 		s.client.relayPool.UnregisterSubscription(s.ID)
+		for _, relayURL := range s.acquired {
+			s.client.relayPool.Release(relayURL)
+		}
+		s.acquired = nil
 		return lastErr
 	}
 
@@ -128,6 +142,13 @@ func (s *Subscription) Close() error {
 		}
 	}
 
+	// Release the pool leases this subscription held so the connections can be
+	// idle-evicted once nothing else needs them.
+	for _, relayURL := range s.acquired {
+		s.client.relayPool.Release(relayURL)
+	}
+	s.acquired = nil
+
 	s.active = false
 	close(s.Done)
 	close(s.Events)
@@ -155,14 +176,23 @@ func (s *Subscription) AddRelay(url string) error {
 
 	// If subscription is active, send REQ to new relay
 	if s.active {
+		// Connect-on-demand and hold a lease, mirroring Start.
+		if _, err := s.client.relayPool.Acquire(url); err != nil {
+			s.Relays = s.Relays[:len(s.Relays)-1]
+			return err
+		}
+		s.acquired = append(s.acquired, url)
+
 		reqMessage := []interface{}{"REQ", s.ID}
 		for _, filter := range s.Filters {
 			reqMessage = append(reqMessage, filter)
 		}
 
 		if err := s.client.relayPool.SendMessage(url, reqMessage); err != nil {
-			// Remove from list if send failed
+			// Remove from list and drop the lease if send failed
 			s.Relays = s.Relays[:len(s.Relays)-1]
+			s.acquired = s.acquired[:len(s.acquired)-1]
+			s.client.relayPool.Release(url)
 			return err
 		}
 
@@ -209,6 +239,15 @@ func (s *Subscription) RemoveRelay(url string) error {
 			conn.mu.Lock()
 			delete(conn.Subscriptions, s.ID)
 			conn.mu.Unlock()
+		}
+	}
+
+	// Drop the lease if this sub was holding one for the removed relay.
+	for i, u := range s.acquired {
+		if u == url {
+			s.acquired = append(s.acquired[:i], s.acquired[i+1:]...)
+			s.client.relayPool.Release(url)
+			break
 		}
 	}
 

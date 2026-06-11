@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -17,6 +18,12 @@ type Client struct {
 	subscriptions map[string]*Subscription
 	config        *Config
 	mu            sync.RWMutex
+
+	// sessionRelays are the urls Acquired for the currently logged-in session
+	// (a lease held on each for the session's lifetime). Guarded by mu. They're
+	// released when the session switches relays or ends, so they can be
+	// idle-evicted — the outbox pool stays additive rather than torn down.
+	sessionRelays []string
 }
 
 // NewClient creates a new Nostr client instance
@@ -462,97 +469,85 @@ type RelayConfig struct {
 	Write bool   `json:"write"`
 }
 
-// ReplaceRelayConnections replaces current relay connections with a new set
+// ReplaceRelayConnections swaps the relays held for the current session.
+//
+// In the outbox model this is ADDITIVE: it does not tear the shared pool down.
+// It releases the previous session's leases (so those connections become
+// idle-evictable once nothing else needs them) and acquires the new set,
+// holding one lease on each for the session's lifetime. Index/seed relays are
+// pinned separately and are never affected by a session switch.
 func (c *Client) ReplaceRelayConnections(newRelays []RelayConfig) error {
-	log.ClientCore().Info("Replacing relay connections", "new_relay_count", len(newRelays))
-
-	// Extract URLs for connection
-	var relayURLs []string
+	urls := make([]string, 0, len(newRelays))
 	for _, relay := range newRelays {
-		relayURLs = append(relayURLs, relay.URL)
+		urls = append(urls, relay.URL)
 	}
 
-	// Close existing connections (need to do this with lock)
+	// Drop the previous session's holds first.
 	c.mu.Lock()
-	if err := c.relayPool.Close(); err != nil {
-		log.ClientCore().Warn("Error closing existing relay pool", "error", err)
+	previous := c.sessionRelays
+	c.sessionRelays = nil
+	c.mu.Unlock()
+	for _, u := range previous {
+		c.relayPool.Release(u)
 	}
 
-	// Create new relay pool with current config
-	c.relayPool = NewRelayPool(c.config)
-	c.mu.Unlock() // IMPORTANT: Unlock before trying to connect to avoid deadlock
-
-	// Connect to new relays (this needs to happen without the lock)
-	if err := c.ConnectToRelaysWithRetry(relayURLs, 2); err != nil {
-		log.ClientCore().Error("Failed to connect to new relay set", "error", err)
-		// Try to recover by connecting to index relays
-		c.mu.Lock()
-		c.relayPool = NewRelayPool(c.config)
-		c.mu.Unlock()
-
-		// Try index relays as fallback
-		if len(c.config.IndexRelays) > 0 {
-			log.ClientCore().Info("Attempting to reconnect to index relays as fallback")
-			if fallbackErr := c.ConnectToRelaysWithRetry(c.config.IndexRelays, 1); fallbackErr != nil {
-				log.ClientCore().Error("Failed to connect to index relays as fallback", "error", fallbackErr)
-			}
+	// Acquire the new set, holding one lease each for the session duration.
+	acquired := make([]string, 0, len(urls))
+	for _, u := range urls {
+		if _, err := c.relayPool.Acquire(u); err != nil {
+			log.ClientCore().Debug("Failed to acquire session relay", "relay", u, "error", err)
+			continue
 		}
-
-		return fmt.Errorf("failed to connect to new relay set: %w", err)
+		acquired = append(acquired, u)
 	}
 
-	// Log relay permissions
-	for _, relay := range newRelays {
-		permissions := []string{}
-		if relay.Read {
-			permissions = append(permissions, "read")
-		}
-		if relay.Write {
-			permissions = append(permissions, "write")
-		}
-		log.ClientCore().Debug("Relay permissions set",
-			"relay", relay.URL,
-			"permissions", permissions)
+	c.mu.Lock()
+	c.sessionRelays = acquired
+	c.mu.Unlock()
+
+	if len(acquired) == 0 && len(urls) > 0 {
+		return fmt.Errorf("failed to connect to any of the %d requested relays", len(urls))
 	}
 
-	connectedRelays := c.GetConnectedRelays()
-	log.ClientCore().Info("Successfully replaced relay connections",
-		"requested_count", len(newRelays),
-		"connected_count", len(connectedRelays),
-		"connected_relays", connectedRelays)
-
+	log.ClientCore().Info("Switched session relays (additive)",
+		"requested", len(urls), "acquired", len(acquired))
 	return nil
 }
 
-// SwitchToUserRelays switches the client to use user's cached relays
+// SwitchToUserRelays holds the user's relays for the session (additive — see
+// ReplaceRelayConnections). Index relays stay connected alongside them.
 func (c *Client) SwitchToUserRelays(userRelays []RelayConfig) error {
-	log.ClientCore().Info("Switching to user relays", "relay_count", len(userRelays))
-
 	if len(userRelays) == 0 {
-		log.ClientCore().Warn("No user relays found, keeping current connections")
+		log.ClientCore().Warn("No user relays provided, keeping current session relays")
 		return nil
 	}
-
-	// Replace connections with user's relays
+	log.ClientCore().Info("Switching to user relays", "relay_count", len(userRelays))
 	return c.ReplaceRelayConnections(userRelays)
 }
 
-// SwitchToIndexRelays switches the client back to the configured index
-// (seed/discovery) relays — used when a session ends or when no per-user
-// mailbox set is known.
+// SwitchToIndexRelays releases the current session's relay leases. There is
+// nothing to "switch back" to in the additive model: the index/seed relays are
+// pinned and kept up by the health check, so they remain connected regardless.
 func (c *Client) SwitchToIndexRelays() error {
-	log.ClientCore().Info("Switching to index relays")
-
-	// Convert index relays to RelayConfig format (both read and write)
-	var indexRelayConfigs []RelayConfig
-	for _, url := range c.config.IndexRelays {
-		indexRelayConfigs = append(indexRelayConfigs, RelayConfig{
-			URL:   url,
-			Read:  true,
-			Write: true,
-		})
+	c.mu.Lock()
+	previous := c.sessionRelays
+	c.sessionRelays = nil
+	c.mu.Unlock()
+	for _, u := range previous {
+		c.relayPool.Release(u)
 	}
+	log.ClientCore().Info("Released session relays; pinned index relays remain", "released", len(previous))
+	return nil
+}
 
-	// Replace connections with index relays
-	return c.ReplaceRelayConnections(indexRelayConfigs)
+// PinRelays marks relays so the idle sweeper never evicts them — used for the
+// index/seed relays. Pinning does not dial; the connection is still established
+// on demand by Acquire or the startup connect.
+func (c *Client) PinRelays(urls ...string) {
+	c.relayPool.Pin(urls...)
+}
+
+// StartEvictionSweeper starts the pool's idle-connection sweeper, bounded to ctx.
+func (c *Client) StartEvictionSweeper(ctx context.Context, interval time.Duration) {
+	c.relayPool.StartEvictionSweeper(ctx, interval)
 }
