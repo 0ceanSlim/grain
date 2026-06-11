@@ -88,7 +88,7 @@ Four layers. The bottom layer is the *default* lists; above it sits **one shared
 
 ### 4.0 The shape in one paragraph
 
-There is **one default relay list** (app config) so the relay works before anyone logs in and so new sessions have a starting point. As the relay runs and users interact, it dials more and more relays into **one shared connection pool** — the "hundreds of websockets" of the outbox model, ref-counted and shared across sessions. When a user logs in they get a **per-session relay config**: their own event-derived relays (NIP-65 outbox/inbox, NIP-17 DM…) **plus** the default local-role relays, all **editable by that user and persisted in session cache** (e.g. "only ever write to relay X"). Every action selects a read-set or write-set *out of the shared pool*, computed from routing (§5) and narrowed by the session config. Interacting with another user pulls *that* user's outbox/inbox into the pool on demand.
+There is **one default relay list** (app config) so the relay works before anyone logs in and so new sessions have a starting point. As the relay runs and users interact, it dials more and more relays into **one shared connection pool** — the "hundreds of websockets" of the outbox model, ref-counted and shared across sessions. When a user logs in they get a **per-session relay config**: their own event-derived relays (NIP-65 outbox/inbox, NIP-17 DM…) **plus** the default local-role relays, all **editable by that user and persisted in session cache**. Every action selects a read-set or write-set *out of the shared pool*, computed from routing (§5). Interacting with another user pulls *that* user's outbox/inbox into the pool on demand — and **by default the client writes to other users' relays as well as its own** (that is the whole point of outbox). A user *can* explicitly pin to fixed relays ("only write to X / read from Y"), but that disables outbox routing and is opt-in and discouraged (§4.3).
 
 ### 4.1 App defaults — config: bootstrap + per-session seed
 
@@ -135,7 +135,7 @@ It holds, per logged-in pubkey:
 - the user's own **per-target-shaped** roles — `Outbox` / `Inbox` / `DMInbox` (also in the directory §4.4)
 - the user's own **self-only event-derived** roles, hydrated from their published lists — `Search` (10007) / `Blocked` (10006) / `Favorite` (10012) / `PrivateHome` (10013, decrypt with the user's signer)
 - **local** roles inherited from defaults — `Broadcast` / `Indexer` / `Proxy` / `Local` / `Trusted` — now user-overridable
-- user **constraints** that *narrow* the routed set — e.g. "only write to X", "only read from Y", per-relay enable/disable
+- an optional **fixed-relay override** (default **OFF**): pin the client to specific relays ("only write to X", "only read from Y"). This **turns the outbox model off** — replies stop reaching other users' inboxes — so it is explicit opt-in and **not recommended** unless the user deliberately wants a single-/fixed-relay client.
 
 ```go
 type SessionRelays struct {
@@ -190,7 +190,7 @@ This generalizes today's `Mailboxes` (which only has Read/Write/Both). The logge
 
 ## 5. Routing table
 
-`Route(op, targetPubkey) []string` composes the session's roles (§4.3) + the target's event-derived roles (§4.4), then **narrows by the session user's constraints** (e.g. "only write to X"). If the session has `Proxy` relays configured, feed-fetch ops short-circuit to proxy. The resolved URLs are then `Acquire`d from the shared pool (§4.2). A reply writes to **both** the author's outbox *and* the target's inbox, so the event lands where the target reads.
+`Route(op, targetPubkey) []string` composes the session's roles (§4.3) + the target's event-derived roles (§4.4). **By default this is full outbox routing** — a reply writes to **both** the author's outbox *and* the target's inbox (so it lands where the target reads), and reads hit the author's outbox. Routing collapses to a fixed relay set **only** if the user has explicitly enabled the fixed-relay override (§4.3), which turns outbox off. If the session has `Proxy` relays configured, feed-fetch ops short-circuit to proxy. The resolved URLs are then `Acquire`d from the shared pool (§4.2).
 
 | Operation | Relays resolved |
 |---|---|
@@ -294,7 +294,7 @@ client := core.NewClient(core.DefaultConfig())       // owns the shared pool (§
 // A user context = the per-session relay config (§4.3) + optional signer.
 uc := client.NewUserContext(pubkey, core.WithSigner(mySigner))
 uc.Relays().Set(url, core.RoleOutbox|core.RoleInbox)  // user edits their own config
-uc.Relays().OnlyWrite(url)                            // "only write to X" constraint
+uc.Relays().PinFixed(url)                             // opt-out: pin to fixed relays — DISABLES outbox, discouraged
 
 // Routing is automatic; the caller names the intent, not the relays.
 notes, err := uc.FetchNotes(ctx, authorPubkey)        // → author's Outbox
