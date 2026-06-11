@@ -79,9 +79,15 @@ func (rp *RelayPool) Acquire(url string) (*RelayConnection, error) {
 		rp.mu.Unlock()
 
 		// Dial without holding the pool lock, bounded by the dial semaphore so a
-		// burst of outbox lookups can't open unbounded sockets at once.
+		// burst of outbox lookups can't open unbounded sockets at once. Use the
+		// shorter per-dial open timeout (not ConnectionTimeout) so a dead relay
+		// in someone's outbox fails fast instead of stalling a query.
+		openTimeout := rp.config.OpenTimeout
+		if openTimeout <= 0 {
+			openTimeout = rp.config.ConnectionTimeout
+		}
 		rp.dialSem <- struct{}{}
-		conn, err := rp.dialFn(url, rp.config.ConnectionTimeout)
+		conn, err := rp.dialFn(url, openTimeout)
 		<-rp.dialSem
 
 		rp.mu.Lock()

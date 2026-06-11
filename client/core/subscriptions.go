@@ -60,23 +60,39 @@ func (s *Subscription) Start() error {
 		reqMessage = append(reqMessage, filter)
 	}
 
+	// Connect to all target relays CONCURRENTLY (bounded by the pool's dial
+	// semaphore) rather than one at a time, so a slow or dead relay in someone's
+	// outbox only costs its own dial timeout instead of stacking up serially
+	// behind the others. Each goroutine writes its own index, so no shared-write
+	// race; wg.Wait synchronises before we read the results.
+	connected := make([]bool, len(s.Relays))
+	var wg sync.WaitGroup
+	for i, relayURL := range s.Relays {
+		wg.Add(1)
+		go func(i int, url string) {
+			defer wg.Done()
+			if _, err := s.client.relayPool.Acquire(url); err != nil {
+				log.ClientCore().Debug("Failed to acquire relay for subscription", "relay", url, "sub_id", s.ID, "error", err)
+				return
+			}
+			connected[i] = true
+		}(i, relayURL)
+	}
+	wg.Wait()
+
+	// Fire the REQ to every relay that came up, holding its lease for the
+	// subscription's lifetime so it isn't idle-evicted out from under us.
 	var lastErr error
 	sent := 0
-
-	for _, relayURL := range s.Relays {
-		// Connect-on-demand and hold a lease for the subscription's lifetime so
-		// the connection isn't idle-evicted out from under an active sub.
-		if _, err := s.client.relayPool.Acquire(relayURL); err != nil {
-			log.ClientCore().Debug("Failed to acquire relay for subscription", "relay", relayURL, "sub_id", s.ID, "error", err)
-			lastErr = err
+	for i, relayURL := range s.Relays {
+		if !connected[i] {
 			continue
 		}
 		s.acquired = append(s.acquired, relayURL)
 
 		if err := s.client.relayPool.SendMessage(relayURL, reqMessage); err != nil {
-			// Demoted to Debug: races with upstream disconnect are
-			// normal flakiness, not grain bugs. The subscription's
-			// caller still sees the failure via the lastErr return.
+			// Demoted to Debug: races with upstream disconnect are normal
+			// flakiness, not grain bugs.
 			log.ClientCore().Debug("Failed to send subscription to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
 			lastErr = err
 			continue
@@ -124,27 +140,21 @@ func (s *Subscription) Close() error {
 	// Unregister from relay pool
 	s.client.relayPool.UnregisterSubscription(s.ID)
 
-	// Send CLOSE message to all relays
+	// Send CLOSE to, and release the lease on, each relay this subscription
+	// actually acquired (the connected subset — others never got a REQ). This
+	// also lets the connections be idle-evicted once nothing else needs them.
 	closeMessage := []interface{}{"CLOSE", s.ID}
-
-	for _, relayURL := range s.Relays {
+	for _, relayURL := range s.acquired {
 		if err := s.client.relayPool.SendMessage(relayURL, closeMessage); err != nil {
-			// Demoted to Debug: closing a sub on an already-disconnected
-			// relay is expected during teardown, not a problem.
+			// Demoted to Debug: closing a sub on an already-disconnected relay
+			// is expected during teardown, not a problem.
 			log.ClientCore().Debug("Failed to send close to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
 		}
-
-		// Remove subscription from relay
 		if conn, err := s.client.relayPool.GetConnection(relayURL); err == nil {
 			conn.mu.Lock()
 			delete(conn.Subscriptions, s.ID)
 			conn.mu.Unlock()
 		}
-	}
-
-	// Release the pool leases this subscription held so the connections can be
-	// idle-evicted once nothing else needs them.
-	for _, relayURL := range s.acquired {
 		s.client.relayPool.Release(relayURL)
 	}
 	s.acquired = nil

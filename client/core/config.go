@@ -29,6 +29,7 @@ type Config struct {
 	BackoffMax      time.Duration `json:"backoff_max"`        // dial-retry backoff ceiling
 	RelayListTTL    time.Duration `json:"relay_list_ttl"`     // per-user relay-list directory cache TTL
 	RelayListNegTTL time.Duration `json:"relay_list_neg_ttl"` // shorter TTL for "no list published"
+	OpenTimeout     time.Duration `json:"open_timeout"`       // per-dial cap for on-demand outbox dials (< ConnectionTimeout)
 }
 
 // DefaultConfig returns a sensible default configuration. The IndexRelays
@@ -58,6 +59,7 @@ func DefaultConfig() *Config {
 		BackoffMax:        60 * time.Second,
 		RelayListTTL:      time.Hour,
 		RelayListNegTTL:   time.Minute,
+		OpenTimeout:       4 * time.Second,
 	}
 }
 
