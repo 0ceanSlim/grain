@@ -106,6 +106,37 @@ func (d *RelayDirectory) Invalidate(pubkey string) {
 	d.mu.Unlock()
 }
 
+// Store inserts or merges a resolved relay set for a pubkey directly, without a
+// network resolve — used by bulk seeding. A NIP-65 (10002) and a NIP-17 (10050)
+// event for the same author arrive separately, so non-empty fields merge rather
+// than clobber.
+func (d *RelayDirectory) Store(pubkey string, ur *UserRelays) {
+	if pubkey == "" || ur == nil {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	existing, ok := d.entries[pubkey]
+	if !ok {
+		ur.FetchedAt = time.Now()
+		ur.Negative = false
+		d.entries[pubkey] = ur
+		return
+	}
+	if len(ur.Outbox) > 0 {
+		existing.Outbox = ur.Outbox
+	}
+	if len(ur.Inbox) > 0 {
+		existing.Inbox = ur.Inbox
+	}
+	if len(ur.DMInbox) > 0 {
+		existing.DMInbox = ur.DMInbox
+	}
+	existing.FetchedAt = time.Now()
+	existing.Negative = false
+}
+
 // KnownRelays returns the distinct relay URLs across every resolved entry —
 // the union of all users' outbox / inbox / DM relays the directory has seen.
 // This is the bulk of the client's "known relays" set: relays we're aware of
@@ -229,7 +260,9 @@ func parseDMRelays(event *nostr.Event) []string {
 	var relays []string
 	for _, tag := range event.Tags {
 		if len(tag) >= 2 && tag[0] == "relay" {
-			relays = append(relays, tag[1])
+			if n, ok := normalizeRelayURL(tag[1]); ok {
+				relays = append(relays, n)
+			}
 		}
 	}
 	return relays

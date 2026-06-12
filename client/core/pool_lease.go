@@ -42,6 +42,12 @@ func (rp *RelayPool) Pin(urls ...string) {
 // so the connection can eventually be idle-evicted. Concurrent Acquires for the
 // same url share a single dial (single-flight) and the resulting connection.
 func (rp *RelayPool) Acquire(url string) (*RelayConnection, error) {
+	normalized, ok := normalizeRelayURL(url)
+	if !ok {
+		return nil, fmt.Errorf("invalid relay url: %q", url)
+	}
+	url = normalized
+
 	for {
 		rp.mu.Lock()
 

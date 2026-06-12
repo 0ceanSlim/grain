@@ -34,24 +34,24 @@ func TestSessionRelaySwitchIsAdditive(t *testing.T) {
 	c.relayPool.Release("wss://index") // pinned ⇒ stays connected at lease 0
 
 	// Login as user A.
-	if err := c.SwitchToUserRelays([]RelayConfig{{URL: "wss://userA", Read: true, Write: true}}); err != nil {
+	if err := c.SwitchToUserRelays([]RelayConfig{{URL: "wss://user-a", Read: true, Write: true}}); err != nil {
 		t.Fatalf("switch to user A: %v", err)
 	}
 	conns := c.GetConnectedRelays()
 	assertHasRelay(t, conns, "wss://index") // index NOT torn down
-	assertHasRelay(t, conns, "wss://userA")
-	if l := leasesOf(c.relayPool, "wss://userA"); l != 1 {
+	assertHasRelay(t, conns, "wss://user-a")
+	if l := leasesOf(c.relayPool, "wss://user-a"); l != 1 {
 		t.Fatalf("userA leases = %d, want 1 (held for the session)", l)
 	}
 
 	// Switch to user B: A's session lease released, B acquired.
-	if err := c.SwitchToUserRelays([]RelayConfig{{URL: "wss://userB"}}); err != nil {
+	if err := c.SwitchToUserRelays([]RelayConfig{{URL: "wss://user-b"}}); err != nil {
 		t.Fatalf("switch to user B: %v", err)
 	}
-	if l := leasesOf(c.relayPool, "wss://userA"); l != 0 {
+	if l := leasesOf(c.relayPool, "wss://user-a"); l != 0 {
 		t.Fatalf("userA leases after switch = %d, want 0 (released)", l)
 	}
-	if l := leasesOf(c.relayPool, "wss://userB"); l != 1 {
+	if l := leasesOf(c.relayPool, "wss://user-b"); l != 1 {
 		t.Fatalf("userB leases = %d, want 1", l)
 	}
 
@@ -59,7 +59,7 @@ func TestSessionRelaySwitchIsAdditive(t *testing.T) {
 	if err := c.SwitchToIndexRelays(); err != nil {
 		t.Fatalf("switch to index: %v", err)
 	}
-	if l := leasesOf(c.relayPool, "wss://userB"); l != 0 {
+	if l := leasesOf(c.relayPool, "wss://user-b"); l != 0 {
 		t.Fatalf("userB leases after logout = %d, want 0", l)
 	}
 	assertHasRelay(t, c.GetConnectedRelays(), "wss://index")

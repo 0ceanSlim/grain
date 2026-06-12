@@ -60,6 +60,21 @@ func TestPoolStatsKnownCountsDefaultsAndDirectory(t *testing.T) {
 	}
 }
 
+func TestDirectoryStoreMergesAndCountsKnown(t *testing.T) {
+	d := newRelayDirectory(time.Hour, time.Minute, func(string) *UserRelays { return nil })
+	// A 10002 then a 10050 for the same author must merge, not clobber.
+	d.Store("a", &UserRelays{Outbox: []string{"wss://o1"}, Inbox: []string{"wss://i1"}})
+	d.Store("a", &UserRelays{DMInbox: []string{"wss://dm1"}})
+
+	if known := d.KnownRelays(); len(known) != 3 {
+		t.Fatalf("KnownRelays = %v, want 3 (o1,i1,dm1 merged)", known)
+	}
+	cached, ok := d.Cached("a")
+	if !ok || len(cached.Outbox) != 1 || len(cached.Inbox) != 1 || len(cached.DMInbox) != 1 {
+		t.Fatalf("Store merge clobbered fields: %+v ok=%v", cached, ok)
+	}
+}
+
 func TestDirectoryCachesAndSingleFlights(t *testing.T) {
 	var calls int32
 	d := newRelayDirectory(time.Hour, time.Minute, func(string) *UserRelays {

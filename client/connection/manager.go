@@ -53,10 +53,14 @@ func InitializeCoreClient(serverCfg *cfgType.ServerConfig) error {
 			log.ClientConnection().Warn("Failed to connect to index relays during initialization - relay will operate in offline mode",
 				"error", err,
 				"relay_count", len(config.IndexRelays))
-		} else {
-			log.ClientConnection().Info("Core client connected to index relays",
-				"relay_count", len(config.IndexRelays))
+			return
 		}
+		log.ClientConnection().Info("Core client connected to index relays",
+			"relay_count", len(config.IndexRelays))
+
+		// Seed the known-relays set broadly from the indexers so it starts large
+		// instead of growing only as users get browsed.
+		coreClient.SeedKnownRelays()
 	}()
 
 	log.ClientConnection().Info("Core client initialized successfully",

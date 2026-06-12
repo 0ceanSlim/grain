@@ -43,6 +43,7 @@ func NewClient(config *Config) *Client {
 	if config == nil {
 		config = DefaultConfig()
 	}
+	config.IndexRelays = normalizeRelayURLs(config.IndexRelays)
 
 	c := &Client{
 		relayPool:     NewRelayPool(config),
@@ -460,7 +461,10 @@ func parseMailboxEvent(event *nostr.Event) *Mailboxes {
 	// Parse relay tags
 	for _, tag := range event.Tags {
 		if len(tag) >= 2 && tag[0] == "r" {
-			relayURL := tag[1]
+			relayURL, ok := normalizeRelayURL(tag[1])
+			if !ok {
+				continue
+			}
 			if len(tag) >= 3 {
 				switch tag[2] {
 				case "read":
