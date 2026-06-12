@@ -482,9 +482,12 @@
         sess &&
         sess.publicKey &&
         sess.publicKey.toLowerCase() === (profileData.pubkey || "").toLowerCase();
-      if (mine) showElement("profile-edit-btn");
+      if (mine) {
+        showElement("profile-edit-btn");
+        showElement("profile-advanced-btn");
+      }
     } catch (_) {
-      /* not logged in — leave the Edit button hidden */
+      /* not logged in — leave the Edit buttons hidden */
     }
   }
 
@@ -525,7 +528,7 @@
     const saveBtn = document.getElementById("profile-save-btn");
     if (saveBtn) saveBtn.disabled = true;
     try {
-      // 1. Server merges the edits over the existing event → unsigned kind-0.
+      // Server merges the edits over the existing event → unsigned kind-0.
       status("Assembling event…");
       const buildResp = await fetch("/api/v1/user/profile/build", {
         method: "POST",
@@ -534,45 +537,218 @@
       });
       if (!buildResp.ok) throw new Error(await buildResp.text());
       const unsigned = await buildResp.json();
-
-      // 2. Sign client-side with the user's signer.
-      status("Waiting for your signer…");
-      if (typeof window.restoreSigner === "function") await window.restoreSigner();
-      if (!window.grainSigner || typeof window.grainSigner.signEvent !== "function") {
-        throw new Error("No signer available — log in with a signing method.");
-      }
-      const signed = await window.grainSigner.signEvent(unsigned);
-
-      // 3. Publish via the outbox.
-      status("Publishing…");
-      const pubResp = await fetch("/api/v1/events/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event: signed }),
-      });
-      const result = await pubResp.json();
-      if (!pubResp.ok || !result.success) {
-        throw new Error(result.error || "publish failed");
-      }
-
-      showPublishToast(result);
-
-      const accepted = (result.results || []).some((r) => r.Accepted || r.accepted);
-      if (accepted) {
-        // At least one relay stored it — hydrate the UI in place from the event
-        // we just signed, no page reload needed (we already have the data).
-        status("");
-        window.toggleProfileEdit();
-        profileData.profile = signed;
-        displayProfile(signed);
-      } else {
-        status("Sent, but no relay has accepted it yet — see the toast.");
-      }
+      await signAndPublish(unsigned, status, () => window.toggleProfileEdit());
     } catch (err) {
       console.error("Save profile failed:", err);
       status("Error: " + (err.message || err));
     } finally {
       if (saveBtn) saveBtn.disabled = false;
+    }
+  };
+
+  // Shared: sign an unsigned event with the user's signer, publish via the
+  // outbox, show the OK toast, and hydrate the page in place once a relay
+  // accepts. Throws on failure (the caller surfaces the error).
+  async function signAndPublish(unsigned, status, onAccepted) {
+    status("Waiting for your signer…");
+    if (typeof window.restoreSigner === "function") await window.restoreSigner();
+    if (!window.grainSigner || typeof window.grainSigner.signEvent !== "function") {
+      throw new Error("No signer available — log in with a signing method.");
+    }
+    const signed = await window.grainSigner.signEvent(unsigned);
+
+    status("Publishing…");
+    const pubResp = await fetch("/api/v1/events/publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: signed }),
+    });
+    const result = await pubResp.json();
+    if (!pubResp.ok || !result.success) {
+      throw new Error(result.error || "publish failed");
+    }
+
+    showPublishToast(result);
+    const accepted = (result.results || []).some((r) => r.Accepted || r.accepted);
+    if (accepted) {
+      status("");
+      profileData.profile = signed;
+      displayProfile(signed); // re-parses content + re-renders the page in place
+      if (onAccepted) onAccepted();
+    } else {
+      status("Sent, but no relay has accepted it yet — see the toast.");
+    }
+  }
+
+  // ── Advanced editor: full control over content fields and tags ──
+  let advState = { content: [], tags: [] };
+  let advDragFrom = null;
+
+  function escAttr(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  window.toggleAdvancedEdit = function () {
+    const panel = document.getElementById("profile-advanced-panel");
+    if (!panel) return;
+    const opening = panel.classList.contains("hidden");
+    if (opening) {
+      hideElement("profile-edit-panel"); // don't show both editors at once
+      loadAdvState();
+      setElementText("adv-status", "");
+    }
+    panel.classList.toggle("hidden");
+  };
+
+  function loadAdvState() {
+    const evt = profileData.profile || {};
+    const content = profileData.content || {};
+    advState.content = Object.keys(content).map((k) => ({
+      key: k,
+      value: content[k] == null ? "" : String(content[k]),
+    }));
+    advState.tags = (evt.tags || []).map((t) => t.slice());
+    const id = profileData.identifier || profileData.pubkey || "";
+    setElementText("adv-meta", `kind 0 · ${id} · created_at: set on sign`);
+    renderAdvContent();
+    renderAdvTags();
+  }
+
+  function renderAdvContent() {
+    const box = document.getElementById("adv-content");
+    if (!box) return;
+    box.innerHTML = "";
+    advState.content.forEach((row, i) => {
+      const div = document.createElement("div");
+      div.className = "flex items-center gap-2";
+      div.innerHTML =
+        `<input value="${escAttr(row.key)}" placeholder="field" class="w-1/3 px-2 py-1 text-sm border rounded bg-surface-elevated text-text border-border" data-ck="${i}" />` +
+        `<input value="${escAttr(row.value)}" placeholder="value" class="flex-1 px-2 py-1 text-sm border rounded bg-surface-elevated text-text border-border" data-cv="${i}" />` +
+        `<button class="px-2 text-danger hover:opacity-80" data-cdel="${i}" title="Remove">×</button>`;
+      box.appendChild(div);
+    });
+    box.querySelectorAll("[data-ck]").forEach((el) => {
+      el.oninput = () => (advState.content[+el.dataset.ck].key = el.value);
+    });
+    box.querySelectorAll("[data-cv]").forEach((el) => {
+      el.oninput = () => (advState.content[+el.dataset.cv].value = el.value);
+    });
+    box.querySelectorAll("[data-cdel]").forEach((el) => {
+      el.onclick = () => {
+        advState.content.splice(+el.dataset.cdel, 1);
+        renderAdvContent();
+      };
+    });
+  }
+
+  function renderAdvTags() {
+    const box = document.getElementById("adv-tags");
+    if (!box) return;
+    box.innerHTML = "";
+    advState.tags.forEach((tag, i) => {
+      const row = document.createElement("div");
+      row.className = "flex items-center gap-2 p-1 rounded bg-surface-elevated";
+      row.dataset.row = i;
+      row.ondragover = (e) => e.preventDefault();
+      row.ondrop = (e) => {
+        e.preventDefault();
+        advMoveTag(advDragFrom, i);
+      };
+      const els = tag
+        .map(
+          (el, j) =>
+            `<input value="${escAttr(el)}" class="px-2 py-1 text-sm border rounded bg-surface text-text border-border" data-te="${i}_${j}" />`
+        )
+        .join("");
+      row.innerHTML =
+        `<span class="cursor-grab select-none text-text-secondary" draggable="true" title="Drag to reorder" data-grip="${i}">⠿</span>` +
+        `<div class="flex flex-wrap items-center flex-1 gap-1">${els}` +
+        `<button class="px-1 text-xs text-accent hover:opacity-80" data-teadd="${i}" title="Add element">+</button></div>` +
+        `<button class="px-2 text-danger hover:opacity-80" data-tdel="${i}" title="Remove tag">×</button>`;
+      box.appendChild(row);
+    });
+    box.querySelectorAll("[data-grip]").forEach((el) => {
+      el.ondragstart = (e) => {
+        advDragFrom = +el.dataset.grip;
+        // Firefox won't start a drag unless some data is set.
+        if (e.dataTransfer) e.dataTransfer.setData("text/plain", "");
+      };
+    });
+    box.querySelectorAll("[data-te]").forEach((el) => {
+      el.oninput = () => {
+        const [i, j] = el.dataset.te.split("_").map(Number);
+        advState.tags[i][j] = el.value;
+      };
+    });
+    box.querySelectorAll("[data-teadd]").forEach((el) => {
+      el.onclick = () => {
+        advState.tags[+el.dataset.teadd].push("");
+        renderAdvTags();
+      };
+    });
+    box.querySelectorAll("[data-tdel]").forEach((el) => {
+      el.onclick = () => {
+        advState.tags.splice(+el.dataset.tdel, 1);
+        renderAdvTags();
+      };
+    });
+  }
+
+  function advMoveTag(from, to) {
+    if (from == null || from === to) return;
+    const [item] = advState.tags.splice(from, 1);
+    advState.tags.splice(to, 0, item);
+    advDragFrom = null;
+    renderAdvTags();
+  }
+
+  window.advAddContent = function () {
+    advState.content.push({ key: "", value: "" });
+    renderAdvContent();
+  };
+  window.advAddTag = function () {
+    advState.tags.push(["", ""]);
+    renderAdvTags();
+  };
+
+  window.advSave = async function () {
+    const status = (m) => setElementText("adv-status", m);
+
+    // Content: keep rows with a non-empty key, re-serialized to the content JSON.
+    const content = {};
+    advState.content.forEach((row) => {
+      const k = (row.key || "").trim();
+      if (k) content[k] = row.value;
+    });
+
+    // Tags: trim trailing empty elements, drop empty rows; order is preserved.
+    const tags = advState.tags
+      .map((t) => {
+        const c = t.slice();
+        while (c.length && c[c.length - 1] === "") c.pop();
+        return c;
+      })
+      .filter((t) => t.length > 0);
+
+    // Advanced = full control: assemble the event directly (no server merge).
+    // created_at is stamped now; kind/pubkey are fixed.
+    const unsigned = {
+      kind: 0,
+      pubkey: profileData.pubkey,
+      created_at: Math.floor(Date.now() / 1000),
+      content: JSON.stringify(content),
+      tags: tags,
+    };
+
+    try {
+      await signAndPublish(unsigned, status, () => window.toggleAdvancedEdit());
+    } catch (err) {
+      console.error("Advanced save failed:", err);
+      status("Error: " + (err.message || err));
     }
   };
 

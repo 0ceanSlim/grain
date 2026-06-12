@@ -87,15 +87,22 @@
         </button>
       </div>
 
-      <!-- Edit button. Hidden by default; profile-page.js reveals it only when
-           the logged-in user is viewing their own profile. -->
-      <div class="mb-4">
+      <!-- Edit buttons. Hidden by default; profile-page.js reveals them only
+           when the logged-in user is viewing their own profile. -->
+      <div class="flex justify-center gap-2 mb-4">
         <button
           id="profile-edit-btn"
           onclick="toggleProfileEdit()"
           class="hidden px-4 py-2 text-sm transition-colors rounded-lg text-text bg-surface-elevated hover:bg-surface-hover"
         >
           ✏️ Edit profile
+        </button>
+        <button
+          id="profile-advanced-btn"
+          onclick="toggleAdvancedEdit()"
+          class="hidden px-4 py-2 text-sm transition-colors rounded-lg text-text bg-surface-elevated hover:bg-surface-hover"
+        >
+          ⚙️ Advanced
         </button>
       </div>
 
@@ -202,6 +209,45 @@
           </button>
         </div>
         <p id="profile-save-status" class="mt-3 text-sm text-text-secondary"></p>
+      </div>
+
+      <!-- Advanced editor. Own profile only; full control over content fields
+           and tags (drag the ⠿ handle to reorder tags). kind/pubkey are fixed
+           and created_at is stamped at sign time. Populated by profile-page.js. -->
+      <div
+        id="profile-advanced-panel"
+        class="hidden max-w-2xl p-6 mx-auto mb-8 text-left rounded-lg bg-surface"
+      >
+        <h3 class="mb-1 text-lg font-semibold text-text">Advanced editor</h3>
+        <p id="adv-meta" class="mb-4 font-mono text-xs break-all text-text-secondary"></p>
+
+        <h4 class="mb-2 text-sm font-medium text-text">Content</h4>
+        <div id="adv-content" class="space-y-2"></div>
+        <button onclick="advAddContent()" class="mt-2 text-sm text-accent hover:opacity-80">
+          + Add field
+        </button>
+
+        <h4 class="mt-5 mb-2 text-sm font-medium text-text">Tags</h4>
+        <div id="adv-tags" class="space-y-2"></div>
+        <button onclick="advAddTag()" class="mt-2 text-sm text-accent hover:opacity-80">
+          + Add tag
+        </button>
+
+        <div class="flex gap-2 mt-6">
+          <button
+            onclick="advSave()"
+            class="px-4 py-2 text-sm transition-colors rounded-lg text-text-on-accent bg-accent hover:opacity-80"
+          >
+            Save &amp; sign
+          </button>
+          <button
+            onclick="toggleAdvancedEdit()"
+            class="px-4 py-2 text-sm transition-colors rounded-lg text-text bg-surface-elevated hover:bg-surface-hover"
+          >
+            Cancel
+          </button>
+        </div>
+        <p id="adv-status" class="mt-3 text-sm text-text-secondary"></p>
       </div>
 
       <!-- Social Links Row (dynamically populated) -->
