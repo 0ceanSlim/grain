@@ -132,10 +132,12 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 
 	// User data fetching endpoints
 	mux.HandleFunc("/api/v1/user/profile", api.GetUserProfileHandler)
+	mux.HandleFunc("/api/v1/user/profile/build", api.BuildProfileHandler)
 	mux.HandleFunc("/api/v1/user/relays", api.GetUserRelaysHandler)
 
 	// Event querying endpoints
 	mux.HandleFunc("/api/v1/events/query", api.QueryEventsHandler)
+	mux.HandleFunc("/api/v1/events/publish", api.PublishSignedHandler)
 
 	// Relay management endpoints
 	mux.HandleFunc("/api/v1/client/relays", api.ClientRelaysHandler)
