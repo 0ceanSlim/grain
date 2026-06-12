@@ -35,6 +35,31 @@ func TestAppendUniqueDedupsPreservingOrder(t *testing.T) {
 	}
 }
 
+func TestKnownRelays(t *testing.T) {
+	d := newRelayDirectory(time.Hour, time.Minute, func(string) *UserRelays { return nil })
+	d.entries["a"] = &UserRelays{Outbox: []string{"wss://o1"}, Inbox: []string{"wss://i1"}}
+	d.entries["b"] = &UserRelays{Outbox: []string{"wss://o1", "wss://o2"}, DMInbox: []string{"wss://dm"}}
+
+	// Distinct across both entries: o1, i1, o2, dm = 4.
+	if got := d.KnownRelays(); len(got) != 4 {
+		t.Fatalf("KnownRelays = %v, want 4 distinct", got)
+	}
+}
+
+func TestPoolStatsKnownCountsDefaultsAndDirectory(t *testing.T) {
+	c := newClientWithStubDirectory(map[string]*UserRelays{
+		"a": {Outbox: []string{"wss://o1"}, Inbox: []string{"wss://i1"}},
+		"b": {Outbox: []string{"wss://o2"}},
+	})
+	c.directory.Lookup("a")
+	c.directory.Lookup("b")
+
+	// 5 default index relays + 3 distinct resolved (o1, i1, o2) = 8.
+	if s := c.PoolStats(); s.Known != 8 {
+		t.Fatalf("Known = %d, want 8 (5 index + 3 resolved)", s.Known)
+	}
+}
+
 func TestDirectoryCachesAndSingleFlights(t *testing.T) {
 	var calls int32
 	d := newRelayDirectory(time.Hour, time.Minute, func(string) *UserRelays {

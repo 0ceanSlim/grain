@@ -204,23 +204,59 @@
       </svg>
     </button>
 
-    <!-- Relay-pool indicator: how many relays the outbox pool has connected
-         out of the total it's tracking. Updated by the poller in the script
-         block below from /api/v1/client/status. Hidden on the narrowest
-         screens to keep the header uncluttered. -->
-    <div
-      id="relay-pool-status"
-      class="items-center hidden gap-1 px-2 py-1 font-mono text-xs rounded sm:flex text-text-secondary bg-surface-elevated"
-      title="Relays connected / total tracked by the outbox pool"
-    >
-      <span id="relay-pool-dot" class="text-text-secondary">●</span>
-      <span id="relay-pool-count">—/—</span>
-      <span class="hidden md:inline">relays</span>
-    </div>
-
     <!-- Login / profile button. Always present; content updated by
          navigation.js. -->
     <div id="profile-nav">{{template "login-button"}}</div>
+
+    <!-- Relay-pool indicator: connected / known relays, between the login
+         button and the theme swapper. Clicking toggles a breakdown panel; the
+         full relay manager lands in a later slice. Updated by the poller below
+         from /api/v1/client/status. -->
+    <div class="relative">
+      <button
+        id="relay-pool-button"
+        type="button"
+        title="Relay pool — connected / known relays"
+        class="flex items-center gap-1 px-2 py-1 text-xs rounded text-text-secondary hover:text-text hover:bg-surface-hover"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"
+          ></path>
+        </svg>
+        <span id="relay-pool-count" class="font-mono">—/—</span>
+      </button>
+      <div
+        id="relay-pool-panel"
+        class="absolute right-0 z-50 hidden p-3 mt-2 text-xs border rounded-lg shadow w-52 bg-surface border-border top-full"
+      >
+        <div class="mb-2 font-semibold text-text">Relay pool</div>
+        <div class="space-y-1">
+          <div class="flex justify-between">
+            <span class="text-text-secondary">Known</span>
+            <span id="rp-known" class="font-mono text-text">—</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-text-secondary">Connected</span>
+            <span id="rp-connected" class="font-mono text-text">—</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-text-secondary">In use</span>
+            <span id="rp-leased" class="font-mono text-text">—</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-text-secondary">Pinned (index)</span>
+            <span id="rp-pinned" class="font-mono text-text">—</span>
+          </div>
+        </div>
+        <div class="pt-2 mt-2 border-t text-text-secondary border-border">
+          Full relay manager coming soon.
+        </div>
+      </div>
+    </div>
 
     <!-- Theme swapper. Icon-only trigger + dropdown panel populated
          by theme.js. Sits to the right of the login button per the
@@ -269,26 +305,45 @@
   };
 
   // Relay-pool indicator. Polls /api/v1/client/status and shows
-  // connected/total relays the outbox pool is tracking. Best-effort: if the
-  // relay is unreachable the indicator just keeps its last value.
+  // connected/known relays; the button toggles a breakdown panel. Best-effort:
+  // if the relay is unreachable the indicator keeps its last value.
   (function () {
+    var btn = document.getElementById("relay-pool-button");
+    var panel = document.getElementById("relay-pool-panel");
     var count = document.getElementById("relay-pool-count");
-    var dot = document.getElementById("relay-pool-dot");
     if (!count) return;
+
+    function set(id, v) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = v;
+    }
+
     function refresh() {
       fetch("/api/v1/client/status")
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (s) {
           if (!s || !s.initialized) return;
-          var connected = s.pool_connected || 0;
-          var total = s.pool_total || 0;
-          count.textContent = connected + "/" + total;
-          if (dot) dot.className = connected > 0 ? "text-success" : "text-text-secondary";
+          count.textContent = (s.pool_connected || 0) + "/" + (s.pool_known || 0);
+          set("rp-known", s.pool_known || 0);
+          set("rp-connected", s.pool_connected || 0);
+          set("rp-leased", s.pool_leased || 0);
+          set("rp-pinned", s.pool_pinned || 0);
         })
         .catch(function () {});
     }
+
+    if (btn && panel) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        panel.classList.toggle("hidden");
+      });
+      document.addEventListener("click", function () {
+        panel.classList.add("hidden");
+      });
+    }
+
     refresh();
-    setInterval(refresh, 10000);
+    setInterval(refresh, 4000);
   })();
 </script>
 

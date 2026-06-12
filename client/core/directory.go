@@ -106,6 +106,32 @@ func (d *RelayDirectory) Invalidate(pubkey string) {
 	d.mu.Unlock()
 }
 
+// KnownRelays returns the distinct relay URLs across every resolved entry —
+// the union of all users' outbox / inbox / DM relays the directory has seen.
+// This is the bulk of the client's "known relays" set: relays we're aware of
+// from indexer-seeded mailbox lists, whether or not we're connected to them.
+func (d *RelayDirectory) KnownRelays() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	set := make(map[string]struct{})
+	for _, ur := range d.entries {
+		for _, r := range ur.Outbox {
+			set[r] = struct{}{}
+		}
+		for _, r := range ur.Inbox {
+			set[r] = struct{}{}
+		}
+		for _, r := range ur.DMInbox {
+			set[r] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for r := range set {
+		out = append(out, r)
+	}
+	return out
+}
+
 // Cached returns a user's resolved relays only if a fresh entry is already in
 // the cache, WITHOUT triggering a network resolve. For latency-sensitive paths
 // (e.g. rendering a profile) that must not block on resolution.
@@ -123,6 +149,17 @@ func (d *RelayDirectory) Cached(pubkey string) (*UserRelays, bool) {
 // TTL. Safe for concurrent use; the logged-in user is just another pubkey.
 func (c *Client) ResolveRelays(pubkey string) *UserRelays {
 	return c.directory.Lookup(pubkey)
+}
+
+// WarmRelays kicks an asynchronous resolution of a user's relay lists into the
+// directory if not already cached, so their mailbox relays join the "known" set
+// and the cache is ready for outbox-routed fetches next time — without blocking
+// the caller and without dialing (resolution queries the index relays only).
+func (c *Client) WarmRelays(pubkey string) {
+	if _, ok := c.directory.Cached(pubkey); ok {
+		return
+	}
+	go c.directory.Lookup(pubkey)
 }
 
 // fetchUserRelaysFromNetwork is the RelayDirectory's resolver: it queries the

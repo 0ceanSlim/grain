@@ -109,6 +109,7 @@ func GetCoreClientStatus() map[string]interface{} {
 		"connected_relays": connectedRelays,
 		"connected_count":  len(connectedRelays),
 		"index_relays":     indexRelays,
+		"pool_known":       stats.Known,     // relays the client is aware of
 		"pool_total":       stats.Total,     // relays tracked in the pool
 		"pool_connected":   stats.Connected, // currently connected
 		"pool_pinned":      stats.Pinned,    // index/seed relays

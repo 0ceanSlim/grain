@@ -295,6 +295,11 @@ func collectLatestReplaceable(sub *Subscription, totalRelays int, timeout time.D
 func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Event, error) {
 	log.ClientCore().Debug("Fetching user profile", "pubkey", pubkey, "relay_hints", relayHints)
 
+	// Background-warm this user's mailbox relays into the directory (and thus
+	// the "known" set), without blocking this fetch. Resolution only queries the
+	// already-connected index relays, so it adds no new dials.
+	c.WarmRelays(pubkey)
+
 	// Create filter for metadata (kind 0)
 	filter := nostr.Filter{
 		Authors: []string{pubkey},

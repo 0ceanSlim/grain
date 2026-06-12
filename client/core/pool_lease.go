@@ -239,13 +239,15 @@ func (rp *RelayPool) evictIdle(now time.Time, idleTTL time.Duration) int {
 // PoolStats is a snapshot of the relay pool's connection counts, for status /
 // observability (e.g. an "x / y relays connected" dashboard indicator).
 type PoolStats struct {
-	Total     int `json:"total"`     // relays tracked in the pool
+	Known     int `json:"known"`     // relays the client is aware of (defaults + resolved lists + connections)
+	Total     int `json:"total"`     // relays tracked in the pool (have a connection slot)
 	Connected int `json:"connected"` // currently connected
 	Pinned    int `json:"pinned"`    // index/seed relays kept alive
 	Leased    int `json:"leased"`    // connections with at least one active lease
 }
 
-// Stats returns a snapshot of the pool's connection counts.
+// Stats returns a snapshot of the pool's connection counts (without Known,
+// which the Client fills in since it spans the directory too).
 func (rp *RelayPool) Stats() PoolStats {
 	rp.mu.RLock()
 	defer rp.mu.RUnlock()
@@ -263,9 +265,36 @@ func (rp *RelayPool) Stats() PoolStats {
 	return s
 }
 
-// PoolStats returns a snapshot of the relay pool's connection counts.
+// allURLs returns every relay URL currently tracked in the pool.
+func (rp *RelayPool) allURLs() []string {
+	rp.mu.RLock()
+	defer rp.mu.RUnlock()
+	out := make([]string, 0, len(rp.connections))
+	for u := range rp.connections {
+		out = append(out, u)
+	}
+	return out
+}
+
+// PoolStats returns a snapshot of the pool's counts plus Known — the distinct
+// relays the client is aware of: configured defaults, every relay tracked in
+// the pool, and every relay from the indexer-seeded mailbox lists the directory
+// has resolved. Known climbs as you interact; connections grow on demand.
 func (c *Client) PoolStats() PoolStats {
-	return c.relayPool.Stats()
+	s := c.relayPool.Stats()
+
+	known := make(map[string]struct{})
+	for _, u := range c.config.IndexRelays {
+		known[u] = struct{}{}
+	}
+	for _, u := range c.relayPool.allURLs() {
+		known[u] = struct{}{}
+	}
+	for _, u := range c.directory.KnownRelays() {
+		known[u] = struct{}{}
+	}
+	s.Known = len(known)
+	return s
 }
 
 // StartEvictionSweeper runs evictIdle on an interval until ctx is cancelled,
