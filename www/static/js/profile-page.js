@@ -573,40 +573,41 @@
   // outbox, show the OK toast, and hydrate the page in place once a relay
   // accepts. Throws on failure (the caller surfaces the error).
   async function signAndPublish(unsigned, status, onAccepted) {
-    status("Waiting for your signer…");
-    if (typeof window.restoreSigner === "function") await window.restoreSigner();
-    if (!window.grainSigner || typeof window.grainSigner.signEvent !== "function") {
-      throw new Error("No signer available — log in with a signing method.");
-    }
-    const signed = await window.grainSigner.signEvent(unsigned);
-
-    status(""); // the toast takes over from here
-    const toast = makePublishToast(); // small bottom-right toast, spinner while sending
-
-    let result;
+    // Create the toast UP FRONT so the user always gets feedback — including
+    // when the signer is unavailable, which used to throw before any toast and
+    // left the user staring at nothing.
+    status("");
+    const toast = makePublishToast();
     try {
+      toast.status("Waiting for your signer…");
+      if (typeof window.restoreSigner === "function") await window.restoreSigner();
+      if (!window.grainSigner || typeof window.grainSigner.signEvent !== "function") {
+        throw new Error("No signer available — log in with a signing method.");
+      }
+      const signed = await window.grainSigner.signEvent(unsigned);
+
+      toast.status("Publishing…");
       const pubResp = await fetch("/api/v1/events/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event: signed }),
       });
-      result = await pubResp.json();
+      const result = await pubResp.json();
       if (!pubResp.ok || !result.success) {
         toast.fail(result.error || "publish failed");
         return;
       }
-    } catch (err) {
-      toast.fail(err.message || String(err));
-      return;
-    }
 
-    toast.update(result);
-    if ((result.results || []).some((r) => r.Accepted || r.accepted)) {
-      // At least one relay stored it — hydrate the page in place from the event
-      // we just signed; no reload.
-      profileData.profile = signed;
-      displayProfile(signed);
-      if (onAccepted) onAccepted();
+      toast.update(result);
+      if ((result.results || []).some((r) => r.Accepted || r.accepted)) {
+        // At least one relay stored it — hydrate the page in place; no reload.
+        profileData.profile = signed;
+        displayProfile(signed);
+        if (onAccepted) onAccepted();
+      }
+    } catch (err) {
+      console.error("Publish failed:", err);
+      toast.fail(err.message || String(err));
     }
   }
 
@@ -825,6 +826,10 @@
     }
 
     return {
+      status(text) {
+        const el = t.querySelector("[data-title]");
+        if (el) el.textContent = text;
+      },
       update(result) {
         const relays = result.results || [];
         const accepted = relays.filter((r) => r.Accepted || r.accepted).length;
