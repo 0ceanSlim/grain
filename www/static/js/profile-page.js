@@ -387,7 +387,7 @@
       const bannerImg = document.getElementById("profile-banner-img");
       bannerImg.src = profileContent.banner;
       bannerImg.onload = function () {
-        showElement("profile-banner");
+        showElement("profile-banner-img");
       };
       bannerImg.onerror = function () {
         console.warn("Failed to load profile banner:", profileContent.banner);
