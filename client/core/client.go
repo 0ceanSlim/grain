@@ -302,13 +302,14 @@ func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Even
 		Limit:   &[]int{1}[0], // Get latest only
 	}
 
-	// Use relay hints if provided, otherwise route to the author's outbox
-	// relays (falling back to index relays) per the outbox model, rather than
-	// blasting every connected relay.
+	// Use relay hints if provided, otherwise query the index/profile-indexer
+	// relays plus the author's outbox when already cached (RouteMetadata) —
+	// metadata lives on the indexers, and resolving the outbox synchronously on
+	// every profile view is what made the dashboard crawl.
 	targetRelays := relayHints
 	if len(targetRelays) == 0 {
-		targetRelays = c.RouteFetch(pubkey)
-		log.ClientCore().Debug("No relay hints provided, routing to author outbox",
+		targetRelays = c.RouteMetadata(pubkey)
+		log.ClientCore().Debug("No relay hints provided, routing metadata fetch",
 			"pubkey", pubkey, "relays", targetRelays)
 	}
 
@@ -329,41 +330,41 @@ func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Even
 	return event, nil
 }
 
-// GetUserRelays retrieves user relay list (kind 10002)
+// GetUserRelays retrieves a user's relay list (NIP-65), resolved through the
+// directory — an index-relay query that is TTL-cached and single-flighted —
+// rather than fanning a REQ out to every connected relay. That fan-out is what
+// melted the dashboard during a mutelist sync once the outbox pool had grown to
+// dozens of connections: each author's lookup blasted all of them. Returns
+// empty mailboxes (not an error) when the user has published no relay list.
 func (c *Client) GetUserRelays(pubkey string) (*Mailboxes, error) {
-	log.ClientCore().Debug("Fetching user relays", "pubkey", pubkey)
+	ur := c.ResolveRelays(pubkey)
 
-	filter := nostr.Filter{
-		Authors: []string{pubkey},
-		Kinds:   []int{10002},
-		Limit:   &[]int{1}[0],
+	// Reconstruct the read/write/both split callers expect from the directory's
+	// outbox (write+both) / inbox (read+both) view: a relay in both is "both",
+	// outbox-only is "write", inbox-only is "read".
+	inbox := make(map[string]bool, len(ur.Inbox))
+	for _, r := range ur.Inbox {
+		inbox[r] = true
+	}
+	outbox := make(map[string]bool, len(ur.Outbox))
+	for _, r := range ur.Outbox {
+		outbox[r] = true
 	}
 
-	// Use connected relays for relay list queries
-	connectedRelays := c.relayPool.GetConnectedRelays()
-	if len(connectedRelays) == 0 {
-		return nil, &ClientError{Message: "no connected relays available"}
+	mb := &Mailboxes{}
+	for _, r := range ur.Outbox {
+		if inbox[r] {
+			mb.Both = append(mb.Both, r)
+		} else {
+			mb.Write = append(mb.Write, r)
+		}
 	}
-
-	sub, err := c.Subscribe([]nostr.Filter{filter}, connectedRelays)
-	if err != nil {
-		return nil, err
+	for _, r := range ur.Inbox {
+		if !outbox[r] {
+			mb.Read = append(mb.Read, r)
+		}
 	}
-	defer sub.Close()
-
-	event := collectLatestReplaceable(sub, len(connectedRelays), 5*time.Second)
-	if event == nil {
-		// Not an error: the user may simply not have published a kind-10002.
-		log.ClientCore().Debug("No relay list found for user", "pubkey", pubkey)
-		return &Mailboxes{}, nil
-	}
-
-	mailboxes := parseMailboxEvent(event)
-	log.ClientCore().Debug("Parsed user relays", "pubkey", pubkey,
-		"read_count", len(mailboxes.Read),
-		"write_count", len(mailboxes.Write),
-		"both_count", len(mailboxes.Both))
-	return mailboxes, nil
+	return mb, nil
 }
 
 // PublishEvent publishes an event to specified relays

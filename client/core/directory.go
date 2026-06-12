@@ -83,8 +83,11 @@ func (d *RelayDirectory) Lookup(pubkey string) *UserRelays {
 
 		ur := d.resolve(pubkey)
 		if ur == nil {
-			ur = &UserRelays{FetchedAt: time.Now(), Negative: true}
+			ur = &UserRelays{Negative: true}
 		}
+		// Stamp the fetch time here, not in the resolver, so a resolver that
+		// forgets can't silently disable caching (entry never reads as fresh).
+		ur.FetchedAt = time.Now()
 
 		d.mu.Lock()
 		d.entries[pubkey] = ur
@@ -101,6 +104,18 @@ func (d *RelayDirectory) Invalidate(pubkey string) {
 	d.mu.Lock()
 	delete(d.entries, pubkey)
 	d.mu.Unlock()
+}
+
+// Cached returns a user's resolved relays only if a fresh entry is already in
+// the cache, WITHOUT triggering a network resolve. For latency-sensitive paths
+// (e.g. rendering a profile) that must not block on resolution.
+func (d *RelayDirectory) Cached(pubkey string) (*UserRelays, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if ur, ok := d.entries[pubkey]; ok && d.fresh(ur) {
+		return ur, true
+	}
+	return nil, false
 }
 
 // ResolveRelays returns a target user's per-target relay roles (outbox / inbox /

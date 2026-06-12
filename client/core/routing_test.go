@@ -119,3 +119,24 @@ func TestFixedRelaysOverrideRouting(t *testing.T) {
 	assertHasRelay(t, got, "wss://my-out")
 	assertHasRelay(t, got, "wss://your-in")
 }
+
+// Profile/metadata routing queries the index relays and only adds a user's
+// outbox when it's already cached — never a blocking resolve (the dashboard
+// slowdown). This keeps profile views fast while still preferring the user's
+// own relays once we know them.
+func TestRouteMetadataIndexPlusCachedOutbox(t *testing.T) {
+	c := newClientWithStubDirectory(map[string]*UserRelays{
+		"known": {Outbox: []string{"wss://known-out"}},
+	})
+
+	// Uncached user → index relays only, outbox not pulled in (no resolve).
+	got := c.RouteMetadata("stranger")
+	assertHasRelay(t, got, c.config.IndexRelays[0])
+	assertNotContains(t, got, "wss://known-out")
+
+	// Warm the cache, then the outbox is included alongside the indexers.
+	c.directory.Lookup("known")
+	got = c.RouteMetadata("known")
+	assertHasRelay(t, got, c.config.IndexRelays[0])
+	assertHasRelay(t, got, "wss://known-out")
+}

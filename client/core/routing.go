@@ -36,6 +36,27 @@ func (c *Client) RouteFetch(pubkey string) []string {
 	return c.config.IndexRelays
 }
 
+// RouteMetadata returns the relays to fetch a user's profile/metadata (kind 0)
+// and replaceable lists from.
+//
+// Flow: the index/profile-indexer relays aggregate everyone's metadata and are
+// already connected, so they are always queried (fast, reliable). The user's
+// own outbox often carries a fresher copy, so it is added too — but only when
+// it is ALREADY cached, never via a blocking resolve. Resolving every profile
+// view synchronously is what made the dashboard crawl; the cache is warmed by
+// the relay-list lookups that happen anyway, so subsequent views include the
+// outbox for free. Honours the fixed-relay override.
+func (c *Client) RouteMetadata(pubkey string) []string {
+	if fixed, read := c.fixedReads(); fixed {
+		return read
+	}
+	relays := append([]string(nil), c.config.IndexRelays...)
+	if ur, ok := c.directory.Cached(pubkey); ok {
+		relays = appendUnique(relays, ur.Outbox)
+	}
+	return relays
+}
+
 // RoutePublish returns the relays an event should be published to under the
 // outbox model: the author's own outbox PLUS every p-tagged recipient's inbox
 // (their DM inbox for NIP-17 gift wraps), so the event reaches both the
