@@ -295,9 +295,7 @@
 
   // Add external identity link to UI
   function addExternalIdentityLink(platform, identity) {
-    const socialLinksContainer = document.querySelector(
-      ".flex.justify-center.gap-6.mb-8"
-    );
+    const socialLinksContainer = document.getElementById("social-links-container");
     if (!socialLinksContainer) return;
 
     // Platform configuration
@@ -491,19 +489,44 @@
     }
   }
 
+  let pfEditing = false;
+
+  // Flip the page between view and edit: .pf-view elements show when viewing,
+  // .pf-edit when editing. The conditional contact cards live inside a .pf-view
+  // wrapper, so hiding the wrapper doesn't disturb their own visibility.
+  function setEditMode(on) {
+    pfEditing = on;
+    document.querySelectorAll(".pf-view").forEach((e) => e.classList.toggle("hidden", on));
+    document.querySelectorAll(".pf-edit").forEach((e) => e.classList.toggle("hidden", !on));
+  }
+
+  function advPanelOpen() {
+    const p = document.getElementById("profile-advanced-panel");
+    return p && !p.classList.contains("hidden");
+  }
+
   window.toggleProfileEdit = function () {
-    const panel = document.getElementById("profile-edit-panel");
-    if (!panel) return;
-    const opening = panel.classList.contains("hidden");
-    if (opening) {
+    if (!pfEditing) {
+      if (advPanelOpen()) window.toggleAdvancedEdit(); // one editor at a time
       const content = profileData.content || {};
       EDITABLE_FIELDS.forEach((f) => {
         const el = document.getElementById("edit-" + f);
         if (el) el.value = content[f] != null ? String(content[f]) : "";
       });
       setElementText("profile-save-status", "");
+      setEditMode(true);
+    } else {
+      setEditMode(false);
+      // Re-render the view so the contact cards reapply their conditional
+      // visibility (and any saved changes show).
+      if (profileData.profile) displayProfile(profileData.profile);
     }
-    panel.classList.toggle("hidden");
+  };
+
+  window.focusPictureField = function () {
+    if (!pfEditing) window.toggleProfileEdit();
+    const el = document.getElementById("edit-picture");
+    if (el) el.focus();
   };
 
   window.saveProfile = async function () {
@@ -604,7 +627,11 @@
     if (!panel) return;
     const opening = panel.classList.contains("hidden");
     if (opening) {
-      hideElement("profile-edit-panel"); // don't show both editors at once
+      if (pfEditing) {
+        // Leave inline edit first — one editor at a time.
+        setEditMode(false);
+        if (profileData.profile) displayProfile(profileData.profile);
+      }
       loadAdvState();
       setElementText("adv-status", "");
     }
