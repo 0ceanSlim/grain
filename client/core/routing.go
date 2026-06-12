@@ -5,6 +5,13 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
+// isMetadataKind reports whether an event kind is the sort that lives on the
+// indexer relays for everyone to fetch: profile metadata (NIP-01 kind 0) and
+// the relay-list events (NIP-65 10002, NIP-17 10050).
+func isMetadataKind(kind int) bool {
+	return kind == 0 || kind == 10002 || kind == 10050
+}
+
 // pTaggedPubkeys returns the distinct pubkeys referenced by the event's `p`
 // tags, in order — the recipients a reply / mention / DM is directed at.
 func pTaggedPubkeys(event *nostr.Event) []string {
@@ -68,6 +75,13 @@ func (c *Client) RoutePublish(event *nostr.Event) []string {
 	}
 
 	relays := append([]string(nil), c.ResolveRelays(event.PubKey).Outbox...)
+
+	// Profile metadata (kind 0) and relay lists (10002 / 10050) belong on the
+	// indexer relays too — that's where clients fetch them for arbitrary users,
+	// so a profile update must reach the indexers, not just the author's outbox.
+	if isMetadataKind(event.Kind) {
+		relays = appendUnique(relays, c.config.IndexRelays)
+	}
 
 	for _, pk := range pTaggedPubkeys(event) {
 		if pk == event.PubKey {

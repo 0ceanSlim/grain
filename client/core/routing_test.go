@@ -124,6 +124,22 @@ func TestFixedRelaysOverrideRouting(t *testing.T) {
 // outbox when it's already cached — never a blocking resolve (the dashboard
 // slowdown). This keeps profile views fast while still preferring the user's
 // own relays once we know them.
+// Publishing a profile (kind 0) must reach the indexers in addition to the
+// author's own outbox; a plain note (kind 1) must not blanket the indexers.
+func TestRoutePublishMetadataHitsIndexers(t *testing.T) {
+	c := newClientWithStubDirectory(map[string]*UserRelays{
+		"me": {Outbox: []string{"wss://my-out"}},
+	})
+
+	profile := c.RoutePublish(&nostr.Event{PubKey: "me", Kind: 0})
+	assertHasRelay(t, profile, "wss://my-out")
+	assertHasRelay(t, profile, c.config.IndexRelays[0])
+
+	note := c.RoutePublish(&nostr.Event{PubKey: "me", Kind: 1})
+	assertHasRelay(t, note, "wss://my-out")
+	assertNotContains(t, note, c.config.IndexRelays[0])
+}
+
 func TestRouteMetadataIndexPlusCachedOutbox(t *testing.T) {
 	c := newClientWithStubDirectory(map[string]*UserRelays{
 		"known": {Outbox: []string{"wss://known-out"}},

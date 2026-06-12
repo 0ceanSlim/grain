@@ -557,26 +557,33 @@
     }
     const signed = await window.grainSigner.signEvent(unsigned);
 
-    status("Publishing…");
-    const pubResp = await fetch("/api/v1/events/publish", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event: signed }),
-    });
-    const result = await pubResp.json();
-    if (!pubResp.ok || !result.success) {
-      throw new Error(result.error || "publish failed");
+    status(""); // the toast takes over from here
+    const toast = makePublishToast(); // small bottom-right toast, spinner while sending
+
+    let result;
+    try {
+      const pubResp = await fetch("/api/v1/events/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event: signed }),
+      });
+      result = await pubResp.json();
+      if (!pubResp.ok || !result.success) {
+        toast.fail(result.error || "publish failed");
+        return;
+      }
+    } catch (err) {
+      toast.fail(err.message || String(err));
+      return;
     }
 
-    showPublishToast(result);
-    const accepted = (result.results || []).some((r) => r.Accepted || r.accepted);
-    if (accepted) {
-      status("");
+    toast.update(result);
+    if ((result.results || []).some((r) => r.Accepted || r.accepted)) {
+      // At least one relay stored it — hydrate the page in place from the event
+      // we just signed; no reload.
       profileData.profile = signed;
-      displayProfile(signed); // re-parses content + re-renders the page in place
+      displayProfile(signed);
       if (onAccepted) onAccepted();
-    } else {
-      status("Sent, but no relay has accepted it yet — see the toast.");
     }
   }
 
@@ -752,47 +759,86 @@
     }
   };
 
-  // Toast listing each relay's NIP-20 verdict for the published event:
-  //   ✓ accepted (stored), • sent but no OK yet, ✗ rejected / send failed.
-  function showPublishToast(result) {
-    const relays = result.results || [];
-    const accepted = relays.filter((r) => r.Accepted || r.accepted).length;
-    const lines = relays
-      .map((r) => {
-        const url = r.RelayURL || r.relayURL || "";
-        const sent = r.Success || r.success;
-        const ok = r.Accepted || r.accepted;
-        const reason = r.Reason || r.reason || "";
-        let icon, cls, note;
-        if (ok) {
-          icon = "✓"; cls = "text-success"; note = "";
-        } else if (sent) {
-          icon = "•"; cls = "text-warning"; note = reason || "no response";
-        } else {
-          icon = "✗"; cls = "text-danger"; note = reason || "send failed";
-        }
-        return `<div class="flex items-start gap-2">
-          <span class="${cls}">${icon}</span>
-          <span class="flex-1 min-w-0">
-            <span class="font-mono text-xs break-all">${url}</span>
-            ${note ? `<span class="block text-xs text-text-secondary">${note}</span>` : ""}
-          </span>
-        </div>`;
-      })
-      .join("");
+  // Publish toast: small, bottom-right. Spinner while sending; then the accepted
+  // count. Click the header to expand per-relay details (accept / reject+reason
+  // / send failure); dismiss anytime with the ×.
+  function makePublishToast() {
+    const t = document.createElement("div");
+    t.className =
+      "fixed z-50 overflow-hidden text-sm border rounded-lg shadow-lg bottom-4 right-4 w-72 bg-surface border-border";
+    t.innerHTML =
+      `<div class="flex items-center gap-2 px-3 py-2 cursor-pointer" data-head>` +
+      `<span data-icon class="inline-block w-4 h-4 border-2 rounded-full border-text-secondary border-t-transparent animate-spin"></span>` +
+      `<span data-title class="flex-1 font-medium text-text">Publishing…</span>` +
+      `<button data-close class="px-1 text-text-secondary hover:text-text" title="Dismiss">×</button>` +
+      `</div>` +
+      `<div data-body class="hidden px-3 pb-2 space-y-1 overflow-y-auto border-t max-h-48 border-border"></div>`;
+    document.body.appendChild(t);
 
-    const toast = document.createElement("div");
-    toast.className =
-      "fixed z-50 max-w-sm p-4 border rounded-lg shadow-lg top-4 right-4 bg-surface border-border";
-    toast.innerHTML = `
-      <div class="mb-2 font-semibold text-text">Accepted by ${accepted}/${relays.length} relays</div>
-      <div class="space-y-1 overflow-y-auto max-h-48">${
-        lines || '<span class="text-xs text-text-secondary">No relays targeted.</span>'
-      }</div>`;
-    document.body.appendChild(toast);
-    setTimeout(() => {
-      if (document.body.contains(toast)) document.body.removeChild(toast);
-    }, 7000);
+    const body = t.querySelector("[data-body]");
+    let timer = null;
+    const dismiss = () => {
+      if (timer) clearTimeout(timer);
+      if (document.body.contains(t)) document.body.removeChild(t);
+    };
+    t.querySelector("[data-close]").onclick = (e) => {
+      e.stopPropagation();
+      dismiss();
+    };
+    t.querySelector("[data-head]").onclick = () => body.classList.toggle("hidden");
+
+    function setIcon(text, cls) {
+      const icon = t.querySelector("[data-icon]");
+      icon.className = cls;
+      icon.textContent = text;
+    }
+
+    return {
+      update(result) {
+        const relays = result.results || [];
+        const accepted = relays.filter((r) => r.Accepted || r.accepted).length;
+        setIcon(accepted > 0 ? "✓" : "•", accepted > 0 ? "text-success" : "text-warning");
+        t.querySelector("[data-title]").textContent =
+          `Accepted by ${accepted}/${relays.length} relays`;
+        body.innerHTML =
+          relays.map(relayLine).join("") ||
+          '<span class="text-xs text-text-secondary">No relays targeted.</span>';
+        timer = setTimeout(dismiss, 12000);
+      },
+      fail(msg) {
+        setIcon("✗", "text-danger");
+        t.querySelector("[data-title]").textContent = "Publish failed";
+        body.innerHTML = `<span class="text-xs break-all text-danger">${escAttr(msg || "")}</span>`;
+        body.classList.remove("hidden");
+        timer = setTimeout(dismiss, 12000);
+      },
+    };
+  }
+
+  // One per-relay line in the expanded toast.
+  function relayLine(r) {
+    const url = r.RelayURL || r.relayURL || "";
+    const sent = r.Success || r.success;
+    const ok = r.Accepted || r.accepted;
+    const reason = r.Reason || r.reason || "";
+    const msg = r.Message || r.message || "";
+    let icon, cls, note;
+    if (ok) {
+      icon = "✓"; cls = "text-success"; note = reason;
+    } else if (!sent) {
+      icon = "✗"; cls = "text-danger"; note = msg || "failed to send";
+    } else if (reason) {
+      icon = "✗"; cls = "text-danger"; note = reason; // relay rejected it
+    } else {
+      icon = "•"; cls = "text-warning"; note = "no response";
+    }
+    return (
+      `<div class="flex items-start gap-2 text-xs">` +
+      `<span class="${cls}">${icon}</span>` +
+      `<span class="flex-1 min-w-0"><span class="font-mono break-all">${escAttr(url)}</span>` +
+      (note ? `<span class="block text-text-secondary">${escAttr(note)}</span>` : "") +
+      `</span></div>`
+    );
   }
 
   // Utility functions
