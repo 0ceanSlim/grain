@@ -636,6 +636,10 @@
       setElementText("adv-status", "");
     }
     panel.classList.toggle("hidden");
+    if (opening) {
+      // Bring the advanced inputs into view (the panel sits below the card).
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   };
 
   function loadAdvState() {
