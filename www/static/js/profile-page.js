@@ -137,6 +137,11 @@
     // Update external identities from event tags (NIP-39)
     updateExternalIdentities(profile);
 
+    // Keep the parsed content for the editor's diff, and reveal the Edit button
+    // if this is the logged-in user's own profile.
+    profileData.content = profileContent;
+    checkOwnProfile();
+
     console.log("Profile component display complete");
   }
 
@@ -184,9 +189,10 @@
       showElement("profile-website-container");
     }
 
-    // Lightning address
-    if (profileContent.lud16) {
-      setElementText("profile-lightning", profileContent.lud16);
+    // Lightning address (lud16 preferred; lud06 LNURL as fallback)
+    const lightning = profileContent.lud16 || profileContent.lud06;
+    if (lightning) {
+      setElementText("profile-lightning", lightning);
       showElement("profile-lightning-container");
     }
   }
@@ -457,6 +463,138 @@
       if (btn) btn.textContent = "view event json";
     }
   };
+
+  // ── Profile editing (own profile only) ─────────────────────────
+  // Editable kind-0 content fields. The input id is edit-<field> where <field>
+  // is the content key, so we map both ways generically.
+  const EDITABLE_FIELDS = [
+    "name", "display_name", "about", "picture", "banner", "nip05", "lud16", "website",
+  ];
+
+  // Reveal the Edit button only when the logged-in user is viewing their own
+  // profile (session pubkey === this profile's pubkey).
+  async function checkOwnProfile() {
+    try {
+      const r = await fetch("/api/v1/session", { cache: "no-store" });
+      if (!r.ok) return;
+      const sess = await r.json();
+      const mine =
+        sess &&
+        sess.publicKey &&
+        sess.publicKey.toLowerCase() === (profileData.pubkey || "").toLowerCase();
+      if (mine) showElement("profile-edit-btn");
+    } catch (_) {
+      /* not logged in — leave the Edit button hidden */
+    }
+  }
+
+  window.toggleProfileEdit = function () {
+    const panel = document.getElementById("profile-edit-panel");
+    if (!panel) return;
+    const opening = panel.classList.contains("hidden");
+    if (opening) {
+      const content = profileData.content || {};
+      EDITABLE_FIELDS.forEach((f) => {
+        const el = document.getElementById("edit-" + f);
+        if (el) el.value = content[f] != null ? String(content[f]) : "";
+      });
+      setElementText("profile-save-status", "");
+    }
+    panel.classList.toggle("hidden");
+  };
+
+  window.saveProfile = async function () {
+    const status = (m) => setElementText("profile-save-status", m);
+    const content = profileData.content || {};
+
+    // Collect ONLY the fields the user actually changed, so we add tags for
+    // exactly those and leave everything else in the kind-0 untouched.
+    const edits = {};
+    EDITABLE_FIELDS.forEach((f) => {
+      const el = document.getElementById("edit-" + f);
+      if (!el) return;
+      const newVal = el.value.trim();
+      const oldVal = content[f] != null ? String(content[f]) : "";
+      if (newVal !== oldVal) edits[f] = newVal;
+    });
+    if (Object.keys(edits).length === 0) {
+      status("No changes to save.");
+      return;
+    }
+
+    const saveBtn = document.getElementById("profile-save-btn");
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      // 1. Server merges the edits over the existing event → unsigned kind-0.
+      status("Assembling event…");
+      const buildResp = await fetch("/api/v1/user/profile/build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event: profileData.profile, edits }),
+      });
+      if (!buildResp.ok) throw new Error(await buildResp.text());
+      const unsigned = await buildResp.json();
+
+      // 2. Sign client-side with the user's signer.
+      status("Waiting for your signer…");
+      if (typeof window.restoreSigner === "function") await window.restoreSigner();
+      if (!window.grainSigner || typeof window.grainSigner.signEvent !== "function") {
+        throw new Error("No signer available — log in with a signing method.");
+      }
+      const signed = await window.grainSigner.signEvent(unsigned);
+
+      // 3. Publish via the outbox.
+      status("Publishing…");
+      const pubResp = await fetch("/api/v1/events/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event: signed }),
+      });
+      const result = await pubResp.json();
+      if (!pubResp.ok || !result.success) {
+        throw new Error(result.error || "publish failed");
+      }
+
+      showPublishToast(result);
+      status("");
+      window.toggleProfileEdit();
+      setTimeout(() => window.refreshProfile(), 1000);
+    } catch (err) {
+      console.error("Save profile failed:", err);
+      status("Error: " + (err.message || err));
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  };
+
+  // Toast listing the relays an event was published to. Per-relay accept/reject
+  // (NIP-20 OK) is a follow-up; for now this reflects send success per relay.
+  function showPublishToast(result) {
+    const relays = result.results || [];
+    const ok = relays.filter((r) => r.Success || r.success).length;
+    const lines = relays
+      .map((r) => {
+        const url = r.RelayURL || r.relayURL || "";
+        const good = r.Success || r.success;
+        return `<div class="flex items-center gap-2"><span class="${
+          good ? "text-success" : "text-danger"
+        }">${good ? "✓" : "✗"}</span><span class="font-mono text-xs break-all">${url}</span></div>`;
+      })
+      .join("");
+
+    const toast = document.createElement("div");
+    toast.className =
+      "fixed z-50 max-w-sm p-4 border rounded-lg shadow-lg top-4 right-4 bg-surface border-border";
+    toast.innerHTML = `
+      <div class="mb-2 font-semibold text-text">Published to ${ok}/${relays.length} relays</div>
+      <div class="space-y-1 overflow-y-auto max-h-48">${
+        lines || '<span class="text-xs text-text-secondary">No relays targeted.</span>'
+      }</div>`;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      if (document.body.contains(toast)) document.body.removeChild(toast);
+    }, 6000);
+  }
 
   // Utility functions
   function showElement(elementId) {

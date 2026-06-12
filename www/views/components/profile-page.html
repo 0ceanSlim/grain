@@ -87,6 +87,18 @@
         </button>
       </div>
 
+      <!-- Edit button. Hidden by default; profile-page.js reveals it only when
+           the logged-in user is viewing their own profile. -->
+      <div class="mb-4">
+        <button
+          id="profile-edit-btn"
+          onclick="toggleProfileEdit()"
+          class="hidden px-4 py-2 text-sm transition-colors rounded-lg text-text bg-surface-elevated hover:bg-surface-hover"
+        >
+          ✏️ Edit profile
+        </button>
+      </div>
+
       <!-- About Section -->
       <div class="max-w-2xl mx-auto mb-4">
         <div class="p-6 bg-surface rounded-lg">
@@ -131,6 +143,67 @@
           >
         </div>
       </div>
+      <!-- Edit panel. Own profile only; toggled by the Edit button. Fields map
+           1:1 to kind-0 content keys (the input id is edit-<key>). Save sends
+           only the changed fields to /build, signs client-side, and publishes
+           via the outbox; everything else in the existing kind-0 is preserved. -->
+      <div
+        id="profile-edit-panel"
+        class="hidden max-w-2xl p-6 mx-auto mb-8 text-left rounded-lg bg-surface"
+      >
+        <h3 class="mb-4 text-lg font-semibold text-text">Edit profile</h3>
+        <div class="space-y-3">
+          <label class="block">
+            <span class="text-sm text-text-secondary">Name</span>
+            <input id="edit-name" type="text" class="w-full px-3 py-2 mt-1 text-sm border rounded bg-surface-elevated text-text border-border" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-text-secondary">Display name</span>
+            <input id="edit-display_name" type="text" class="w-full px-3 py-2 mt-1 text-sm border rounded bg-surface-elevated text-text border-border" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-text-secondary">About</span>
+            <textarea id="edit-about" rows="3" class="w-full px-3 py-2 mt-1 text-sm border rounded bg-surface-elevated text-text border-border"></textarea>
+          </label>
+          <label class="block">
+            <span class="text-sm text-text-secondary">Picture URL</span>
+            <input id="edit-picture" type="text" class="w-full px-3 py-2 mt-1 text-sm border rounded bg-surface-elevated text-text border-border" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-text-secondary">Banner URL</span>
+            <input id="edit-banner" type="text" class="w-full px-3 py-2 mt-1 text-sm border rounded bg-surface-elevated text-text border-border" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-text-secondary">NIP-05</span>
+            <input id="edit-nip05" type="text" class="w-full px-3 py-2 mt-1 text-sm border rounded bg-surface-elevated text-text border-border" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-text-secondary">Lightning address (lud16)</span>
+            <input id="edit-lud16" type="text" class="w-full px-3 py-2 mt-1 text-sm border rounded bg-surface-elevated text-text border-border" />
+          </label>
+          <label class="block">
+            <span class="text-sm text-text-secondary">Website</span>
+            <input id="edit-website" type="text" class="w-full px-3 py-2 mt-1 text-sm border rounded bg-surface-elevated text-text border-border" />
+          </label>
+        </div>
+        <div class="flex gap-2 mt-4">
+          <button
+            id="profile-save-btn"
+            onclick="saveProfile()"
+            class="px-4 py-2 text-sm transition-colors rounded-lg text-text-on-accent bg-accent hover:opacity-80"
+          >
+            Save &amp; sign
+          </button>
+          <button
+            onclick="toggleProfileEdit()"
+            class="px-4 py-2 text-sm transition-colors rounded-lg text-text bg-surface-elevated hover:bg-surface-hover"
+          >
+            Cancel
+          </button>
+        </div>
+        <p id="profile-save-status" class="mt-3 text-sm text-text-secondary"></p>
+      </div>
+
       <!-- Social Links Row (dynamically populated) -->
       <div class="flex justify-center gap-6 mb-8" id="social-links-container">
         <!-- External identity links will be added here dynamically -->
