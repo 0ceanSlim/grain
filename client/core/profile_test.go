@@ -73,6 +73,35 @@ func TestAssembleProfileEventPreservesAndDualWrites(t *testing.T) {
 	}
 }
 
+// A stale client tag (e.g. from Amethyst) must be stripped, not preserved —
+// kind-0 shouldn't advertise the writing app by default.
+func TestAssembleProfileEventStripsClientTag(t *testing.T) {
+	existing := &nostr.Event{
+		PubKey:  "abc",
+		Content: `{"name":"alice"}`,
+		Tags:    [][]string{{"client", "amethyst", "31990:..."}, {"i", "github:alice", "p"}},
+	}
+	got, err := AssembleProfileEvent(existing, map[string]string{"about": "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tag := range got.Tags {
+		if tag[0] == "client" {
+			t.Fatalf("client tag should have been stripped, got tags %v", got.Tags)
+		}
+	}
+	// Other tags (NIP-39 i) are still preserved.
+	hasI := false
+	for _, tag := range got.Tags {
+		if tag[0] == "i" {
+			hasI = true
+		}
+	}
+	if !hasI {
+		t.Error("non-client tags must still be preserved")
+	}
+}
+
 func TestAssembleProfileEventNewProfile(t *testing.T) {
 	got, err := AssembleProfileEvent(&nostr.Event{PubKey: "abc"}, map[string]string{"name": "alice"})
 	if err != nil {

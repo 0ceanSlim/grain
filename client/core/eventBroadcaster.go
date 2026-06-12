@@ -9,10 +9,14 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// BroadcastResult represents the result of broadcasting to a single relay
+// BroadcastResult represents the result of broadcasting to a single relay.
+// Success means the EVENT was sent; Accepted is the relay's NIP-20 OK verdict
+// (whether it actually stored the event), with Reason carrying any message.
 type BroadcastResult struct {
 	RelayURL string
 	Success  bool
+	Accepted bool
+	Reason   string
 	Error    error
 	Message  string
 	Duration time.Duration
@@ -38,6 +42,11 @@ func BroadcastEvent(event *nostr.Event, relays []string, pool *RelayPool) []Broa
 
 	log.ClientCore().Info("Broadcasting event", "event_id", event.ID, "relay_count", len(relays))
 
+	// Start collecting NIP-20 OK responses BEFORE sending, so a relay that
+	// replies fast can't beat the waiter into place.
+	okCh := pool.messageRouter.RegisterOKWaiter(event.ID, len(relays))
+	defer pool.messageRouter.UnregisterOKWaiter(event.ID)
+
 	// Create EVENT message
 	eventMessage := []interface{}{"EVENT", event}
 
@@ -59,6 +68,11 @@ func BroadcastEvent(event *nostr.Event, relays []string, pool *RelayPool) []Broa
 
 	wg.Wait()
 
+	// Collect OK responses for the relays we successfully sent to, matched by
+	// relay URL, within a short window. A relay that never answers is left as
+	// Accepted=false (sent but unconfirmed).
+	collectOKResponses(okCh, results)
+
 	// Log summary
 	successful := 0
 	failed := 0
@@ -77,6 +91,43 @@ func BroadcastEvent(event *nostr.Event, relays []string, pool *RelayPool) []Broa
 		"total", len(relays))
 
 	return results
+}
+
+// collectOKResponses waits on okCh for NIP-20 OK responses and fills the
+// Accepted/Reason fields of the matching results, for up to a short window. It
+// only waits for relays we successfully sent to; a relay that never answers is
+// left Accepted=false (sent but unconfirmed).
+func collectOKResponses(okCh <-chan OKResult, results []BroadcastResult) {
+	relayIndex := make(map[string]int, len(results))
+	pending := 0
+	for i := range results {
+		relayIndex[results[i].RelayURL] = i
+		if results[i].Success {
+			pending++
+		}
+	}
+	if pending == 0 {
+		return
+	}
+
+	deadline := time.After(5 * time.Second)
+	received := make(map[string]bool, pending)
+	for pending > 0 {
+		select {
+		case ok := <-okCh:
+			if received[ok.Relay] {
+				continue
+			}
+			received[ok.Relay] = true
+			if idx, found := relayIndex[ok.Relay]; found {
+				results[idx].Accepted = ok.Accepted
+				results[idx].Reason = ok.Reason
+			}
+			pending--
+		case <-deadline:
+			return
+		}
+	}
 }
 
 // broadcastToSingleRelay broadcasts to a single relay

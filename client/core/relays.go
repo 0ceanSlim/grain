@@ -61,9 +61,19 @@ type RelayConnection struct {
 	idleAt time.Time
 }
 
-// MessageRouter handles routing messages to subscriptions
+// OKResult is a relay's NIP-20 response to a published event: whether it was
+// accepted and any human-readable reason.
+type OKResult struct {
+	Relay    string `json:"relay"`
+	Accepted bool   `json:"accepted"`
+	Reason   string `json:"reason,omitempty"`
+}
+
+// MessageRouter handles routing messages to subscriptions and OK responses to
+// in-flight publishes.
 type MessageRouter struct {
 	subscriptions map[string]*Subscription
+	okWaiters     map[string]chan OKResult // event id -> waiter (set during a publish)
 	mu            sync.RWMutex
 }
 
@@ -71,6 +81,39 @@ type MessageRouter struct {
 func NewMessageRouter() *MessageRouter {
 	return &MessageRouter{
 		subscriptions: make(map[string]*Subscription),
+		okWaiters:     make(map[string]chan OKResult),
+	}
+}
+
+// RegisterOKWaiter starts collecting OK responses for an event being published.
+// The returned channel is buffered for up to buf relays; UnregisterOKWaiter
+// must be called when done.
+func (mr *MessageRouter) RegisterOKWaiter(eventID string, buf int) chan OKResult {
+	ch := make(chan OKResult, buf)
+	mr.mu.Lock()
+	mr.okWaiters[eventID] = ch
+	mr.mu.Unlock()
+	return ch
+}
+
+// UnregisterOKWaiter stops collecting OK responses for an event.
+func (mr *MessageRouter) UnregisterOKWaiter(eventID string) {
+	mr.mu.Lock()
+	delete(mr.okWaiters, eventID)
+	mr.mu.Unlock()
+}
+
+// RouteOK delivers a relay's OK response to the publisher waiting on it, if any.
+func (mr *MessageRouter) RouteOK(eventID string, ok OKResult) {
+	mr.mu.RLock()
+	ch, exists := mr.okWaiters[eventID]
+	mr.mu.RUnlock()
+	if !exists {
+		return
+	}
+	select {
+	case ch <- ok:
+	default: // waiter buffer full or gone — drop
 	}
 }
 
@@ -561,9 +604,16 @@ func (rc *RelayConnection) processMessage(message string) error {
 			log.ClientCore().Info("Relay notice", "relay", rc.URL, "notice", notice)
 		}
 	case "OK":
+		// NIP-20: ["OK", <event-id>, <accepted bool>, <reason string>]
 		if len(messageArray) >= 3 {
-			log.ClientCore().Debug("Received OK message", "relay", rc.URL)
-			// TODO: Handle event publication response
+			eventID, _ := messageArray[1].(string)
+			accepted, _ := messageArray[2].(bool)
+			reason := ""
+			if len(messageArray) >= 4 {
+				reason, _ = messageArray[3].(string)
+			}
+			log.ClientCore().Debug("Received OK message", "relay", rc.URL, "accepted", accepted, "reason", reason)
+			rc.messageRouter.RouteOK(eventID, OKResult{Relay: rc.URL, Accepted: accepted, Reason: reason})
 		}
 	default:
 		log.ClientCore().Debug("Unknown message type", "relay", rc.URL, "type", messageType)
