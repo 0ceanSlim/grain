@@ -97,6 +97,65 @@ func annotateMediaServers(urls []string, kind string) []MediaServerEntry {
 	return entries
 }
 
+// MediaServersBuildRequest carries the desired ordered server list for one
+// media-server list kind.
+type MediaServersBuildRequest struct {
+	Kind    int      `json:"kind"`    // 10063 (Blossom) or 10096 (NIP-96)
+	Servers []string `json:"servers"` // ordered base URLs, primary first
+}
+
+// BuildMediaServersHandler assembles an UNSIGNED media-server list event for the
+// session user, preserving any non-server tags on their existing list, and
+// returns it for the browser to sign. Publish the signed event via
+// /api/v1/events/publish.
+//
+// @Summary      Build a media-server list event
+// @Description  Assemble an unsigned Blossom (10063) or NIP-96 (10096) server-list event for the session user, preserving non-server tags, and return it to sign client-side.
+// @Tags         client
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  nostr.Event
+// @Failure      400  {string}  string  "Invalid request"
+// @Failure      401  {string}  string  "Authentication required"
+// @Router       /api/v1/user/media-servers/build [post]
+func BuildMediaServersHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess := session.SessionMgr.GetCurrentUser(r)
+	if sess == nil {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+
+	var req MediaServersBuildRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	coreClient := connection.GetCoreClient()
+	if coreClient == nil {
+		http.Error(w, "Client not available", http.StatusInternalServerError)
+		return
+	}
+
+	// Fetch the user's existing list so non-server tags survive the rewrite.
+	existing := coreClient.FetchMediaServerList(sess.PublicKey, req.Kind)
+	unsigned, err := core.AssembleMediaServerEvent(existing, req.Kind, sess.PublicKey, req.Servers)
+	if err != nil {
+		log.ClientAPI().Warn("Media-server build failed", "pubkey", sess.PublicKey, "kind", req.Kind, "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(unsigned); err != nil {
+		log.ClientAPI().Error("Failed to encode built media-server event", "error", err)
+	}
+}
+
 // GetSuggestedMediaServersHandler returns grain's curated quick-add media-server
 // suggestions (Blossom preferred, NIP-96 legacy fallback) for the settings page.
 //

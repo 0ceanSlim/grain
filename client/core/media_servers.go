@@ -41,11 +41,6 @@ var suggestedMediaServers = []MediaServerInfo{
 		Note: "Free · ~20 MB/file · runs on nostr.build infra",
 	},
 	{
-		URL: "https://blossom.primal.net", Kind: MediaKindBlossom, Name: "Primal",
-		Cost: "free", Retention: "permanent", Mirror: true,
-		Note: "Free · reliable, widely-used default",
-	},
-	{
 		URL: "https://0x0.happytavern.co", Kind: MediaKindBlossom, Name: "Happy Tavern (free)",
 		Cost: "free", Retention: "ephemeral", Mirror: true,
 		Note: "Free · auto-pruned by size/age — pair as a fast primary with a permanent mirror",
@@ -55,6 +50,11 @@ var suggestedMediaServers = []MediaServerInfo{
 		Cost: "paid", Retention: "permanent", Mirror: true,
 		Note: "Tavern membership · 10k sats one-time · 100 MB/file · 8 GB · kept forever",
 		CTA:  "https://happytavern.co/nostr-verified",
+	},
+	{
+		URL: "https://blossom.primal.net", Kind: MediaKindBlossom, Name: "Primal",
+		Cost: "free", Retention: "permanent", Mirror: true,
+		Note: "Free · reliable, widely-used default",
 	},
 	// NIP-96 (legacy fallback)
 	{

@@ -216,6 +216,122 @@
         </div>
       </div>
 
+      <!-- Media Servers (#83): where uploads go. The user's Blossom (kind
+           10063) + NIP-96 (kind 10096) lists, plus grain's recommended
+           quick-adds. Lists/rows are rendered by media-servers.js. -->
+      <div id="media-servers-section" class="p-6 mb-8 bg-surface rounded-lg">
+        <h2 class="mb-1 text-xl font-semibold text-text">🗂️ Media servers</h2>
+        <p class="mb-4 text-sm text-text-secondary">
+          Where grain uploads your pictures and files. Add a server to upload
+          from the app — or just paste image URLs without one.
+        </p>
+
+        <!-- Blossom explainer -->
+        <div class="flex gap-3 p-3 mb-5 text-sm rounded-lg bg-info-dim text-info">
+          <span aria-hidden="true">🌸</span>
+          <p>
+            <span class="font-semibold">Blossom</span> stores media as files
+            addressed by their hash. Upload once, mirror to several servers, and
+            any Blossom app can still find your media by hash — even if one
+            server drops it. <span class="font-semibold">Recommended.</span>
+          </p>
+        </div>
+
+        <!-- Your Blossom servers -->
+        <h3 class="text-sm font-medium text-text">Your Blossom servers</h3>
+        <p class="mb-2 text-xs text-text-muted">
+          First is your primary — uploads go here. The rest are mirrors. Drag
+          the ⠿ to reorder.
+        </p>
+        <div id="ms-blossom-list" class="space-y-2"></div>
+
+        <h4
+          class="mt-4 mb-2 text-xs font-medium tracking-wide uppercase text-text-secondary"
+        >
+          Recommended
+        </h4>
+        <div id="ms-blossom-suggested" class="space-y-2"></div>
+
+        <div class="flex gap-2 mt-3">
+          <input
+            id="ms-blossom-input"
+            type="text"
+            placeholder="Add a Blossom server by URL…"
+            class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"
+          />
+          <button
+            onclick="msAddBlossomFromInput()"
+            class="px-4 py-2 text-sm transition-colors rounded-lg text-text bg-surface-elevated hover:bg-surface-hover"
+          >
+            + Add
+          </button>
+        </div>
+        <p class="mt-2 text-xs text-text-muted">
+          Want to pick your own? Browse
+          <a
+            href="https://blossomservers.com"
+            target="_blank"
+            rel="noopener"
+            class="text-accent"
+            >blossomservers.com ↗</a
+          >
+        </p>
+
+        <!-- Legacy NIP-96 -->
+        <details class="mt-6">
+          <summary
+            class="text-sm font-medium cursor-pointer text-text-secondary hover:text-text"
+          >
+            Legacy — HTTP servers (NIP-96)
+          </summary>
+          <p class="mt-2 mb-3 text-xs text-text-muted">
+            Traditional HTTP file storage, authed with NIP-98. Works, but has no
+            mirroring and isn't hash-addressed.
+            <span class="font-semibold text-text-secondary">Prefer Blossom</span>
+            unless you specifically need an existing NIP-96 host.
+          </p>
+          <div id="ms-nip96-list" class="space-y-2"></div>
+          <h4
+            class="mt-3 mb-2 text-xs font-medium tracking-wide uppercase text-text-secondary"
+          >
+            Recommended
+          </h4>
+          <div id="ms-nip96-suggested" class="space-y-2"></div>
+          <div class="flex gap-2 mt-3">
+            <input
+              id="ms-nip96-input"
+              type="text"
+              placeholder="Add a NIP-96 server by URL…"
+              class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"
+            />
+            <button
+              onclick="msAddNip96FromInput()"
+              class="px-4 py-2 text-sm transition-colors rounded-lg text-text bg-surface-elevated hover:bg-surface-hover"
+            >
+              + Add
+            </button>
+          </div>
+        </details>
+
+        <!-- Save -->
+        <div
+          class="flex items-center justify-between gap-3 pt-4 mt-6 border-t border-border"
+        >
+          <p class="text-xs text-text-muted">
+            Saving publishes your <code>kind 10063</code> + <code>10096</code>
+            lists.
+          </p>
+          <button
+            id="ms-save-btn"
+            onclick="msSave()"
+            class="px-4 py-2 text-sm transition-colors rounded-lg text-text-on-accent bg-accent hover:opacity-80"
+          >
+            Save &amp; sign
+          </button>
+        </div>
+        <p id="ms-status" class="mt-2 text-sm text-right text-text-secondary"></p>
+      </div>
+
       <!-- Key Information -->
       <div class="p-6 mb-8 bg-surface rounded-lg">
         <h2 class="mb-4 text-xl font-semibold text-text">
@@ -275,6 +391,11 @@
   </div>
 
   <script src="/static/js/settings.js"></script>
+  <!-- Shared publish helper + media-servers section (#83). nostr-publish.js
+       must load first; media-servers.js self-initialises when its section is in
+       the DOM. -->
+  <script src="/static/js/nostr-publish.js"></script>
+  <script src="/static/js/media-servers.js"></script>
   <script>
     // Safe initialization that waits for both DOM and script to be ready
     function safeInitializeSettings() {

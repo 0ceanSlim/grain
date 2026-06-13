@@ -1,6 +1,7 @@
 package core
 
 import (
+	"reflect"
 	"testing"
 
 	nostr "github.com/0ceanslim/grain/server/types"
@@ -102,5 +103,52 @@ func TestSuggestedMediaServersAreWellFormed(t *testing.T) {
 		if info.Kind == MediaKindNIP96 && info.Mirror {
 			t.Errorf("suggested %q is NIP-96 but flagged as a mirror target (BUD-04 is Blossom-only)", info.URL)
 		}
+	}
+}
+
+// Saving a list must rewrite the server tags in order while preserving every
+// other tag and the content — the same "don't drop data" rule as the kind-0
+// editor.
+func TestAssembleMediaServerEventPreservesOtherTags(t *testing.T) {
+	existing := &nostr.Event{
+		PubKey:  "abc",
+		Kind:    10063,
+		Content: "keep me",
+		Tags: [][]string{
+			{"server", "https://old.example"}, // dropped — the server list is rewritten
+			{"client", "amethyst"},            // preserved — not a server tag
+		},
+	}
+	got, err := AssembleMediaServerEvent(existing, 10063, "abc",
+		[]string{"https://blossom.band/", "https://blossom.band", "https://nostr.build"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Kind != 10063 || got.PubKey != "abc" || got.Content != "keep me" {
+		t.Fatalf("kind/pubkey/content not carried over: %+v", got)
+	}
+	if got.ID != "" || got.Sig != "" {
+		t.Fatal("assembled event must be unsigned")
+	}
+	want := [][]string{
+		{"client", "amethyst"},
+		{"server", "https://blossom.band"}, // normalised + deduped, order preserved
+		{"server", "https://nostr.build"},
+	}
+	if !reflect.DeepEqual(got.Tags, want) {
+		t.Fatalf("tags = %v, want %v", got.Tags, want)
+	}
+}
+
+func TestAssembleMediaServerEventNilExistingAndBadKind(t *testing.T) {
+	got, err := AssembleMediaServerEvent(nil, 10096, "pk", []string{"nostr.build"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Kind != 10096 || got.PubKey != "pk" || len(got.Tags) != 1 || got.Tags[0][1] != "https://nostr.build" {
+		t.Fatalf("nil-existing build wrong: %+v", got)
+	}
+	if _, err := AssembleMediaServerEvent(nil, 10002, "pk", nil); err == nil {
+		t.Fatal("expected an error for an unsupported kind")
 	}
 }

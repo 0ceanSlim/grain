@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 	"sync"
@@ -127,6 +128,73 @@ func (c *Client) ResolveMediaServers(pubkey string) *MediaServers {
 // resolve re-fetches — used after the user publishes an updated list.
 func (c *Client) InvalidateMediaServers(pubkey string) {
 	c.mediaDir.Invalidate(pubkey)
+}
+
+// FetchMediaServerList returns the user's latest raw event of the given
+// media-server list kind (10063 Blossom or 10096 NIP-96), or nil if none is
+// found. Used by the build flow to preserve any non-server tags when
+// republishing the list. Queries the index relays plus the user's cached
+// outbox, where these lists most often live.
+func (c *Client) FetchMediaServerList(pubkey string, kind int) *nostr.Event {
+	relays := c.config.IndexRelays
+	if ur, ok := c.directory.Cached(pubkey); ok {
+		relays = appendUnique(relays, ur.Outbox)
+	}
+	return c.fetchLatestEvent(pubkey, kind, relays)
+}
+
+// AssembleMediaServerEvent builds an UNSIGNED media-server list event (Blossom
+// kind 10063 or NIP-96 kind 10096) from the user's existing one, replacing the
+// server list while preserving every other tag and the content — the same
+// conservative "don't drop data" rule as AssembleProfileEvent.
+//
+// servers are written as `["server", <url>]` tags in the given order (primary
+// first), normalised and de-duplicated. existing may be nil (a first list). The
+// returned event has no ID or Sig: the caller signs it.
+func AssembleMediaServerEvent(existing *nostr.Event, kind int, pubkey string, servers []string) (*nostr.Event, error) {
+	if kind != 10063 && kind != 10096 {
+		return nil, fmt.Errorf("unsupported media-server list kind %d (want 10063 or 10096)", kind)
+	}
+
+	var existingTags [][]string
+	content := ""
+	if existing != nil {
+		existingTags = existing.Tags
+		content = existing.Content
+		if existing.PubKey != "" {
+			pubkey = existing.PubKey
+		}
+	}
+
+	// Preserve every non-server tag; the server list itself is fully rewritten.
+	tags := make([][]string, 0, len(existingTags)+len(servers))
+	for _, t := range existingTags {
+		if len(t) >= 1 && t[0] == "server" {
+			continue
+		}
+		tags = append(tags, t)
+	}
+	// Append the new server list in order, normalised + de-duplicated.
+	seen := make(map[string]struct{})
+	for _, s := range servers {
+		u, ok := normalizeMediaURL(s)
+		if !ok {
+			continue
+		}
+		if _, dup := seen[u]; dup {
+			continue
+		}
+		seen[u] = struct{}{}
+		tags = append(tags, []string{"server", u})
+	}
+
+	return &nostr.Event{
+		PubKey:    pubkey,
+		Kind:      kind,
+		CreatedAt: time.Now().Unix(),
+		Content:   content,
+		Tags:      tags,
+	}, nil
 }
 
 // fetchUserMediaServersFromNetwork is the MediaDirectory's resolver: it queries
