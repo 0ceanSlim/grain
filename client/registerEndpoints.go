@@ -141,6 +141,11 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/user/media-servers/build", api.BuildMediaServersHandler)
 	mux.HandleFunc("/api/v1/media-servers/suggested", api.GetSuggestedMediaServersHandler)
 
+	// Relay-list management: build a NIP-65 / NIP-17 / NIP-51 relay list to sign,
+	// and the fixed-relay override (advanced opt-out of the outbox model).
+	mux.HandleFunc("/api/v1/user/relay-list/build", api.BuildRelayListHandler)
+	mux.HandleFunc("/api/v1/client/fixed-relays", api.FixedRelaysHandler)
+
 	// Event querying endpoints
 	mux.HandleFunc("/api/v1/events/query", api.QueryEventsHandler)
 	mux.HandleFunc("/api/v1/events/publish", api.PublishSignedHandler)

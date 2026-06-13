@@ -146,10 +146,13 @@ func PublishSignedHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A republished media-server list must show immediately — drop the cached
-	// resolution so the next lookup re-fetches the new list.
+	// A republished media-server or relay list must show immediately — drop the
+	// cached resolution so the next lookup re-fetches it.
 	if req.Event.Kind == 10063 || req.Event.Kind == 10096 {
 		coreClient.InvalidateMediaServers(req.Event.PubKey)
+	}
+	if req.Event.Kind == 10002 || req.Event.Kind == 10050 {
+		coreClient.InvalidateUserRelays(req.Event.PubKey)
 	}
 
 	log.ClientAPI().Info("Published signed event", "kind", req.Event.Kind, "event_id", req.Event.ID, "relay_count", len(relays))
