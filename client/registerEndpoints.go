@@ -135,6 +135,11 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/user/profile/build", api.BuildProfileHandler)
 	mux.HandleFunc("/api/v1/user/relays", api.GetUserRelaysHandler)
 
+	// Media-server lists (Blossom kind 10063 + NIP-96 kind 10096) for the
+	// upload flow: the user's resolved lists, plus grain's quick-add suggestions.
+	mux.HandleFunc("/api/v1/user/media-servers", api.GetUserMediaServersHandler)
+	mux.HandleFunc("/api/v1/media-servers/suggested", api.GetSuggestedMediaServersHandler)
+
 	// Event querying endpoints
 	mux.HandleFunc("/api/v1/events/query", api.QueryEventsHandler)
 	mux.HandleFunc("/api/v1/events/publish", api.PublishSignedHandler)

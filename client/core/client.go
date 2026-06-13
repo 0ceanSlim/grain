@@ -29,6 +29,10 @@ type Client struct {
 	// (outbox / inbox / DM inbox) for outbox routing.
 	directory *RelayDirectory
 
+	// mediaDir resolves and caches per-user media-server lists (Blossom kind
+	// 10063 / NIP-96 kind 10096) for the upload flow.
+	mediaDir *MediaDirectory
+
 	// Fixed-relay override (opt-out, default OFF). When enabled, every read uses
 	// fixedRead and every write uses fixedWrite, bypassing outbox routing
 	// entirely — replies stop reaching other users' inboxes. Only for users who
@@ -51,6 +55,7 @@ func NewClient(config *Config) *Client {
 		config:        config,
 	}
 	c.directory = newRelayDirectory(config.RelayListTTL, config.RelayListNegTTL, c.fetchUserRelaysFromNetwork)
+	c.mediaDir = newMediaDirectory(config.RelayListTTL, config.RelayListNegTTL, c.fetchUserMediaServersFromNetwork)
 	return c
 }
 
