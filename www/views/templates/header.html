@@ -253,8 +253,8 @@
           </div>
         </div>
         <button
-          hx-get="/views/settings.html"
-          hx-target="#main-content"
+          type="button"
+          onclick="openRelaySettings()"
           class="flex items-center w-full gap-2 px-2 py-1.5 mt-2 text-xs text-left transition-colors border-t rounded text-text-secondary hover:text-text hover:bg-surface-hover border-border"
         >
           ⚙️ Manage relays
@@ -359,6 +359,36 @@
     refresh();
     setInterval(refresh, 4000);
   })();
+
+  // "Manage relays" → open Settings and jump straight to the relay section.
+  // Done in JS rather than hx-get on the button: the button lives inside the
+  // relay-pool panel, which the document-click handler hides on the same click
+  // — that stranded the htmx request and left it spinning. Mirror routing.js's
+  // settings swap, then scroll to #relay-manager-section once the settings
+  // content becomes visible (it loads behind its own spinner / watchdog).
+  window.openRelaySettings = function () {
+    var panel = document.getElementById("relay-pool-panel");
+    if (panel) panel.classList.add("hidden");
+    if (typeof htmx === "undefined") {
+      window.location.href = "/settings";
+      return;
+    }
+    window.history.pushState({}, "", "/settings");
+    htmx
+      .ajax("GET", "/views/settings.html", { target: "#main-content" })
+      .then(function () {
+        var tries = 0;
+        (function scrollWhenReady() {
+          var sec = document.getElementById("relay-manager-section");
+          // offsetParent is null while #settings-content is still hidden.
+          if (sec && sec.offsetParent !== null) {
+            sec.scrollIntoView({ behavior: "smooth", block: "start" });
+            return;
+          }
+          if (tries++ < 120) setTimeout(scrollWhenReady, 100); // up to ~12s
+        })();
+      });
+  };
 </script>
 
 <!-- Hidden template for navigation.js to swap the logged-out
