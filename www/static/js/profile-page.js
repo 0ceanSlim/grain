@@ -573,42 +573,21 @@
   // outbox, show the OK toast, and hydrate the page in place once a relay
   // accepts. Throws on failure (the caller surfaces the error).
   async function signAndPublish(unsigned, status, onAccepted) {
-    // Create the toast UP FRONT so the user always gets feedback — including
-    // when the signer is unavailable, which used to throw before any toast and
-    // left the user staring at nothing.
     status("");
-    const toast = makePublishToast();
-    try {
-      toast.status("Waiting for your signer…");
-      if (typeof window.restoreSigner === "function") await window.restoreSigner();
-      if (!window.grainSigner || typeof window.grainSigner.signEvent !== "function") {
-        throw new Error("No signer available — log in with a signing method.");
-      }
-      const signed = await window.grainSigner.signEvent(unsigned);
-
-      toast.status("Publishing…");
-      const pubResp = await fetch("/api/v1/events/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event: signed }),
-      });
-      const result = await pubResp.json();
-      if (!pubResp.ok || !result.success) {
-        toast.fail(result.error || "publish failed");
-        return;
-      }
-
-      toast.update(result);
-      if ((result.results || []).some((r) => r.Accepted || r.accepted)) {
-        // At least one relay stored it — hydrate the page in place; no reload.
+    if (!window.grainPublish || typeof window.grainPublish.signAndPublish !== "function") {
+      status("Publish helper not loaded — reload the page.");
+      return;
+    }
+    // Delegate to the shared live broadcast toast (nostr-publish.js); hydrate the
+    // profile in place once at least one relay accepts.
+    await window.grainPublish.signAndPublish(unsigned, {
+      title: "Publishing profile…",
+      onAccepted: function (signed) {
         profileData.profile = signed;
         displayProfile(signed);
         if (onAccepted) onAccepted();
-      }
-    } catch (err) {
-      console.error("Publish failed:", err);
-      toast.fail(err.message || String(err));
-    }
+      },
+    });
   }
 
   // ── Advanced editor: full control over content fields and tags ──
@@ -790,92 +769,6 @@
       status("Error: " + (err.message || err));
     }
   };
-
-  // Publish toast: small, bottom-right. Spinner while sending; then the accepted
-  // count. Click the header to expand per-relay details (accept / reject+reason
-  // / send failure); dismiss anytime with the ×.
-  function makePublishToast() {
-    const t = document.createElement("div");
-    t.className =
-      "fixed z-50 overflow-hidden text-sm border rounded-lg shadow-lg bottom-4 right-4 w-72 bg-surface border-border";
-    t.innerHTML =
-      `<div class="flex items-center gap-2 px-3 py-2 cursor-pointer" data-head>` +
-      `<span data-icon class="inline-block w-4 h-4 border-2 rounded-full border-text-secondary border-t-transparent animate-spin"></span>` +
-      `<span data-title class="flex-1 font-medium text-text">Publishing…</span>` +
-      `<button data-close class="px-1 text-text-secondary hover:text-text" title="Dismiss">×</button>` +
-      `</div>` +
-      `<div data-body class="hidden px-3 pb-2 space-y-1 overflow-y-auto border-t max-h-48 border-border"></div>`;
-    document.body.appendChild(t);
-
-    const body = t.querySelector("[data-body]");
-    let timer = null;
-    const dismiss = () => {
-      if (timer) clearTimeout(timer);
-      if (document.body.contains(t)) document.body.removeChild(t);
-    };
-    t.querySelector("[data-close]").onclick = (e) => {
-      e.stopPropagation();
-      dismiss();
-    };
-    t.querySelector("[data-head]").onclick = () => body.classList.toggle("hidden");
-
-    function setIcon(text, cls) {
-      const icon = t.querySelector("[data-icon]");
-      icon.className = cls;
-      icon.textContent = text;
-    }
-
-    return {
-      status(text) {
-        const el = t.querySelector("[data-title]");
-        if (el) el.textContent = text;
-      },
-      update(result) {
-        const relays = result.results || [];
-        const accepted = relays.filter((r) => r.Accepted || r.accepted).length;
-        setIcon(accepted > 0 ? "✓" : "•", accepted > 0 ? "text-success" : "text-warning");
-        t.querySelector("[data-title]").textContent =
-          `Accepted by ${accepted}/${relays.length} relays`;
-        body.innerHTML =
-          relays.map(relayLine).join("") ||
-          '<span class="text-xs text-text-secondary">No relays targeted.</span>';
-        timer = setTimeout(dismiss, 12000);
-      },
-      fail(msg) {
-        setIcon("✗", "text-danger");
-        t.querySelector("[data-title]").textContent = "Publish failed";
-        body.innerHTML = `<span class="text-xs break-all text-danger">${escAttr(msg || "")}</span>`;
-        body.classList.remove("hidden");
-        timer = setTimeout(dismiss, 12000);
-      },
-    };
-  }
-
-  // One per-relay line in the expanded toast.
-  function relayLine(r) {
-    const url = r.RelayURL || r.relayURL || "";
-    const sent = r.Success || r.success;
-    const ok = r.Accepted || r.accepted;
-    const reason = r.Reason || r.reason || "";
-    const msg = r.Message || r.message || "";
-    let icon, cls, note;
-    if (ok) {
-      icon = "✓"; cls = "text-success"; note = reason;
-    } else if (!sent) {
-      icon = "✗"; cls = "text-danger"; note = msg || "failed to send";
-    } else if (reason) {
-      icon = "✗"; cls = "text-danger"; note = reason; // relay rejected it
-    } else {
-      icon = "•"; cls = "text-warning"; note = "no response";
-    }
-    return (
-      `<div class="flex items-start gap-2 text-xs">` +
-      `<span class="${cls}">${icon}</span>` +
-      `<span class="flex-1 min-w-0"><span class="font-mono break-all">${escAttr(url)}</span>` +
-      (note ? `<span class="block text-text-secondary">${escAttr(note)}</span>` : "") +
-      `</span></div>`
-    );
-  }
 
   // Utility functions
   function showElement(elementId) {
