@@ -12,6 +12,11 @@
 // Update by reading the upstream README, not by inventing labels.
 package client
 
+import (
+	"encoding/json"
+	"net/http"
+)
+
 // KindLabels maps kind → "Display Name (NIP-XX)" or
 // "Display Name (deprecated)" where applicable. Keep ordered by
 // kind for diffability; ranges (10000+) are NOT enumerated because
@@ -88,3 +93,12 @@ var KindLabels = map[int]string{
 // "" if the kind isn't in the table. Callers that want a fallback
 // string should `if l := KindLabel(k); l != "" { ... }`.
 func KindLabel(k int) string { return KindLabels[k] }
+
+// KindLabelsHandler serves the kind → label table as JSON for client UIs (the
+// relay-stream feed). Object keys are stringified kinds; unknown kinds are
+// simply absent and the UI falls back to "Kind N".
+func KindLabelsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_ = json.NewEncoder(w).Encode(KindLabels)
+}

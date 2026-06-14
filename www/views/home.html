@@ -23,6 +23,18 @@
     </div>
   </div>
 
+  <!-- Live Relay Stream: events hitting THIS relay, streamed live via a direct
+       WebSocket to grain's own relay. Rendered by feed.js. -->
+  <div class="mb-8 overflow-hidden bg-surface border border-border rounded-lg">
+    <div class="px-4 py-3 border-b border-border bg-surface-elevated">
+      <h2 class="text-lg font-semibold text-text">📡 Live Relay Stream</h2>
+      <p class="text-xs text-text-secondary">
+        Events hitting this relay, newest first — click an event to open it.
+      </p>
+    </div>
+    <div id="relay-stream-list" class="overflow-y-auto max-h-96"></div>
+  </div>
+
   <!-- 1. Relay Overview Section - MOVED ABOVE WHITELIST/BLACKLIST -->
   <div
     class="mb-8 overflow-hidden bg-surface border border-border rounded-lg"
@@ -271,6 +283,7 @@
   }
 </style>
 <script src="/static/js/dashboard.js"></script>
+<script src="/static/js/feed.js"></script>
 <script>
   // Safe initialization that waits for both DOM and script to be ready
   function safeInitializeDashboard() {

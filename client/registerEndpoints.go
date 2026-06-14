@@ -60,6 +60,9 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/ping/", api.PingHandler)
 	mux.HandleFunc("/api/v1/keys/decode/nip19/", api.Nip19DecodeHandler) // Decode NIP-19 entities
 
+	// Kind → human-readable label table (for the relay-stream feed).
+	mux.HandleFunc("/api/v1/kinds", KindLabelsHandler)
+
 	// OpenAPI / Swagger UI. The spec is served standalone so other
 	// tooling (Postman, openapi-generator, etc.) can consume it
 	// without scraping the UI shell. The UI itself is grain's own
