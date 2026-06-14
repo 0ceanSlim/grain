@@ -130,6 +130,104 @@ func collectOKResponses(okCh <-chan OKResult, results []BroadcastResult) {
 	}
 }
 
+// broadcastEventStream broadcasts like BroadcastEvent but emits each relay's
+// result on the returned channel the moment it resolves: a send failure right
+// away, an accept/reject when that relay's NIP-20 OK arrives, and a "sent but no
+// response" at the collect deadline. The channel is closed once every relay has
+// resolved. This powers the live, count-up publish toast.
+func broadcastEventStream(event *nostr.Event, relays []string, pool *RelayPool) <-chan BroadcastResult {
+	out := make(chan BroadcastResult, len(relays)) // buffered to the relay count: each relay emits exactly once, so sends never block
+
+	go func() {
+		defer close(out)
+		if event == nil || len(relays) == 0 {
+			return
+		}
+
+		// Register the OK waiter BEFORE sending so a fast relay can't beat it.
+		okCh := pool.messageRouter.RegisterOKWaiter(event.ID, len(relays))
+		defer pool.messageRouter.UnregisterOKWaiter(event.ID)
+
+		eventMessage := []interface{}{"EVENT", event}
+
+		sent := make([]BroadcastResult, len(relays))
+		relayIndex := make(map[string]int, len(relays))
+		for i, u := range relays {
+			relayIndex[u] = i
+		}
+
+		// Send to every relay concurrently. A send FAILURE is final — emit it
+		// immediately; a successful send waits for the relay's OK below.
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		for i, relayURL := range relays {
+			wg.Add(1)
+			go func(index int, relay string) {
+				defer wg.Done()
+				start := time.Now()
+				r := broadcastToSingleRelay(relay, eventMessage, pool)
+				r.RelayURL = relay
+				r.Duration = time.Since(start)
+				mu.Lock()
+				sent[index] = r
+				mu.Unlock()
+				if !r.Success {
+					out <- r
+				}
+			}(i, relayURL)
+		}
+		wg.Wait()
+
+		pending := 0
+		for i := range sent {
+			if sent[i].Success {
+				pending++
+			}
+		}
+		if pending == 0 {
+			return
+		}
+
+		deadline := time.After(5 * time.Second)
+		received := make(map[string]bool, pending)
+		for pending > 0 {
+			select {
+			case ok := <-okCh:
+				if received[ok.Relay] {
+					continue
+				}
+				idx, found := relayIndex[ok.Relay]
+				if !found || !sent[idx].Success {
+					continue
+				}
+				received[ok.Relay] = true
+				sent[idx].Accepted = ok.Accepted
+				sent[idx].Reason = ok.Reason
+				out <- sent[idx]
+				pending--
+			case <-deadline:
+				// Emit the relays that were sent but never answered.
+				for i := range sent {
+					if sent[i].Success && !received[sent[i].RelayURL] {
+						out <- sent[i] // Accepted=false, no reason => "no response"
+					}
+				}
+				return
+			}
+		}
+	}()
+
+	return out
+}
+
+// PublishEventStream broadcasts an already-signed event to the given relays and
+// returns a channel that emits each relay's result as it resolves. The caller
+// ranges the channel until it closes. Used by the streaming publish endpoint to
+// drive the live broadcast toast.
+func (c *Client) PublishEventStream(event *nostr.Event, relays []string) <-chan BroadcastResult {
+	return broadcastEventStream(event, relays, c.relayPool)
+}
+
 // broadcastToSingleRelay broadcasts to a single relay
 func broadcastToSingleRelay(relayURL string, message []interface{}, pool *RelayPool) BroadcastResult {
 	err := pool.SendMessage(relayURL, message)

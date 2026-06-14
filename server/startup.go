@@ -456,7 +456,11 @@ func initRoot(w http.ResponseWriter, r *http.Request) {
 		// Let API and auth endpoints fall through to be handled by registered endpoints
 		http.NotFound(w, r)
 	case strings.HasPrefix(r.URL.Path, "/views/") || strings.HasPrefix(r.URL.Path, "/static/") || strings.HasPrefix(r.URL.Path, "/style/"):
-		// Serve actual static files from embedded FS (CSS, JS, view templates, etc.)
+		// Serve actual static files from embedded FS (CSS, JS, view templates, etc.).
+		// no-cache so a rebuilt binary's updated assets are picked up on the next
+		// load without a manual hard-refresh: the bytes are embedded in the binary,
+		// so the same URL serves new content after every build.
+		w.Header().Set("Cache-Control", "no-cache")
 		subFS, _ := fs.Sub(client.GetEmbeddedWWW(), "www")
 		fileServer := http.FileServer(http.FS(subFS))
 		http.StripPrefix("/", fileServer).ServeHTTP(w, r)

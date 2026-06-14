@@ -171,3 +171,104 @@ func writeSignedResponse(w http.ResponseWriter, status int, resp PublishSignedRe
 		log.ClientAPI().Error("Failed to encode publish response", "error", err)
 	}
 }
+
+// publishStreamMsg is one NDJSON line of a streaming publish: a "start" line
+// carrying the target relay list, a "result" line per relay as it resolves, and
+// a final "done" line.
+type publishStreamMsg struct {
+	Type     string   `json:"type"`             // "start" | "result" | "done"
+	Relays   []string `json:"relays,omitempty"` // start: the target relays
+	RelayURL string   `json:"relayURL,omitempty"`
+	Sent     bool     `json:"sent"`     // the EVENT was delivered
+	Accepted bool     `json:"accepted"` // the relay's NIP-20 OK verdict
+	Reason   string   `json:"reason,omitempty"`
+	Message  string   `json:"message,omitempty"` // send-failure detail
+}
+
+// PublishSignedStreamHandler is the streaming counterpart of
+// PublishSignedHandler: it broadcasts a client-signed event and streams each
+// relay's result as NDJSON (one JSON object per line) the moment it resolves, so
+// the browser can show a live, count-up broadcast toast.
+//
+// @Summary      Publish a pre-signed event (streaming)
+// @Description  Verify a client-signed event belongs to the session user, broadcast it via the outbox model, and stream per-relay results as newline-delimited JSON.
+// @Tags         client-events
+// @Accept       json
+// @Produce      application/x-ndjson
+// @Success      200  {string}  string  "NDJSON stream of start/result/done lines"
+// @Failure      401  {string}  string  "Authentication required"
+// @Failure      403  {string}  string  "Pubkey mismatch"
+// @Router       /api/v1/events/publish/stream [post]
+func PublishSignedStreamHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess := session.SessionMgr.GetCurrentUser(r)
+	if sess == nil {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+
+	var req PublishSignedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Event == nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Event.PubKey != sess.PublicKey {
+		http.Error(w, "Event pubkey does not match the session", http.StatusForbidden)
+		return
+	}
+	if !core.VerifyEventSignature(req.Event) {
+		http.Error(w, "Invalid event signature", http.StatusBadRequest)
+		return
+	}
+
+	coreClient := connection.GetCoreClient()
+	if coreClient == nil {
+		http.Error(w, "Client not available", http.StatusInternalServerError)
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	relays := coreClient.RoutePublish(req.Event)
+
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no") // tell any proxy not to buffer the stream
+	enc := json.NewEncoder(w)
+
+	_ = enc.Encode(publishStreamMsg{Type: "start", Relays: relays})
+	flusher.Flush()
+
+	for res := range coreClient.PublishEventStream(req.Event, relays) {
+		msg := publishStreamMsg{
+			Type:     "result",
+			RelayURL: res.RelayURL,
+			Sent:     res.Success,
+			Accepted: res.Accepted,
+			Reason:   res.Reason,
+		}
+		if !res.Success {
+			msg.Message = res.Message
+		}
+		_ = enc.Encode(msg)
+		flusher.Flush()
+	}
+
+	_ = enc.Encode(publishStreamMsg{Type: "done"})
+	flusher.Flush()
+
+	// Same cache invalidation as the non-streaming handler.
+	if req.Event.Kind == 10063 || req.Event.Kind == 10096 {
+		coreClient.InvalidateMediaServers(req.Event.PubKey)
+	}
+	if req.Event.Kind == 10002 || req.Event.Kind == 10050 {
+		coreClient.InvalidateUserRelays(req.Event.PubKey)
+	}
+	log.ClientAPI().Info("Streamed signed event publish", "kind", req.Event.Kind, "event_id", req.Event.ID, "relay_count", len(relays))
+}

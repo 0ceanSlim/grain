@@ -242,7 +242,13 @@
       if (res && res.accepted) {
         if (kind === "nip96") MS.orig.nip96 = MS.nip96.slice();
         else MS.orig.blossom = MS.blossom.slice();
-        setStatus(kind, "Saved.");
+        setStatus(kind, "✓ Saved — published to your relays.");
+      } else if (res) {
+        // Signed + sent, but no relay stored it (e.g. nowhere good to route a
+        // 10063/10096 yet). The toast lists the per-relay reasons.
+        setStatus(kind, "Signed, but no relay accepted it yet — see the toast.");
+      } else {
+        setStatus(kind, "Publish failed — see the toast or the browser console.");
       }
     } finally {
       if (btn) btn.disabled = false;

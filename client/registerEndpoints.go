@@ -149,6 +149,7 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 	// Event querying endpoints
 	mux.HandleFunc("/api/v1/events/query", api.QueryEventsHandler)
 	mux.HandleFunc("/api/v1/events/publish", api.PublishSignedHandler)
+	mux.HandleFunc("/api/v1/events/publish/stream", api.PublishSignedStreamHandler)
 
 	// Relay management endpoints
 	mux.HandleFunc("/api/v1/client/relays", api.ClientRelaysHandler)

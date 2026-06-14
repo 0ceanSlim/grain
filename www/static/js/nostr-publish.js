@@ -1,107 +1,155 @@
 /**
- * Shared client-side publish helper.
+ * Shared client-side publish helper with a live broadcast toast.
  *
- * window.grainPublish.signAndPublish(unsigned, { status, onAccepted })
+ * window.grainPublish.signAndPublish(unsigned, { title, onAccepted })
  *   Signs an unsigned event with the user's signer (NIP-07 / NIP-46 / Amber /
- *   key via mill), publishes it through grain's outbox-routed /api/v1/events/
- *   publish, and shows a small bottom-right toast with per-relay OK results.
- *   Returns { signed, result, accepted } on success, or null on failure (the
- *   toast surfaces the error). onAccepted(signed, result) fires once at least
- *   one relay stores the event.
+ *   key via mill), POSTs it to the streaming publish endpoint, and drives a
+ *   small bottom-right toast that counts up live as each relay answers — a
+ *   spinner + x/N pill, expandable to the per-relay accept / reject / no-response
+ *   detail. The toast persists until dismissed (it only auto-fades on a fully
+ *   clean success). Returns { signed, results, accepted } or null on failure.
  *
- * Kept generic so the profile editor, media-server settings, and the media
- * uploader can share one toast instead of each rolling their own.
+ * Shared so the profile editor, media-server settings, the relay manager, and
+ * the media uploader all get the same toast.
  */
 (function () {
   function escAttr(s) {
-    return String(s)
+    return String(s == null ? "" : s)
       .replace(/&/g, "&amp;")
       .replace(/"/g, "&quot;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
   }
-
-  // One per-relay line in the expanded toast.
-  function relayLine(r) {
-    const url = r.RelayURL || r.relayURL || "";
-    const sent = r.Success || r.success;
-    const ok = r.Accepted || r.accepted;
-    const reason = r.Reason || r.reason || "";
-    const msg = r.Message || r.message || "";
-    let icon, cls, note;
-    if (ok) {
-      icon = "✓"; cls = "text-success"; note = reason;
-    } else if (!sent) {
-      icon = "✗"; cls = "text-danger"; note = msg || "failed to send";
-    } else if (reason) {
-      icon = "✗"; cls = "text-danger"; note = reason; // relay rejected it
-    } else {
-      icon = "•"; cls = "text-warning"; note = "no response";
-    }
-    return (
-      `<div class="flex items-start gap-2 text-xs">` +
-      `<span class="${cls}">${icon}</span>` +
-      `<span class="flex-1 min-w-0"><span class="font-mono break-all">${escAttr(url)}</span>` +
-      (note ? `<span class="block text-text-secondary">${escAttr(note)}</span>` : "") +
-      `</span></div>`
-    );
+  function shortRelay(u) {
+    return String(u || "").replace(/^wss?:\/\//, "").replace(/\/$/, "");
   }
 
-  // Small, bottom-right toast. Spinner while sending; then the accepted count.
-  // Click the header to expand per-relay detail; dismiss with the ×.
+  // Singleton bottom-right stack so multiple publishes (e.g. Blossom then
+  // NIP-96) sit above each other instead of overlapping.
+  function toastStack() {
+    let el = document.getElementById("grain-toast-stack");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "grain-toast-stack";
+      el.style.cssText =
+        "position:fixed;right:1rem;bottom:1rem;z-index:2147483000;display:flex;" +
+        "flex-direction:column;gap:0.5rem;align-items:flex-end;pointer-events:none;";
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  // Maps a per-relay result to its icon/colour/note.
+  function statusBits(r) {
+    if (r.accepted) return { icon: "✓", cls: "text-success", note: r.reason || "" };
+    if (r.sent === false) return { icon: "✗", cls: "text-danger", note: r.message || "failed to send" };
+    if (r.reason) return { icon: "✗", cls: "text-danger", note: r.reason };
+    if (r.pending) return { icon: "•", cls: "text-text-muted", note: "waiting…" };
+    return { icon: "•", cls: "text-warning", note: "no response" };
+  }
+
   function makePublishToast(initialTitle) {
     const t = document.createElement("div");
-    t.className =
-      "fixed z-50 overflow-hidden text-sm border rounded-lg shadow-lg bottom-4 right-4 w-72 bg-surface border-border";
+    // Inline layout so the toast is visible regardless of utility-class
+    // availability or any stacking context on the host page.
+    t.style.cssText =
+      "pointer-events:auto;width:18rem;max-width:90vw;overflow:hidden;" +
+      "background:var(--color-surface);border:1px solid var(--color-border);" +
+      "border-radius:0.75rem;box-shadow:var(--shadow-lg);font-size:0.875rem;";
     t.innerHTML =
-      `<div class="flex items-center gap-2 px-3 py-2 cursor-pointer" data-head>` +
-      `<span data-icon class="inline-block w-4 h-4 border-2 rounded-full border-text-secondary border-t-transparent animate-spin"></span>` +
-      `<span data-title class="flex-1 font-medium text-text">${escAttr(initialTitle || "Publishing…")}</span>` +
-      `<button data-close class="px-1 text-text-secondary hover:text-text" title="Dismiss">×</button>` +
+      `<div data-head style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;cursor:pointer;">` +
+      `<span data-icon class="inline-block w-4 h-4 border-2 rounded-full border-text-secondary border-t-transparent animate-spin" style="flex:none;"></span>` +
+      `<span data-title class="text-text" style="flex:1;min-width:0;font-weight:500;">${escAttr(initialTitle || "Broadcasting…")}</span>` +
+      `<button data-toggle title="Details" class="text-text-secondary hover:text-text" style="flex:none;padding:0 0.25rem;">▾</button>` +
+      `<button data-close title="Dismiss" class="text-text-secondary hover:text-text" style="flex:none;padding:0 0.25rem;">×</button>` +
       `</div>` +
-      `<div data-body class="hidden px-3 pb-2 space-y-1 overflow-y-auto border-t max-h-48 border-border"></div>`;
-    document.body.appendChild(t);
+      `<div data-body style="display:none;border-top:1px solid var(--color-border);max-height:12rem;overflow-y:auto;padding:0.25rem 0;"></div>`;
+    toastStack().appendChild(t);
 
+    const titleEl = t.querySelector("[data-title]");
+    const iconEl = t.querySelector("[data-icon]");
+    const toggleEl = t.querySelector("[data-toggle]");
     const body = t.querySelector("[data-body]");
+    const rows = {};
+    let total = 0;
+    let accepted = 0;
     let timer = null;
-    const dismiss = () => {
-      if (timer) clearTimeout(timer);
-      if (document.body.contains(t)) document.body.removeChild(t);
-    };
-    t.querySelector("[data-close]").onclick = (e) => {
-      e.stopPropagation();
-      dismiss();
-    };
-    t.querySelector("[data-head]").onclick = () => body.classList.toggle("hidden");
+    let expanded = false;
 
-    function setIcon(text, cls) {
-      const icon = t.querySelector("[data-icon]");
-      icon.className = cls;
-      icon.textContent = text;
+    function dismiss() {
+      if (timer) clearTimeout(timer);
+      if (t.parentNode) t.parentNode.removeChild(t);
+    }
+    function setExpanded(on) {
+      expanded = on;
+      body.style.display = on ? "block" : "none";
+      toggleEl.textContent = on ? "▴" : "▾";
+    }
+    t.querySelector("[data-close]").onclick = (e) => { e.stopPropagation(); dismiss(); };
+    toggleEl.onclick = (e) => { e.stopPropagation(); setExpanded(!expanded); };
+    t.querySelector("[data-head]").onclick = () => setExpanded(!expanded);
+
+    function setIcon(symbol, cls) {
+      iconEl.className = cls;
+      iconEl.style.cssText = "flex:none;width:1rem;text-align:center;font-weight:700;";
+      iconEl.textContent = symbol;
+    }
+    function rowFor(url) {
+      if (rows[url]) return rows[url];
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:flex-start;gap:0.5rem;padding:0.2rem 0.75rem;font-size:0.75rem;";
+      row.innerHTML =
+        `<span data-ri style="flex:none;width:0.9rem;text-align:center;"></span>` +
+        `<span style="flex:1;min-width:0;"><span data-ru class="font-mono break-all"></span>` +
+        `<span data-rn class="block text-text-secondary"></span></span>`;
+      row.querySelector("[data-ru]").textContent = shortRelay(url);
+      body.appendChild(row);
+      rows[url] = row;
+      return row;
+    }
+    function paint(url, bits) {
+      const row = rowFor(url);
+      const ri = row.querySelector("[data-ri]");
+      ri.className = bits.cls;
+      ri.textContent = bits.icon;
+      const rn = row.querySelector("[data-rn]");
+      rn.textContent = bits.note || "";
+      rn.style.display = bits.note ? "block" : "none";
     }
 
     return {
       status(text) {
-        const el = t.querySelector("[data-title]");
-        if (el) el.textContent = text;
+        titleEl.textContent = text;
       },
-      update(result) {
-        const relays = result.results || [];
-        const accepted = relays.filter((r) => r.Accepted || r.accepted).length;
-        setIcon(accepted > 0 ? "✓" : "•", accepted > 0 ? "text-success" : "text-warning");
-        t.querySelector("[data-title]").textContent =
-          `Accepted by ${accepted}/${relays.length} relays`;
-        body.innerHTML =
-          relays.map(relayLine).join("") ||
-          '<span class="text-xs text-text-secondary">No relays targeted.</span>';
-        timer = setTimeout(dismiss, 12000);
+      start(relays) {
+        relays = relays || [];
+        total = relays.length;
+        relays.forEach((u) => paint(u, statusBits({ pending: true })));
+        titleEl.textContent = total ? `Broadcasting… 0/${total}` : "Broadcasting…";
       },
-      fail(msg) {
+      addResult(msg) {
+        if (!msg.relayURL) return;
+        paint(msg.relayURL, statusBits(msg));
+        if (msg.accepted) accepted++;
+        titleEl.textContent = `Broadcasting… ${accepted}/${total}`;
+      },
+      done() {
+        if (accepted > 0) {
+          setIcon("✓", "text-success");
+          titleEl.textContent = `Sent to ${accepted}/${total} relays`;
+        } else {
+          setIcon("•", "text-warning");
+          titleEl.textContent = `No relay accepted (0/${total})`;
+        }
+        // Persist by default; only a fully clean success fades on its own.
+        if (total > 0 && accepted === total) timer = setTimeout(dismiss, 15000);
+      },
+      fail(message) {
         setIcon("✗", "text-danger");
-        t.querySelector("[data-title]").textContent = "Publish failed";
-        body.innerHTML = `<span class="text-xs break-all text-danger">${escAttr(msg || "")}</span>`;
-        body.classList.remove("hidden");
-        timer = setTimeout(dismiss, 12000);
+        titleEl.textContent = "Publish failed";
+        body.innerHTML =
+          `<div class="text-danger break-all" style="padding:0.25rem 0.75rem;font-size:0.75rem;">${escAttr(message || "")}</div>`;
+        setExpanded(true);
       },
       dismiss,
     };
@@ -109,10 +157,6 @@
 
   async function signAndPublish(unsigned, opts) {
     opts = opts || {};
-    const status = typeof opts.status === "function" ? opts.status : function () {};
-    status("");
-    // Create the toast up front so the user gets feedback even when the signer
-    // step itself fails (that used to throw before any toast appeared).
     const toast = makePublishToast(opts.title);
     try {
       toast.status("Waiting for your signer…");
@@ -122,21 +166,53 @@
       }
       const signed = await window.grainSigner.signEvent(unsigned);
 
-      toast.status("Publishing…");
-      const resp = await fetch("/api/v1/events/publish", {
+      toast.status("Broadcasting…");
+      const resp = await fetch("/api/v1/events/publish/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event: signed }),
       });
-      const result = await resp.json();
-      if (!resp.ok || !result.success) {
-        toast.fail(result.error || "publish failed");
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => "");
+        toast.fail(txt || "HTTP " + resp.status);
         return null;
       }
-      toast.update(result);
-      const accepted = (result.results || []).some((r) => r.Accepted || r.accepted);
-      if (accepted && typeof opts.onAccepted === "function") opts.onAccepted(signed, result);
-      return { signed, result, accepted };
+      if (!resp.body) {
+        toast.fail("No response stream.");
+        return null;
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      const results = [];
+      let acceptedAny = false;
+      let buf = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line) continue;
+          let m;
+          try {
+            m = JSON.parse(line);
+          } catch (e) {
+            continue;
+          }
+          if (m.type === "start") toast.start(m.relays || []);
+          else if (m.type === "result") {
+            results.push(m);
+            if (m.accepted) acceptedAny = true;
+            toast.addResult(m);
+          } else if (m.type === "done") toast.done();
+        }
+      }
+
+      if (acceptedAny && typeof opts.onAccepted === "function") opts.onAccepted(signed, results);
+      return { signed, results, accepted: acceptedAny };
     } catch (err) {
       console.error("Publish failed:", err);
       toast.fail(err.message || String(err));
