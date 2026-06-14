@@ -159,4 +159,8 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 
 	// Relay-pool status (total vs connected) for the dashboard indicator
 	mux.HandleFunc("/api/v1/client/status", api.ClientStatusHandler)
+
+	// Live update channel (SSE) — server->browser push for live-sync (#87) and
+	// the streaming fetch path (#77).
+	mux.HandleFunc("/api/v1/stream", api.StreamHandler)
 }

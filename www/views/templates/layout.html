@@ -72,6 +72,9 @@
          grain's session API loads right after. -->
     <script src="/static/mill/mill.umd.min.js?v={{assetVersion}}"></script>
     <script src="/static/js/mill-bridge.js?v={{assetVersion}}" defer></script>
+    <!-- Live update channel (SSE): opens one EventSource when logged in and
+         re-broadcasts pushes as `grain:stream` events. -->
+    <script src="/static/js/grain-stream.js?v={{assetVersion}}" defer></script>
 
     <title>{{.Title}}</title>
     <style>
