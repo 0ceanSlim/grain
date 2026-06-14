@@ -219,7 +219,7 @@
       <!-- Media Servers (#83): where uploads go. The user's Blossom (kind
            10063) + NIP-96 (kind 10096) lists, plus grain's recommended
            quick-adds. Lists/rows are rendered by media-servers.js. -->
-      <div id="media-servers-section" class="p-6 mb-8 bg-surface rounded-lg">
+      <div id="media-servers-section" class="p-6 mb-8 text-left bg-surface rounded-lg">
         <h2 class="mb-1 text-xl font-semibold text-text">🗂️ Media servers</h2>
         <p class="mb-4 text-sm text-text-secondary">
           Where grain uploads your pictures and files. Add a server to upload
@@ -277,6 +277,26 @@
           >
         </p>
 
+        <!-- Save the Blossom (kind 10063) list on its own -->
+        <div
+          class="flex items-center justify-between gap-3 pt-3 mt-4 border-t border-border"
+        >
+          <p class="text-xs text-text-muted">
+            Publishes your <code>kind 10063</code> Blossom list.
+          </p>
+          <button
+            id="ms-blossom-save"
+            onclick="msSave('blossom')"
+            class="px-4 py-2 text-sm transition-colors rounded-lg text-text-on-accent bg-accent hover:opacity-80"
+          >
+            Save &amp; sign
+          </button>
+        </div>
+        <p
+          id="ms-blossom-status"
+          class="mt-1 text-sm text-right text-text-secondary"
+        ></p>
+
         <!-- Legacy NIP-96 -->
         <details class="mt-6">
           <summary
@@ -311,25 +331,27 @@
               + Add
             </button>
           </div>
-        </details>
 
-        <!-- Save -->
-        <div
-          class="flex items-center justify-between gap-3 pt-4 mt-6 border-t border-border"
-        >
-          <p class="text-xs text-text-muted">
-            Saving publishes your <code>kind 10063</code> + <code>10096</code>
-            lists.
-          </p>
-          <button
-            id="ms-save-btn"
-            onclick="msSave()"
-            class="px-4 py-2 text-sm transition-colors rounded-lg text-text-on-accent bg-accent hover:opacity-80"
+          <!-- Save the NIP-96 (kind 10096) list on its own -->
+          <div
+            class="flex items-center justify-between gap-3 pt-3 mt-4 border-t border-border"
           >
-            Save &amp; sign
-          </button>
-        </div>
-        <p id="ms-status" class="mt-2 text-sm text-right text-text-secondary"></p>
+            <p class="text-xs text-text-muted">
+              Publishes your <code>kind 10096</code> NIP-96 list.
+            </p>
+            <button
+              id="ms-nip96-save"
+              onclick="msSave('nip96')"
+              class="px-4 py-2 text-sm transition-colors rounded-lg text-text-on-accent bg-accent hover:opacity-80"
+            >
+              Save &amp; sign
+            </button>
+          </div>
+          <p
+            id="ms-nip96-status"
+            class="mt-1 text-sm text-right text-text-secondary"
+          ></p>
+        </details>
       </div>
 
       <!-- Key Information -->

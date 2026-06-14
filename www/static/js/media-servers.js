@@ -53,8 +53,8 @@
   function listFor(kind) {
     return kind === "nip96" ? MS.nip96 : MS.blossom;
   }
-  function setStatus(msg) {
-    const el = document.getElementById("ms-status");
+  function setStatus(kind, msg) {
+    const el = document.getElementById("ms-" + kind + "-status");
     if (el) el.textContent = msg || "";
   }
 
@@ -63,11 +63,11 @@
       primary: "bg-accent-dim text-accent",
       free: "bg-success-dim text-success",
       paid: "bg-warning-dim text-warning",
-      permanent: "bg-surface-inset text-text-secondary",
+      permanent: "text-text-secondary border border-border-strong",
       ephemeral: "bg-warning-dim text-warning",
     };
-    const cls = styles[variant] || "bg-surface-inset text-text-secondary";
-    return `<span class="px-2 py-0.5 text-xs rounded ${cls}">${esc(label)}</span>`;
+    const cls = styles[variant] || "text-text-secondary border border-border-strong";
+    return `<span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded ${cls}">${esc(label)}</span>`;
   }
 
   function chipsFor(url, isPrimary) {
@@ -79,15 +79,26 @@
     return out.join("");
   }
 
+  // The small info line under the chips (capability note + optional CTA link).
+  function noteFor(url) {
+    const info = MS.info[url] || {};
+    if (!info.note) return "";
+    const cta = info.cta
+      ? ` <a href="${esc(info.cta)}" target="_blank" rel="noopener" class="text-accent hover:underline">membership ↗</a>`
+      : "";
+    return `<div class="mt-1 text-xs leading-snug text-text-muted">${esc(info.note)}${cta}</div>`;
+  }
+
   function yourRow(kind, url, idx) {
     return (
-      `<div class="flex items-center gap-3 p-2.5 border rounded-lg bg-surface-elevated border-border" data-idx="${idx}">` +
-      `<span class="cursor-grab select-none text-text-muted" draggable="true" data-grip title="Drag to reorder">⠿</span>` +
+      `<div class="flex items-center gap-2.5 px-3 py-2 border rounded-lg bg-surface-elevated border-border" data-idx="${idx}">` +
+      `<span class="text-lg cursor-grab select-none shrink-0 text-text-muted" draggable="true" data-grip title="Drag to reorder">⠿</span>` +
       `<div class="flex-1 min-w-0">` +
-      `<div class="text-sm font-medium truncate text-text">${esc(display(url))}</div>` +
-      `<div class="flex flex-wrap gap-1.5 mt-1">${chipsFor(url, idx === 0)}</div>` +
+      `<a href="${esc(url)}" target="_blank" rel="noopener" class="block text-sm font-medium truncate text-text hover:text-accent hover:underline">${esc(display(url))}</a>` +
+      `<div class="flex flex-wrap items-center gap-1 mt-1">${chipsFor(url, idx === 0)}</div>` +
+      noteFor(url) +
       `</div>` +
-      `<button data-remove class="px-1 text-lg leading-none text-text-muted hover:text-danger" title="Remove">×</button>` +
+      `<button data-remove class="px-1 text-lg leading-none shrink-0 text-text-muted hover:text-danger" title="Remove">×</button>` +
       `</div>`
     );
   }
@@ -97,16 +108,16 @@
     if (info.cost) chips.push(chip(cap(info.cost), info.cost));
     if (info.retention) chips.push(chip(cap(info.retention), info.retention));
     const cta = info.cta
-      ? ` <a href="${esc(info.cta)}" target="_blank" rel="noopener" class="text-accent">membership ↗</a>`
+      ? ` <a href="${esc(info.cta)}" target="_blank" rel="noopener" class="text-accent hover:underline">membership ↗</a>`
       : "";
     return (
-      `<div class="flex items-center gap-3 p-2.5 border rounded-lg bg-surface-elevated border-border">` +
+      `<div class="flex items-center gap-2.5 px-3 py-2 border rounded-lg bg-surface-elevated border-border">` +
       `<div class="flex-1 min-w-0">` +
-      `<div class="text-sm font-medium truncate text-text">${esc(display(info.url))}</div>` +
-      `<div class="flex flex-wrap gap-1.5 mt-1">${chips.join("")}</div>` +
-      `<div class="mt-1 text-xs text-text-muted">${esc(info.note || "")}${cta}</div>` +
+      `<a href="${esc(info.url)}" target="_blank" rel="noopener" class="block text-sm font-medium truncate text-text hover:text-accent hover:underline">${esc(display(info.url))}</a>` +
+      `<div class="flex flex-wrap items-center gap-1 mt-1">${chips.join("")}</div>` +
+      `<div class="mt-1 text-xs leading-snug text-text-muted">${esc(info.note || "")}${cta}</div>` +
       `</div>` +
-      `<button data-add data-kind="${esc(kind)}" data-url="${esc(info.url)}" class="px-3 py-1 text-xs rounded-lg whitespace-nowrap text-text bg-surface-overlay hover:bg-surface-hover">+ Add</button>` +
+      `<button data-add data-kind="${esc(kind)}" data-url="${esc(info.url)}" class="px-3 py-1 text-xs rounded-lg shrink-0 whitespace-nowrap text-text bg-surface-overlay hover:bg-surface-hover">+ Add</button>` +
       `</div>`
     );
   }
@@ -194,47 +205,45 @@
     return a.every((v, i) => v === b[i]);
   }
 
-  async function msSave() {
+  async function msSave(kind) {
     if (!window.grainPublish) {
-      setStatus("Publish helper not loaded — reload the page.");
+      setStatus(kind, "Publish helper not loaded — reload the page.");
       return;
     }
-    const changed = [];
-    if (!sameList(MS.blossom, MS.orig.blossom)) changed.push({ kind: 10063, servers: MS.blossom });
-    if (!sameList(MS.nip96, MS.orig.nip96)) changed.push({ kind: 10096, servers: MS.nip96 });
-    if (changed.length === 0) {
-      setStatus("No changes to save.");
+    const numericKind = kind === "nip96" ? 10096 : 10063;
+    const label = kind === "nip96" ? "NIP-96" : "Blossom";
+    const list = listFor(kind);
+    const orig = kind === "nip96" ? MS.orig.nip96 : MS.orig.blossom;
+    if (sameList(list, orig)) {
+      setStatus(kind, "No changes to save.");
       return;
     }
 
-    const btn = document.getElementById("ms-save-btn");
+    const btn = document.getElementById("ms-" + kind + "-save");
     if (btn) btn.disabled = true;
     try {
-      for (const c of changed) {
-        const label = c.kind === 10063 ? "Blossom" : "NIP-96";
-        setStatus("Building your " + label + " list…");
-        const resp = await fetch("/api/v1/user/media-servers/build", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(c),
-        });
-        if (!resp.ok) {
-          setStatus("Couldn't build the " + label + " list: " + (await resp.text()));
-          return;
-        }
-        const unsigned = await resp.json();
-        const res = await window.grainPublish.signAndPublish(unsigned, {
-          title: "Publishing " + label + " list…",
-          status: setStatus,
-        });
-        if (res && res.accepted) {
-          if (c.kind === 10063) MS.orig.blossom = MS.blossom.slice();
-          else MS.orig.nip96 = MS.nip96.slice();
-        } else {
-          return; // toast already explained the failure; stop before the next list
-        }
+      setStatus(kind, "Building your " + label + " list…");
+      const resp = await fetch("/api/v1/user/media-servers/build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: numericKind, servers: list }),
+      });
+      if (!resp.ok) {
+        setStatus(kind, "Couldn't build the list: " + (await resp.text()));
+        return;
       }
-      setStatus("Saved.");
+      const unsigned = await resp.json();
+      const res = await window.grainPublish.signAndPublish(unsigned, {
+        title: "Publishing " + label + " list…",
+        status: function (m) {
+          setStatus(kind, m);
+        },
+      });
+      if (res && res.accepted) {
+        if (kind === "nip96") MS.orig.nip96 = MS.nip96.slice();
+        else MS.orig.blossom = MS.blossom.slice();
+        setStatus(kind, "Saved.");
+      }
     } finally {
       if (btn) btn.disabled = false;
     }
@@ -271,7 +280,7 @@
       renderAll();
     } catch (e) {
       console.error("Media servers init failed:", e);
-      setStatus("Couldn't load your media servers.");
+      setStatus("blossom", "Couldn't load your media servers.");
     }
   }
 
