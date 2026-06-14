@@ -74,12 +74,29 @@
     let total = 0;
     let accepted = 0;
     let timer = null;
+    let autoMs = 0;
     let expanded = false;
 
     function dismiss() {
       if (timer) clearTimeout(timer);
       if (t.parentNode) t.parentNode.removeChild(t);
     }
+    // Auto-dismiss after a delay, paused while the pointer is over the toast so
+    // the per-relay detail stays readable. Re-armed on mouse-leave.
+    function scheduleDismiss(ms) {
+      autoMs = ms;
+      if (timer) clearTimeout(timer);
+      if (ms > 0) timer = setTimeout(dismiss, ms);
+    }
+    t.addEventListener("mouseenter", function () {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    });
+    t.addEventListener("mouseleave", function () {
+      if (autoMs > 0 && t.parentNode) scheduleDismiss(autoMs);
+    });
     function setExpanded(on) {
       expanded = on;
       body.style.display = on ? "block" : "none";
@@ -141,8 +158,9 @@
           setIcon("•", "text-warning");
           titleEl.textContent = `No relay accepted (0/${total})`;
         }
-        // Persist by default; only a fully clean success fades on its own.
-        if (total > 0 && accepted === total) timer = setTimeout(dismiss, 15000);
+        // A fully clean success fades quickly; a partial / empty result lingers
+        // longer (so the per-relay detail can be read) then clears itself.
+        scheduleDismiss(total > 0 && accepted === total ? 15000 : 30000);
       },
       fail(message) {
         setIcon("✗", "text-danger");
@@ -150,6 +168,7 @@
         body.innerHTML =
           `<div class="text-danger break-all" style="padding:0.25rem 0.75rem;font-size:0.75rem;">${escAttr(message || "")}</div>`;
         setExpanded(true);
+        scheduleDismiss(45000);
       },
       dismiss,
     };

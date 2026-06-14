@@ -443,5 +443,19 @@
       // Give the script tag time to load
       setTimeout(safeInitializeSettings, 10);
     }
+
+    // Watchdog: the relay-manager and media-servers sections load themselves,
+    // independently of the cache fetch that hides this spinner. If that fetch
+    // stalls, don't hold the whole page hostage — reveal the content anyway so
+    // those sections are usable. (Session/key fields just stay "Loading…".)
+    setTimeout(function () {
+      var loadingEl = document.getElementById("loading");
+      var contentEl = document.getElementById("settings-content");
+      if (loadingEl && !loadingEl.classList.contains("hidden")) {
+        console.warn("Settings: cache fetch stalled — revealing content via watchdog");
+        loadingEl.classList.add("hidden");
+        if (contentEl) contentEl.classList.remove("hidden");
+      }
+    }, 8000);
   </script>
 </div>

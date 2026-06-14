@@ -189,6 +189,12 @@
     const menu = document.getElementById("user-dropdown-menu");
     if (!menu) return;
     if (menu.classList.contains("hidden")) {
+      // Close any other open header dropdown (theme, relay pool). Their
+      // triggers call stopPropagation, so the document-level outside-click
+      // handlers can't see this click — coordinate explicitly via an event.
+      window.dispatchEvent(
+        new CustomEvent("grain:dropdown-open", { detail: "profile" })
+      );
       positionDropdown();
       menu.classList.remove("hidden");
       // Refresh profile section every open so a new display
@@ -201,6 +207,11 @@
     }
   };
   window.closeUserDropdown = closeDropdown;
+
+  // When another header dropdown opens, close this one.
+  window.addEventListener("grain:dropdown-open", function (e) {
+    if (e.detail !== "profile") closeDropdown();
+  });
 
   function closeDropdown() {
     const menu = document.getElementById("user-dropdown-menu");

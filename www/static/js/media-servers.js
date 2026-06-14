@@ -255,6 +255,29 @@
     }
   }
 
+  // fetch with a hard timeout so a stalled connection can't leave the section
+  // spinning forever — on failure we render a retry instead of an endless spinner.
+  function fetchTimeout(url, ms) {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(), ms || 15000);
+    return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(id));
+  }
+
+  function renderListError(msg) {
+    ["ms-blossom-list", "ms-nip96-list"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.innerHTML =
+        '<div class="flex items-center justify-between gap-2 p-3 text-sm border border-dashed rounded-lg text-text-muted border-border-strong">' +
+        "<span>" + esc(msg) + "</span>" +
+        '<button data-ms-retry class="px-2 py-1 text-xs rounded shrink-0 text-text bg-surface-overlay hover:bg-surface-hover">Retry</button>' +
+        "</div>";
+    });
+    document.querySelectorAll("[data-ms-retry]").forEach((b) => {
+      b.onclick = initMediaServers;
+    });
+  }
+
   async function initMediaServers() {
     const sec = document.getElementById("media-servers-section");
     if (!sec) return;
@@ -269,8 +292,8 @@
     });
     try {
       const [meRes, sugRes] = await Promise.all([
-        fetch("/api/v1/user/media-servers"),
-        fetch("/api/v1/media-servers/suggested"),
+        fetchTimeout("/api/v1/user/media-servers", 15000),
+        fetchTimeout("/api/v1/media-servers/suggested", 15000),
       ]);
       if (meRes.ok) {
         const me = await meRes.json();
@@ -295,7 +318,11 @@
       renderAll();
     } catch (e) {
       console.error("Media servers init failed:", e);
-      setStatus("blossom", "Couldn't load your media servers.");
+      renderListError(
+        e && e.name === "AbortError"
+          ? "Timed out loading your media servers."
+          : "Couldn't load your media servers."
+      );
     }
   }
 

@@ -35,6 +35,18 @@ func StreamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Clear the server's write deadline for this connection. The shared
+	// http.Server sets WriteTimeout (a few seconds) to bound normal request
+	// handlers, but that deadline caps the ENTIRE response — for a long-lived
+	// SSE stream it kills the connection mid-flight (heartbeats don't help; the
+	// deadline is absolute, not idle-based), so the browser reconnects in a
+	// tight loop and live-sync thrashes. Streaming handlers must opt out.
+	if rc := http.NewResponseController(w); rc != nil {
+		if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+			log.ClientAPI().Debug("SSE: could not clear write deadline", "error", err)
+		}
+	}
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")

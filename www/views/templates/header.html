@@ -339,10 +339,20 @@
     if (btn && panel) {
       btn.addEventListener("click", function (e) {
         e.stopPropagation();
+        // Opening: close any other header dropdown (profile, theme) first.
+        if (panel.classList.contains("hidden")) {
+          window.dispatchEvent(
+            new CustomEvent("grain:dropdown-open", { detail: "relay-pool" })
+          );
+        }
         panel.classList.toggle("hidden");
       });
       document.addEventListener("click", function () {
         panel.classList.add("hidden");
+      });
+      // When another header dropdown opens, close this one.
+      window.addEventListener("grain:dropdown-open", function (e) {
+        if (e.detail !== "relay-pool") panel.classList.add("hidden");
       });
     }
 

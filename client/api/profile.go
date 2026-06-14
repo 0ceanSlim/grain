@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/0ceanslim/grain/client/connection"
 	"github.com/0ceanslim/grain/client/core"
@@ -237,6 +238,16 @@ func PublishSignedStreamHandler(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
 		return
+	}
+
+	// Opt out of the server's WriteTimeout: a broadcast to slow relays can run
+	// longer than the (few-second) deadline, which would otherwise cut the
+	// NDJSON stream and truncate the live toast's per-relay results. Same fix
+	// as StreamHandler.
+	if rc := http.NewResponseController(w); rc != nil {
+		if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+			log.ClientAPI().Debug("publish stream: could not clear write deadline", "error", err)
+		}
 	}
 
 	relays := coreClient.RoutePublish(req.Event)
