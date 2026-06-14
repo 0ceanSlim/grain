@@ -258,6 +258,15 @@
   async function initMediaServers() {
     const sec = document.getElementById("media-servers-section");
     if (!sec) return;
+    // Loading state while the lists resolve from the relays (a few seconds cold).
+    ["ms-blossom-list", "ms-nip96-list"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el)
+        el.innerHTML =
+          '<div class="flex items-center gap-2 px-3 py-3 text-sm text-text-muted">' +
+          '<span class="inline-block w-4 h-4 border-2 rounded-full border-text-secondary border-t-transparent animate-spin"></span>' +
+          "Fetching your media servers…</div>";
+    });
     try {
       const [meRes, sugRes] = await Promise.all([
         fetch("/api/v1/user/media-servers"),

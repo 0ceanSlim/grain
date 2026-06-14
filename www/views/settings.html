@@ -41,178 +41,177 @@
         </div>
       </div>
 
-      <!-- Relay Management -->
-      <div class="p-6 mb-8 bg-surface rounded-lg">
-        <h2 class="mb-4 text-xl font-semibold text-text">
-          📡 Relay Management
-        </h2>
+      <!-- Relay Manager (#98). The full role model; lists are rendered + edited
+           by relay-manager.js from /api/v1/user/relay-lists, published via the
+           relay-list build + streaming publish endpoints. -->
+      <div
+        id="relay-manager-section"
+        class="p-6 mb-8 text-left bg-surface rounded-lg"
+      >
+        <h2 class="mb-1 text-xl font-semibold text-text">📡 Relays</h2>
+        <p class="mb-4 text-sm text-text-secondary">
+          grain connects on demand under the outbox model — your mailboxes say
+          where you publish and where others reach you.
+        </p>
 
-        <!-- Tab Navigation -->
-        <div class="flex mb-6 border-b border-border-strong">
-          <button
-            id="client-relays-tab"
-            class="px-4 py-2 text-sm font-medium text-accent transition-colors border-b-2 border-blue-500"
-            onclick="switchRelayTab('client-relays')"
-          >
-            Client Relays
-          </button>
-          <button
-            id="mailboxes-tab"
-            class="px-4 py-2 text-sm font-medium text-text-secondary transition-colors border-b-2 border-transparent hover:text-text"
-            onclick="switchRelayTab('mailboxes')"
-          >
-            Mailboxes
-          </button>
-        </div>
-
-        <!-- Client Relays Tab Content -->
-        <div id="client-relays-content" class="relay-tab-content">
-          <div class="flex items-center justify-between mb-4">
-            <p class="text-sm text-text-secondary">Your configured client relays</p>
-            <div id="client-relay-buttons" class="space-x-2">
-              <button
-                id="edit-relays-btn"
-                onclick="toggleEditMode()"
-                class="px-4 py-2 text-sm text-text transition-colors bg-blue-600 rounded-lg hover:bg-accent-hover"
-              >
-                Edit
-              </button>
-              <button
-                id="save-relays-btn"
-                onclick="saveRelayChanges()"
-                class="hidden px-4 py-2 text-sm text-text transition-colors bg-green-600 rounded-lg hover:opacity-80"
-              >
-                Save
-              </button>
-              <button
-                id="import-mailboxes-btn"
-                onclick="importFromMailboxes()"
-                class="hidden px-4 py-2 text-sm text-text transition-colors bg-accent rounded-lg hover:bg-accent-hover"
-              >
-                Import from Mailboxes
-              </button>
-              <button
-                id="cancel-edit-btn"
-                onclick="cancelEdit()"
-                class="hidden px-4 py-2 text-sm text-text transition-colors bg-surface-overlay rounded-lg hover:bg-surface-hover"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-
-          <!-- View Mode: Client Relays Table -->
-          <div id="client-relays-view" class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-border-strong">
-                  <th class="px-2 py-3 font-medium text-left text-text-secondary">
-                    Relay
-                  </th>
-                  <th
-                    class="w-20 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Status
-                  </th>
-                  <th
-                    class="w-20 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Ping
-                  </th>
-                  <th
-                    class="w-16 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Read
-                  </th>
-                  <th
-                    class="w-16 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Write
-                  </th>
-                </tr>
-              </thead>
-              <tbody id="client-relays-table">
-                <tr>
-                  <td colspan="5" class="py-8 text-center text-text-secondary">
-                    <div
-                      class="inline-block w-4 h-4 mr-2 border-2 border-white rounded-full animate-spin border-t-transparent"
-                    ></div>
-                    Loading relays...
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Edit Mode: Client Relays Form -->
-          <div id="client-relays-edit" class="hidden space-y-4">
-            <div class="p-4 bg-surface-elevated rounded-lg">
-              <h3 class="mb-4 text-lg font-medium text-text">
-                Edit Client Relays
-              </h3>
-              <div id="relay-form-list" class="space-y-3">
-                <!-- Dynamic relay form entries will be inserted here -->
-              </div>
-              <button
-                onclick="addNewRelayInput()"
-                class="px-4 py-2 mt-4 text-sm text-text transition-colors bg-blue-600 rounded-lg hover:bg-accent-hover"
-              >
-                + Add Relay
-              </button>
-            </div>
+        <!-- Connection overview (filled by relay-manager.js from client/status) -->
+        <div id="rm-overview" class="grid grid-cols-2 gap-2 mb-2 sm:grid-cols-4">
+          <div class="px-3 py-2 rounded-lg bg-surface-elevated">
+            <div class="text-xs text-text-secondary">Known</div>
+            <div class="text-xl font-semibold text-text">—</div>
           </div>
         </div>
 
-        <!-- Mailboxes Tab Content -->
-        <div id="mailboxes-content" class="hidden relay-tab-content">
-          <div class="mb-4">
-            <p class="text-sm text-text-secondary">
-              Your configured mailbox relays (NIP-65)
-            </p>
-          </div>
+        <!-- ── Public (NIP-65 / NIP-17) ── -->
+        <h3
+          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
+        >
+          Public · others can read these
+        </h3>
 
-          <!-- Mailboxes Table -->
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-border-strong">
-                  <th class="px-2 py-3 font-medium text-left text-text-secondary">
-                    Mailbox
-                  </th>
-                  <th
-                    class="w-20 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Status
-                  </th>
-                  <th
-                    class="w-20 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Ping
-                  </th>
-                  <th
-                    class="w-16 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Read
-                  </th>
-                  <th
-                    class="w-16 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Write
-                  </th>
-                </tr>
-              </thead>
-              <tbody id="mailboxes-table">
-                <tr>
-                  <td colspan="5" class="py-8 text-center text-text-secondary">
-                    <div
-                      class="inline-block w-4 h-4 mr-2 border-2 border-white rounded-full animate-spin border-t-transparent"
-                    ></div>
-                    Loading mailboxes...
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+        <div class="mt-3">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">↑ Outbox</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10002 · write</span>
           </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">Where you publish. Others fetch your notes here.</p>
+          <div id="rm-outbox-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 mt-2">
+            <input id="rm-outbox-input" type="text" placeholder="Add an outbox relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />
+            <button onclick="rmAddOutbox()" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">↓ Inbox</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10002 · read</span>
+          </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">Where replies, mentions, and zaps reach you.</p>
+          <div id="rm-inbox-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 mt-2">
+            <input id="rm-inbox-input" type="text" placeholder="Add an inbox relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />
+            <button onclick="rmAddInbox()" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-3 pt-3 mt-3 border-t border-border">
+          <span class="text-xs text-text-muted">Outbox + Inbox publish together as <code>kind 10002</code>.</span>
+          <button id="rm-nip65-save" onclick="rmSaveNip65()" class="px-4 py-2 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Save &amp; sign</button>
+        </div>
+        <p id="rm-nip65-status" class="mt-1 text-xs text-right text-text-secondary"></p>
+
+        <div class="mt-5">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">✉ DM inbox</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10050 · NIP-17</span>
+          </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">Where your private (gift-wrapped) direct messages are delivered.</p>
+          <div id="rm-dm-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 mt-2">
+            <input id="rm-dm-input" type="text" placeholder="Add a DM relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />
+            <button onclick="rmAdd('dm')" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
+          </div>
+          <div class="flex items-center justify-between gap-3 mt-2">
+            <span class="text-xs text-text-muted">Publishes <code>kind 10050</code>.</span>
+            <button onclick="rmSave('dm')" class="px-4 py-1.5 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Save &amp; sign</button>
+          </div>
+          <p id="rm-dm-status" class="mt-1 text-xs text-right text-text-secondary"></p>
+        </div>
+
+        <!-- ── Your lists (NIP-51 / NIP-37) ── -->
+        <h3
+          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
+        >
+          Your lists
+        </h3>
+
+        <div class="mt-3">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">🔍 Search</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10007</span>
+          </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">Relays grain queries when you search.</p>
+          <div id="rm-search-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 mt-2">
+            <input id="rm-search-input" type="text" placeholder="Add a search relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />
+            <button onclick="rmAdd('search')" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
+          </div>
+          <div class="flex items-center justify-between gap-3 mt-2">
+            <span class="text-xs text-text-muted">Publishes <code>kind 10007</code>.</span>
+            <button onclick="rmSave('search')" class="px-4 py-1.5 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Save &amp; sign</button>
+          </div>
+          <p id="rm-search-status" class="mt-1 text-xs text-right text-text-secondary"></p>
+        </div>
+
+        <div class="mt-5">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">★ Favorites</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10012</span>
+          </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">Relays you've starred to browse.</p>
+          <div id="rm-favorites-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 mt-2">
+            <input id="rm-favorites-input" type="text" placeholder="Add a favorite relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />
+            <button onclick="rmAdd('favorites')" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
+          </div>
+          <div class="flex items-center justify-between gap-3 mt-2">
+            <span class="text-xs text-text-muted">Publishes <code>kind 10012</code>.</span>
+            <button onclick="rmSave('favorites')" class="px-4 py-1.5 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Save &amp; sign</button>
+          </div>
+          <p id="rm-favorites-status" class="mt-1 text-xs text-right text-text-secondary"></p>
+        </div>
+
+        <div class="mt-5">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">⛔ Blocked</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10006</span>
+          </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">grain never connects to these.</p>
+          <div id="rm-blocked-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 mt-2">
+            <input id="rm-blocked-input" type="text" placeholder="Add a blocked relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />
+            <button onclick="rmAdd('blocked')" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
+          </div>
+          <div class="flex items-center justify-between gap-3 mt-2">
+            <span class="text-xs text-text-muted">Publishes <code>kind 10006</code>.</span>
+            <button onclick="rmSave('blocked')" class="px-4 py-1.5 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Save &amp; sign</button>
+          </div>
+          <p id="rm-blocked-status" class="mt-1 text-xs text-right text-text-secondary"></p>
+        </div>
+
+        <div class="mt-5 opacity-60">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">🔒 Private</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10013 · NIP-37</span>
+            <span class="px-2 py-0.5 ml-auto text-xs rounded bg-surface-inset text-text-muted">coming soon</span>
+          </div>
+          <p class="mt-0.5 text-xs text-text-muted">Encrypted relay list — only you can read it (needs signer decryption).</p>
+        </div>
+
+        <!-- ── App relays (local config) ── -->
+        <h3
+          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
+        >
+          App relays · grain's plumbing
+        </h3>
+        <div id="rm-app-relays" class="space-y-3"></div>
+
+        <!-- Fixed-relay override -->
+        <div class="p-4 mt-6 border rounded-lg border-warning bg-warning-dim">
+          <label class="flex items-center justify-between gap-3 cursor-pointer">
+            <span class="text-sm font-medium text-warning">⚠ Fixed relays (advanced)</span>
+            <input id="rm-fixed-toggle" type="checkbox" onchange="rmToggleFixed()" />
+          </label>
+          <p class="mt-1 text-xs text-warning">
+            Read from / write to one fixed set only. <span class="font-semibold">Turns off the outbox model</span> — your replies won't reach others' inboxes. Off by default; not recommended.
+          </p>
+          <div id="rm-fixed-inputs" class="hidden mt-3 space-y-2">
+            <textarea id="rm-fixed-read" rows="2" placeholder="Read relays — one per line" class="w-full px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"></textarea>
+            <textarea id="rm-fixed-write" rows="2" placeholder="Write relays — one per line" class="w-full px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"></textarea>
+            <button onclick="rmApplyFixed()" class="px-4 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">Apply fixed relays</button>
+          </div>
+          <p id="rm-fixed-status" class="mt-1 text-xs text-warning"></p>
         </div>
       </div>
 
@@ -417,6 +416,7 @@
        must load first; media-servers.js self-initialises when its section is in
        the DOM. -->
   <script src="/static/js/nostr-publish.js"></script>
+  <script src="/static/js/relay-manager.js"></script>
   <script src="/static/js/media-servers.js"></script>
   <script>
     // Safe initialization that waits for both DOM and script to be ready

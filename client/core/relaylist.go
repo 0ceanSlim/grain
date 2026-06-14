@@ -187,26 +187,54 @@ type UserRelayLists struct {
 	Blocked   []string         `json:"blocked"`   // 10006
 	Search    []string         `json:"search"`    // 10007
 	Favorites []string         `json:"favorites"` // 10012
+	// Encrypted flags NIP-51 lists whose event carried NIP-44 private content —
+	// entries grain can't read yet (#100); only the public entries are listed.
+	Encrypted EncryptedFlags `json:"encrypted"`
+}
+
+// EncryptedFlags reports which NIP-51 lists have private (encrypted) entries.
+type EncryptedFlags struct {
+	Blocked   bool `json:"blocked"`
+	Search    bool `json:"search"`
+	Favorites bool `json:"favorites"`
 }
 
 // FetchUserRelayLists resolves a user's relay lists for every kind the relay
 // manager shows, fetching the kinds concurrently. Each goroutine writes a
 // distinct field, so no locking is needed.
+//
+// A user's own NIP-51/17 lists live on their own relays, which a cold page load
+// may not have cached — so the relay set is the index relays PLUS the user's
+// resolved read+write relays, giving the lists a real chance to be found.
 func (c *Client) FetchUserRelayLists(pubkey string) *UserRelayLists {
+	relays := append([]string(nil), c.config.IndexRelays...)
+	ur := c.ResolveRelays(pubkey) // blocking resolve — own user is cached post-login
+	relays = appendUnique(relays, ur.Outbox)
+	relays = appendUnique(relays, ur.Inbox)
+
 	out := &UserRelayLists{}
 	var wg sync.WaitGroup
 	fetch := func(kind int, assign func(*nostr.Event)) {
 		defer wg.Done()
-		if ev := c.FetchRelayList(pubkey, kind); ev != nil {
+		if ev := c.fetchLatestEvent(pubkey, kind, relays); ev != nil {
 			assign(ev)
 		}
 	}
 	wg.Add(5)
 	go fetch(10002, func(ev *nostr.Event) { out.NIP65 = ParseNIP65Entries(ev) })
 	go fetch(10050, func(ev *nostr.Event) { out.DM = ParseRelayTagURLs(ev) })
-	go fetch(10006, func(ev *nostr.Event) { out.Blocked = ParseRelayTagURLs(ev) })
-	go fetch(10007, func(ev *nostr.Event) { out.Search = ParseRelayTagURLs(ev) })
-	go fetch(10012, func(ev *nostr.Event) { out.Favorites = ParseRelayTagURLs(ev) })
+	go fetch(10006, func(ev *nostr.Event) {
+		out.Blocked = ParseRelayTagURLs(ev)
+		out.Encrypted.Blocked = ev.Content != ""
+	})
+	go fetch(10007, func(ev *nostr.Event) {
+		out.Search = ParseRelayTagURLs(ev)
+		out.Encrypted.Search = ev.Content != ""
+	})
+	go fetch(10012, func(ev *nostr.Event) {
+		out.Favorites = ParseRelayTagURLs(ev)
+		out.Encrypted.Favorites = ev.Content != ""
+	})
 	wg.Wait()
 	return out
 }

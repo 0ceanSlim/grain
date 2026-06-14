@@ -75,6 +75,7 @@ type UserRelayListsResponse struct {
 	Blocked   []string              `json:"blocked"`   // 10006
 	Search    []string              `json:"search"`    // 10007
 	Favorites []string              `json:"favorites"` // 10012
+	Encrypted core.EncryptedFlags   `json:"encrypted"` // NIP-51 lists with private (encrypted) entries
 }
 
 // GetUserRelayListsHandler resolves a user's relay lists (NIP-65 10002, NIP-17
@@ -114,6 +115,7 @@ func GetUserRelayListsHandler(w http.ResponseWriter, r *http.Request) {
 		Blocked:   lists.Blocked,
 		Search:    lists.Search,
 		Favorites: lists.Favorites,
+		Encrypted: lists.Encrypted,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

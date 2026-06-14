@@ -252,9 +252,13 @@
             <span id="rp-pinned" class="font-mono text-text">—</span>
           </div>
         </div>
-        <div class="pt-2 mt-2 border-t text-text-secondary border-border">
-          Full relay manager coming soon.
-        </div>
+        <button
+          hx-get="/views/settings.html"
+          hx-target="#main-content"
+          class="flex items-center w-full gap-2 px-2 py-1.5 mt-2 text-xs text-left transition-colors border-t rounded text-text-secondary hover:text-text hover:bg-surface-hover border-border"
+        >
+          ⚙️ Manage relays
+        </button>
       </div>
     </div>
 
