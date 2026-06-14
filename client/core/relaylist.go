@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
@@ -119,4 +120,93 @@ func (c *Client) FetchRelayList(pubkey string, kind int) *nostr.Event {
 // so routing picks up the change immediately.
 func (c *Client) InvalidateUserRelays(pubkey string) {
 	c.directory.Invalidate(pubkey)
+}
+
+// ParseNIP65Entries parses a kind-10002 event's `r` tags into relay entries with
+// read/write flags. An unmarked entry (`["r", url]`) is both read and write;
+// `["r", url, "read"]` / `["r", url, "write"]` set one side. URLs are normalised;
+// a relay listed twice has its flags OR-ed together.
+func ParseNIP65Entries(event *nostr.Event) []RelayListEntry {
+	var out []RelayListEntry
+	seen := make(map[string]int)
+	for _, t := range event.Tags {
+		if len(t) < 2 || t[0] != "r" || t[1] == "" {
+			continue
+		}
+		u, ok := normalizeRelayURL(t[1])
+		if !ok {
+			continue
+		}
+		read, write := true, true
+		if len(t) >= 3 {
+			switch t[2] {
+			case "read":
+				read, write = true, false
+			case "write":
+				read, write = false, true
+			}
+		}
+		if idx, dup := seen[u]; dup {
+			out[idx].Read = out[idx].Read || read
+			out[idx].Write = out[idx].Write || write
+			continue
+		}
+		seen[u] = len(out)
+		out = append(out, RelayListEntry{URL: u, Read: read, Write: write})
+	}
+	return out
+}
+
+// ParseRelayTagURLs extracts the `relay` tag URLs from a NIP-17 / NIP-51
+// relay-list event (kinds 10050 / 10006 / 10007 / 10012), normalised and
+// de-duplicated, in order.
+func ParseRelayTagURLs(event *nostr.Event) []string {
+	var out []string
+	seen := make(map[string]struct{})
+	for _, t := range event.Tags {
+		if len(t) >= 2 && t[0] == "relay" && t[1] != "" {
+			u, ok := normalizeRelayURL(t[1])
+			if !ok {
+				continue
+			}
+			if _, dup := seen[u]; dup {
+				continue
+			}
+			seen[u] = struct{}{}
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
+// UserRelayLists is a user's resolved relay lists across the kinds the relay
+// manager edits. NIP65 carries read/write flags; the rest are plain URL lists.
+type UserRelayLists struct {
+	NIP65     []RelayListEntry `json:"nip65"`     // 10002
+	DM        []string         `json:"dm"`        // 10050
+	Blocked   []string         `json:"blocked"`   // 10006
+	Search    []string         `json:"search"`    // 10007
+	Favorites []string         `json:"favorites"` // 10012
+}
+
+// FetchUserRelayLists resolves a user's relay lists for every kind the relay
+// manager shows, fetching the kinds concurrently. Each goroutine writes a
+// distinct field, so no locking is needed.
+func (c *Client) FetchUserRelayLists(pubkey string) *UserRelayLists {
+	out := &UserRelayLists{}
+	var wg sync.WaitGroup
+	fetch := func(kind int, assign func(*nostr.Event)) {
+		defer wg.Done()
+		if ev := c.FetchRelayList(pubkey, kind); ev != nil {
+			assign(ev)
+		}
+	}
+	wg.Add(5)
+	go fetch(10002, func(ev *nostr.Event) { out.NIP65 = ParseNIP65Entries(ev) })
+	go fetch(10050, func(ev *nostr.Event) { out.DM = ParseRelayTagURLs(ev) })
+	go fetch(10006, func(ev *nostr.Event) { out.Blocked = ParseRelayTagURLs(ev) })
+	go fetch(10007, func(ev *nostr.Event) { out.Search = ParseRelayTagURLs(ev) })
+	go fetch(10012, func(ev *nostr.Event) { out.Favorites = ParseRelayTagURLs(ev) })
+	wg.Wait()
+	return out
 }

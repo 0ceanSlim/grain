@@ -143,6 +143,7 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 
 	// Relay-list management: build a NIP-65 / NIP-17 / NIP-51 relay list to sign,
 	// and the fixed-relay override (advanced opt-out of the outbox model).
+	mux.HandleFunc("/api/v1/user/relay-lists", api.GetUserRelayListsHandler)
 	mux.HandleFunc("/api/v1/user/relay-list/build", api.BuildRelayListHandler)
 	mux.HandleFunc("/api/v1/client/fixed-relays", api.FixedRelaysHandler)
 

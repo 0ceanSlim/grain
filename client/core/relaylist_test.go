@@ -68,3 +68,38 @@ func TestAssembleRelayListRejectsUnsupportedKind(t *testing.T) {
 		t.Fatal("expected an error for a non relay-list kind (10063 is media)")
 	}
 }
+
+func TestParseNIP65Entries(t *testing.T) {
+	ev := &nostr.Event{Tags: [][]string{
+		{"r", "wss://a"},          // both
+		{"r", "wss://b", "read"},  // read-only
+		{"r", "wss://c", "write"}, // write-only
+		{"r", "wss://a", "write"}, // duplicate of a — flags OR together (stays both)
+		{"other", "ignored"},
+		{"r"}, // malformed
+	}}
+	got := ParseNIP65Entries(ev)
+	want := []RelayListEntry{
+		{URL: "wss://a", Read: true, Write: true},
+		{URL: "wss://b", Read: true, Write: false},
+		{URL: "wss://c", Read: false, Write: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ParseNIP65Entries = %v, want %v", got, want)
+	}
+}
+
+func TestParseRelayTagURLs(t *testing.T) {
+	ev := &nostr.Event{Tags: [][]string{
+		{"relay", "wss://x"},
+		{"relay", "wss://x"}, // duplicate dropped
+		{"other", "y"},
+		{"relay", "wss://y"},
+		{"relay"}, // malformed
+	}}
+	got := ParseRelayTagURLs(ev)
+	want := []string{"wss://x", "wss://y"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ParseRelayTagURLs = %v, want %v", got, want)
+	}
+}

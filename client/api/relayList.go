@@ -66,6 +66,62 @@ func BuildRelayListHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// UserRelayListsResponse is a user's resolved relay lists across the kinds the
+// relay manager edits.
+type UserRelayListsResponse struct {
+	Pubkey    string                `json:"pubkey"`
+	NIP65     []core.RelayListEntry `json:"nip65"`     // 10002, with read/write flags
+	DM        []string              `json:"dm"`        // 10050
+	Blocked   []string              `json:"blocked"`   // 10006
+	Search    []string              `json:"search"`    // 10007
+	Favorites []string              `json:"favorites"` // 10012
+}
+
+// GetUserRelayListsHandler resolves a user's relay lists (NIP-65 10002, NIP-17
+// 10050, NIP-51 10006/10007/10012) for the relay manager. Defaults to the
+// session user when no pubkey is given.
+//
+// @Summary      Get a user's relay lists
+// @Description  Resolve a user's NIP-65 / NIP-17 / NIP-51 relay lists for the relay manager. Defaults to the session user.
+// @Tags         client
+// @Produce      json
+// @Param        pubkey  query     string  false  "Hex pubkey (defaults to the session user)"
+// @Success      200     {object}  UserRelayListsResponse
+// @Failure      401     {string}  string  "Authentication required or pubkey parameter needed"
+// @Router       /api/v1/user/relay-lists [get]
+func GetUserRelayListsHandler(w http.ResponseWriter, r *http.Request) {
+	pubkey := r.URL.Query().Get("pubkey")
+	if pubkey == "" {
+		sess := session.SessionMgr.GetCurrentUser(r)
+		if sess == nil {
+			http.Error(w, "Authentication required or pubkey parameter needed", http.StatusUnauthorized)
+			return
+		}
+		pubkey = sess.PublicKey
+	}
+
+	coreClient := connection.GetCoreClient()
+	if coreClient == nil {
+		http.Error(w, "Client not available", http.StatusInternalServerError)
+		return
+	}
+
+	lists := coreClient.FetchUserRelayLists(pubkey)
+	resp := UserRelayListsResponse{
+		Pubkey:    pubkey,
+		NIP65:     lists.NIP65,
+		DM:        lists.DM,
+		Blocked:   lists.Blocked,
+		Search:    lists.Search,
+		Favorites: lists.Favorites,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.ClientAPI().Error("Failed to encode relay lists response", "error", err)
+	}
+}
+
 // FixedRelaysRequest sets or clears the fixed-relay override.
 type FixedRelaysRequest struct {
 	Enabled bool     `json:"enabled"`
