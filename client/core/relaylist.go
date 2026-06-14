@@ -219,9 +219,15 @@ func (c *Client) FetchUserRelayLists(pubkey string) *UserRelayLists {
 
 	out := &UserRelayLists{}
 	var wg sync.WaitGroup
+	// Resolve all five kinds concurrently; the response can't return until the
+	// slowest finishes, and a user is usually missing at least one list type
+	// (a negative that would otherwise wait the full default deadline on any
+	// slow relay). A shorter deadline keeps the relay manager snappy on a cold
+	// load; a list that exists still comes back well within it.
+	const relayListResolveTimeout = 3 * time.Second
 	fetch := func(kind int, assign func(*nostr.Event)) {
 		defer wg.Done()
-		if ev := c.fetchLatestEvent(pubkey, kind, relays); ev != nil {
+		if ev := c.fetchLatestEventWithin(pubkey, kind, relays, relayListResolveTimeout); ev != nil {
 			assign(ev)
 		}
 	}
@@ -255,19 +261,32 @@ type relayListsEntry struct {
 // manager reads through this so the page renders from cache once login-hydration
 // has warmed it.
 func (c *Client) ResolveUserRelayLists(pubkey string) *UserRelayLists {
-	c.relayListsMu.Lock()
-	if e, ok := c.relayListsCache[pubkey]; ok && time.Since(e.at) < c.config.RelayListTTL {
+	for {
+		c.relayListsMu.Lock()
+		if e, ok := c.relayListsCache[pubkey]; ok && time.Since(e.at) < c.config.RelayListTTL {
+			c.relayListsMu.Unlock()
+			return e.lists
+		}
+		// A resolve for this pubkey is already running — wait for it and re-read
+		// the cache instead of launching a duplicate multi-second fetch.
+		if ch, ok := c.relayListsInflight[pubkey]; ok {
+			c.relayListsMu.Unlock()
+			<-ch
+			continue
+		}
+		ch := make(chan struct{})
+		c.relayListsInflight[pubkey] = ch
 		c.relayListsMu.Unlock()
-		return e.lists
+
+		lists := c.FetchUserRelayLists(pubkey)
+
+		c.relayListsMu.Lock()
+		c.relayListsCache[pubkey] = relayListsEntry{lists: lists, at: time.Now()}
+		delete(c.relayListsInflight, pubkey)
+		close(ch)
+		c.relayListsMu.Unlock()
+		return lists
 	}
-	c.relayListsMu.Unlock()
-
-	lists := c.FetchUserRelayLists(pubkey)
-
-	c.relayListsMu.Lock()
-	c.relayListsCache[pubkey] = relayListsEntry{lists: lists, at: time.Now()}
-	c.relayListsMu.Unlock()
-	return lists
 }
 
 // WarmUserRelayLists resolves a user's relay lists into the cache in the

@@ -455,6 +455,9 @@
         console.warn("Settings: cache fetch stalled — revealing content via watchdog");
         loadingEl.classList.add("hidden");
         if (contentEl) contentEl.classList.remove("hidden");
+        if (typeof window.scrollToSettingsTarget === "function") {
+          window.scrollToSettingsTarget();
+        }
       }
     }, 8000);
   </script>

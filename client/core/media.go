@@ -227,14 +227,19 @@ func (c *Client) fetchUserMediaServersFromNetwork(pubkey string) *MediaServers {
 		nip96   *nostr.Event
 		wg      sync.WaitGroup
 	)
+	// Most users have no media-server lists, so this resolve is usually a
+	// negative that would otherwise wait the full default deadline on any slow
+	// relay. A shorter deadline keeps the media settings section snappy; a real
+	// list still comes back well within it.
+	const mediaResolveTimeout = 3 * time.Second
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		blossom = c.fetchLatestEvent(pubkey, 10063, relays)
+		blossom = c.fetchLatestEventWithin(pubkey, 10063, relays, mediaResolveTimeout)
 	}()
 	go func() {
 		defer wg.Done()
-		nip96 = c.fetchLatestEvent(pubkey, 10096, relays)
+		nip96 = c.fetchLatestEventWithin(pubkey, 10096, relays, mediaResolveTimeout)
 	}()
 	wg.Wait()
 

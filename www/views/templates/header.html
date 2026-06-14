@@ -339,11 +339,18 @@
     if (btn && panel) {
       btn.addEventListener("click", function (e) {
         e.stopPropagation();
-        // Opening: close any other header dropdown (profile, theme) first.
+        // Opening: close any other header dropdown (profile, theme) first, and
+        // warm the relay-list + media-server caches (once) so "Manage relays"
+        // lands on already-resolved data instead of a cold ~5s relay fetch.
         if (panel.classList.contains("hidden")) {
           window.dispatchEvent(
             new CustomEvent("grain:dropdown-open", { detail: "relay-pool" })
           );
+          if (!window.__relayCachesWarmed) {
+            window.__relayCachesWarmed = true;
+            fetch("/api/v1/user/relay-lists").catch(function () {});
+            fetch("/api/v1/user/media-servers").catch(function () {});
+          }
         }
         panel.classList.toggle("hidden");
       });
@@ -369,25 +376,15 @@
   window.openRelaySettings = function () {
     var panel = document.getElementById("relay-pool-panel");
     if (panel) panel.classList.add("hidden");
+    // settings.js scrolls here once the content is visible (handles both the
+    // normal load and the watchdog-reveal path deterministically).
+    window.__grainScrollTarget = "relay-manager-section";
     if (typeof htmx === "undefined") {
       window.location.href = "/settings";
       return;
     }
     window.history.pushState({}, "", "/settings");
-    htmx
-      .ajax("GET", "/views/settings.html", { target: "#main-content" })
-      .then(function () {
-        var tries = 0;
-        (function scrollWhenReady() {
-          var sec = document.getElementById("relay-manager-section");
-          // offsetParent is null while #settings-content is still hidden.
-          if (sec && sec.offsetParent !== null) {
-            sec.scrollIntoView({ behavior: "smooth", block: "start" });
-            return;
-          }
-          if (tries++ < 120) setTimeout(scrollWhenReady, 100); // up to ~12s
-        })();
-      });
+    htmx.ajax("GET", "/views/settings.html", { target: "#main-content" });
   };
 </script>
 

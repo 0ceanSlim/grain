@@ -237,6 +237,16 @@ func (c *Client) fetchUserRelaysFromNetwork(pubkey string) *UserRelays {
 // fetchLatestEvent returns the newest event of kind for pubkey from relays, or
 // nil if none arrives. Shared by the directory resolver.
 func (c *Client) fetchLatestEvent(pubkey string, kind int, relays []string) *nostr.Event {
+	return c.fetchLatestEventWithin(pubkey, kind, relays, 5*time.Second)
+}
+
+// fetchLatestEventWithin is fetchLatestEvent with a caller-chosen deadline. A
+// replaceable event, when it exists, comes back well under a second; the full
+// deadline is only ever spent waiting on unresponsive relays in the negative
+// case. Callers resolving "does the user have this list at all?" (media servers,
+// relay lists) pass a shorter deadline so a cold miss doesn't stall the UI for
+// the full 5s.
+func (c *Client) fetchLatestEventWithin(pubkey string, kind int, relays []string, timeout time.Duration) *nostr.Event {
 	if len(relays) == 0 {
 		return nil
 	}
@@ -252,7 +262,7 @@ func (c *Client) fetchLatestEvent(pubkey string, kind int, relays []string) *nos
 		return nil
 	}
 	defer sub.Close()
-	return collectLatestReplaceable(sub, len(relays), 5*time.Second)
+	return collectLatestReplaceable(sub, len(relays), timeout)
 }
 
 // parseDMRelays extracts relay URLs from a NIP-17 kind 10050 event's relay tags.

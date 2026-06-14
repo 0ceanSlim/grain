@@ -35,8 +35,13 @@ type Client struct {
 
 	// relayListsCache caches a user's resolved relay lists (all kinds) so the
 	// settings page renders from cache once login-hydration has warmed it.
-	relayListsMu    sync.Mutex
-	relayListsCache map[string]relayListsEntry
+	// relayListsInflight collapses concurrent resolves for the same pubkey onto
+	// one network fetch (e.g. the relay-pool dropdown's warm prefetch and the
+	// relay manager's own load), so the second caller waits for the first
+	// instead of duplicating a multi-second cold resolve.
+	relayListsMu       sync.Mutex
+	relayListsCache    map[string]relayListsEntry
+	relayListsInflight map[string]chan struct{}
 
 	// Fixed-relay override (opt-out, default OFF). When enabled, every read uses
 	// fixedRead and every write uses fixedWrite, bypassing outbox routing
@@ -62,6 +67,7 @@ func NewClient(config *Config) *Client {
 	c.directory = newRelayDirectory(config.RelayListTTL, config.RelayListNegTTL, c.fetchUserRelaysFromNetwork)
 	c.mediaDir = newMediaDirectory(config.RelayListTTL, config.RelayListNegTTL, c.fetchUserMediaServersFromNetwork)
 	c.relayListsCache = make(map[string]relayListsEntry)
+	c.relayListsInflight = make(map[string]chan struct{})
 	return c
 }
 
