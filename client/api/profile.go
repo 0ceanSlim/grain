@@ -154,6 +154,10 @@ func PublishSignedHandler(w http.ResponseWriter, r *http.Request) {
 	if req.Event.Kind == 10002 || req.Event.Kind == 10050 {
 		coreClient.InvalidateUserRelays(req.Event.PubKey)
 	}
+	switch req.Event.Kind {
+	case 10002, 10050, 10006, 10007, 10012:
+		coreClient.InvalidateUserRelayLists(req.Event.PubKey)
+	}
 
 	log.ClientAPI().Info("Published signed event", "kind", req.Event.Kind, "event_id", req.Event.ID, "relay_count", len(relays))
 	writeSignedResponse(w, http.StatusOK, PublishSignedResponse{
@@ -269,6 +273,10 @@ func PublishSignedStreamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Event.Kind == 10002 || req.Event.Kind == 10050 {
 		coreClient.InvalidateUserRelays(req.Event.PubKey)
+	}
+	switch req.Event.Kind {
+	case 10002, 10050, 10006, 10007, 10012:
+		coreClient.InvalidateUserRelayLists(req.Event.PubKey)
 	}
 	log.ClientAPI().Info("Streamed signed event publish", "kind", req.Event.Kind, "event_id", req.Event.ID, "relay_count", len(relays))
 }

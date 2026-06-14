@@ -33,6 +33,11 @@ type Client struct {
 	// 10063 / NIP-96 kind 10096) for the upload flow.
 	mediaDir *MediaDirectory
 
+	// relayListsCache caches a user's resolved relay lists (all kinds) so the
+	// settings page renders from cache once login-hydration has warmed it.
+	relayListsMu    sync.Mutex
+	relayListsCache map[string]relayListsEntry
+
 	// Fixed-relay override (opt-out, default OFF). When enabled, every read uses
 	// fixedRead and every write uses fixedWrite, bypassing outbox routing
 	// entirely — replies stop reaching other users' inboxes. Only for users who
@@ -56,6 +61,7 @@ func NewClient(config *Config) *Client {
 	}
 	c.directory = newRelayDirectory(config.RelayListTTL, config.RelayListNegTTL, c.fetchUserRelaysFromNetwork)
 	c.mediaDir = newMediaDirectory(config.RelayListTTL, config.RelayListNegTTL, c.fetchUserMediaServersFromNetwork)
+	c.relayListsCache = make(map[string]relayListsEntry)
 	return c
 }
 

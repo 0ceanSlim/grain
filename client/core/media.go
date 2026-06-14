@@ -130,6 +130,12 @@ func (c *Client) InvalidateMediaServers(pubkey string) {
 	c.mediaDir.Invalidate(pubkey)
 }
 
+// WarmMediaServers resolves a user's media-server lists into the cache in the
+// background — used by login-hydration so the media settings page is instant.
+func (c *Client) WarmMediaServers(pubkey string) {
+	go c.ResolveMediaServers(pubkey)
+}
+
 // FetchMediaServerList returns the user's latest raw event of the given
 // media-server list kind (10063 Blossom or 10096 NIP-96), or nil if none is
 // found. Used by the build flow to preserve any non-server tags when

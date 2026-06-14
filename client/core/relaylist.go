@@ -238,3 +238,43 @@ func (c *Client) FetchUserRelayLists(pubkey string) *UserRelayLists {
 	wg.Wait()
 	return out
 }
+
+// relayListsEntry is a TTL-cached resolution of a user's relay lists.
+type relayListsEntry struct {
+	lists *UserRelayLists
+	at    time.Time
+}
+
+// ResolveUserRelayLists returns a user's relay lists from cache when fresh,
+// otherwise resolves them from the network and caches the result. The relay
+// manager reads through this so the page renders from cache once login-hydration
+// has warmed it.
+func (c *Client) ResolveUserRelayLists(pubkey string) *UserRelayLists {
+	c.relayListsMu.Lock()
+	if e, ok := c.relayListsCache[pubkey]; ok && time.Since(e.at) < c.config.RelayListTTL {
+		c.relayListsMu.Unlock()
+		return e.lists
+	}
+	c.relayListsMu.Unlock()
+
+	lists := c.FetchUserRelayLists(pubkey)
+
+	c.relayListsMu.Lock()
+	c.relayListsCache[pubkey] = relayListsEntry{lists: lists, at: time.Now()}
+	c.relayListsMu.Unlock()
+	return lists
+}
+
+// WarmUserRelayLists resolves a user's relay lists into the cache in the
+// background — used by login-hydration so the settings page is instant.
+func (c *Client) WarmUserRelayLists(pubkey string) {
+	go c.ResolveUserRelayLists(pubkey)
+}
+
+// InvalidateUserRelayLists drops a user's cached relay lists so the next resolve
+// re-fetches — call after they publish a new relay-list event.
+func (c *Client) InvalidateUserRelayLists(pubkey string) {
+	c.relayListsMu.Lock()
+	delete(c.relayListsCache, pubkey)
+	c.relayListsMu.Unlock()
+}

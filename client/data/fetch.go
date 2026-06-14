@@ -136,6 +136,12 @@ func FetchAndCacheUserDataWithCoreClient(publicKey string) error {
 	// Cache the data using the cache package function
 	cache.CacheUserDataFromObjects(publicKey, userMetadata, mailboxes)
 
+	// Login-hydration: warm the media-server + relay-list caches in the
+	// background so the settings pages render from cache instead of fetching on
+	// open. Both Warm* helpers spawn their own goroutine, so this never blocks.
+	coreClient.WarmMediaServers(publicKey)
+	coreClient.WarmUserRelayLists(publicKey)
+
 	// Initialize client relays based on what we found
 	if mailboxes != nil {
 		// User has mailboxes - replace client relays with user's preferred relays

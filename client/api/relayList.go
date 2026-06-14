@@ -107,7 +107,7 @@ func GetUserRelayListsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lists := coreClient.FetchUserRelayLists(pubkey)
+	lists := coreClient.ResolveUserRelayLists(pubkey)
 	resp := UserRelayListsResponse{
 		Pubkey:    pubkey,
 		NIP65:     lists.NIP65,
