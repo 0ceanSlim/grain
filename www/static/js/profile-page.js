@@ -471,6 +471,7 @@
 
   // Reveal the Edit button only when the logged-in user is viewing their own
   // profile (session pubkey === this profile's pubkey).
+  let pfIsOwn = false;
   async function checkOwnProfile() {
     try {
       const r = await fetch("/api/v1/session", { cache: "no-store" });
@@ -480,6 +481,7 @@
         sess &&
         sess.publicKey &&
         sess.publicKey.toLowerCase() === (profileData.pubkey || "").toLowerCase();
+      pfIsOwn = !!mine;
       if (mine) {
         showElement("profile-edit-btn");
         showElement("profile-advanced-btn");
@@ -821,6 +823,18 @@
       }
     }, 3000);
   }
+
+  // Live-sync (#87): if your own profile (kind 0) changes in another client and
+  // you're viewing it here (and not mid-edit), re-pull it so the page is current.
+  if (window.__pfStreamHandler)
+    window.removeEventListener("grain:stream", window.__pfStreamHandler);
+  window.__pfStreamHandler = function (e) {
+    const m = e.detail || {};
+    if (m.type === "list-updated" && m.kind === 0 && pfIsOwn && !pfEditing) {
+      window.refreshProfile();
+    }
+  };
+  window.addEventListener("grain:stream", window.__pfStreamHandler);
 
   // Initialize when DOM is ready
   if (document.readyState === "loading") {

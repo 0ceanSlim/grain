@@ -317,6 +317,39 @@
     }
   };
 
+  // Live-sync (#87): re-pull a media list when it changes here or in another
+  // client. Re-wire on each load (the handler closes over this module's state).
+  if (window.__msStreamHandler)
+    window.removeEventListener("grain:stream", window.__msStreamHandler);
+  window.__msStreamHandler = function (e) {
+    const m = e.detail || {};
+    if (m.type !== "list-updated" || (m.kind !== 10063 && m.kind !== 10096)) return;
+    fetch("/api/v1/user/media-servers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((me) => {
+        if (!me) return;
+        if (m.kind === 10063) {
+          MS.blossom = (me.blossom || []).map((x) => {
+            setInfo(x.url, x);
+            return x.url;
+          });
+          MS.orig.blossom = MS.blossom.slice();
+          renderList("blossom");
+          renderSuggested("blossom");
+        } else {
+          MS.nip96 = (me.nip96 || []).map((x) => {
+            setInfo(x.url, x);
+            return x.url;
+          });
+          MS.orig.nip96 = MS.nip96.slice();
+          renderList("nip96");
+          renderSuggested("nip96");
+        }
+      })
+      .catch(function () {});
+  };
+  window.addEventListener("grain:stream", window.__msStreamHandler);
+
   // The script ships inside the HTMX-swapped settings view, so the section is
   // already in the DOM when this runs.
   if (document.getElementById("media-servers-section")) initMediaServers();

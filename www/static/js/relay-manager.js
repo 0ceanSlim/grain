@@ -323,5 +323,33 @@
       });
   }
 
+  // Live-sync (#87): when one of our relay lists changes — here or in another
+  // client — re-pull just that list so the page stays current without a reload.
+  // Re-wire on each load (the handler closes over this module's state).
+  if (window.__rmStreamHandler)
+    window.removeEventListener("grain:stream", window.__rmStreamHandler);
+  window.__rmStreamHandler = function (e) {
+    const m = e.detail || {};
+    if (m.type !== "list-updated") return;
+    const map = { 10050: "dm", 10007: "search", 10012: "favorites", 10006: "blocked" };
+    if (m.kind !== 10002 && !map[m.kind]) return;
+    fetch("/api/v1/user/relay-lists")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        if (m.kind === 10002) {
+          RM.nip65 = d.nip65 || [];
+          renderNip65();
+        } else {
+          const key = map[m.kind];
+          RM.lists[key] = d[key] || [];
+          RM.encrypted = d.encrypted || RM.encrypted;
+          renderTagList(key);
+        }
+      })
+      .catch(function () {});
+  };
+  window.addEventListener("grain:stream", window.__rmStreamHandler);
+
   init();
 })();

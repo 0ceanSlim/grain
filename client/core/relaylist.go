@@ -199,18 +199,23 @@ type EncryptedFlags struct {
 	Favorites bool `json:"favorites"`
 }
 
-// FetchUserRelayLists resolves a user's relay lists for every kind the relay
-// manager shows, fetching the kinds concurrently. Each goroutine writes a
-// distinct field, so no locking is needed.
-//
-// A user's own NIP-51/17 lists live on their own relays, which a cold page load
-// may not have cached — so the relay set is the index relays PLUS the user's
-// resolved read+write relays, giving the lists a real chance to be found.
-func (c *Client) FetchUserRelayLists(pubkey string) *UserRelayLists {
+// OwnListRelays returns the relay set to read a user's own replaceable lists
+// from: the index relays plus their resolved read+write relays. A user's own
+// NIP-51/17 lists live on their own relays, which a cold load may not have
+// cached. Shared by FetchUserRelayLists and the live-sync subscription.
+func (c *Client) OwnListRelays(pubkey string) []string {
 	relays := append([]string(nil), c.config.IndexRelays...)
 	ur := c.ResolveRelays(pubkey) // blocking resolve — own user is cached post-login
 	relays = appendUnique(relays, ur.Outbox)
 	relays = appendUnique(relays, ur.Inbox)
+	return relays
+}
+
+// FetchUserRelayLists resolves a user's relay lists for every kind the relay
+// manager shows, fetching the kinds concurrently. Each goroutine writes a
+// distinct field, so no locking is needed.
+func (c *Client) FetchUserRelayLists(pubkey string) *UserRelayLists {
+	relays := c.OwnListRelays(pubkey)
 
 	out := &UserRelayLists{}
 	var wg sync.WaitGroup

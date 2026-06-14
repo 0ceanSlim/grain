@@ -2,6 +2,7 @@ package connection
 
 import (
 	"github.com/0ceanslim/grain/client/core"
+	"github.com/0ceanslim/grain/client/stream"
 	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -40,6 +41,10 @@ func InitializeCoreClient(serverCfg *cfgType.ServerConfig) error {
 	// Pin index/seed relays so the idle sweeper never evicts them — they must
 	// stay connected to resolve relay lists and metadata for arbitrary users.
 	coreClient.PinRelays(config.IndexRelays...)
+
+	// Live-sync (#87): start a user's own-event subscription when their first
+	// page opens the SSE channel, and stop it when the last one disconnects.
+	stream.Default().SetLifecycle(StartLiveSync, StopLiveSync)
 
 	// Connect to index relays asynchronously. Relay startup must never
 	// block on outbound network — when index relays are unreachable, the
