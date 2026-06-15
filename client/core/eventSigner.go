@@ -98,6 +98,12 @@ func (es *EventSigner) signHash(hashHex string) (string, error) {
 	return hex.EncodeToString(signature.Serialize()), nil
 }
 
+// PublicKey returns the public key in hex format. It satisfies the [Signer]
+// seam; GetPublicKey is retained as an alias for existing callers.
+func (es *EventSigner) PublicKey() string {
+	return es.publicKey
+}
+
 // GetPublicKey returns the public key in hex format
 func (es *EventSigner) GetPublicKey() string {
 	return es.publicKey
