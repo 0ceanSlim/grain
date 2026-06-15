@@ -57,6 +57,68 @@ func TestUserContextSign(t *testing.T) {
 	}
 }
 
+func TestBuildReplyTags(t *testing.T) {
+	hasTag := func(tags [][]string, want ...string) bool {
+		for _, tg := range tags {
+			if len(tg) < len(want) {
+				continue
+			}
+			ok := true
+			for i, w := range want {
+				if tg[i] != w {
+					ok = false
+					break
+				}
+			}
+			if ok {
+				return true
+			}
+		}
+		return false
+	}
+	countP := func(tags [][]string, pk string) int {
+		n := 0
+		for _, tg := range tags {
+			if len(tg) >= 2 && tg[0] == "p" && tg[1] == pk {
+				n++
+			}
+		}
+		return n
+	}
+
+	// Reply to a top-level note: parent is the root, author gets a p-tag.
+	top := &nostr.Event{ID: "P1", PubKey: "AUTHOR", Kind: 1}
+	tt := buildReplyTags(top)
+	if !hasTag(tt, "e", "P1", "", "root") {
+		t.Errorf("top-level reply missing root e-tag: %v", tt)
+	}
+	if !hasTag(tt, "p", "AUTHOR") {
+		t.Errorf("top-level reply missing author p-tag: %v", tt)
+	}
+
+	// Reply within a thread: carry the root, mark the parent as reply, notify
+	// the whole thread, and don't duplicate the parent author.
+	mid := &nostr.Event{
+		ID: "P2", PubKey: "BOB", Kind: 1,
+		Tags: [][]string{
+			{"e", "ROOT", "", "root"},
+			{"e", "P1", "", "reply"},
+			{"p", "ALICE"},
+			{"p", "BOB"}, // parent author already present — must not double
+		},
+	}
+	mt := buildReplyTags(mid)
+	if !hasTag(mt, "e", "ROOT", "", "root") {
+		t.Errorf("threaded reply missing root: %v", mt)
+	}
+	if !hasTag(mt, "e", "P2", "", "reply") {
+		t.Errorf("threaded reply missing reply marker: %v", mt)
+	}
+	if !hasTag(mt, "p", "ALICE") || countP(mt, "BOB") != 1 {
+		t.Errorf("threaded reply p-tags wrong (want ALICE + single BOB): %v", mt)
+	}
+}
+
 func TestSessionRelays(t *testing.T) {
 	sr := newSessionRelays()
 	sr.Set("wss://a", RoleOutbox|RoleInbox)

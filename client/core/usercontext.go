@@ -1,7 +1,9 @@
 package core
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
 )
@@ -99,3 +101,91 @@ func (uc *UserContext) ClearFixedRelays() { uc.client.ClearFixedRelays() }
 
 // FixedRelaysEnabled reports whether the fixed-relay override is active.
 func (uc *UserContext) FixedRelaysEnabled() bool { return uc.client.FixedRelaysEnabled() }
+
+// StreamNotes streams author's text notes (kind 1) from their outbox relays as
+// each relay answers — the lazy-hydration path for a profile feed. Pass options
+// like [WithLimit] to bound it. Routing honours the fixed-relay override.
+func (uc *UserContext) StreamNotes(ctx context.Context, author string, opts ...StreamOption) <-chan *nostr.Event {
+	relays := uc.client.RouteFetch(author)
+	filter := nostr.Filter{Authors: []string{author}, Kinds: []int{1}}
+	return uc.client.StreamEvents(ctx, filter, relays, opts...)
+}
+
+// FetchNotes collects author's text notes (kind 1) from their outbox relays.
+// Best-effort: per-relay failures are logged, so an empty result means "none
+// found" rather than a hard error. For incremental delivery use [StreamNotes].
+func (uc *UserContext) FetchNotes(ctx context.Context, author string, opts ...StreamOption) []*nostr.Event {
+	relays := uc.client.RouteFetch(author)
+	filter := nostr.Filter{Authors: []string{author}, Kinds: []int{1}}
+	return uc.client.QueryEvents(ctx, filter, relays, opts...)
+}
+
+// Reply builds a NIP-10 kind-1 reply to parent, signs it as this user, and
+// publishes it under the outbox model so it reaches the parent author's inbox as
+// well as the user's own audience. It returns the signed reply and the per-relay
+// broadcast results. Requires a signer.
+func (uc *UserContext) Reply(parent *nostr.Event, content string) (*nostr.Event, []BroadcastResult, error) {
+	if parent == nil {
+		return nil, nil, fmt.Errorf("reply: parent event is nil")
+	}
+	evt := &nostr.Event{
+		Kind:      1,
+		Content:   content,
+		CreatedAt: time.Now().Unix(),
+		Tags:      buildReplyTags(parent),
+	}
+	results, err := uc.SignAndPublish(evt)
+	return evt, results, err
+}
+
+// buildReplyTags assembles the NIP-10 e/p tags for a reply to parent: the thread
+// root and the immediate parent as marked "e" tags, plus "p" tags for everyone
+// already in the thread and the parent's author, so the whole thread is notified.
+func buildReplyTags(parent *nostr.Event) [][]string {
+	var tags [][]string
+
+	// Thread root: a marked "root" e-tag on the parent, else the first "e" tag
+	// (positional NIP-10), else the parent itself is the root.
+	root := ""
+	for _, tag := range parent.Tags {
+		if len(tag) >= 4 && tag[0] == "e" && tag[3] == "root" {
+			root = tag[1]
+			break
+		}
+	}
+	if root == "" {
+		for _, tag := range parent.Tags {
+			if len(tag) >= 2 && tag[0] == "e" {
+				root = tag[1]
+				break
+			}
+		}
+	}
+	if root != "" && root != parent.ID {
+		tags = append(tags, []string{"e", root, "", "root"})
+		tags = append(tags, []string{"e", parent.ID, "", "reply"})
+	} else {
+		tags = append(tags, []string{"e", parent.ID, "", "root"})
+	}
+
+	// Notify everyone already in the thread, plus the parent's author.
+	seen := make(map[string]struct{})
+	addP := func(pk string) {
+		if pk == "" {
+			return
+		}
+		if _, ok := seen[pk]; ok {
+			return
+		}
+		seen[pk] = struct{}{}
+		tags = append(tags, []string{"p", pk})
+	}
+	for _, tag := range parent.Tags {
+		if len(tag) >= 2 && tag[0] == "p" {
+			addP(tag[1])
+		}
+	}
+	addP(parent.PubKey)
+
+	return tags
+}
