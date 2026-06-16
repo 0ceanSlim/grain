@@ -53,7 +53,7 @@ func (c *Client) StreamEvents(ctx context.Context, filter nostr.Filter, relays [
 		if len(relays) == 0 {
 			return
 		}
-		sub, err := c.Subscribe([]nostr.Filter{filter}, relays)
+		sub, err := c.Subscribe(ctx, []nostr.Filter{filter}, relays)
 		if err != nil {
 			log.ClientCore().Debug("StreamEvents subscribe failed", "error", err)
 			return

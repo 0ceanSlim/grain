@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -210,11 +211,11 @@ func (c *Client) fetchUserRelaysFromNetwork(pubkey string) *UserRelays {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		nip65 = c.fetchLatestEvent(pubkey, 10002, relays)
+		nip65 = c.fetchLatestEvent(context.Background(), pubkey, 10002, relays)
 	}()
 	go func() {
 		defer wg.Done()
-		nip17 = c.fetchLatestEvent(pubkey, 10050, relays)
+		nip17 = c.fetchLatestEvent(context.Background(), pubkey, 10050, relays)
 	}()
 	wg.Wait()
 
@@ -236,8 +237,8 @@ func (c *Client) fetchUserRelaysFromNetwork(pubkey string) *UserRelays {
 
 // fetchLatestEvent returns the newest event of kind for pubkey from relays, or
 // nil if none arrives. Shared by the directory resolver.
-func (c *Client) fetchLatestEvent(pubkey string, kind int, relays []string) *nostr.Event {
-	return c.fetchLatestEventWithin(pubkey, kind, relays, 5*time.Second)
+func (c *Client) fetchLatestEvent(ctx context.Context, pubkey string, kind int, relays []string) *nostr.Event {
+	return c.fetchLatestEventWithin(ctx, pubkey, kind, relays, 5*time.Second)
 }
 
 // fetchLatestEventWithin is fetchLatestEvent with a caller-chosen deadline. A
@@ -246,7 +247,7 @@ func (c *Client) fetchLatestEvent(pubkey string, kind int, relays []string) *nos
 // case. Callers resolving "does the user have this list at all?" (media servers,
 // relay lists) pass a shorter deadline so a cold miss doesn't stall the UI for
 // the full 5s.
-func (c *Client) fetchLatestEventWithin(pubkey string, kind int, relays []string, timeout time.Duration) *nostr.Event {
+func (c *Client) fetchLatestEventWithin(ctx context.Context, pubkey string, kind int, relays []string, timeout time.Duration) *nostr.Event {
 	if len(relays) == 0 {
 		return nil
 	}
@@ -256,13 +257,13 @@ func (c *Client) fetchLatestEventWithin(pubkey string, kind int, relays []string
 		Kinds:   []int{kind},
 		Limit:   &limit,
 	}
-	sub, err := c.Subscribe([]nostr.Filter{filter}, relays)
+	sub, err := c.Subscribe(ctx, []nostr.Filter{filter}, relays)
 	if err != nil {
 		log.ClientCore().Debug("Subscribe failed during relay resolution", "pubkey", pubkey, "kind", kind, "error", err)
 		return nil
 	}
 	defer sub.Close()
-	return collectLatestReplaceable(sub, len(relays), timeout)
+	return collectLatestReplaceable(ctx, sub, len(relays), timeout)
 }
 
 // parseDMRelays extracts relay URLs from a NIP-17 kind 10050 event's relay tags.

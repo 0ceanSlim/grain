@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -106,7 +107,7 @@ func FetchAndCacheUserDataWithCoreClient(publicKey string) error {
 	go func() {
 		defer wg.Done()
 		log.ClientData().Debug("Fetching user metadata", "pubkey", publicKey)
-		userMetadata, profileErr = coreClient.GetUserProfile(publicKey, relaysForQueries)
+		userMetadata, profileErr = coreClient.GetUserProfile(context.Background(), publicKey, relaysForQueries)
 	}()
 	wg.Wait()
 

@@ -168,7 +168,10 @@ func (c *Client) DisconnectFromRelays(relayURLs []string) error {
 }
 
 // Subscribe creates a new subscription with filters and relay hints
-func (c *Client) Subscribe(filters []nostr.Filter, relayHints []string) (*Subscription, error) {
+func (c *Client) Subscribe(ctx context.Context, filters []nostr.Filter, relayHints []string) (*Subscription, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err // already cancelled / past deadline
+	}
 	subID := generateSubscriptionID()
 
 	// Use all connected relays if no hints provided
@@ -272,7 +275,7 @@ func (c *Client) ConnectToRelaysWithRetry(urls []string, maxRetries int) error {
 // the GetUserRelays latency bug (#77): that method used to wait on sub.Done —
 // which EOSE never closes — so every mailbox fetch burned the full timeout
 // instead of returning the moment a relay reported EOSE.
-func collectLatestReplaceable(sub *Subscription, totalRelays int, timeout time.Duration) *nostr.Event {
+func collectLatestReplaceable(ctx context.Context, sub *Subscription, totalRelays int, timeout time.Duration) *nostr.Event {
 	deadline := time.After(timeout)
 	eoseRelays := make(map[string]bool)
 	var latest *nostr.Event
@@ -304,13 +307,15 @@ func collectLatestReplaceable(sub *Subscription, totalRelays int, timeout time.D
 			log.ClientCore().Debug("Subscription error while collecting event",
 				"sub_id", sub.ID, "error", err)
 
+		case <-ctx.Done():
+			return latest
 		case <-deadline:
 			return latest
 		}
 	}
 }
 
-func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Event, error) {
+func (c *Client) GetUserProfile(ctx context.Context, pubkey string, relayHints []string) (*nostr.Event, error) {
 	log.ClientCore().Debug("Fetching user profile", "pubkey", pubkey, "relay_hints", relayHints)
 
 	// Background-warm this user's mailbox relays into the directory (and thus
@@ -336,13 +341,13 @@ func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Even
 			"pubkey", pubkey, "relays", targetRelays)
 	}
 
-	sub, err := c.Subscribe([]nostr.Filter{filter}, targetRelays)
+	sub, err := c.Subscribe(ctx, []nostr.Filter{filter}, targetRelays)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create subscription: %w", err)
 	}
 	defer sub.Close()
 
-	event := collectLatestReplaceable(sub, len(targetRelays), 5*time.Second)
+	event := collectLatestReplaceable(ctx, sub, len(targetRelays), 5*time.Second)
 	if event == nil {
 		log.ClientCore().Warn("No profile found", "pubkey", pubkey)
 		return nil, &ClientError{Message: "profile not found"}

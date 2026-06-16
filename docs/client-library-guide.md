@@ -17,10 +17,12 @@ are the **reference consumer** of this surface — a worked example of how to bu
 on it, not part of its import contract.
 
 > **Status (0.8.0, pre-1.0).** The surface below is stable enough to build on,
-> with two known gaps: the network methods don't take a `context.Context` on the
-> *existing* (pre-0.8) methods yet — the newer `StreamEvents`/`QueryEvents` do —
-> and `PublishDM` (gift-wrapped NIP-17) is deferred until NIP-44 encryption
-> lands. See [the design doc](design/outbox-relay-pool.md) §11.
+> with known gaps: the **read/fetch** methods take a `context.Context`
+> (`Subscribe`, `GetUserProfile`, `StreamEvents`/`QueryEvents`, `FetchNotes`,
+> `StreamNotes`) so a fetch can be cancelled; the **publish** methods don't yet
+> (they carry their own deadlines). `PublishDM` (gift-wrapped NIP-17) is deferred
+> until NIP-44 encryption lands, and NIP-42 AUTH-for-`trusted` is not yet
+> implemented. See [the design doc](design/outbox-relay-pool.md) §11.
 
 ---
 

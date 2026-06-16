@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -27,7 +28,7 @@ func TestCollectReturnsEventOnEOSE(t *testing.T) {
 	sub.Events <- &nostr.Event{ID: "e1", CreatedAt: 100}
 	sub.EOSE <- "wss://a"
 
-	got := collectLatestReplaceable(sub, 2, 300*time.Millisecond)
+	got := collectLatestReplaceable(context.Background(), sub, 2, 300*time.Millisecond)
 	if got == nil || got.ID != "e1" {
 		t.Fatalf("want event e1, got %+v", got)
 	}
@@ -40,7 +41,7 @@ func TestCollectPicksHighestCreatedAt(t *testing.T) {
 	sub.Events <- &nostr.Event{ID: "old", CreatedAt: 100}
 	sub.Events <- &nostr.Event{ID: "new", CreatedAt: 200}
 
-	got := collectLatestReplaceable(sub, 2, 150*time.Millisecond)
+	got := collectLatestReplaceable(context.Background(), sub, 2, 150*time.Millisecond)
 	if got == nil || got.ID != "new" {
 		t.Fatalf("want newest event 'new', got %+v", got)
 	}
@@ -56,7 +57,7 @@ func TestCollectAllEOSEReturnsNilPromptly(t *testing.T) {
 	sub.EOSE <- "wss://b"
 
 	start := time.Now()
-	got := collectLatestReplaceable(sub, 2, 2*time.Second)
+	got := collectLatestReplaceable(context.Background(), sub, 2, 2*time.Second)
 	elapsed := time.Since(start)
 
 	if got != nil {
@@ -70,7 +71,7 @@ func TestCollectAllEOSEReturnsNilPromptly(t *testing.T) {
 // Nothing arrives: nil at the deadline (offline / not-found case).
 func TestCollectTimeoutReturnsNil(t *testing.T) {
 	sub := newTestSub("t4", 1)
-	if got := collectLatestReplaceable(sub, 1, 150*time.Millisecond); got != nil {
+	if got := collectLatestReplaceable(context.Background(), sub, 1, 150*time.Millisecond); got != nil {
 		t.Fatalf("want nil on timeout, got %+v", got)
 	}
 }
@@ -79,7 +80,7 @@ func TestCollectTimeoutReturnsNil(t *testing.T) {
 func TestCollectTimeoutReturnsLatest(t *testing.T) {
 	sub := newTestSub("t5", 2)
 	sub.Events <- &nostr.Event{ID: "e", CreatedAt: 100}
-	if got := collectLatestReplaceable(sub, 2, 150*time.Millisecond); got == nil || got.ID != "e" {
+	if got := collectLatestReplaceable(context.Background(), sub, 2, 150*time.Millisecond); got == nil || got.ID != "e" {
 		t.Fatalf("want event e at timeout, got %+v", got)
 	}
 }
@@ -90,7 +91,7 @@ func TestCollectErrorIsNonFatal(t *testing.T) {
 	sub.Errors <- errors.New("relay blew up")
 	sub.Events <- &nostr.Event{ID: "e", CreatedAt: 100}
 
-	if got := collectLatestReplaceable(sub, 2, 150*time.Millisecond); got == nil || got.ID != "e" {
+	if got := collectLatestReplaceable(context.Background(), sub, 2, 150*time.Millisecond); got == nil || got.ID != "e" {
 		t.Fatalf("want event e despite a relay error, got %+v", got)
 	}
 }

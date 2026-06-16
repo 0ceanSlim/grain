@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -112,7 +113,7 @@ func (c *Client) FetchRelayList(pubkey string, kind int) *nostr.Event {
 	if ur, ok := c.directory.Cached(pubkey); ok {
 		relays = appendUnique(relays, ur.Outbox)
 	}
-	return c.fetchLatestEvent(pubkey, kind, relays)
+	return c.fetchLatestEvent(context.Background(), pubkey, kind, relays)
 }
 
 // InvalidateUserRelays drops a user's cached relay-role resolution so the next
@@ -227,7 +228,7 @@ func (c *Client) FetchUserRelayLists(pubkey string) *UserRelayLists {
 	const relayListResolveTimeout = 3 * time.Second
 	fetch := func(kind int, assign func(*nostr.Event)) {
 		defer wg.Done()
-		if ev := c.fetchLatestEventWithin(pubkey, kind, relays, relayListResolveTimeout); ev != nil {
+		if ev := c.fetchLatestEventWithin(context.Background(), pubkey, kind, relays, relayListResolveTimeout); ev != nil {
 			assign(ev)
 		}
 	}

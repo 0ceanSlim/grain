@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -146,7 +147,7 @@ func (c *Client) FetchMediaServerList(pubkey string, kind int) *nostr.Event {
 	if ur, ok := c.directory.Cached(pubkey); ok {
 		relays = appendUnique(relays, ur.Outbox)
 	}
-	return c.fetchLatestEvent(pubkey, kind, relays)
+	return c.fetchLatestEvent(context.Background(), pubkey, kind, relays)
 }
 
 // AssembleMediaServerEvent builds an UNSIGNED media-server list event (Blossom
@@ -235,11 +236,11 @@ func (c *Client) fetchUserMediaServersFromNetwork(pubkey string) *MediaServers {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		blossom = c.fetchLatestEventWithin(pubkey, 10063, relays, mediaResolveTimeout)
+		blossom = c.fetchLatestEventWithin(context.Background(), pubkey, 10063, relays, mediaResolveTimeout)
 	}()
 	go func() {
 		defer wg.Done()
-		nip96 = c.fetchLatestEventWithin(pubkey, 10096, relays, mediaResolveTimeout)
+		nip96 = c.fetchLatestEventWithin(context.Background(), pubkey, 10096, relays, mediaResolveTimeout)
 	}()
 	wg.Wait()
 

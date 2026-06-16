@@ -1,6 +1,7 @@
 package connection
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -38,7 +39,7 @@ func StartLiveSync(pubkey string) {
 
 	since := time.Now()
 	relays := cc.OwnListRelays(pubkey)
-	sub, err := cc.Subscribe([]nostr.Filter{{
+	sub, err := cc.Subscribe(context.Background(), []nostr.Filter{{
 		Authors: []string{pubkey},
 		Kinds:   ownEventKinds,
 		Since:   &since,

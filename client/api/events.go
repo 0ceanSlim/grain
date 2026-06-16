@@ -194,7 +194,7 @@ func GetUserProfileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch profile
-	profile, err := coreClient.GetUserProfile(pubkey, nil)
+	profile, err := coreClient.GetUserProfile(r.Context(), pubkey, nil)
 	if err != nil {
 		log.ClientAPI().Error("Failed to fetch user profile", "pubkey", pubkey, "error", err)
 		http.Error(w, "Profile not found", http.StatusNotFound)
@@ -308,7 +308,7 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create subscription to fetch events
-	sub, err := coreClient.Subscribe(filters, nil)
+	sub, err := coreClient.Subscribe(r.Context(), filters, nil)
 	if err != nil {
 		log.ClientAPI().Error("Failed to create subscription", "error", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ func TestSubscribeDialsRelaysConcurrently(t *testing.T) {
 	relays := []string{"wss://r1", "wss://r2", "wss://r3", "wss://r4"}
 
 	start := time.Now()
-	sub, err := c.Subscribe([]nostr.Filter{{Kinds: []int{0}}}, relays)
+	sub, err := c.Subscribe(context.Background(), []nostr.Filter{{Kinds: []int{0}}}, relays)
 	if err != nil {
 		t.Fatalf("Subscribe: %v", err)
 	}

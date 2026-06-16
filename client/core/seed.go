@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
@@ -12,12 +13,12 @@ import (
 // limit is reached, or the timeout elapses. Unlike collectLatestReplaceable
 // (which keeps only the single newest), this gathers a batch — used for bulk
 // queries like relay-list seeding.
-func (c *Client) FetchEvents(filters []nostr.Filter, relays []string, limit int, timeout time.Duration) []*nostr.Event {
+func (c *Client) FetchEvents(ctx context.Context, filters []nostr.Filter, relays []string, limit int, timeout time.Duration) []*nostr.Event {
 	if len(relays) == 0 {
 		return nil
 	}
 
-	sub, err := c.Subscribe(filters, relays)
+	sub, err := c.Subscribe(ctx, filters, relays)
 	if err != nil {
 		log.ClientCore().Debug("FetchEvents subscribe failed", "error", err)
 		return nil
@@ -53,6 +54,8 @@ func (c *Client) FetchEvents(filters []nostr.Filter, relays []string, limit int,
 		case <-sub.Errors:
 			// One relay failing isn't fatal; keep collecting from the rest.
 
+		case <-ctx.Done():
+			return events
 		case <-deadline:
 			return events
 		}
@@ -74,6 +77,7 @@ func (c *Client) SeedKnownRelays() {
 	const limit = 500
 	lim := limit
 	events := c.FetchEvents(
+		context.Background(),
 		[]nostr.Filter{{Kinds: []int{10002, 10050}, Limit: &lim}},
 		relays, limit, 8*time.Second,
 	)
