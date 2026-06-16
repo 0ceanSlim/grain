@@ -42,6 +42,32 @@ func (rp *RelayPool) Pin(urls ...string) {
 // so the connection can eventually be idle-evicted. Concurrent Acquires for the
 // same url share a single dial (single-flight) and the resulting connection.
 func (rp *RelayPool) Acquire(url string) (*RelayConnection, error) {
+	openTimeout := rp.config.OpenTimeout
+	if openTimeout <= 0 {
+		openTimeout = rp.config.ConnectionTimeout
+	}
+	return rp.acquire(url, openTimeout, false)
+}
+
+// EnsureConnectedForSend makes sure url is connected so the publish path can send
+// to it, redialing a dropped target relay bounded by timeout. It ignores dial
+// backoff because a publish is an explicit user action (unlike a background
+// outbox dial that should fail fast), and it does not retain the lease — the
+// caller only needs the pooled connection for the immediate send, and the
+// sweeper evicts it later if it stays idle. Returns an error if it can't connect
+// in time, which the broadcast surfaces as a per-relay timeout.
+func (rp *RelayPool) EnsureConnectedForSend(url string, timeout time.Duration) error {
+	if _, err := rp.acquire(url, timeout, true); err != nil {
+		return err
+	}
+	rp.Release(url)
+	return nil
+}
+
+// acquire is the shared dial-and-lease core behind Acquire and
+// EnsureConnectedForSend. openTimeout bounds the dial; bypassBackoff skips the
+// dial-backoff gate.
+func (rp *RelayPool) acquire(url string, openTimeout time.Duration, bypassBackoff bool) (*RelayConnection, error) {
 	normalized, ok := normalizeRelayURL(url)
 	if !ok {
 		return nil, fmt.Errorf("invalid relay url: %q", url)
@@ -65,9 +91,11 @@ func (rp *RelayPool) Acquire(url string) (*RelayConnection, error) {
 			delete(rp.connections, url)
 		}
 
-		if t, ok := rp.backoff[url]; ok && time.Now().Before(t) {
-			rp.mu.Unlock()
-			return nil, fmt.Errorf("relay %s in dial backoff", url)
+		if !bypassBackoff {
+			if t, ok := rp.backoff[url]; ok && time.Now().Before(t) {
+				rp.mu.Unlock()
+				return nil, fmt.Errorf("relay %s in dial backoff", url)
+			}
 		}
 
 		// Single-flight: if a dial for this url is already in progress, wait for
@@ -85,13 +113,9 @@ func (rp *RelayPool) Acquire(url string) (*RelayConnection, error) {
 		rp.mu.Unlock()
 
 		// Dial without holding the pool lock, bounded by the dial semaphore so a
-		// burst of outbox lookups can't open unbounded sockets at once. Use the
-		// shorter per-dial open timeout (not ConnectionTimeout) so a dead relay
-		// in someone's outbox fails fast instead of stalling a query.
-		openTimeout := rp.config.OpenTimeout
-		if openTimeout <= 0 {
-			openTimeout = rp.config.ConnectionTimeout
-		}
+		// burst of outbox lookups can't open unbounded sockets at once. The dial
+		// timeout is the caller's: short for background outbox dials (fail fast),
+		// longer for an explicit publish reconnect.
 		rp.dialSem <- struct{}{}
 		conn, err := rp.dialFn(url, openTimeout)
 		<-rp.dialSem

@@ -229,7 +229,24 @@ func (c *Client) PublishEventStream(event *nostr.Event, relays []string) <-chan 
 }
 
 // broadcastToSingleRelay broadcasts to a single relay
+// publishConnectTimeout bounds the redial of a dropped publish target before the
+// broadcast gives up on it with a server-timeout result.
+const publishConnectTimeout = 10 * time.Second
+
 func broadcastToSingleRelay(relayURL string, message []interface{}, pool *RelayPool) BroadcastResult {
+	// Make sure the target relay is connected before sending. A publish target
+	// that has dropped would otherwise fail instantly with "not connected";
+	// redial it (an explicit publish ignores dial backoff), bounded by
+	// publishConnectTimeout, and report a server timeout if it won't come up.
+	if err := pool.EnsureConnectedForSend(relayURL, publishConnectTimeout); err != nil {
+		log.ClientCore().Warn("Couldn't connect to relay to broadcast", "relay", relayURL, "error", err)
+		return BroadcastResult{
+			Success: false,
+			Error:   err,
+			Message: "server timeout (couldn't connect)",
+		}
+	}
+
 	err := pool.SendMessage(relayURL, message)
 	if err != nil {
 		log.ClientCore().Warn("Failed to broadcast to relay", "relay", relayURL, "error", err)
