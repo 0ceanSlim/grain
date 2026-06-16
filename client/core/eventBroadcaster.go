@@ -243,7 +243,7 @@ func broadcastToSingleRelay(relayURL string, message []interface{}, pool *RelayP
 		return BroadcastResult{
 			Success: false,
 			Error:   err,
-			Message: "server timeout (couldn't connect)",
+			Message: "unreachable (server timeout)",
 		}
 	}
 

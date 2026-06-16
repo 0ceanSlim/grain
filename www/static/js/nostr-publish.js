@@ -45,7 +45,7 @@
     if (r.sent === false) return { icon: "✗", cls: "text-danger", note: r.message || "failed to send" };
     if (r.reason) return { icon: "✗", cls: "text-danger", note: r.reason };
     if (r.pending) return { icon: "•", cls: "text-text-muted", note: "waiting…" };
-    return { icon: "•", cls: "text-warning", note: "no response" };
+    return { icon: "•", cls: "text-warning", note: "sent · no confirmation" };
   }
 
   function makePublishToast(initialTitle) {
