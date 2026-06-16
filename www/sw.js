@@ -1,4 +1,4 @@
-const CACHE_NAME = "grain-v5"; // Bumped so activate purges poisoned older caches
+const CACHE_NAME = "grain-v6"; // Bumped so activate purges poisoned older caches
 const STATIC_CACHE_URLS = [
   "/",
   "/static/js/navigation.js",
