@@ -37,6 +37,11 @@
     pubkey: "", // session user, for NIP-51 self-decrypt
     app: { indexer: [], broadcast: [], local: [], trusted: [] }, // local-role prefs
     appLoaded: false,
+    known: [], // [{ url, connected, pinned, leased }] — the known-relays browser
+    knownLoaded: false,
+    knownFilter: "",
+    knownInfo: {}, // url -> NIP-11 object | null(pending)
+    knownExpanded: {}, // url -> true
     loaded: false,
   };
 
@@ -337,6 +342,155 @@
   }
   window.rmAppSave = rmAppSave;
 
+  // ── Known-relays browser ──────────────────────────────────────────────
+  // Browse every relay grain has seen (config seeds + your mailboxes + ones
+  // it's connected to), with live pool status and NIP-11 on expand, and stage
+  // any of them into your lists (then Save & sign that list to publish).
+
+  // Which of the user's lists a relay is currently in — for the row badges.
+  function knownInLists(url) {
+    const u = normWs(url);
+    const out = [];
+    const e = RM.nip65.find((x) => x.url === u);
+    if (e && e.write) out.push("outbox");
+    if (e && e.read) out.push("inbox");
+    ["search", "favorites", "blocked", "dm"].forEach((k) => {
+      if ((RM.lists[k] || []).indexOf(u) >= 0) out.push(k);
+    });
+    return out;
+  }
+
+  function knownNip11(info) {
+    if (!info || !Object.keys(info).length)
+      return `<div class="px-3 pb-2 text-xs text-text-muted">No NIP-11 info advertised.</div>`;
+    const nips = (info.supported_nips || []).join(", ");
+    const lim = info.limitation || {};
+    const flags = [];
+    if (lim.auth_required) flags.push("🔒 AUTH required");
+    if (lim.payment_required) flags.push("💰 paid");
+    if (lim.restricted_writes) flags.push("✍ restricted writes");
+    const rows = [];
+    if (info.name) rows.push(`<div class="font-medium text-text">${esc(info.name)}</div>`);
+    if (info.description) rows.push(`<div>${esc(info.description)}</div>`);
+    if (info.software)
+      rows.push(
+        `<div><span class="text-text-muted">software</span> ${esc(info.software)}${info.version ? " · " + esc(info.version) : ""}</div>`
+      );
+    if (nips) rows.push(`<div><span class="text-text-muted">NIPs</span> ${esc(nips)}</div>`);
+    if (flags.length) rows.push(`<div class="text-warning">${esc(flags.join("  ·  "))}</div>`);
+    return `<div class="px-3 pb-2.5 space-y-0.5 text-xs text-text-secondary">${rows.join("")}</div>`;
+  }
+
+  function knownRow(k) {
+    const inLists = knownInLists(k.url);
+    const dotCls = k.connected ? "bg-success" : k.pinned ? "bg-accent" : "bg-text-muted";
+    const dotTitle = k.connected ? "connected" : k.pinned ? "pinned" : "known";
+    const expanded = !!RM.knownExpanded[k.url];
+    const info = RM.knownInfo[k.url];
+    let detail = "";
+    if (expanded)
+      detail =
+        info === null
+          ? `<div class="px-3 pb-2 text-xs text-text-muted">Loading NIP-11…</div>`
+          : knownNip11(info);
+    const badges = inLists
+      .map(
+        (l) =>
+          `<span class="px-1.5 py-0.5 text-xs rounded bg-surface-inset text-text-secondary">${esc(l)}</span>`
+      )
+      .join("");
+    return (
+      `<div class="border rounded-lg bg-surface-elevated border-border">` +
+      `<div class="flex items-center gap-2 px-3 py-2">` +
+      `<span class="w-2 h-2 rounded-full shrink-0 ${dotCls}" title="${dotTitle}"></span>` +
+      `<a href="${esc(httpish(k.url))}" target="_blank" rel="noopener" class="flex-1 min-w-0 text-sm truncate text-text hover:text-accent hover:underline" title="${esc(k.url)}">${esc(shortRelay(k.url))}</a>` +
+      badges +
+      `<select data-known-add="${esc(k.url)}" class="px-1 py-1 text-xs border rounded shrink-0 bg-surface-overlay text-text border-border">` +
+      `<option value="">+ list…</option>` +
+      `<option value="outbox">Outbox</option><option value="inbox">Inbox</option>` +
+      `<option value="search">Search</option><option value="favorites">Favorites</option>` +
+      `<option value="blocked">Blocked</option><option value="dm">DM</option>` +
+      `</select>` +
+      `<button data-known-toggle="${esc(k.url)}" class="px-1 leading-none shrink-0 text-text-secondary hover:text-text" title="NIP-11 info">${expanded ? "▴" : "▾"}</button>` +
+      `</div>` +
+      detail +
+      `</div>`
+    );
+  }
+
+  function renderKnown() {
+    const box = document.getElementById("rm-known-list");
+    if (!box) return;
+    if (!RM.knownLoaded) {
+      box.innerHTML = spinnerRow("Loading known relays…");
+      return;
+    }
+    const q = (RM.knownFilter || "").toLowerCase();
+    const filtered = q
+      ? RM.known.filter((k) => k.url.toLowerCase().indexOf(q) >= 0)
+      : RM.known;
+    if (!filtered.length) {
+      box.innerHTML = emptyRow(q ? "No matches." : "No known relays yet.");
+      return;
+    }
+    // Relevance-first: connected, then pinned, then ones already in your lists,
+    // then the rest alphabetically — so the top of 900+ is actually useful.
+    const ranked = filtered.map((k) => ({
+      k,
+      r: k.connected ? 0 : k.pinned ? 1 : knownInLists(k.url).length ? 2 : 3,
+    }));
+    ranked.sort((a, b) => a.r - b.r || a.k.url.localeCompare(b.k.url));
+    const ordered = ranked.map((x) => x.k);
+    const cap = 150;
+    let html = ordered.slice(0, cap).map(knownRow).join("");
+    if (filtered.length > cap)
+      html += `<div class="px-3 py-1.5 text-xs text-text-muted">+${filtered.length - cap} more — type to filter.</div>`;
+    box.innerHTML = html;
+    box.querySelectorAll("[data-known-toggle]").forEach((b) => {
+      b.onclick = () => rmKnownToggle(b.getAttribute("data-known-toggle"));
+    });
+    box.querySelectorAll("[data-known-add]").forEach((s) => {
+      s.onchange = () => {
+        rmKnownAdd(s.getAttribute("data-known-add"), s.value);
+        s.value = "";
+      };
+    });
+  }
+
+  async function rmKnownToggle(url) {
+    RM.knownExpanded[url] = !RM.knownExpanded[url];
+    if (RM.knownExpanded[url] && RM.knownInfo[url] === undefined) {
+      RM.knownInfo[url] = null; // pending — show the loader
+      renderKnown();
+      try {
+        const r = await fetch("/api/v1/relay-info?url=" + encodeURIComponent(url));
+        RM.knownInfo[url] = r.ok ? await r.json() : {};
+      } catch (_) {
+        RM.knownInfo[url] = {};
+      }
+    }
+    renderKnown();
+  }
+
+  function rmKnownAdd(url, target) {
+    if (!target) return;
+    if (target === "outbox" || target === "inbox") {
+      nip65Upsert(url, target === "outbox" ? "write" : "read"); // re-renders NIP-65
+    } else if (RM.lists[target]) {
+      const u = normWs(url);
+      if (u && RM.lists[target].indexOf(u) < 0) {
+        RM.lists[target].push(u);
+        renderTagList(target);
+      }
+    }
+    renderKnown(); // refresh the which-lists badges on this row
+  }
+
+  window.rmKnownSearch = function (v) {
+    RM.knownFilter = v || "";
+    renderKnown();
+  };
+
   // The Private (10013, NIP-37) list is read-only: NIP-37 keeps relays in the
   // encrypted content (public entries are rare), so this mostly shows the
   // decrypt reveal. Editing/re-encrypting waits for the encrypt side.
@@ -554,6 +708,19 @@
       .catch(() => {
         RM.appLoaded = true;
         renderApp();
+      });
+
+    renderKnown(); // initial spinner
+    fetch("/api/v1/client/known-relays")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        RM.known = Array.isArray(d) ? d : [];
+        RM.knownLoaded = true;
+        renderKnown();
+      })
+      .catch(() => {
+        RM.knownLoaded = true;
+        renderKnown();
       });
   }
 
