@@ -58,11 +58,11 @@ func AssembleProfileEvent(existing *nostr.Event, edits map[string]string) (*nost
 	}
 	tags := make([][]string, 0, len(existingTags)+len(edits))
 	for _, t := range existingTags {
-		if len(t) >= 1 && (edited[t[0]] || t[0] == "client") {
-			// Drop tags we're upserting below, and drop any "client" tag:
-			// kind-0 shouldn't advertise which app wrote it by default (e.g. a
-			// stale client:amethyst tag carried over from another client). A
-			// grain client tag can be an explicit opt-in later.
+		if len(t) >= 1 && edited[t[0]] {
+			// Drop tags we're upserting below. The `client` tag is handled by the
+			// build handler via ApplyClientTag (strip foreign + add grain's own per
+			// config / per-user setting), not here, so the library assembler stays
+			// policy-free.
 			continue
 		}
 		tags = append(tags, t)

@@ -15,8 +15,9 @@ import (
 // ProfileBuildRequest carries the user's existing kind-0 event and the field
 // edits to apply.
 type ProfileBuildRequest struct {
-	Event *nostr.Event      `json:"event"` // existing kind-0 (may be null for a first profile)
-	Edits map[string]string `json:"edits"`
+	Event     *nostr.Event      `json:"event"` // existing kind-0 (may be null for a first profile)
+	Edits     map[string]string `json:"edits"`
+	ClientTag *bool             `json:"client_tag,omitempty"` // nil = config default; else per-user override (#99)
 }
 
 // BuildProfileHandler merges the supplied field edits over the user's existing
@@ -73,6 +74,9 @@ func BuildProfileHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	en, nm := resolveClientTag(req.ClientTag)
+	core.ApplyClientTag(unsigned, en, nm)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(unsigned); err != nil {

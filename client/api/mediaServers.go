@@ -100,8 +100,9 @@ func annotateMediaServers(urls []string, kind string) []MediaServerEntry {
 // MediaServersBuildRequest carries the desired ordered server list for one
 // media-server list kind.
 type MediaServersBuildRequest struct {
-	Kind    int      `json:"kind"`    // 10063 (Blossom) or 10096 (NIP-96)
-	Servers []string `json:"servers"` // ordered base URLs, primary first
+	Kind      int      `json:"kind"`                 // 10063 (Blossom) or 10096 (NIP-96)
+	Servers   []string `json:"servers"`              // ordered base URLs, primary first
+	ClientTag *bool    `json:"client_tag,omitempty"` // nil = config default; else per-user override (#99)
 }
 
 // BuildMediaServersHandler assembles an UNSIGNED media-server list event for the
@@ -149,6 +150,9 @@ func BuildMediaServersHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	en, nm := resolveClientTag(req.ClientTag)
+	core.ApplyClientTag(unsigned, en, nm)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(unsigned); err != nil {

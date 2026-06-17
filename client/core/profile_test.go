@@ -73,9 +73,10 @@ func TestAssembleProfileEventPreservesAndDualWrites(t *testing.T) {
 	}
 }
 
-// A stale client tag (e.g. from Amethyst) must be stripped, not preserved —
-// kind-0 shouldn't advertise the writing app by default.
-func TestAssembleProfileEventStripsClientTag(t *testing.T) {
+// The assembler is now policy-free about the client tag: it preserves whatever
+// is there (the build handler applies ApplyClientTag to strip foreign + stamp
+// grain's own). This documents that division and the end-to-end result.
+func TestAssembleProfileEventClientTagHandledByHelper(t *testing.T) {
 	existing := &nostr.Event{
 		PubKey:  "abc",
 		Content: `{"name":"alice"}`,
@@ -85,20 +86,21 @@ func TestAssembleProfileEventStripsClientTag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tag := range got.Tags {
-		if tag[0] == "client" {
-			t.Fatalf("client tag should have been stripped, got tags %v", got.Tags)
-		}
+	// Assembler preserves the existing client tag (no longer strips it).
+	if !hasTag(got.Tags, "client", "amethyst") {
+		t.Errorf("assembler should preserve the client tag for the handler to rewrite, got %v", got.Tags)
 	}
-	// Other tags (NIP-39 i) are still preserved.
-	hasI := false
-	for _, tag := range got.Tags {
-		if tag[0] == "i" {
-			hasI = true
-		}
+	if !hasTag(got.Tags, "i", "github:alice") {
+		t.Error("non-client tags must be preserved")
 	}
-	if !hasI {
-		t.Error("non-client tags must still be preserved")
+
+	// The handler's helper then strips the foreign tag and stamps grain's.
+	ApplyClientTag(got, true, "grain")
+	if hasTag(got.Tags, "client", "amethyst") {
+		t.Error("ApplyClientTag should strip the foreign client tag")
+	}
+	if !hasTag(got.Tags, "client", "grain") || countTag(got.Tags, "client") != 1 {
+		t.Errorf("ApplyClientTag should leave exactly one client:grain, got %v", got.Tags)
 	}
 }
 

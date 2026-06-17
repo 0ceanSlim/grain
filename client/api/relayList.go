@@ -12,8 +12,9 @@ import (
 
 // RelayListBuildRequest carries the desired relay list for one kind.
 type RelayListBuildRequest struct {
-	Kind    int                   `json:"kind"`    // 10002 | 10050 | 10006 | 10007 | 10012
-	Entries []core.RelayListEntry `json:"entries"` // ordered; Read/Write apply to 10002 only
+	Kind      int                   `json:"kind"`                 // 10002 | 10050 | 10006 | 10007 | 10012
+	Entries   []core.RelayListEntry `json:"entries"`              // ordered; Read/Write apply to 10002 only
+	ClientTag *bool                 `json:"client_tag,omitempty"` // nil = config default; else per-user override (#99)
 }
 
 // BuildRelayListHandler assembles an UNSIGNED relay-list event for the session
@@ -59,6 +60,9 @@ func BuildRelayListHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	en, nm := resolveClientTag(req.ClientTag)
+	core.ApplyClientTag(unsigned, en, nm)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(unsigned); err != nil {

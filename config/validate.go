@@ -51,6 +51,16 @@ func ValidateAndApplyDefaults(cfg *cfgType.ServerConfig) (warnings []string, err
 		warnings = append(warnings, "server.implicit_req_limit was 0, defaulting to 500")
 	}
 
+	// Client (built-in Nostr client) defaults. An unset client_tag block (empty
+	// name) means "never configured" → grain's client tag is on, named "grain"
+	// (#99). Once the admin section writes it, the name is non-empty so this
+	// won't re-trigger and an explicit `enabled: false` is respected.
+	if cfg.Client.ClientTag.Name == "" {
+		cfg.Client.ClientTag.Name = "grain"
+		cfg.Client.ClientTag.Enabled = true
+		warnings = append(warnings, "client.client_tag unset, defaulting to enabled (\"grain\")")
+	}
+
 	// Logging defaults
 	if cfg.Logging.Level == "" {
 		cfg.Logging.Level = "info"
