@@ -226,7 +226,11 @@
       const resp = await fetch("/api/v1/user/media-servers/build", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: numericKind, servers: list }),
+        body: JSON.stringify({
+          kind: numericKind,
+          servers: list,
+          client_tag: window.grainClientTag ? window.grainClientTag.enabled() : true,
+        }),
       });
       if (!resp.ok) {
         setStatus(kind, "Couldn't build the list: " + (await resp.text()));

@@ -799,7 +799,11 @@
       resp = await fetch("/api/v1/user/relay-list/build", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: kind, entries: entries }),
+        body: JSON.stringify({
+          kind: kind,
+          entries: entries,
+          client_tag: window.grainClientTag ? window.grainClientTag.enabled() : true,
+        }),
       });
     } catch (e) {
       setStatus(statusId, "Network error.");

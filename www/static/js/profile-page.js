@@ -558,7 +558,11 @@
       const buildResp = await fetch("/api/v1/user/profile/build", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event: profileData.profile, edits }),
+        body: JSON.stringify({
+          event: profileData.profile,
+          edits,
+          client_tag: window.grainClientTag ? window.grainClientTag.enabled() : true,
+        }),
       });
       if (!buildResp.ok) throw new Error(await buildResp.text());
       const unsigned = await buildResp.json();

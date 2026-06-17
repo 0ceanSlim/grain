@@ -405,6 +405,25 @@
         </details>
       </div>
 
+      <!-- Client tag (#99) -->
+      <div class="p-6 mb-8 text-left bg-surface rounded-lg">
+        <h2 class="mb-1 text-xl font-semibold text-text">🏷️ Client tag</h2>
+        <p class="mb-3 text-sm text-text-muted">
+          When on, grain stamps a <code>client:grain</code> tag on events you
+          publish (profile, relay &amp; media lists, notes) so others can see they
+          came from grain. grain always removes other apps' client tags. Turn this
+          off to publish without any client tag.
+        </p>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input
+            id="client-tag-toggle"
+            type="checkbox"
+            onchange="window.grainClientTag && window.grainClientTag.set(this.checked)"
+          />
+          <span class="text-sm text-text">Stamp grain's client tag on my events</span>
+        </label>
+      </div>
+
       <!-- Key Information -->
       <div class="p-6 mb-8 bg-surface rounded-lg">
         <h2 class="mb-4 text-xl font-semibold text-text">
@@ -495,6 +514,16 @@
       // Give the script tag time to load
       setTimeout(safeInitializeSettings, 10);
     }
+
+    // Reflect the stored client-tag preference into its toggle (#99).
+    (function initClientTagToggle() {
+      var cb = document.getElementById("client-tag-toggle");
+      if (cb && window.grainClientTag) {
+        cb.checked = window.grainClientTag.enabled();
+      } else {
+        setTimeout(initClientTagToggle, 50);
+      }
+    })();
 
     // Watchdog: the relay-manager and media-servers sections load themselves,
     // independently of the cache fetch that hides this spinner. If that fetch

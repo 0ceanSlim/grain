@@ -55,6 +55,8 @@
          doesn't flash the wrong palette during paint. theme.js
          exposes window.GrainTheme for the header swapper. -->
     <script src="/static/js/theme.js?v={{assetVersion}}"></script>
+    <!-- Per-user client-tag preference (#99); read by the build-request callers. -->
+    <script src="/static/js/client-tag.js?v={{assetVersion}}"></script>
 
     <!-- Load external libraries first. These will be replaced on build with local minified
      versions and the build step will replace the tailwind cdn and compile the full minified css -->
