@@ -198,6 +198,20 @@
         </h3>
         <div id="rm-app-relays" class="space-y-3"></div>
 
+        <!-- ── NIP-42 AUTH requests (was "Trusted") ── -->
+        <h3
+          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
+        >
+          Relays requesting AUTH · NIP-42
+        </h3>
+        <p class="mb-2 text-xs text-text-muted">
+          Relays that asked grain to authenticate this session. Authenticate with
+          your signer to use them — each stays trusted until you remove it or your
+          session ends. If a relay re-challenges, your signer prompts you again.
+        </p>
+        <div id="rm-auth-list" class="space-y-1.5"></div>
+        <p id="rm-auth-status" class="mt-1 text-xs text-text-secondary"></p>
+
         <!-- Shared autocomplete source for every "add a relay" input above —
              populated from the known set by relay-manager.js. -->
         <datalist id="rm-known-options"></datalist>

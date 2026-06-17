@@ -25,7 +25,6 @@
     { key: "indexer", title: "Indexer", badge: "seed", active: true, note: "Seed relays grain uses to discover everyone's relay lists." },
     { key: "broadcast", title: "Broadcast", badge: "blast", active: true, note: "Every event you publish is also mirrored here — and these are blast/broadcast relays that re-send it onward to many other relays." },
     { key: "local", title: "Local", badge: "local", active: false, note: "Same-device / LAN relays. Stored now; routing preference coming." },
-    { key: "trusted", title: "Trusted", badge: "auth", active: false, note: "The only relays grain will sign NIP-42 AUTH for. Stored now; AUTH coming (#101)." },
   ];
 
   const RM = {
@@ -45,6 +44,8 @@
     knownExpanded: {}, // url -> true (shared by the browser AND in-list rows)
     knownSort: "relevance", // "relevance" | "ping"
     knownPing: {}, // url -> ms | -1(unreachable) | "pending"
+    auth: [], // [{ relay, challenge, authed, at }] — NIP-42 AUTH requests
+    authLoaded: false,
     loaded: false,
   };
 
@@ -407,6 +408,127 @@
     }
   }
   window.rmAppSave = rmAppSave;
+
+  // ── NIP-42 AUTH requests ──────────────────────────────────────────────
+  // Relays that challenged grain for AUTH this session. Authenticate signs a
+  // kind-22242 event with the browser signer; grain relays it on the same
+  // connection. A relay stays trusted for the session once answered.
+
+  function authRow(a) {
+    const dotCls = a.authed ? "bg-success" : "bg-warning";
+    const status = a.authed
+      ? `<span class="px-1.5 py-0.5 text-xs rounded shrink-0 bg-surface-inset text-success">trusted · session</span>`
+      : `<span class="px-1.5 py-0.5 text-xs rounded shrink-0 bg-surface-inset text-warning">challenged</span>`;
+    const authBtn = a.authed
+      ? ""
+      : `<button data-auth-go="${esc(a.relay)}" class="px-2.5 py-1 text-xs rounded shrink-0 text-text-on-accent bg-accent hover:opacity-80">Authenticate</button>`;
+    return (
+      `<div class="flex items-center gap-2 px-3 py-2 border rounded-lg bg-surface-elevated border-border">` +
+      `<span class="w-2 h-2 rounded-full shrink-0 ${dotCls}" title="${a.authed ? "authed" : "challenged"}"></span>` +
+      `<a href="${esc(httpish(a.relay))}" target="_blank" rel="noopener" class="flex-1 min-w-0 text-sm truncate text-text hover:text-accent hover:underline">${esc(shortRelay(a.relay))}</a>` +
+      status +
+      authBtn +
+      `<button data-auth-remove="${esc(a.relay)}" class="px-1 text-lg leading-none shrink-0 text-text-muted hover:text-danger" title="Forget for this session">×</button>` +
+      `</div>`
+    );
+  }
+
+  function renderAuth() {
+    const box = document.getElementById("rm-auth-list");
+    if (!box) return;
+    if (!RM.authLoaded) {
+      box.innerHTML = spinnerRow("Checking…");
+      return;
+    }
+    if (!RM.auth.length) {
+      box.innerHTML = emptyRow("No relays have requested authentication this session.");
+      return;
+    }
+    box.innerHTML = RM.auth
+      .slice()
+      .sort((a, b) => Number(a.authed) - Number(b.authed) || a.relay.localeCompare(b.relay))
+      .map(authRow)
+      .join("");
+    box.querySelectorAll("[data-auth-go]").forEach((b) => {
+      b.onclick = () => rmAuthenticate(b.getAttribute("data-auth-go"));
+    });
+    box.querySelectorAll("[data-auth-remove]").forEach((b) => {
+      b.onclick = () => rmAuthRemove(b.getAttribute("data-auth-remove"));
+    });
+  }
+
+  function rmAuthRefresh() {
+    fetch("/api/v1/client/auth-requests")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        RM.auth = Array.isArray(d) ? d : [];
+        RM.authLoaded = true;
+        renderAuth();
+      })
+      .catch(() => {
+        RM.authLoaded = true;
+        renderAuth();
+      });
+  }
+
+  async function rmAuthenticate(relay) {
+    const a = RM.auth.find((x) => x.relay === relay);
+    if (!a || !a.challenge) {
+      rmAuthRefresh();
+      return;
+    }
+    if (typeof window.restoreSigner === "function") {
+      try {
+        await window.restoreSigner();
+      } catch (_) {}
+    }
+    const signer = window.grainSigner;
+    if (!signer || typeof signer.signEvent !== "function") {
+      setStatus("rm-auth-status", "Signer unavailable — reconnect to authenticate.");
+      return;
+    }
+    setStatus("rm-auth-status", "Signing AUTH for " + shortRelay(relay) + "…");
+    let signed;
+    try {
+      signed = await signer.signEvent({
+        kind: 22242,
+        created_at: Math.floor(Date.now() / 1000),
+        content: "",
+        tags: [
+          ["relay", relay],
+          ["challenge", a.challenge],
+        ],
+      });
+    } catch (_) {
+      setStatus("rm-auth-status", "Signing declined.");
+      return;
+    }
+    try {
+      const resp = await fetch("/api/v1/client/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ relay: relay, event: signed }),
+      });
+      const d = resp.ok ? await resp.json() : {};
+      setStatus(
+        "rm-auth-status",
+        d.success ? "✓ Authenticated to " + shortRelay(relay) + "." : "AUTH failed: " + (d.error || "relay unreachable")
+      );
+    } catch (_) {
+      setStatus("rm-auth-status", "AUTH request failed.");
+    }
+    rmAuthRefresh();
+  }
+
+  function rmAuthRemove(relay) {
+    fetch("/api/v1/client/auth/remove", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ relay: relay }),
+    })
+      .catch(function () {})
+      .finally(rmAuthRefresh);
+  }
 
   // ── Known-relays browser ──────────────────────────────────────────────
   // Browse every relay grain has seen (config seeds + your mailboxes + ones
@@ -788,8 +910,13 @@
     renderApp();
     renderAll(); // spinners while loaded === false
     refreshOverview();
+    renderAuth(); // initial spinner
+    rmAuthRefresh();
     if (window.__rmOverviewTimer) clearInterval(window.__rmOverviewTimer);
-    window.__rmOverviewTimer = setInterval(refreshOverview, 5000);
+    window.__rmOverviewTimer = setInterval(() => {
+      refreshOverview();
+      rmAuthRefresh(); // AUTH challenges arrive async during pool activity
+    }, 5000);
 
     fetch("/api/v1/user/relay-lists")
       .then((r) => (r.ok ? r.json() : null))
