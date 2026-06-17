@@ -209,6 +209,9 @@ func nip44Decrypt(priv *btcec.PrivateKey, peerPub *btcec.PublicKey, payload stri
 	switch ver {
 	case nip44VersionV2:
 		return nip44DecryptV2(payload, nip44ConversationKeyV2(priv, peerPub))
+	case nip44VersionV3:
+		// v3 authenticates an event kind + scope the generic seam doesn't carry.
+		return "", errors.New("nip44: v3 payload requires kind+scope context")
 	default:
 		return "", fmt.Errorf("nip44: unsupported version %d", ver)
 	}

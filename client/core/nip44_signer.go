@@ -1,6 +1,7 @@
 package core
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 
@@ -30,6 +31,30 @@ func (es *EventSigner) NIP44Decrypt(peerPubKey, payload string) (string, error) 
 		return "", err
 	}
 	return nip44Decrypt(es.privateKey, pub, payload)
+}
+
+// NIP44V3Encrypt encrypts plaintext to peerPubKey under NIP-44 v3, binding the
+// event kind and scope. v3 is a draft — prefer NIP44Encrypt (v2) for interop.
+func (es *EventSigner) NIP44V3Encrypt(peerPubKey string, kind uint32, scope, plaintext []byte) (string, error) {
+	pub, err := xOnlyPubFromHex(peerPubKey)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
+		return "", err
+	}
+	return nip44EncryptV3(es.privateKey, pub, kind, scope, plaintext, nonce)
+}
+
+// NIP44V3Decrypt decrypts a NIP-44 v3 payload from peerPubKey, requiring it to
+// match the expected kind + scope.
+func (es *EventSigner) NIP44V3Decrypt(peerPubKey string, expectedKind uint32, expectedScope []byte, payload string) ([]byte, error) {
+	pub, err := xOnlyPubFromHex(peerPubKey)
+	if err != nil {
+		return nil, err
+	}
+	return nip44DecryptV3(es.privateKey, pub, expectedKind, expectedScope, payload)
 }
 
 // xOnlyPubFromHex parses a 64-char hex x-only pubkey into a curve point.

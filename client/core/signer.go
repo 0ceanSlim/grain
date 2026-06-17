@@ -37,8 +37,19 @@ type Encrypter interface {
 	NIP44Decrypt(peerPubKey, payload string) (string, error)
 }
 
-// The built-in local-key signer satisfies both seams.
+// EncrypterV3 is the optional NIP-44 v3 capability: encryption that additionally
+// binds an event kind and a scope string (cross-context replay protection +
+// signer access control). v3 is a draft proposal with few deployed peers, so
+// prefer [Encrypter] (v2) for interop; this exists so downstream consumers can
+// opt in. kind is a uint32; scope is a UTF-8 byte string (may be empty).
+type EncrypterV3 interface {
+	NIP44V3Encrypt(peerPubKey string, kind uint32, scope, plaintext []byte) (string, error)
+	NIP44V3Decrypt(peerPubKey string, expectedKind uint32, expectedScope []byte, payload string) ([]byte, error)
+}
+
+// The built-in local-key signer satisfies the seams.
 var (
-	_ Signer    = (*EventSigner)(nil)
-	_ Encrypter = (*EventSigner)(nil)
+	_ Signer      = (*EventSigner)(nil)
+	_ Encrypter   = (*EventSigner)(nil)
+	_ EncrypterV3 = (*EventSigner)(nil)
 )
