@@ -75,6 +75,11 @@ type MessageRouter struct {
 	subscriptions map[string]*Subscription
 	okWaiters     map[string]chan OKResult // event id -> waiter (set during a publish)
 	mu            sync.RWMutex
+
+	// NIP-42: per-relay AUTH state observed this session (the latest challenge a
+	// relay sent and whether we've authed to it). Guarded by authMu.
+	authMu     sync.RWMutex
+	authStates map[string]*AuthState // relayURL -> state
 }
 
 // NewMessageRouter creates a new message router
@@ -82,6 +87,7 @@ func NewMessageRouter() *MessageRouter {
 	return &MessageRouter{
 		subscriptions: make(map[string]*Subscription),
 		okWaiters:     make(map[string]chan OKResult),
+		authStates:    make(map[string]*AuthState),
 	}
 }
 
@@ -614,6 +620,15 @@ func (rc *RelayConnection) processMessage(message string) error {
 			}
 			log.ClientCore().Debug("Received OK message", "relay", rc.URL, "accepted", accepted, "reason", reason)
 			rc.messageRouter.RouteOK(eventID, OKResult{Relay: rc.URL, Accepted: accepted, Reason: reason})
+		}
+	case "AUTH":
+		// NIP-42: ["AUTH", <challenge>]. Record the challenge for the session so
+		// the relay manager can surface it and the browser signer can answer it.
+		if len(messageArray) >= 2 {
+			if challenge, ok := messageArray[1].(string); ok && challenge != "" {
+				log.ClientCore().Debug("Received AUTH challenge", "relay", rc.URL)
+				rc.messageRouter.RouteAuth(rc.URL, challenge)
+			}
 		}
 	default:
 		log.ClientCore().Debug("Unknown message type", "relay", rc.URL, "type", messageType)
