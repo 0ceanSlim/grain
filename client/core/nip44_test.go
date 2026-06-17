@@ -233,3 +233,44 @@ func sha256Hex(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:])
 }
+
+// TestNIP44EventSignerRoundTrip exercises the Encrypter seam: self-encryption
+// (NIP-51 lists), a two-party round trip, and rejection by a wrong key.
+func TestNIP44EventSignerRoundTrip(t *testing.T) {
+	alice, err := NewEventSignerFromRandom()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := NewEventSignerFromRandom()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const msg = "hello, private relay list 🌾"
+
+	// Self-encryption — how NIP-51 private list content is stored.
+	selfCt, err := alice.NIP44Encrypt(alice.PublicKey(), msg)
+	if err != nil {
+		t.Fatalf("self encrypt: %v", err)
+	}
+	if got, err := alice.NIP44Decrypt(alice.PublicKey(), selfCt); err != nil || got != msg {
+		t.Fatalf("self round-trip: got %q err %v", got, err)
+	}
+
+	// Two-party: both sides derive the same conversation key.
+	ct, err := alice.NIP44Encrypt(bob.PublicKey(), msg)
+	if err != nil {
+		t.Fatalf("a->b encrypt: %v", err)
+	}
+	if got, err := bob.NIP44Decrypt(alice.PublicKey(), ct); err != nil || got != msg {
+		t.Fatalf("a->b round-trip: got %q err %v", got, err)
+	}
+
+	// A third party can't read it.
+	carol, err := NewEventSignerFromRandom()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := carol.NIP44Decrypt(alice.PublicKey(), ct); err == nil {
+		t.Error("expected decrypt with wrong key to fail")
+	}
+}

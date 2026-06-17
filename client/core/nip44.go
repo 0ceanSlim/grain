@@ -2,6 +2,7 @@ package core
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
@@ -172,6 +173,45 @@ func nip44DecryptV2(payloadB64 string, convKey []byte) (string, error) {
 		return "", err
 	}
 	return string(unpadded), nil
+}
+
+// nip44PayloadVersion peeks the version byte of a base64 payload without
+// decrypting, so decrypt can route to the right scheme (v2 and v3 derive their
+// conversation keys differently).
+func nip44PayloadVersion(payload string) (byte, error) {
+	if len(payload) == 0 || payload[0] == '#' {
+		return 0, errors.New("nip44: unsupported payload version")
+	}
+	data, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil || len(data) < 1 {
+		return 0, errors.New("nip44: invalid payload")
+	}
+	return data[0], nil
+}
+
+// nip44Encrypt encrypts plaintext from priv to peerPub using the default scheme
+// (v2 — the deployed standard) with a fresh random nonce. v3 stays opt-in until
+// the proposal has deployed peers.
+func nip44Encrypt(priv *btcec.PrivateKey, peerPub *btcec.PublicKey, plaintext string) (string, error) {
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
+		return "", err
+	}
+	return nip44EncryptV2(plaintext, nip44ConversationKeyV2(priv, peerPub), nonce)
+}
+
+// nip44Decrypt routes a payload to the matching version's decryptor.
+func nip44Decrypt(priv *btcec.PrivateKey, peerPub *btcec.PublicKey, payload string) (string, error) {
+	ver, err := nip44PayloadVersion(payload)
+	if err != nil {
+		return "", err
+	}
+	switch ver {
+	case nip44VersionV2:
+		return nip44DecryptV2(payload, nip44ConversationKeyV2(priv, peerPub))
+	default:
+		return "", fmt.Errorf("nip44: unsupported version %d", ver)
+	}
 }
 
 // nip44HMACAad is HMAC-SHA256 over (aad || message) — NIP-44 authenticates the
