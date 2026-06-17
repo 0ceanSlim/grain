@@ -345,7 +345,7 @@
           `<p class="mt-0.5 mb-1.5 text-xs text-text-muted">${esc(rr.note)}</p>` +
           `<div class="space-y-1.5">${rows}</div>` +
           `<div class="flex gap-2 mt-2">` +
-          `<input data-app-input="${esc(rr.key)}" type="text" placeholder="Add a relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />` +
+          `<input data-app-input="${esc(rr.key)}" type="text" placeholder="Add a relay…" list="rm-known-options" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />` +
           `<button data-app-add="${esc(rr.key)}" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>` +
           `</div></div>`
         );
@@ -424,6 +424,23 @@
       if ((RM.lists[k] || []).indexOf(u) >= 0) out.push(k);
     });
     return out;
+  }
+
+  // Fill the shared <datalist> that every "add a relay" input autocompletes
+  // from. Connected/pinned float up so the native dropdown's top matches are the
+  // useful ones.
+  function populateKnownDatalist() {
+    const dl = document.getElementById("rm-known-options");
+    if (!dl) return;
+    dl.innerHTML = RM.known
+      .slice()
+      .sort((a, b) => {
+        const ra = a.connected ? 0 : a.pinned ? 1 : 2;
+        const rb = b.connected ? 0 : b.pinned ? 1 : 2;
+        return ra - rb || a.url.localeCompare(b.url);
+      })
+      .map((k) => `<option value="${esc(k.url)}"></option>`)
+      .join("");
   }
 
   function knownNip11(info) {
@@ -825,6 +842,7 @@
           (k) => (RM.knownMap[k.url] = { connected: k.connected, pinned: k.pinned })
         );
         RM.knownLoaded = true;
+        populateKnownDatalist(); // autocomplete source for every add-relay input
         renderKnown();
         renderAll(); // in-list rows now pick up their status dots
       })

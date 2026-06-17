@@ -77,7 +77,7 @@
           <p class="mt-0.5 mb-2 text-xs text-text-muted">Where you publish. Others fetch your notes here.</p>
           <div id="rm-outbox-list" class="space-y-1.5"></div>
           <div class="flex gap-2 mt-2">
-            <input id="rm-outbox-input" type="text" placeholder="Add an outbox relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />
+            <input id="rm-outbox-input" type="text" placeholder="Add an outbox relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" list="rm-known-options" />
             <button onclick="rmAddOutbox()" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
           </div>
         </div>
@@ -90,7 +90,7 @@
           <p class="mt-0.5 mb-2 text-xs text-text-muted">Where replies, mentions, and zaps reach you.</p>
           <div id="rm-inbox-list" class="space-y-1.5"></div>
           <div class="flex gap-2 mt-2">
-            <input id="rm-inbox-input" type="text" placeholder="Add an inbox relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />
+            <input id="rm-inbox-input" type="text" placeholder="Add an inbox relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" list="rm-known-options" />
             <button onclick="rmAddInbox()" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
           </div>
         </div>
@@ -109,7 +109,7 @@
           <p class="mt-0.5 mb-2 text-xs text-text-muted">Where your private (gift-wrapped) direct messages are delivered.</p>
           <div id="rm-dm-list" class="space-y-1.5"></div>
           <div class="flex gap-2 mt-2">
-            <input id="rm-dm-input" type="text" placeholder="Add a DM relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />
+            <input id="rm-dm-input" type="text" placeholder="Add a DM relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" list="rm-known-options" />
             <button onclick="rmAdd('dm')" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
           </div>
           <div class="flex items-center justify-between gap-3 mt-2">
@@ -134,7 +134,7 @@
           <p class="mt-0.5 mb-2 text-xs text-text-muted">Relays grain queries when you search.</p>
           <div id="rm-search-list" class="space-y-1.5"></div>
           <div class="flex gap-2 mt-2">
-            <input id="rm-search-input" type="text" placeholder="Add a search relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />
+            <input id="rm-search-input" type="text" placeholder="Add a search relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" list="rm-known-options" />
             <button onclick="rmAdd('search')" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
           </div>
           <div class="flex items-center justify-between gap-3 mt-2">
@@ -152,7 +152,7 @@
           <p class="mt-0.5 mb-2 text-xs text-text-muted">Relays you've starred to browse.</p>
           <div id="rm-favorites-list" class="space-y-1.5"></div>
           <div class="flex gap-2 mt-2">
-            <input id="rm-favorites-input" type="text" placeholder="Add a favorite relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />
+            <input id="rm-favorites-input" type="text" placeholder="Add a favorite relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" list="rm-known-options" />
             <button onclick="rmAdd('favorites')" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
           </div>
           <div class="flex items-center justify-between gap-3 mt-2">
@@ -170,7 +170,7 @@
           <p class="mt-0.5 mb-2 text-xs text-text-muted">grain never connects to these.</p>
           <div id="rm-blocked-list" class="space-y-1.5"></div>
           <div class="flex gap-2 mt-2">
-            <input id="rm-blocked-input" type="text" placeholder="Add a blocked relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />
+            <input id="rm-blocked-input" type="text" placeholder="Add a blocked relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" list="rm-known-options" />
             <button onclick="rmAdd('blocked')" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
           </div>
           <div class="flex items-center justify-between gap-3 mt-2">
@@ -197,6 +197,10 @@
           App relays · grain's plumbing
         </h3>
         <div id="rm-app-relays" class="space-y-3"></div>
+
+        <!-- Shared autocomplete source for every "add a relay" input above —
+             populated from the known set by relay-manager.js. -->
+        <datalist id="rm-known-options"></datalist>
 
         <!-- ── Known relays (browse + add) — accent card so it stands apart ── -->
         <div class="p-4 mt-6 border rounded-xl border-accent bg-accent-dim">
