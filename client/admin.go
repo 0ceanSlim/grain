@@ -407,6 +407,7 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 			}},
 		{ID: "event_time_constraints", Title: "Event time constraints", Icon: "⏱️", Method: "grain_updateeventtimeconstraints", Config: cfg.EventTimeConstraints},
 		{ID: "backup_relay", Title: "Backup relay", Icon: "🪞", Method: "grain_updatebackuprelay", Config: cfg.BackupRelay},
+		{ID: "client", Title: "Client", Icon: "🧩", Method: "grain_updateclient", Config: cfg.Client},
 		{ID: "rate_limit", Title: "Rate limit", Icon: "🚦", Method: "grain_updateratelimit",
 			Config: RateLimitSectionData{
 				Config:              cfg.RateLimit,

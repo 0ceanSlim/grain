@@ -209,6 +209,8 @@ func dispatchNIP86(req nip86Request, signer string) (any, string) {
 		return runUpdateAuth(req.Params, signer)
 	case "grain_updatebackuprelay":
 		return runUpdateBackupRelay(req.Params, signer)
+	case "grain_updateclient":
+		return runUpdateClient(req.Params, signer)
 	case "grain_updateresourcelimits":
 		return runUpdateResourceLimits(req.Params, signer)
 	case "grain_updateeventtimeconstraints":

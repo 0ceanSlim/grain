@@ -56,6 +56,8 @@
           {{template "admin-event_time_constraints" .Config}}
         {{else if eq .ID "backup_relay"}}
           {{template "admin-backup_relay" .Config}}
+        {{else if eq .ID "client"}}
+          {{template "admin-client" .Config}}
         {{else if eq .ID "rate_limit"}}
           {{template "admin-rate_limit" .Config}}
         {{else if eq .ID "resource_limits"}}
