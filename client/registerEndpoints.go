@@ -156,6 +156,10 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/relay-info", api.RelayInfoHandler)
 	// TCP-connect latency for a set of relays — the browser's "fastest first" sort.
 	mux.HandleFunc("/api/v1/relays/ping", api.PingRelaysHandler)
+	// NIP-42 AUTH: relays that have challenged us, answer one, revoke one.
+	mux.HandleFunc("/api/v1/client/auth-requests", api.AuthRequestsHandler)
+	mux.HandleFunc("/api/v1/client/auth", api.SubmitAuthHandler)
+	mux.HandleFunc("/api/v1/client/auth/remove", api.RemoveAuthHandler)
 
 	// Event querying endpoints
 	mux.HandleFunc("/api/v1/events/query", api.QueryEventsHandler)
