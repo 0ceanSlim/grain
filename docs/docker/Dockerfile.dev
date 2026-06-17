@@ -49,6 +49,20 @@ RUN mkdir -p www/static/mill \
     && curl -fsSL -o www/static/mill/mill.umd.min.js \
         "https://cdn.jsdelivr.net/npm/nostr-mill@${MILL_VERSION}/dist/mill.umd.min.js"
 
+# swagger-ui-dist for the API docs page (/api/docs). Pinned to match the
+# release/test images. Lands in www/static/swagger/ (embedded via //go:embed
+# www/*). Without these the docs shell's JS/CSS 404 and the page renders blank.
+ARG SWAGGER_UI_VERSION=5.17.14
+RUN mkdir -p www/static/swagger \
+    && curl -fsSL -o /tmp/swagger.tgz \
+        "https://registry.npmjs.org/swagger-ui-dist/-/swagger-ui-dist-${SWAGGER_UI_VERSION}.tgz" \
+    && tar -xzf /tmp/swagger.tgz -C /tmp \
+    && cp /tmp/package/swagger-ui-bundle.js \
+          /tmp/package/swagger-ui-standalone-preset.js \
+          /tmp/package/swagger-ui.css \
+          www/static/swagger/ \
+    && rm -rf /tmp/swagger.tgz /tmp/package
+
 # Self-hosted webfonts (token stacks reference Space Grotesk, JetBrains
 # Mono, Comfortaa). Without them the @font-face declarations 404 and
 # the page falls back to system fonts.
@@ -60,12 +74,15 @@ RUN mkdir -p www/static/fonts \
          done; \
        done
 
-# main.go embeds docs/openapi/swagger.json via //go:embed. The release
-# build runs swag here; the dev image doesn't need a real spec, so a
-# stub keeps the embed directive happy.
+# main.go embeds docs/openapi/swagger.json via //go:embed. Use a real spec if
+# the build context carries one (run `make generate` on the host — it's
+# gitignored but copied in); otherwise write a stub so the embed directive is
+# satisfied without forcing swag into every dev rebuild.
 RUN mkdir -p docs/openapi \
-    && echo '{"swagger":"2.0","info":{"title":"grain dev","version":"dev"},"paths":{}}' \
-        > docs/openapi/swagger.json
+    && if [ ! -s docs/openapi/swagger.json ]; then \
+         echo '{"swagger":"2.0","info":{"title":"grain dev","version":"dev"},"paths":{}}' \
+           > docs/openapi/swagger.json; \
+       fi
 
 # Compile. CGO_ENABLED=1 because nostrdb is a C library.
 RUN CGO_ENABLED=1 go build -buildvcs=false -o /out/grain .
