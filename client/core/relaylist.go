@@ -188,9 +188,13 @@ type UserRelayLists struct {
 	Blocked   []string         `json:"blocked"`   // 10006
 	Search    []string         `json:"search"`    // 10007
 	Favorites []string         `json:"favorites"` // 10012
-	// Encrypted flags NIP-51 lists whose event carried NIP-44 private content —
-	// entries grain can't read yet (#100); only the public entries are listed.
+	// Encrypted flags NIP-51 lists whose event carried NIP-44/NIP-04 private
+	// content; only the public entries are listed in the fields above.
 	Encrypted EncryptedFlags `json:"encrypted"`
+	// EncryptedContent carries the raw private content blob per list so the
+	// browser — which holds the user's signer — can decrypt it on demand (#100).
+	// grain itself never decrypts; it just passes the opaque blob through.
+	EncryptedContent EncryptedContent `json:"encrypted_content"`
 }
 
 // EncryptedFlags reports which NIP-51 lists have private (encrypted) entries.
@@ -198,6 +202,15 @@ type EncryptedFlags struct {
 	Blocked   bool `json:"blocked"`
 	Search    bool `json:"search"`
 	Favorites bool `json:"favorites"`
+}
+
+// EncryptedContent holds the raw (still-encrypted) `.content` of each NIP-51
+// list that has private entries, keyed by the same names as EncryptedFlags.
+// Empty strings when a list has no private content.
+type EncryptedContent struct {
+	Blocked   string `json:"blocked,omitempty"`
+	Search    string `json:"search,omitempty"`
+	Favorites string `json:"favorites,omitempty"`
 }
 
 // OwnListRelays returns the relay set to read a user's own replaceable lists
@@ -238,14 +251,17 @@ func (c *Client) FetchUserRelayLists(pubkey string) *UserRelayLists {
 	go fetch(10006, func(ev *nostr.Event) {
 		out.Blocked = ParseRelayTagURLs(ev)
 		out.Encrypted.Blocked = ev.Content != ""
+		out.EncryptedContent.Blocked = ev.Content
 	})
 	go fetch(10007, func(ev *nostr.Event) {
 		out.Search = ParseRelayTagURLs(ev)
 		out.Encrypted.Search = ev.Content != ""
+		out.EncryptedContent.Search = ev.Content
 	})
 	go fetch(10012, func(ev *nostr.Event) {
 		out.Favorites = ParseRelayTagURLs(ev)
 		out.Encrypted.Favorites = ev.Content != ""
+		out.EncryptedContent.Favorites = ev.Content
 	})
 	wg.Wait()
 	return out

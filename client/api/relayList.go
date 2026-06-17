@@ -76,6 +76,9 @@ type UserRelayListsResponse struct {
 	Search    []string              `json:"search"`    // 10007
 	Favorites []string              `json:"favorites"` // 10012
 	Encrypted core.EncryptedFlags   `json:"encrypted"` // NIP-51 lists with private (encrypted) entries
+	// EncryptedContent is the raw encrypted blob per list so the browser can
+	// decrypt it with the user's signer on demand (#100). grain never decrypts.
+	EncryptedContent core.EncryptedContent `json:"encrypted_content"`
 }
 
 // GetUserRelayListsHandler resolves a user's relay lists (NIP-65 10002, NIP-17
@@ -109,13 +112,14 @@ func GetUserRelayListsHandler(w http.ResponseWriter, r *http.Request) {
 
 	lists := coreClient.ResolveUserRelayLists(pubkey)
 	resp := UserRelayListsResponse{
-		Pubkey:    pubkey,
-		NIP65:     lists.NIP65,
-		DM:        lists.DM,
-		Blocked:   lists.Blocked,
-		Search:    lists.Search,
-		Favorites: lists.Favorites,
-		Encrypted: lists.Encrypted,
+		Pubkey:           pubkey,
+		NIP65:            lists.NIP65,
+		DM:               lists.DM,
+		Blocked:          lists.Blocked,
+		Search:           lists.Search,
+		Favorites:        lists.Favorites,
+		Encrypted:        lists.Encrypted,
+		EncryptedContent: lists.EncryptedContent,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

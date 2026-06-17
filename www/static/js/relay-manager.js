@@ -29,6 +29,9 @@
     nip65: [], // [{ url, read, write }]
     lists: { dm: [], search: [], favorites: [], blocked: [] },
     encrypted: {}, // key -> true when the list carries NIP-44 private entries (#100)
+    encryptedContent: {}, // key -> raw encrypted blob; the browser decrypts on demand
+    decrypted: {}, // key -> [urls] once the user clicks Decrypt (read-only reveal)
+    pubkey: "", // session user, for NIP-51 self-decrypt
     loaded: false,
   };
 
@@ -73,13 +76,104 @@
   function emptyRow(text) {
     return `<div class="px-3 py-3 text-sm text-center border border-dashed rounded-lg text-text-muted border-border-strong">${esc(text)}</div>`;
   }
-  // Shown on a NIP-51 list whose event carries NIP-44 private entries grain
-  // can't read yet — so it reads as private rather than empty/broken (#100).
-  function encryptedHint() {
+  // NIP-51 list `.content` is encrypted to the author themselves; try NIP-44
+  // then NIP-04 (per NIP-51). Returns null if neither scheme works. The signer
+  // holds the key — grain only ever passes the opaque blob through (#100).
+  async function decryptContent(signer, selfPubkey, content) {
+    if (signer && signer.nip44 && signer.nip44.decrypt) {
+      try {
+        return await signer.nip44.decrypt(selfPubkey, content);
+      } catch (_) {}
+    }
+    if (signer && signer.nip04 && signer.nip04.decrypt) {
+      try {
+        return await signer.nip04.decrypt(selfPubkey, content);
+      } catch (_) {}
+    }
+    return null;
+  }
+  // Pull relay URLs from a decrypted NIP-51 tag array (["relay", url] / ["r", url]).
+  function parseDecryptedRelays(plain) {
+    let tags;
+    try {
+      tags = JSON.parse(plain);
+    } catch (_) {
+      return null;
+    }
+    if (!Array.isArray(tags)) return null;
+    const out = [];
+    for (const t of tags) {
+      if (Array.isArray(t) && (t[0] === "relay" || t[0] === "r") && typeof t[1] === "string") {
+        const u = normWs(t[1]);
+        if (u && out.indexOf(u) < 0) out.push(u);
+      }
+    }
+    return out;
+  }
+  // The private-entries block for a list whose event carries encrypted content:
+  // a Decrypt button, then the revealed entries (read-only) once decrypted (#100).
+  // Read-only on purpose — re-encrypting on save needs the encrypt side (later).
+  function encryptedSection(key) {
+    const dec = RM.decrypted[key];
+    if (dec) {
+      const rows = dec.length
+        ? dec
+            .map(
+              (u) =>
+                `<div class="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg bg-surface-inset border-border">` +
+                `<span class="shrink-0" title="Private (encrypted) entry">🔒</span>` +
+                `<a href="${esc(httpish(u))}" target="_blank" rel="noopener" class="flex-1 min-w-0 truncate text-text hover:text-accent hover:underline">${esc(shortRelay(u))}</a></div>`
+            )
+            .join("")
+        : `<div class="px-3 py-2 text-xs text-text-muted">No private entries.</div>`;
+      return (
+        `<div class="mt-1.5 space-y-1.5">` +
+        `<div class="px-1 text-xs text-text-muted">🔓 Private entries (read-only — editing comes with the encrypt side):</div>` +
+        rows +
+        `</div>`
+      );
+    }
+    if (!RM.encryptedContent[key]) {
+      return (
+        `<div class="flex items-center gap-2 px-3 py-2 text-xs rounded-lg text-text-muted bg-surface-inset">` +
+        `🔒 This list has encrypted (private) entries.</div>`
+      );
+    }
     return (
-      `<div class="flex items-center gap-2 px-3 py-2 text-xs rounded-lg text-text-muted bg-surface-inset">` +
-      `🔒 This list has encrypted (private) entries — decrypt support coming.</div>`
+      `<div class="flex items-center justify-between gap-2 px-3 py-2 text-xs rounded-lg text-text-muted bg-surface-inset">` +
+      `<span>🔒 This list has encrypted (private) entries.</span>` +
+      `<button data-rm-decrypt="${esc(key)}" class="px-2 py-1 rounded shrink-0 text-text bg-surface-overlay hover:bg-surface-hover">🔓 Decrypt</button>` +
+      `</div>`
     );
+  }
+  // Decrypt a list's private entries with the user's signer and reveal them.
+  async function rmDecrypt(key) {
+    const content = RM.encryptedContent[key];
+    if (!content) return;
+    if (typeof window.restoreSigner === "function") {
+      try {
+        await window.restoreSigner();
+      } catch (_) {}
+    }
+    const signer = window.grainSigner;
+    if (!signer) {
+      setStatus("rm-" + key + "-status", "Signer unavailable — reconnect to decrypt.");
+      return;
+    }
+    setStatus("rm-" + key + "-status", "Decrypting…");
+    const plain = await decryptContent(signer, RM.pubkey, content);
+    if (plain == null) {
+      setStatus("rm-" + key + "-status", "Couldn't decrypt — signer declined or no NIP-44 support.");
+      return;
+    }
+    const urls = parseDecryptedRelays(plain);
+    if (urls == null) {
+      setStatus("rm-" + key + "-status", "Decrypted, but couldn't parse the entries.");
+      return;
+    }
+    RM.decrypted[key] = urls;
+    setStatus("rm-" + key + "-status", "");
+    renderTagList(key);
   }
   function relayRow(url, removeAttr) {
     return (
@@ -129,7 +223,7 @@
       : enc
       ? ""
       : emptyRow("None yet.");
-    if (enc) html += encryptedHint();
+    if (enc) html += encryptedSection(key);
     box.innerHTML = html;
     box.querySelectorAll("[data-rm]").forEach((b) => {
       b.onclick = () => {
@@ -137,6 +231,9 @@
         RM.lists[key] = RM.lists[key].filter((x) => x !== u);
         renderTagList(key);
       };
+    });
+    box.querySelectorAll("[data-rm-decrypt]").forEach((b) => {
+      b.onclick = () => rmDecrypt(b.getAttribute("data-rm-decrypt"));
     });
   }
 
@@ -313,6 +410,8 @@
           RM.lists.favorites = d.favorites || [];
           RM.lists.blocked = d.blocked || [];
           RM.encrypted = d.encrypted || {};
+          RM.encryptedContent = d.encrypted_content || {};
+          RM.pubkey = d.pubkey || "";
         }
         RM.loaded = true;
         renderAll();
@@ -344,6 +443,8 @@
           const key = map[m.kind];
           RM.lists[key] = d[key] || [];
           RM.encrypted = d.encrypted || RM.encrypted;
+          RM.encryptedContent = d.encrypted_content || RM.encryptedContent;
+          delete RM.decrypted[key]; // changed elsewhere — re-show the Decrypt button
           renderTagList(key);
         }
       })
