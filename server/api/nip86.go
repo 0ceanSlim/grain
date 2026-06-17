@@ -81,7 +81,7 @@ type nip86IPEntry struct {
 // @Description
 // @Description **Spec methods (writes):** `banpubkey` / `unbanpubkey` / `allowpubkey` / `unallowpubkey` (params: `[pubkey, reason?]`), `allowkind` / `disallowkind` (params: `[kind:int]`), `blockip` / `unblockip` (params: `[ip-or-cidr, reason?]`), `changerelayname` / `changerelaydescription` / `changerelayicon` (params: `[value:string]`).
 // @Description
-// @Description **Grain vendor extensions (writes):** `grain_updateserver`, `grain_updateratelimit`, `grain_updateeventpurge`, `grain_updatelogging`, `grain_updateauth`, `grain_updatebackuprelay`, `grain_updateresourcelimits`, `grain_updateeventtimeconstraints`, `grain_updatewhitelistconfig`, `grain_updateblacklistconfig`. Each takes the full section blob as `params[0]` (same shape the matching GET endpoint returns) and stages it to disk; the response is `{ok:true, restart_pending:true}`. Operator clicks Apply → dashboard calls `grain_reloadconfig`.
+// @Description **Grain vendor extensions (writes):** `grain_updateserver`, `grain_updateratelimit`, `grain_updateeventpurge`, `grain_updatelogging`, `grain_updateauth`, `grain_updatebackuprelay`, `grain_updateclient`, `grain_updateresourcelimits`, `grain_updateeventtimeconstraints`, `grain_updatewhitelistconfig`, `grain_updateblacklistconfig`. Each takes the full section blob as `params[0]` (same shape the matching GET endpoint returns) and stages it to disk; the response is `{ok:true, restart_pending:true}`. Operator clicks Apply → dashboard calls `grain_reloadconfig`.
 // @Description
 // @Description **Grain vendor extensions (ops + reads):** `grain_reloadconfig` (triggers restart), `grain_refreshcache` (synchronous whitelist + blacklist cache refresh), `grain_whitelistconfig` / `grain_blacklistconfig` (full-struct reads — the blacklist read overlays IP fields from config.yml so the dashboard sees one coherent shape), `grain_stats_overview` (server counters + list/cache stats).
 // @Description
@@ -278,6 +278,7 @@ func supportedNIP86Methods() []string {
 		"grain_updatelogging",
 		"grain_updateauth",
 		"grain_updatebackuprelay",
+		"grain_updateclient",
 		"grain_updateresourcelimits",
 		"grain_updateeventtimeconstraints",
 		"grain_updatewhitelistconfig",

@@ -31,7 +31,7 @@ type ProfileBuildRequest struct {
 // @Tags         client
 // @Accept       json
 // @Produce      json
-// @Success      200  {object}  nostr.Event
+// @Success      200  {object}  relay.Event
 // @Failure      400  {string}  string  "Invalid request"
 // @Failure      401  {string}  string  "Authentication required"
 // @Failure      403  {string}  string  "Pubkey mismatch"
