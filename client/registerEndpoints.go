@@ -151,6 +151,9 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/client/fixed-relays", api.FixedRelaysHandler)
 	// Session app-relay preferences (local roles: indexer/broadcast/local/trusted).
 	mux.HandleFunc("/api/v1/client/app-relays", api.AppRelaysHandler)
+	// Known-relays browser: list the known set + per-relay NIP-11 (cached).
+	mux.HandleFunc("/api/v1/client/known-relays", api.KnownRelaysHandler)
+	mux.HandleFunc("/api/v1/relay-info", api.RelayInfoHandler)
 
 	// Event querying endpoints
 	mux.HandleFunc("/api/v1/events/query", api.QueryEventsHandler)

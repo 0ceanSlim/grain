@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sort"
 	"time"
 
 	"github.com/0ceanslim/grain/server/utils/log"
@@ -312,9 +313,15 @@ func (rp *RelayPool) allURLs() []string {
 // has resolved. Known climbs as you interact; connections grow on demand.
 func (c *Client) PoolStats() PoolStats {
 	s := c.relayPool.Stats()
+	s.Known = len(c.knownSet())
+	return s
+}
 
+// knownSet is the distinct relays the client is aware of: the effective index
+// seeds, every relay in the pool, and every relay the directory has resolved.
+func (c *Client) knownSet() map[string]struct{} {
 	known := make(map[string]struct{})
-	for _, u := range c.config.IndexRelays {
+	for _, u := range c.indexRelays() {
 		known[u] = struct{}{}
 	}
 	for _, u := range c.relayPool.allURLs() {
@@ -323,8 +330,59 @@ func (c *Client) PoolStats() PoolStats {
 	for _, u := range c.directory.KnownRelays() {
 		known[u] = struct{}{}
 	}
-	s.Known = len(known)
-	return s
+	return known
+}
+
+// KnownRelays returns the known set as a sorted slice — the relays behind
+// PoolStats.Known, for the known-relays browser.
+func (c *Client) KnownRelays() []string {
+	known := c.knownSet()
+	out := make([]string, 0, len(known))
+	for u := range known {
+		out = append(out, u)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// RelayLiveStatus is the pool's live view of one relay for the known-relays
+// browser. The zero value means "known but not currently in the pool".
+type RelayLiveStatus struct {
+	Connected bool `json:"connected"`
+	Pinned    bool `json:"pinned"`
+	Leased    bool `json:"leased"`
+}
+
+// StatusOf returns the pool's live status for url.
+func (rp *RelayPool) StatusOf(url string) RelayLiveStatus {
+	rp.mu.RLock()
+	defer rp.mu.RUnlock()
+	st := RelayLiveStatus{Pinned: rp.pinned[url]}
+	if conn, ok := rp.connections[url]; ok {
+		conn.mu.RLock()
+		st.Connected = conn.Status == StatusConnected
+		st.Leased = conn.leases > 0
+		conn.mu.RUnlock()
+	}
+	return st
+}
+
+// KnownRelayStatus pairs a known relay URL with its live pool status, for the
+// known-relays browser.
+type KnownRelayStatus struct {
+	URL string `json:"url"`
+	RelayLiveStatus
+}
+
+// KnownRelaysWithStatus returns every known relay (sorted) annotated with its
+// live pool status. NIP-11 detail is fetched separately, lazily, per relay.
+func (c *Client) KnownRelaysWithStatus() []KnownRelayStatus {
+	urls := c.KnownRelays()
+	out := make([]KnownRelayStatus, 0, len(urls))
+	for _, u := range urls {
+		out = append(out, KnownRelayStatus{URL: u, RelayLiveStatus: c.relayPool.StatusOf(u)})
+	}
+	return out
 }
 
 // StartEvictionSweeper runs evictIdle on an interval until ctx is cancelled,

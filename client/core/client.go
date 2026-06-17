@@ -57,6 +57,11 @@ type Client struct {
 	// appRelaysMu. These are session preferences, not published Nostr lists.
 	appRelaysMu sync.Mutex
 	appRelays   map[Role][]string
+
+	// relayInfoCache TTL-caches relays' NIP-11 documents for the known-relays
+	// browser (#98). A plain HTTP GET per relay, not a pool connection.
+	relayInfoMu    sync.Mutex
+	relayInfoCache map[string]relayInfoEntry
 }
 
 // NewClient creates a new Nostr client instance
@@ -76,6 +81,7 @@ func NewClient(config *Config) *Client {
 	c.relayListsCache = make(map[string]relayListsEntry)
 	c.relayListsInflight = make(map[string]chan struct{})
 	c.appRelays = make(map[Role][]string)
+	c.relayInfoCache = make(map[string]relayInfoEntry)
 	return c
 }
 
