@@ -62,6 +62,12 @@ type Client struct {
 	// browser (#98). A plain HTTP GET per relay, not a pool connection.
 	relayInfoMu    sync.Mutex
 	relayInfoCache map[string]relayInfoEntry
+
+	// relayPingCache short-TTL-caches TCP-connect latency per relay for the
+	// known-relays "fastest first" sort (#98). A cheap reachability probe, not a
+	// pool/WebSocket round-trip.
+	relayPingMu    sync.Mutex
+	relayPingCache map[string]relayPingEntry
 }
 
 // NewClient creates a new Nostr client instance
@@ -82,6 +88,7 @@ func NewClient(config *Config) *Client {
 	c.relayListsInflight = make(map[string]chan struct{})
 	c.appRelays = make(map[Role][]string)
 	c.relayInfoCache = make(map[string]relayInfoEntry)
+	c.relayPingCache = make(map[string]relayPingEntry)
 	return c
 }
 

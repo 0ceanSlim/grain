@@ -40,8 +40,11 @@
     known: [], // [{ url, connected, pinned, leased }] — the known-relays browser
     knownLoaded: false,
     knownFilter: "",
+    knownMap: {}, // url -> { connected, pinned } — status lookup for in-list rows
     knownInfo: {}, // url -> NIP-11 object | null(pending)
-    knownExpanded: {}, // url -> true
+    knownExpanded: {}, // url -> true (shared by the browser AND in-list rows)
+    knownSort: "relevance", // "relevance" | "ping"
+    knownPing: {}, // url -> ms | -1(unreachable) | "pending"
     loaded: false,
   };
 
@@ -185,11 +188,56 @@
     setStatus("rm-" + key + "-status", "");
     renderTagList(key);
   }
+  // Status dot shared by in-list rows and the known-relays browser.
+  function dotMarkup(connected, pinned) {
+    const cls = connected ? "bg-success" : pinned ? "bg-accent" : "bg-text-muted";
+    const title = connected ? "connected" : pinned ? "pinned" : "known";
+    return `<span class="w-2 h-2 rounded-full shrink-0 ${cls}" title="${title}"></span>`;
+  }
+  // Status dot for an in-list relay, looked up from the known-relays pool status.
+  function relayStatusDot(url) {
+    const st = RM.knownMap[normWs(url)] || RM.knownMap[url] || {};
+    return dotMarkup(st.connected, st.pinned);
+  }
+  // The NIP-11 detail block for an expanded relay row — shared everywhere.
+  // Lazily filled by rmRelayInfoToggle.
+  function relayInfoDetailHTML(url) {
+    if (!RM.knownExpanded[url]) return "";
+    const info = RM.knownInfo[url];
+    return info === null
+      ? `<div class="px-3 pb-2 text-xs text-text-muted">Loading NIP-11…</div>`
+      : knownNip11(info);
+  }
+  // Toggle a relay's NIP-11 detail (shared by in-list rows + the browser).
+  // Fetches lazily, then re-renders both so the row updates wherever it appears.
+  async function rmRelayInfoToggle(url) {
+    RM.knownExpanded[url] = !RM.knownExpanded[url];
+    if (RM.knownExpanded[url] && RM.knownInfo[url] === undefined) {
+      RM.knownInfo[url] = null; // pending
+      renderAll();
+      renderKnown();
+      try {
+        const r = await fetch("/api/v1/relay-info?url=" + encodeURIComponent(url));
+        RM.knownInfo[url] = r.ok ? await r.json() : {};
+      } catch (_) {
+        RM.knownInfo[url] = {};
+      }
+    }
+    renderAll();
+    renderKnown();
+  }
+
   function relayRow(url, removeAttr) {
+    const expanded = !!RM.knownExpanded[url];
     return (
-      `<div class="flex items-center gap-2.5 px-3 py-2 border rounded-lg bg-surface-elevated border-border">` +
+      `<div class="border rounded-lg bg-surface-elevated border-border">` +
+      `<div class="flex items-center gap-2.5 px-3 py-2">` +
+      relayStatusDot(url) +
       `<a href="${esc(httpish(url))}" target="_blank" rel="noopener" class="flex-1 min-w-0 text-sm font-medium truncate text-text hover:text-accent hover:underline">${esc(shortRelay(url))}</a>` +
+      `<button data-relay-info="${esc(url)}" class="px-1 leading-none shrink-0 text-text-secondary hover:text-text" title="NIP-11 info">${expanded ? "▴" : "▾"}</button>` +
       `<button ${removeAttr} class="px-1 text-lg leading-none shrink-0 text-text-muted hover:text-danger" title="Remove">×</button>` +
+      `</div>` +
+      relayInfoDetailHTML(url) +
       `</div>`
     );
   }
@@ -216,6 +264,14 @@
     });
     ib.querySelectorAll("[data-ib]").forEach((b) => {
       b.onclick = () => nip65Remove(b.getAttribute("data-ib"), "read");
+    });
+    wireRelayInfo(ob);
+    wireRelayInfo(ib);
+  }
+  // Wire the ▾ NIP-11 expanders within a list container.
+  function wireRelayInfo(box) {
+    box.querySelectorAll("[data-relay-info]").forEach((b) => {
+      b.onclick = () => rmRelayInfoToggle(b.getAttribute("data-relay-info"));
     });
   }
 
@@ -245,6 +301,7 @@
     box.querySelectorAll("[data-rm-decrypt]").forEach((b) => {
       b.onclick = () => rmDecrypt(b.getAttribute("data-rm-decrypt"));
     });
+    wireRelayInfo(box);
   }
 
   function appRow(key, url) {
@@ -381,19 +438,22 @@
     return `<div class="px-3 pb-2.5 space-y-0.5 text-xs text-text-secondary">${rows.join("")}</div>`;
   }
 
+  // A latency badge (TCP-connect ms) once a relay has been pinged — green/amber/
+  // red by speed, "—" if unreachable, a spinner while in flight.
+  function pingBadge(url) {
+    const p = RM.knownPing[url];
+    if (p === undefined) return "";
+    if (p === "pending")
+      return `<span class="inline-block w-3 h-3 border rounded-full shrink-0 border-text-secondary border-t-transparent animate-spin" title="pinging…"></span>`;
+    if (p === -1)
+      return `<span class="text-xs shrink-0 text-text-muted" title="unreachable">—</span>`;
+    const cls = p < 150 ? "text-success" : p < 500 ? "text-warning" : "text-danger";
+    return `<span class="font-mono text-xs shrink-0 ${cls}" title="TCP connect latency">${p}ms</span>`;
+  }
+
   function knownRow(k) {
-    const inLists = knownInLists(k.url);
-    const dotCls = k.connected ? "bg-success" : k.pinned ? "bg-accent" : "bg-text-muted";
-    const dotTitle = k.connected ? "connected" : k.pinned ? "pinned" : "known";
     const expanded = !!RM.knownExpanded[k.url];
-    const info = RM.knownInfo[k.url];
-    let detail = "";
-    if (expanded)
-      detail =
-        info === null
-          ? `<div class="px-3 pb-2 text-xs text-text-muted">Loading NIP-11…</div>`
-          : knownNip11(info);
-    const badges = inLists
+    const badges = knownInLists(k.url)
       .map(
         (l) =>
           `<span class="px-1.5 py-0.5 text-xs rounded bg-surface-inset text-text-secondary">${esc(l)}</span>`
@@ -402,8 +462,9 @@
     return (
       `<div class="border rounded-lg bg-surface-elevated border-border">` +
       `<div class="flex items-center gap-2 px-3 py-2">` +
-      `<span class="w-2 h-2 rounded-full shrink-0 ${dotCls}" title="${dotTitle}"></span>` +
+      dotMarkup(k.connected, k.pinned) +
       `<a href="${esc(httpish(k.url))}" target="_blank" rel="noopener" class="flex-1 min-w-0 text-sm truncate text-text hover:text-accent hover:underline" title="${esc(k.url)}">${esc(shortRelay(k.url))}</a>` +
+      pingBadge(k.url) +
       badges +
       `<select data-known-add="${esc(k.url)}" class="px-1 py-1 text-xs border rounded shrink-0 bg-surface-overlay text-text border-border">` +
       `<option value="">+ list…</option>` +
@@ -411,27 +472,32 @@
       `<option value="search">Search</option><option value="favorites">Favorites</option>` +
       `<option value="blocked">Blocked</option><option value="dm">DM</option>` +
       `</select>` +
-      `<button data-known-toggle="${esc(k.url)}" class="px-1 leading-none shrink-0 text-text-secondary hover:text-text" title="NIP-11 info">${expanded ? "▴" : "▾"}</button>` +
+      `<button data-relay-info="${esc(k.url)}" class="px-1 leading-none shrink-0 text-text-secondary hover:text-text" title="NIP-11 info">${expanded ? "▴" : "▾"}</button>` +
       `</div>` +
-      detail +
+      relayInfoDetailHTML(k.url) +
       `</div>`
     );
   }
 
-  function renderKnown() {
-    const box = document.getElementById("rm-known-list");
-    if (!box) return;
-    if (!RM.knownLoaded) {
-      box.innerHTML = spinnerRow("Loading known relays…");
-      return;
-    }
+  // Ping-sort rank: measured latency first (ascending), unknown/pending in the
+  // middle, unreachable last.
+  function pingRank(url) {
+    const p = RM.knownPing[url];
+    if (typeof p === "number") return p < 0 ? 2e6 : p;
+    return 1e6;
+  }
+
+  // The filtered known set in the active sort order — shared by render and the
+  // ping pass so "visible" means the same thing in both.
+  function knownOrdered() {
     const q = (RM.knownFilter || "").toLowerCase();
     const filtered = q
       ? RM.known.filter((k) => k.url.toLowerCase().indexOf(q) >= 0)
       : RM.known;
-    if (!filtered.length) {
-      box.innerHTML = emptyRow(q ? "No matches." : "No known relays yet.");
-      return;
+    if (RM.knownSort === "ping") {
+      return filtered
+        .slice()
+        .sort((a, b) => pingRank(a.url) - pingRank(b.url) || a.url.localeCompare(b.url));
     }
     // Relevance-first: connected, then pinned, then ones already in your lists,
     // then the rest alphabetically — so the top of 900+ is actually useful.
@@ -440,15 +506,29 @@
       r: k.connected ? 0 : k.pinned ? 1 : knownInLists(k.url).length ? 2 : 3,
     }));
     ranked.sort((a, b) => a.r - b.r || a.k.url.localeCompare(b.k.url));
-    const ordered = ranked.map((x) => x.k);
-    const cap = 150;
-    let html = ordered.slice(0, cap).map(knownRow).join("");
-    if (filtered.length > cap)
-      html += `<div class="px-3 py-1.5 text-xs text-text-muted">+${filtered.length - cap} more — type to filter.</div>`;
+    return ranked.map((x) => x.k);
+  }
+
+  const KNOWN_CAP = 150; // rows rendered at once
+  const PING_BATCH = 50; // relays pinged per pass
+
+  function renderKnown() {
+    const box = document.getElementById("rm-known-list");
+    if (!box) return;
+    if (!RM.knownLoaded) {
+      box.innerHTML = spinnerRow("Loading known relays…");
+      return;
+    }
+    const ordered = knownOrdered();
+    if (!ordered.length) {
+      box.innerHTML = emptyRow(RM.knownFilter ? "No matches." : "No known relays yet.");
+      return;
+    }
+    let html = ordered.slice(0, KNOWN_CAP).map(knownRow).join("");
+    if (ordered.length > KNOWN_CAP)
+      html += `<div class="px-3 py-1.5 text-xs text-text-muted">+${ordered.length - KNOWN_CAP} more — type to filter.</div>`;
     box.innerHTML = html;
-    box.querySelectorAll("[data-known-toggle]").forEach((b) => {
-      b.onclick = () => rmKnownToggle(b.getAttribute("data-known-toggle"));
-    });
+    wireRelayInfo(box); // shared ▾ NIP-11 toggles
     box.querySelectorAll("[data-known-add]").forEach((s) => {
       s.onchange = () => {
         rmKnownAdd(s.getAttribute("data-known-add"), s.value);
@@ -457,17 +537,26 @@
     });
   }
 
-  async function rmKnownToggle(url) {
-    RM.knownExpanded[url] = !RM.knownExpanded[url];
-    if (RM.knownExpanded[url] && RM.knownInfo[url] === undefined) {
-      RM.knownInfo[url] = null; // pending — show the loader
-      renderKnown();
-      try {
-        const r = await fetch("/api/v1/relay-info?url=" + encodeURIComponent(url));
-        RM.knownInfo[url] = r.ok ? await r.json() : {};
-      } catch (_) {
-        RM.knownInfo[url] = {};
-      }
+  // Ping the relays currently in view we haven't measured yet, then re-render
+  // (which re-sorts when in "fastest" mode).
+  async function rmKnownPingVisible() {
+    const urls = knownOrdered()
+      .slice(0, PING_BATCH)
+      .map((k) => k.url)
+      .filter((u) => RM.knownPing[u] === undefined);
+    if (!urls.length) return;
+    urls.forEach((u) => (RM.knownPing[u] = "pending"));
+    renderKnown();
+    try {
+      const r = await fetch("/api/v1/relays/ping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls }),
+      });
+      const d = r.ok ? await r.json() : {};
+      urls.forEach((u) => (RM.knownPing[u] = typeof d[u] === "number" ? d[u] : -1));
+    } catch (_) {
+      urls.forEach((u) => (RM.knownPing[u] = -1));
     }
     renderKnown();
   }
@@ -486,9 +575,16 @@
     renderKnown(); // refresh the which-lists badges on this row
   }
 
+  window.rmKnownSort = function (v) {
+    RM.knownSort = v === "ping" ? "ping" : "relevance";
+    renderKnown();
+    if (RM.knownSort === "ping") rmKnownPingVisible();
+  };
+
   window.rmKnownSearch = function (v) {
     RM.knownFilter = v || "";
     renderKnown();
+    if (RM.knownSort === "ping") rmKnownPingVisible();
   };
 
   // The Private (10013, NIP-37) list is read-only: NIP-37 keeps relays in the
@@ -715,8 +811,13 @@
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         RM.known = Array.isArray(d) ? d : [];
+        RM.knownMap = {};
+        RM.known.forEach(
+          (k) => (RM.knownMap[k.url] = { connected: k.connected, pinned: k.pinned })
+        );
         RM.knownLoaded = true;
         renderKnown();
+        renderAll(); // in-list rows now pick up their status dots
       })
       .catch(() => {
         RM.knownLoaded = true;
