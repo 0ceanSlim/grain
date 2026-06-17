@@ -50,6 +50,13 @@ type Client struct {
 	fixedMode  bool
 	fixedRead  []string
 	fixedWrite []string
+
+	// appRelays holds the session's editable overrides for the locally-configured
+	// roles (Indexer/Broadcast/Local/Trusted), seeded from config. An unset role
+	// falls back to config (the index relays) or has no effect. Guarded by
+	// appRelaysMu. These are session preferences, not published Nostr lists.
+	appRelaysMu sync.Mutex
+	appRelays   map[Role][]string
 }
 
 // NewClient creates a new Nostr client instance
@@ -68,6 +75,7 @@ func NewClient(config *Config) *Client {
 	c.mediaDir = newMediaDirectory(config.RelayListTTL, config.RelayListNegTTL, c.fetchUserMediaServersFromNetwork)
 	c.relayListsCache = make(map[string]relayListsEntry)
 	c.relayListsInflight = make(map[string]chan struct{})
+	c.appRelays = make(map[Role][]string)
 	return c
 }
 

@@ -198,7 +198,7 @@ func (c *Client) WarmRelays(pubkey string) {
 // index/seed relays for a user's latest kind 10002 (NIP-65) and 10050 (NIP-17)
 // events concurrently and maps them to relay roles.
 func (c *Client) fetchUserRelaysFromNetwork(pubkey string) *UserRelays {
-	relays := c.config.IndexRelays
+	relays := c.indexRelays()
 	if len(relays) == 0 {
 		relays = c.GetConnectedRelays()
 	}

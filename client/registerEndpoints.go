@@ -149,6 +149,8 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/user/relay-lists", api.GetUserRelayListsHandler)
 	mux.HandleFunc("/api/v1/user/relay-list/build", api.BuildRelayListHandler)
 	mux.HandleFunc("/api/v1/client/fixed-relays", api.FixedRelaysHandler)
+	// Session app-relay preferences (local roles: indexer/broadcast/local/trusted).
+	mux.HandleFunc("/api/v1/client/app-relays", api.AppRelaysHandler)
 
 	// Event querying endpoints
 	mux.HandleFunc("/api/v1/events/query", api.QueryEventsHandler)

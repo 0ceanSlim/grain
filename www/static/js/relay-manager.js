@@ -17,12 +17,15 @@
     { key: "favorites", kind: 10012 },
     { key: "blocked", kind: 10006 },
   ];
-  // App-relay categories not yet wired (rendered as "coming soon").
-  const COMING = [
-    ["Indexer", "seed", "Seed relays grain uses to discover everyone's relay lists."],
-    ["Broadcast", "local", "Event blasters — forward your posts out to many relays."],
-    ["Local", "local", "Same-device / LAN relays, preferred for speed."],
-    ["Trusted", "local", "The only relays grain signs NIP-42 AUTH for."],
+  // App relays — local session preferences (seeded from the operator's config),
+  // edited here and saved to /api/v1/client/app-relays. Indexer + Broadcast affect
+  // routing now; Local + Trusted are stored but inert (Local routing preference and
+  // Trusted NIP-42 AUTH are follow-ups).
+  const APP_ROLES = [
+    { key: "indexer", title: "Indexer", badge: "seed", active: true, note: "Seed relays grain uses to discover everyone's relay lists." },
+    { key: "broadcast", title: "Broadcast", badge: "blast", active: true, note: "Event blasters — your posts mirror out to these too." },
+    { key: "local", title: "Local", badge: "local", active: false, note: "Same-device / LAN relays. Stored now; routing preference coming." },
+    { key: "trusted", title: "Trusted", badge: "auth", active: false, note: "The only relays grain will sign NIP-42 AUTH for. Stored now; AUTH coming (#101)." },
   ];
 
   const RM = {
@@ -32,6 +35,8 @@
     encryptedContent: {}, // key -> raw encrypted blob; the browser decrypts on demand
     decrypted: {}, // key -> [urls] once the user clicks Decrypt (read-only reveal)
     pubkey: "", // session user, for NIP-51 self-decrypt
+    app: { indexer: [], broadcast: [], local: [], trusted: [] }, // local-role prefs
+    appLoaded: false,
     loaded: false,
   };
 
@@ -237,18 +242,100 @@
     });
   }
 
+  function appRow(key, url) {
+    return (
+      `<div class="flex items-center gap-2.5 px-3 py-2 border rounded-lg bg-surface-elevated border-border">` +
+      `<a href="${esc(httpish(url))}" target="_blank" rel="noopener" class="flex-1 min-w-0 text-sm font-medium truncate text-text hover:text-accent hover:underline">${esc(shortRelay(url))}</a>` +
+      `<button data-app-remove="${esc(url)}" data-app-key="${esc(key)}" class="px-1 text-lg leading-none shrink-0 text-text-muted hover:text-danger" title="Remove">×</button>` +
+      `</div>`
+    );
+  }
+
   function renderApp() {
     const box = document.getElementById("rm-app-relays");
     if (!box) return;
-    box.innerHTML = COMING.map(
-      ([title, badge, note]) =>
-        `<div class="opacity-60"><div class="flex items-center gap-2">` +
-        `<span class="text-sm font-medium text-text">${esc(title)}</span>` +
-        `<span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">${esc(badge)}</span>` +
-        `<span class="px-2 py-0.5 ml-auto text-xs rounded bg-surface-inset text-text-muted">coming soon</span></div>` +
-        `<p class="mt-0.5 text-xs text-text-muted">${esc(note)}</p></div>`
-    ).join("");
+    if (!RM.appLoaded) {
+      box.innerHTML = spinnerRow("Fetching…");
+      return;
+    }
+    box.innerHTML =
+      APP_ROLES.map((rr) => {
+        const list = RM.app[rr.key] || [];
+        const rows = list.length
+          ? list.map((u) => appRow(rr.key, u)).join("")
+          : `<div class="px-3 py-2 text-xs text-text-muted">None.</div>`;
+        return (
+          `<div class="${rr.active ? "" : "opacity-70"}">` +
+          `<div class="flex items-center gap-2">` +
+          `<span class="text-sm font-medium text-text">${esc(rr.title)}</span>` +
+          `<span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">${esc(rr.badge)}</span>` +
+          (rr.active ? "" : `<span class="px-2 py-0.5 ml-auto text-xs rounded bg-surface-inset text-text-muted">stored · inert</span>`) +
+          `</div>` +
+          `<p class="mt-0.5 mb-1.5 text-xs text-text-muted">${esc(rr.note)}</p>` +
+          `<div class="space-y-1.5">${rows}</div>` +
+          `<div class="flex gap-2 mt-2">` +
+          `<input data-app-input="${esc(rr.key)}" type="text" placeholder="Add a relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" />` +
+          `<button data-app-add="${esc(rr.key)}" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>` +
+          `</div></div>`
+        );
+      }).join("") +
+      `<div class="flex items-center justify-between gap-3 pt-3 mt-1 border-t border-border">` +
+      `<span class="text-xs text-text-muted">Session preferences — saved to grain, not published as events.</span>` +
+      `<button onclick="rmAppSave()" class="px-4 py-2 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Save</button>` +
+      `</div>` +
+      `<p id="rm-app-status" class="mt-1 text-xs text-right text-text-secondary"></p>`;
+    box.querySelectorAll("[data-app-add]").forEach((b) => {
+      b.onclick = () => {
+        const key = b.getAttribute("data-app-add");
+        const inp = box.querySelector('[data-app-input="' + key + '"]');
+        if (inp && inp.value.trim()) {
+          rmAppAdd(key, inp.value);
+          inp.value = "";
+        }
+      };
+    });
+    box.querySelectorAll("[data-app-remove]").forEach((b) => {
+      b.onclick = () => rmAppRemove(b.getAttribute("data-app-key"), b.getAttribute("data-app-remove"));
+    });
   }
+
+  function rmAppAdd(key, url) {
+    const u = normWs(url);
+    if (!u || !RM.app[key]) return;
+    if (RM.app[key].indexOf(u) < 0) RM.app[key].push(u);
+    renderApp();
+  }
+  function rmAppRemove(key, url) {
+    if (!RM.app[key]) return;
+    RM.app[key] = RM.app[key].filter((x) => x !== url);
+    renderApp();
+  }
+  async function rmAppSave() {
+    setStatus("rm-app-status", "Saving…");
+    try {
+      const resp = await fetch("/api/v1/client/app-relays", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(RM.app),
+      });
+      if (!resp.ok) {
+        setStatus("rm-app-status", "Save failed: " + (await resp.text()));
+        return;
+      }
+      const d = await resp.json();
+      RM.app = {
+        indexer: d.indexer || [],
+        broadcast: d.broadcast || [],
+        local: d.local || [],
+        trusted: d.trusted || [],
+      };
+      setStatus("rm-app-status", "✓ Saved.");
+      renderApp();
+    } catch (e) {
+      setStatus("rm-app-status", "Save failed.");
+    }
+  }
+  window.rmAppSave = rmAppSave;
 
   // The Private (10013, NIP-37) list is read-only: NIP-37 keeps relays in the
   // encrypted content (public entries are rare), so this mostly shows the
@@ -448,6 +535,25 @@
       .catch(() => {
         RM.loaded = true;
         renderAll();
+      });
+
+    fetch("/api/v1/client/app-relays")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) {
+          RM.app = {
+            indexer: d.indexer || [],
+            broadcast: d.broadcast || [],
+            local: d.local || [],
+            trusted: d.trusted || [],
+          };
+        }
+        RM.appLoaded = true;
+        renderApp();
+      })
+      .catch(() => {
+        RM.appLoaded = true;
+        renderApp();
       });
   }
 

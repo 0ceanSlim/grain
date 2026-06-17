@@ -40,7 +40,7 @@ func (c *Client) RouteFetch(pubkey string) []string {
 	if ur := c.ResolveRelays(pubkey); len(ur.Outbox) > 0 {
 		return ur.Outbox
 	}
-	return c.config.IndexRelays
+	return c.indexRelays()
 }
 
 // RouteMetadata returns the relays to fetch a user's profile/metadata (kind 0)
@@ -57,7 +57,7 @@ func (c *Client) RouteMetadata(pubkey string) []string {
 	if fixed, read := c.fixedReads(); fixed {
 		return read
 	}
-	relays := append([]string(nil), c.config.IndexRelays...)
+	relays := append([]string(nil), c.indexRelays()...)
 	if ur, ok := c.directory.Cached(pubkey); ok {
 		relays = appendUnique(relays, ur.Outbox)
 	}
@@ -80,7 +80,7 @@ func (c *Client) RoutePublish(event *nostr.Event) []string {
 	// indexer relays too — that's where clients fetch them for arbitrary users,
 	// so a profile update must reach the indexers, not just the author's outbox.
 	if isMetadataKind(event.Kind) {
-		relays = appendUnique(relays, c.config.IndexRelays)
+		relays = appendUnique(relays, c.indexRelays())
 	}
 
 	for _, pk := range pTaggedPubkeys(event) {
@@ -95,8 +95,12 @@ func (c *Client) RoutePublish(event *nostr.Event) []string {
 		relays = appendUnique(relays, inbox)
 	}
 
+	// Mirror writes to the session's broadcast relays ("event blasters"), if set,
+	// so a post fans out beyond the author's own outbox.
+	relays = appendUnique(relays, c.AppRelays(RoleBroadcast))
+
 	if len(relays) == 0 {
-		relays = c.config.IndexRelays
+		relays = c.indexRelays()
 	}
 	return relays
 }
@@ -147,7 +151,7 @@ func (c *Client) fixedReads() (bool, []string) {
 	if len(c.fixedRead) > 0 {
 		return true, append([]string(nil), c.fixedRead...)
 	}
-	return true, append([]string(nil), c.config.IndexRelays...)
+	return true, append([]string(nil), c.indexRelays()...)
 }
 
 // fixedWrites is the write-side counterpart of fixedReads.
@@ -160,5 +164,5 @@ func (c *Client) fixedWrites() (bool, []string) {
 	if len(c.fixedWrite) > 0 {
 		return true, append([]string(nil), c.fixedWrite...)
 	}
-	return true, append([]string(nil), c.config.IndexRelays...)
+	return true, append([]string(nil), c.indexRelays()...)
 }

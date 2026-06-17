@@ -143,7 +143,7 @@ func (c *Client) WarmMediaServers(pubkey string) {
 // republishing the list. Queries the index relays plus the user's cached
 // outbox, where these lists most often live.
 func (c *Client) FetchMediaServerList(pubkey string, kind int) *nostr.Event {
-	relays := c.config.IndexRelays
+	relays := c.indexRelays()
 	if ur, ok := c.directory.Cached(pubkey); ok {
 		relays = appendUnique(relays, ur.Outbox)
 	}
@@ -215,7 +215,7 @@ func AssembleMediaServerEvent(existing *nostr.Event, kind int, pubkey string, se
 // outbox is included without a blocking resolve (same rule as RouteMetadata);
 // for the logged-in user it is warmed by the mailbox lookup done at login.
 func (c *Client) fetchUserMediaServersFromNetwork(pubkey string) *MediaServers {
-	relays := c.config.IndexRelays
+	relays := c.indexRelays()
 	if len(relays) == 0 {
 		relays = c.GetConnectedRelays()
 	}

@@ -69,7 +69,7 @@ func (c *Client) FetchEvents(ctx context.Context, filters []nostr.Filter, relays
 // refresh. All relay URLs are normalised on the way in (see normalizeRelayURL),
 // so near-duplicates collapse.
 func (c *Client) SeedKnownRelays() {
-	relays := c.config.IndexRelays
+	relays := c.indexRelays()
 	if len(relays) == 0 {
 		return
 	}

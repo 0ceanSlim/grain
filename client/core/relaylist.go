@@ -109,7 +109,7 @@ func AssembleRelayListEvent(existing *nostr.Event, kind int, pubkey string, entr
 // kind, or nil. Used by the build flow to preserve non-relay tags on republish.
 // Mirrors FetchMediaServerList: index relays plus the user's cached outbox.
 func (c *Client) FetchRelayList(pubkey string, kind int) *nostr.Event {
-	relays := c.config.IndexRelays
+	relays := c.indexRelays()
 	if ur, ok := c.directory.Cached(pubkey); ok {
 		relays = appendUnique(relays, ur.Outbox)
 	}
@@ -221,7 +221,7 @@ type EncryptedContent struct {
 // NIP-51/17 lists live on their own relays, which a cold load may not have
 // cached. Shared by FetchUserRelayLists and the live-sync subscription.
 func (c *Client) OwnListRelays(pubkey string) []string {
-	relays := append([]string(nil), c.config.IndexRelays...)
+	relays := append([]string(nil), c.indexRelays()...)
 	ur := c.ResolveRelays(pubkey) // blocking resolve — own user is cached post-login
 	relays = appendUnique(relays, ur.Outbox)
 	relays = appendUnique(relays, ur.Inbox)
