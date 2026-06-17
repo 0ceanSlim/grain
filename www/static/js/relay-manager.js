@@ -23,7 +23,7 @@
   // Trusted NIP-42 AUTH are follow-ups).
   const APP_ROLES = [
     { key: "indexer", title: "Indexer", badge: "seed", active: true, note: "Seed relays grain uses to discover everyone's relay lists." },
-    { key: "broadcast", title: "Broadcast", badge: "blast", active: true, note: "Event blasters — your posts mirror out to these too." },
+    { key: "broadcast", title: "Broadcast", badge: "blast", active: true, note: "Every event you publish is also mirrored here — and these are blast/broadcast relays that re-send it onward to many other relays." },
     { key: "local", title: "Local", badge: "local", active: false, note: "Same-device / LAN relays. Stored now; routing preference coming." },
     { key: "trusted", title: "Trusted", badge: "auth", active: false, note: "The only relays grain will sign NIP-42 AUTH for. Stored now; AUTH coming (#101)." },
   ];
@@ -199,6 +199,15 @@
     const st = RM.knownMap[normWs(url)] || RM.knownMap[url] || {};
     return dotMarkup(st.connected, st.pinned);
   }
+  // The NIP-11 expander — a labelled pill button (not a bare chevron) so it's
+  // clear the row opens for more info.
+  function infoToggleBtn(url, expanded) {
+    return (
+      `<button data-relay-info="${esc(url)}" title="${expanded ? "Hide" : "Show"} relay info (NIP-11)" ` +
+      `class="flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium border rounded shrink-0 border-border bg-surface-overlay text-text-secondary hover:text-text hover:bg-surface-hover">` +
+      `<span>info</span><span class="text-[0.65rem] leading-none">${expanded ? "▲" : "▼"}</span></button>`
+    );
+  }
   // The NIP-11 detail block for an expanded relay row — shared everywhere.
   // Lazily filled by rmRelayInfoToggle.
   function relayInfoDetailHTML(url) {
@@ -234,7 +243,7 @@
       `<div class="flex items-center gap-2.5 px-3 py-2">` +
       relayStatusDot(url) +
       `<a href="${esc(httpish(url))}" target="_blank" rel="noopener" class="flex-1 min-w-0 text-sm font-medium truncate text-text hover:text-accent hover:underline">${esc(shortRelay(url))}</a>` +
-      `<button data-relay-info="${esc(url)}" class="px-1 leading-none shrink-0 text-text-secondary hover:text-text" title="NIP-11 info">${expanded ? "▴" : "▾"}</button>` +
+      infoToggleBtn(url, expanded) +
       `<button ${removeAttr} class="px-1 text-lg leading-none shrink-0 text-text-muted hover:text-danger" title="Remove">×</button>` +
       `</div>` +
       relayInfoDetailHTML(url) +
@@ -472,7 +481,7 @@
       `<option value="search">Search</option><option value="favorites">Favorites</option>` +
       `<option value="blocked">Blocked</option><option value="dm">DM</option>` +
       `</select>` +
-      `<button data-relay-info="${esc(k.url)}" class="px-1 leading-none shrink-0 text-text-secondary hover:text-text" title="NIP-11 info">${expanded ? "▴" : "▾"}</button>` +
+      infoToggleBtn(k.url, expanded) +
       `</div>` +
       relayInfoDetailHTML(k.url) +
       `</div>`
