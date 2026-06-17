@@ -27,7 +27,7 @@
 
   const RM = {
     nip65: [], // [{ url, read, write }]
-    lists: { dm: [], search: [], favorites: [], blocked: [] },
+    lists: { dm: [], search: [], favorites: [], blocked: [], private: [] },
     encrypted: {}, // key -> true when the list carries NIP-44 private entries (#100)
     encryptedContent: {}, // key -> raw encrypted blob; the browser decrypts on demand
     decrypted: {}, // key -> [urls] once the user clicks Decrypt (read-only reveal)
@@ -250,9 +250,37 @@
     ).join("");
   }
 
+  // The Private (10013, NIP-37) list is read-only: NIP-37 keeps relays in the
+  // encrypted content (public entries are rare), so this mostly shows the
+  // decrypt reveal. Editing/re-encrypting waits for the encrypt side.
+  function renderPrivate() {
+    const box = document.getElementById("rm-private-list");
+    if (!box) return;
+    if (!RM.loaded) {
+      box.innerHTML = spinnerRow("Fetching…");
+      return;
+    }
+    const pub = RM.lists.private || [];
+    const enc = RM.encrypted && RM.encrypted.private;
+    let html = pub
+      .map(
+        (u) =>
+          `<div class="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg bg-surface-elevated border-border">` +
+          `<a href="${esc(httpish(u))}" target="_blank" rel="noopener" class="flex-1 min-w-0 truncate text-text hover:text-accent hover:underline">${esc(shortRelay(u))}</a></div>`
+      )
+      .join("");
+    if (enc) html += encryptedSection("private");
+    else if (!pub.length) html += emptyRow("No private relay list.");
+    box.innerHTML = html;
+    box.querySelectorAll("[data-rm-decrypt]").forEach((b) => {
+      b.onclick = () => rmDecrypt(b.getAttribute("data-rm-decrypt"));
+    });
+  }
+
   function renderAll() {
     renderNip65();
     TAG_CATS.forEach((c) => renderTagList(c.key));
+    renderPrivate();
   }
 
   function nip65Upsert(url, field) {
@@ -409,6 +437,7 @@
           RM.lists.search = d.search || [];
           RM.lists.favorites = d.favorites || [];
           RM.lists.blocked = d.blocked || [];
+          RM.lists.private = d.private || [];
           RM.encrypted = d.encrypted || {};
           RM.encryptedContent = d.encrypted_content || {};
           RM.pubkey = d.pubkey || "";
@@ -430,7 +459,7 @@
   window.__rmStreamHandler = function (e) {
     const m = e.detail || {};
     if (m.type !== "list-updated") return;
-    const map = { 10050: "dm", 10007: "search", 10012: "favorites", 10006: "blocked" };
+    const map = { 10050: "dm", 10007: "search", 10012: "favorites", 10006: "blocked", 10013: "private" };
     if (m.kind !== 10002 && !map[m.kind]) return;
     fetch("/api/v1/user/relay-lists")
       .then((r) => (r.ok ? r.json() : null))
@@ -445,7 +474,8 @@
           RM.encrypted = d.encrypted || RM.encrypted;
           RM.encryptedContent = d.encrypted_content || RM.encryptedContent;
           delete RM.decrypted[key]; // changed elsewhere — re-show the Decrypt button
-          renderTagList(key);
+          if (key === "private") renderPrivate();
+          else renderTagList(key);
         }
       })
       .catch(function () {});

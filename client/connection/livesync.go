@@ -13,7 +13,7 @@ import (
 
 // ownEventKinds are the logged-in user's replaceable kinds grain live-syncs, so
 // a change made in another client shows up here without a reload.
-var ownEventKinds = []int{0, 10002, 10050, 10063, 10096, 10006, 10007, 10012}
+var ownEventKinds = []int{0, 10002, 10050, 10063, 10096, 10006, 10007, 10012, 10013}
 
 var (
 	liveSyncMu   sync.Mutex
@@ -94,7 +94,7 @@ func handleOwnEvent(cc *core.Client, pubkey string, ev *nostr.Event) {
 		cc.InvalidateUserRelays(pubkey)
 	}
 	switch ev.Kind {
-	case 10002, 10050, 10006, 10007, 10012:
+	case 10002, 10050, 10006, 10007, 10012, 10013:
 		cc.InvalidateUserRelayLists(pubkey)
 	}
 	log.ClientConnection().Debug("Live-sync own-event update", "pubkey", pubkey, "kind", ev.Kind)

@@ -188,7 +188,8 @@ type UserRelayLists struct {
 	Blocked   []string         `json:"blocked"`   // 10006
 	Search    []string         `json:"search"`    // 10007
 	Favorites []string         `json:"favorites"` // 10012
-	// Encrypted flags NIP-51 lists whose event carried NIP-44/NIP-04 private
+	Private   []string         `json:"private"`   // 10013 (NIP-37) — usually empty; entries live in the encrypted content
+	// Encrypted flags NIP-51/37 lists whose event carried NIP-44/NIP-04 private
 	// content; only the public entries are listed in the fields above.
 	Encrypted EncryptedFlags `json:"encrypted"`
 	// EncryptedContent carries the raw private content blob per list so the
@@ -197,20 +198,22 @@ type UserRelayLists struct {
 	EncryptedContent EncryptedContent `json:"encrypted_content"`
 }
 
-// EncryptedFlags reports which NIP-51 lists have private (encrypted) entries.
+// EncryptedFlags reports which NIP-51/37 lists have private (encrypted) entries.
 type EncryptedFlags struct {
 	Blocked   bool `json:"blocked"`
 	Search    bool `json:"search"`
 	Favorites bool `json:"favorites"`
+	Private   bool `json:"private"` // 10013 — typically always encrypted
 }
 
-// EncryptedContent holds the raw (still-encrypted) `.content` of each NIP-51
+// EncryptedContent holds the raw (still-encrypted) `.content` of each NIP-51/37
 // list that has private entries, keyed by the same names as EncryptedFlags.
 // Empty strings when a list has no private content.
 type EncryptedContent struct {
 	Blocked   string `json:"blocked,omitempty"`
 	Search    string `json:"search,omitempty"`
 	Favorites string `json:"favorites,omitempty"`
+	Private   string `json:"private,omitempty"`
 }
 
 // OwnListRelays returns the relay set to read a user's own replaceable lists
@@ -245,9 +248,16 @@ func (c *Client) FetchUserRelayLists(pubkey string) *UserRelayLists {
 			assign(ev)
 		}
 	}
-	wg.Add(5)
+	wg.Add(6)
 	go fetch(10002, func(ev *nostr.Event) { out.NIP65 = ParseNIP65Entries(ev) })
 	go fetch(10050, func(ev *nostr.Event) { out.DM = ParseRelayTagURLs(ev) })
+	go fetch(10013, func(ev *nostr.Event) {
+		// NIP-37 private relays: the entries live in the encrypted content, so the
+		// public tag list is normally empty; the browser decrypts on demand (#100).
+		out.Private = ParseRelayTagURLs(ev)
+		out.Encrypted.Private = ev.Content != ""
+		out.EncryptedContent.Private = ev.Content
+	})
 	go fetch(10006, func(ev *nostr.Event) {
 		out.Blocked = ParseRelayTagURLs(ev)
 		out.Encrypted.Blocked = ev.Content != ""

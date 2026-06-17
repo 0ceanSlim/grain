@@ -180,13 +180,14 @@
           <p id="rm-blocked-status" class="mt-1 text-xs text-right text-text-secondary"></p>
         </div>
 
-        <div class="mt-5 opacity-60">
+        <div class="mt-5">
           <div class="flex items-center gap-2">
             <span class="text-sm font-medium text-text">🔒 Private</span>
             <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10013 · NIP-37</span>
-            <span class="px-2 py-0.5 ml-auto text-xs rounded bg-surface-inset text-text-muted">coming soon</span>
           </div>
-          <p class="mt-0.5 text-xs text-text-muted">Encrypted relay list — only you can read it (needs signer decryption).</p>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">Encrypted relay list — only you can read it. Decrypt to reveal (read-only for now; editing comes with the encrypt side).</p>
+          <div id="rm-private-list" class="space-y-1.5"></div>
+          <p id="rm-private-status" class="mt-1 text-xs text-right text-text-secondary"></p>
         </div>
 
         <!-- ── App relays (local config) ── -->
