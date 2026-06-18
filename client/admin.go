@@ -395,6 +395,21 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 	wl := config.GetWhitelistConfig()
 
 	sections := []AdminSection{
+		{ID: "ops", Title: "Operations", Icon: "🛠️", Method: "", Config: nil},
+		{ID: "relay_info", Title: "Relay information", Icon: "📛", Method: "",
+			Config: func() OpsSectionData {
+				m := utils.GetRelayMetadataCopy()
+				return OpsSectionData{
+					RelayName:           m.Name,
+					RelayDescription:    m.Description,
+					RelayIcon:           m.Icon,
+					RelayBanner:         m.Banner,
+					RelayContact:        m.Contact,
+					RelayPrivacyPolicy:  m.PrivacyPolicy,
+					RelayTermsOfService: m.TermsOfService,
+					RelayPostingPolicy:  m.PostingPolicy,
+				}
+			}()},
 		{ID: "logging", Title: "Logging", Icon: "📜", Method: "grain_updatelogging",
 			Config: LoggingSectionData{Config: cfg.Logging, AllComponents: log.GetAllComponents()}},
 		{ID: "auth", Title: "Auth", Icon: "🔐", Method: "grain_updateauth", Config: cfg.Auth},
@@ -467,20 +482,6 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 					OwnerMutelistCount:    ownerCount,
 					OwnerMutelistSynced:   ownerSynced,
 					OwnerMutelistPubkeys:  ownerMutes,
-				}
-			}()},
-		{ID: "ops", Title: "Operations", Icon: "🛠️", Method: "",
-			Config: func() OpsSectionData {
-				m := utils.GetRelayMetadataCopy()
-				return OpsSectionData{
-					RelayName:           m.Name,
-					RelayDescription:    m.Description,
-					RelayIcon:           m.Icon,
-					RelayBanner:         m.Banner,
-					RelayContact:        m.Contact,
-					RelayPrivacyPolicy:  m.PrivacyPolicy,
-					RelayTermsOfService: m.TermsOfService,
-					RelayPostingPolicy:  m.PostingPolicy,
 				}
 			}()},
 	}
