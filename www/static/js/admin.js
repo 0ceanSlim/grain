@@ -442,7 +442,7 @@
     // etc.): show the reconnect indicator and refuse this action.
     // The indicator wires its own click → restore/showAuthModal.
     showReconnectIndicator(true);
-    throw new Error("signer not connected — click the Reconnect indicator");
+    throw new Error("Signer not connected — click the 🔑 Reconnect signer button (top-right).");
   }
   window.adminEnsureSigner = ensureSigner;
 
@@ -488,6 +488,20 @@
   window.addEventListener("grain:signer-ready", () => {
     showReconnectIndicator(false);
   });
+
+  // On load, reflect signer state up front: after claim the signer often needs a
+  // manual reconnect (extension can't be woken silently). Try a silent restore;
+  // if it's still missing, surface the Reconnect pill immediately rather than
+  // waiting for the first action to fail with an error.
+  (async function reflectSignerOnLoad() {
+    if (window.grainSigner && typeof window.grainSigner.signEvent === "function") return;
+    if (typeof window.restoreSigner === "function") {
+      try {
+        if (await window.restoreSigner()) return;
+      } catch (e) {}
+    }
+    showReconnectIndicator(true);
+  })();
 
   // expandDotted converts a flat blob with keys like
   // "pubkey_whitelist.enabled" into a nested object the server's

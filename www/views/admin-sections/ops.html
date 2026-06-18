@@ -110,6 +110,9 @@
     } else {
       Promise.resolve().then(loadStats);
     }
+    // After claim the first load runs before the signer reconnects — re-pull the
+    // stats once it's ready so the operator doesn't have to hit ↻ themselves.
+    window.addEventListener("grain:signer-ready", loadStats);
 
     // ── Refresh cache ────────────────────────────────────────
 

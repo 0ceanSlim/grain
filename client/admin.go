@@ -396,7 +396,7 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 
 	sections := []AdminSection{
 		{ID: "ops", Title: "Operations", Icon: "🛠️", Method: "", Config: nil},
-		{ID: "relay_info", Title: "Relay information", Icon: "📛", Method: "",
+		{ID: "relay_info", Title: "Relay information", Icon: "🪪", Method: "",
 			Config: func() OpsSectionData {
 				m := utils.GetRelayMetadataCopy()
 				return OpsSectionData{
@@ -486,6 +486,10 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 			}()},
 	}
 
+	// Operator-facing display order: the highest-traffic sections first; any not
+	// listed keep their definition order behind them.
+	sections = orderSections(sections, "ops", "relay_info", "server", "rate_limit", "resource_limits", "whitelist", "blacklist")
+
 	data := AdminPageData{
 		Title:      "🌾 grain — admin",
 		Owner:      owner,
@@ -493,6 +497,31 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 		KindLabels: KindLabels,
 	}
 	renderAdmin(w, data)
+}
+
+// orderSections returns sections with the given IDs first, in the order given;
+// any section not named keeps its original position behind them. Lets the
+// definition block stay grouped by concern while the display order is curated.
+func orderSections(sections []AdminSection, firstIDs ...string) []AdminSection {
+	listed := make(map[string]bool, len(firstIDs))
+	for _, id := range firstIDs {
+		listed[id] = true
+	}
+	out := make([]AdminSection, 0, len(sections))
+	for _, id := range firstIDs {
+		for _, s := range sections {
+			if s.ID == id {
+				out = append(out, s)
+				break
+			}
+		}
+	}
+	for _, s := range sections {
+		if !listed[s.ID] {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // renderAdmin parses the admin template against the shared layout and
