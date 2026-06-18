@@ -367,10 +367,14 @@ func (rp *RelayPool) StatusOf(url string) RelayLiveStatus {
 }
 
 // KnownRelayStatus pairs a known relay URL with its live pool status, for the
-// known-relays browser.
+// known-relays browser. The status fields are inlined rather than embedding
+// RelayLiveStatus so the OpenAPI generator (swag) can resolve the type — the
+// JSON shape is identical either way.
 type KnownRelayStatus struct {
-	URL string `json:"url"`
-	RelayLiveStatus
+	URL       string `json:"url"`
+	Connected bool   `json:"connected"`
+	Pinned    bool   `json:"pinned"`
+	Leased    bool   `json:"leased"`
 }
 
 // KnownRelaysWithStatus returns every known relay (sorted) annotated with its
@@ -379,7 +383,8 @@ func (c *Client) KnownRelaysWithStatus() []KnownRelayStatus {
 	urls := c.KnownRelays()
 	out := make([]KnownRelayStatus, 0, len(urls))
 	for _, u := range urls {
-		out = append(out, KnownRelayStatus{URL: u, RelayLiveStatus: c.relayPool.StatusOf(u)})
+		st := c.relayPool.StatusOf(u)
+		out = append(out, KnownRelayStatus{URL: u, Connected: st.Connected, Pinned: st.Pinned, Leased: st.Leased})
 	}
 	return out
 }
