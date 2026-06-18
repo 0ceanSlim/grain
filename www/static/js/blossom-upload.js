@@ -144,9 +144,11 @@
     const overlay = document.createElement("div");
     overlay.className = "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60";
     const card = document.createElement("div");
-    card.className = "w-full max-w-md p-5 border rounded-xl bg-surface border-border shadow-lg";
+    card.className = "w-full max-w-md p-6 border shadow-lg rounded-xl bg-surface border-border";
     overlay.appendChild(card);
+    let previewUrl = "";
     function close() {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
       overlay.remove();
     }
     overlay.addEventListener("click", (e) => {
@@ -175,6 +177,13 @@
       return;
     }
 
+    // Image preview (the name + size stay below it).
+    let previewHtml = "";
+    if (file.type && file.type.indexOf("image/") === 0) {
+      previewUrl = URL.createObjectURL(file);
+      previewHtml = `<img src="${previewUrl}" alt="" class="object-contain w-full mb-3 rounded max-h-44 bg-surface-inset" />`;
+    }
+
     const options = all
       .map((s, i) => {
         const tags = [s.kind, s.cost, s.retention].filter(Boolean).join(" · ");
@@ -183,42 +192,80 @@
       .join("");
 
     card.innerHTML =
-      `<h3 class="mb-1 text-lg font-semibold text-text">Upload file</h3>` +
+      `<h3 class="mb-3 text-lg font-semibold text-text">Upload file</h3>` +
+      previewHtml +
       `<p class="mb-3 text-xs text-text-muted">${esc(file.name)} · ${fmtSize(file.size)}</p>` +
       `<label class="block mb-1 text-xs font-medium text-text-secondary">Upload to</label>` +
-      `<select data-ref="server" class="w-full px-3 py-2 mb-2 text-sm border rounded-lg bg-surface-elevated text-text border-border">${options}</select>` +
-      `<label class="flex items-center gap-2 mb-1 text-sm cursor-pointer text-text">` +
-      `<input data-ref="mirror" type="checkbox" />Mirror to my other servers</label>` +
-      `<p data-ref="ephemeral" class="hidden mb-2 text-xs text-warning">⚠ This server is ephemeral — uploads may be deleted after a while.</p>` +
+      `<select data-ref="server" class="w-full px-3 py-2 mb-3 text-sm border rounded-lg bg-surface-elevated text-text border-border">${options}</select>` +
+      `<label class="flex items-center gap-2 text-sm cursor-pointer text-text">` +
+      `<input data-ref="mirror" type="checkbox" /> Mirror to other servers</label>` +
+      `<div data-ref="mirrorList" class="hidden p-2 mt-2 space-y-1.5 border rounded-lg border-border bg-surface-inset"></div>` +
+      `<p data-ref="ephemeral" class="hidden mt-2 text-xs text-warning">⚠ This server is ephemeral — uploads may be deleted after a while.</p>` +
       `<div data-ref="progress" class="hidden h-1.5 my-3 overflow-hidden rounded bg-surface-inset"><div data-ref="bar" class="h-full bg-accent" style="width:0%"></div></div>` +
-      `<p data-ref="status" class="mt-2 mb-3 text-xs text-text-secondary"></p>` +
+      `<p data-ref="status" class="mt-3 mb-4 text-xs text-text-secondary"></p>` +
       `<div class="flex justify-end gap-2">` +
-      `<button data-ref="cancel" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">Cancel</button>` +
+      `<button data-ref="cancel" class="px-4 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">Cancel</button>` +
       `<button data-ref="go" class="px-4 py-2 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Upload</button>` +
       `</div>`;
 
     const $ = (ref) => card.querySelector('[data-ref="' + ref + '"]');
     const sel = $("server"),
       mirror = $("mirror"),
+      mirrorList = $("mirrorList"),
       ephemeral = $("ephemeral"),
       progress = $("progress"),
       bar = $("bar"),
       status = $("status"),
       go = $("go");
 
+    // Per-server mirror selection: list the OTHER servers (relative to the chosen
+    // primary) with individual checkboxes, default all on, plus a Select all.
+    function renderMirrorList() {
+      const primary = Number(sel.value);
+      const others = [];
+      for (let i = 0; i < all.length; i++) if (i !== primary) others.push(i);
+      if (!others.length) {
+        mirrorList.innerHTML = `<p class="text-xs text-text-muted">No other servers to mirror to.</p>`;
+        return;
+      }
+      mirrorList.innerHTML =
+        `<label class="flex items-center gap-2 text-xs cursor-pointer text-text-secondary"><input data-ref="mirrorAll" type="checkbox" checked /> Select all</label>` +
+        others
+          .map(
+            (i) =>
+              `<label class="flex items-center gap-2 text-xs cursor-pointer text-text"><input type="checkbox" data-mirror-idx="${i}" checked /> ${esc(shortUrl(all[i].url))}</label>`
+          )
+          .join("");
+      const allCb = mirrorList.querySelector('[data-ref="mirrorAll"]');
+      allCb.onchange = () => {
+        mirrorList.querySelectorAll("[data-mirror-idx]").forEach((cb) => (cb.checked = allCb.checked));
+      };
+    }
+
     function reflectServer() {
       const s = all[Number(sel.value)];
       ephemeral.classList.toggle("hidden", !(s && s.retention === "ephemeral"));
-      const others = all.length > 1;
-      mirror.disabled = !others;
-      mirror.parentElement.classList.toggle("opacity-50", !others);
+      const hasOthers = all.length > 1;
+      mirror.disabled = !hasOthers;
+      mirror.parentElement.classList.toggle("opacity-50", !hasOthers);
+      if (mirror.checked) renderMirrorList(); // keep the list in sync with the primary
     }
     sel.onchange = reflectServer;
+    mirror.onchange = () => {
+      mirrorList.classList.toggle("hidden", !mirror.checked);
+      if (mirror.checked) renderMirrorList();
+    };
     reflectServer();
     $("cancel").onclick = close;
 
     go.onclick = async function () {
       const server = all[Number(sel.value)];
+      const mirrorTargets =
+        mirror.checked && !mirror.disabled
+          ? Array.from(mirrorList.querySelectorAll("[data-mirror-idx]:checked")).map(
+              (cb) => all[Number(cb.getAttribute("data-mirror-idx"))]
+            )
+          : [];
       go.disabled = true;
       sel.disabled = true;
       progress.classList.remove("hidden");
@@ -230,15 +277,12 @@
         const url = await uploadTo(file, server, hash, (p) => {
           bar.style.width = Math.round(p * 100) + "%";
         });
-        if (mirror.checked && all.length > 1) {
-          status.textContent = "Mirroring…";
-          for (let i = 0; i < all.length; i++) {
-            if (i === Number(sel.value)) continue;
-            try {
-              await uploadTo(file, all[i], hash, null);
-            } catch (e) {
-              /* best-effort mirror */
-            }
+        for (const t of mirrorTargets) {
+          status.textContent = "Mirroring to " + shortUrl(t.url) + "…";
+          try {
+            await uploadTo(file, t, hash, null);
+          } catch (e) {
+            /* best-effort mirror */
           }
         }
         status.textContent = "✓ Uploaded";
