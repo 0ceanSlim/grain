@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // SerializeEvent manually constructs the JSON string for event serialization according to NIP-01
@@ -26,7 +25,7 @@ func SerializeEvent(evt nostr.Event) string {
 	// Use Go's standard JSON marshaling first
 	jsonBytes, err := json.Marshal(eventData)
 	if err != nil {
-		log.ClientCore().Error("Failed to serialize event",
+		clog().Error("Failed to serialize event",
 			"event_id", evt.ID,
 			"pubkey", evt.PubKey,
 			"kind", evt.Kind,
@@ -40,7 +39,7 @@ func SerializeEvent(evt nostr.Event) string {
 
 	// Only log at debug level for very important events or when troubleshooting
 	if evt.Kind == 0 || evt.Kind == 3 {
-		log.ClientCore().Debug("Event serialized",
+		clog().Debug("Event serialized",
 			"event_id", evt.ID,
 			"kind", evt.Kind,
 			"size_bytes", len(jsonStr))
@@ -81,11 +80,11 @@ func DeserializeEvent(data []byte) (*nostr.Event, error) {
 
 	var event nostr.Event
 	if err := json.Unmarshal(data, &event); err != nil {
-		log.ClientCore().Error("Failed to deserialize event", "error", err)
+		clog().Error("Failed to deserialize event", "error", err)
 		return nil, fmt.Errorf("failed to unmarshal event: %w", err)
 	}
 
-	log.ClientCore().Debug("Event deserialized", "event_id", event.ID, "kind", event.Kind)
+	clog().Debug("Event deserialized", "event_id", event.ID, "kind", event.Kind)
 	return &event, nil
 }
 
@@ -105,7 +104,7 @@ func ComputeEventID(event *nostr.Event) (string, error) {
 	hash := sha256.Sum256([]byte(serialized))
 	eventID := hex.EncodeToString(hash[:])
 
-	log.ClientCore().Debug("Computed event ID", "event_id", eventID, "kind", event.Kind)
+	clog().Debug("Computed event ID", "event_id", eventID, "kind", event.Kind)
 	return eventID, nil
 }
 
@@ -166,7 +165,7 @@ func ValidateEventStructure(event *nostr.Event) error {
 		}
 	}
 
-	log.ClientCore().Debug("Event structure validated", "event_id", event.ID, "kind", event.Kind)
+	clog().Debug("Event structure validated", "event_id", event.ID, "kind", event.Kind)
 	return nil
 }
 
@@ -205,7 +204,7 @@ func SerializeEventArray(events []*nostr.Event) ([]byte, error) {
 		return nil, fmt.Errorf("failed to serialize event array: %w", err)
 	}
 
-	log.ClientCore().Debug("Event array serialized", "event_count", len(events), "size_bytes", len(data))
+	clog().Debug("Event array serialized", "event_count", len(events), "size_bytes", len(data))
 	return data, nil
 }
 
@@ -220,7 +219,7 @@ func CreateNostrMessage(messageType string, args ...interface{}) ([]byte, error)
 		return nil, fmt.Errorf("failed to create Nostr message: %w", err)
 	}
 
-	log.ClientCore().Debug("Nostr message created", "type", messageType, "size_bytes", len(data))
+	clog().Debug("Nostr message created", "type", messageType, "size_bytes", len(data))
 	return data, nil
 }
 
@@ -243,6 +242,6 @@ func ParseNostrMessage(data []byte) (messageType string, args []interface{}, err
 
 	args = message[1:]
 
-	log.ClientCore().Debug("Nostr message parsed", "type", messageType, "arg_count", len(args))
+	clog().Debug("Nostr message parsed", "type", messageType, "arg_count", len(args))
 	return messageType, args, nil
 }

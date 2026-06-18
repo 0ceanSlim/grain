@@ -9,6 +9,7 @@ package core_test
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/0ceanslim/grain/client/core"
@@ -196,4 +197,11 @@ func ExampleApplyClientTag() {
 	ev := &nostr.Event{Kind: 1, Content: "gm"}
 	core.ApplyClientTag(ev, true, "grain")
 	fmt.Println(len(ev.Tags))
+}
+
+// Replacing grain's logging so the library writes through a consumer's logger.
+// Any *slog.Logger satisfies core.Logger; a consumer can also implement the four
+// methods (Debug/Info/Warn/Error) over their own logging stack.
+func ExampleSetLogger() {
+	core.SetLogger(slog.Default())
 }

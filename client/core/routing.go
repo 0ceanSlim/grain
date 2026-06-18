@@ -2,7 +2,6 @@ package core
 
 import (
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // isMetadataKind reports whether an event kind is the sort that lives on the
@@ -117,7 +116,7 @@ func (c *Client) SetFixedRelays(readRelays, writeRelays []string) {
 	c.fixedRead = append([]string(nil), readRelays...)
 	c.fixedWrite = append([]string(nil), writeRelays...)
 	c.mu.Unlock()
-	log.ClientCore().Warn("Fixed-relay override enabled — outbox routing disabled for this client",
+	clog().Warn("Fixed-relay override enabled — outbox routing disabled for this client",
 		"read_relays", len(readRelays), "write_relays", len(writeRelays))
 }
 
@@ -128,7 +127,7 @@ func (c *Client) ClearFixedRelays() {
 	c.fixedRead = nil
 	c.fixedWrite = nil
 	c.mu.Unlock()
-	log.ClientCore().Info("Fixed-relay override cleared — outbox routing restored")
+	clog().Info("Fixed-relay override cleared — outbox routing restored")
 }
 
 // FixedRelaysEnabled reports whether the fixed-relay override is active.

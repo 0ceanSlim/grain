@@ -7,7 +7,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/0ceanslim/grain/server/utils/log"
 	"golang.org/x/net/websocket"
 )
 
@@ -128,7 +127,7 @@ func (rp *RelayPool) acquire(url string, openTimeout time.Duration, bypassBackof
 		if err != nil {
 			rp.recordFailureLocked(url)
 			rp.mu.Unlock()
-			log.ClientCore().Debug("Dial failed", "relay", url, "error", err)
+			clog().Debug("Dial failed", "relay", url, "error", err)
 			return nil, err
 		}
 
@@ -159,7 +158,7 @@ func (rp *RelayPool) acquire(url string, openTimeout time.Duration, bypassBackof
 		rp.mu.Unlock()
 
 		rp.startReader(rc)
-		log.ClientCore().Debug("Acquired relay connection", "relay", url)
+		clog().Debug("Acquired relay connection", "relay", url)
 		return rc, nil
 	}
 }
@@ -239,7 +238,7 @@ func (rp *RelayPool) closeAndRemoveLocked(url string) {
 	if conn, ok := rp.connections[url]; ok {
 		_ = conn.close()
 		delete(rp.connections, url)
-		log.ClientCore().Debug("Evicted relay connection", "relay", url)
+		clog().Debug("Evicted relay connection", "relay", url)
 	}
 }
 
@@ -391,15 +390,15 @@ func (rp *RelayPool) StartEvictionSweeper(ctx context.Context, interval time.Dur
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
-		log.ClientCore().Info("Relay pool eviction sweeper started", "interval", interval)
+		clog().Info("Relay pool eviction sweeper started", "interval", interval)
 		for {
 			select {
 			case <-ctx.Done():
-				log.ClientCore().Info("Relay pool eviction sweeper stopping")
+				clog().Info("Relay pool eviction sweeper stopping")
 				return
 			case <-ticker.C:
 				if n := rp.evictIdle(time.Now(), rp.config.IdleTTL); n > 0 {
-					log.ClientCore().Debug("Idle relay connections evicted", "count", n)
+					clog().Debug("Idle relay connections evicted", "count", n)
 				}
 			}
 		}

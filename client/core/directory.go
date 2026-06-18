@@ -6,7 +6,6 @@ import (
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // UserRelays holds a target user's per-target event-derived relay roles,
@@ -230,7 +229,7 @@ func (c *Client) fetchUserRelaysFromNetwork(pubkey string) *UserRelays {
 	}
 	ur.Negative = len(ur.Outbox) == 0 && len(ur.Inbox) == 0 && len(ur.DMInbox) == 0
 
-	log.ClientCore().Debug("Resolved user relays", "pubkey", pubkey,
+	clog().Debug("Resolved user relays", "pubkey", pubkey,
 		"outbox", len(ur.Outbox), "inbox", len(ur.Inbox), "dm", len(ur.DMInbox), "negative", ur.Negative)
 	return ur
 }
@@ -259,7 +258,7 @@ func (c *Client) fetchLatestEventWithin(ctx context.Context, pubkey string, kind
 	}
 	sub, err := c.Subscribe(ctx, []nostr.Filter{filter}, relays)
 	if err != nil {
-		log.ClientCore().Debug("Subscribe failed during relay resolution", "pubkey", pubkey, "kind", kind, "error", err)
+		clog().Debug("Subscribe failed during relay resolution", "pubkey", pubkey, "kind", kind, "error", err)
 		return nil
 	}
 	defer sub.Close()

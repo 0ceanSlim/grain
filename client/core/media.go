@@ -9,7 +9,6 @@ import (
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // MediaServers holds a user's published media-server lists: Blossom servers
@@ -261,7 +260,7 @@ func (c *Client) fetchUserMediaServersFromNetwork(pubkey string) *MediaServers {
 	}
 	m.Negative = len(m.Blossom) == 0 && len(m.NIP96) == 0
 
-	log.ClientCore().Debug("Resolved user media servers", "pubkey", pubkey,
+	clog().Debug("Resolved user media servers", "pubkey", pubkey,
 		"blossom", len(m.Blossom), "nip96", len(m.NIP96), "negative", m.Negative)
 	return m
 }

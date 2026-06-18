@@ -9,7 +9,6 @@ import (
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // Client represents the main Nostr client with connection pooling
@@ -76,6 +75,9 @@ func NewClient(config *Config) *Client {
 		config = DefaultConfig()
 	}
 	config.IndexRelays = normalizeRelayURLs(config.IndexRelays)
+	if config.Logger != nil {
+		SetLogger(config.Logger)
+	}
 
 	c := &Client{
 		relayPool:     NewRelayPool(config),
@@ -94,7 +96,7 @@ func NewClient(config *Config) *Client {
 
 // ConnectToRelays establishes connections to multiple relay URLs
 func (c *Client) ConnectToRelays(urls []string) error {
-	log.ClientCore().Info("Connecting to relays", "relay_count", len(urls), "relays", urls)
+	clog().Info("Connecting to relays", "relay_count", len(urls), "relays", urls)
 
 	if len(urls) == 0 {
 		return fmt.Errorf("no relay URLs provided")
@@ -107,31 +109,31 @@ func (c *Client) ConnectToRelays(urls []string) error {
 	for _, url := range urls {
 		// Validate URL format
 		if url == "" || (!strings.HasPrefix(url, "ws://") && !strings.HasPrefix(url, "wss://")) {
-			log.ClientCore().Warn("Invalid relay URL format", "relay", url)
+			clog().Warn("Invalid relay URL format", "relay", url)
 			failed = append(failed, url)
 			lastErr = fmt.Errorf("invalid URL format: %s", url)
 			continue
 		}
 
 		if err := c.relayPool.Connect(url); err != nil {
-			log.ClientCore().Warn("Failed to connect to relay", "relay", url, "error", err)
+			clog().Warn("Failed to connect to relay", "relay", url, "error", err)
 			failed = append(failed, url)
 			lastErr = err
 			continue
 		}
 		connected++
-		log.ClientCore().Debug("Successfully connected to relay", "relay", url)
+		clog().Debug("Successfully connected to relay", "relay", url)
 	}
 
 	if connected == 0 && lastErr != nil {
-		log.ClientCore().Error("Failed to connect to any relays",
+		clog().Error("Failed to connect to any relays",
 			"attempted", len(urls),
 			"failed_relays", failed,
 			"last_error", lastErr)
 		return fmt.Errorf("failed to connect to any relays: %w", lastErr)
 	}
 
-	log.ClientCore().Info("Connected to relays",
+	clog().Info("Connected to relays",
 		"connected", connected,
 		"failed", len(failed),
 		"total", len(urls))
@@ -141,7 +143,7 @@ func (c *Client) ConnectToRelays(urls []string) error {
 
 	// Verify connections are actually established
 	actuallyConnected := c.GetConnectedRelays()
-	log.ClientCore().Info("Relay connection verification",
+	clog().Info("Relay connection verification",
 		"reported_connected", connected,
 		"actually_connected", len(actuallyConnected),
 		"connected_relays", actuallyConnected)
@@ -151,15 +153,15 @@ func (c *Client) ConnectToRelays(urls []string) error {
 
 // DisconnectFromRelay closes a specific relay connection
 func (c *Client) DisconnectFromRelay(relayURL string) error {
-	log.ClientCore().Info("Disconnecting from relay", "relay", relayURL)
+	clog().Info("Disconnecting from relay", "relay", relayURL)
 
 	// Use the relay pool's existing CloseConnection method
 	if err := c.relayPool.CloseConnection(relayURL); err != nil {
-		log.ClientCore().Error("Failed to close relay connection", "relay", relayURL, "error", err)
+		clog().Error("Failed to close relay connection", "relay", relayURL, "error", err)
 		return err
 	}
 
-	log.ClientCore().Info("Successfully disconnected from relay", "relay", relayURL)
+	clog().Info("Successfully disconnected from relay", "relay", relayURL)
 	return nil
 }
 
@@ -168,18 +170,18 @@ func (c *Client) DisconnectFromRelays(relayURLs []string) error {
 	var lastErr error
 	disconnected := 0
 
-	log.ClientCore().Info("Disconnecting from multiple relays", "relay_count", len(relayURLs))
+	clog().Info("Disconnecting from multiple relays", "relay_count", len(relayURLs))
 
 	for _, relayURL := range relayURLs {
 		if err := c.DisconnectFromRelay(relayURL); err != nil {
-			log.ClientCore().Warn("Failed to disconnect from relay", "relay", relayURL, "error", err)
+			clog().Warn("Failed to disconnect from relay", "relay", relayURL, "error", err)
 			lastErr = err
 		} else {
 			disconnected++
 		}
 	}
 
-	log.ClientCore().Info("Relay disconnection complete", "requested", len(relayURLs), "disconnected", disconnected)
+	clog().Info("Relay disconnection complete", "requested", len(relayURLs), "disconnected", disconnected)
 
 	if disconnected == 0 && lastErr != nil {
 		return fmt.Errorf("failed to disconnect from any relays: %w", lastErr)
@@ -211,7 +213,7 @@ func (c *Client) Subscribe(ctx context.Context, filters []nostr.Filter, relayHin
 	c.subscriptions[subID] = sub
 	c.mu.Unlock()
 
-	log.ClientCore().Debug("Created subscription", "sub_id", subID, "relay_count", len(targetRelays))
+	clog().Debug("Created subscription", "sub_id", subID, "relay_count", len(targetRelays))
 
 	if err := sub.Start(); err != nil {
 		c.mu.Lock()
@@ -260,7 +262,7 @@ func (c *Client) ConnectToRelaysWithRetry(urls []string, maxRetries int) error {
 	var lastErr error
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		log.ClientCore().Debug("Connection attempt", "attempt", attempt, "max_retries", maxRetries)
+		clog().Debug("Connection attempt", "attempt", attempt, "max_retries", maxRetries)
 
 		err := c.ConnectToRelays(urls)
 		if err == nil {
@@ -272,13 +274,13 @@ func (c *Client) ConnectToRelaysWithRetry(urls []string, maxRetries int) error {
 		// Check if any relays are connected
 		connected := c.relayPool.GetConnectedRelays()
 		if len(connected) > 0 {
-			log.ClientCore().Info("Partial connection success", "connected_relays", len(connected))
+			clog().Info("Partial connection success", "connected_relays", len(connected))
 			return nil // Partial success is acceptable
 		}
 
 		if attempt < maxRetries {
 			delay := time.Duration(attempt) * c.config.RetryDelay
-			log.ClientCore().Info("Retrying connection", "attempt", attempt, "delay", delay)
+			clog().Info("Retrying connection", "attempt", attempt, "delay", delay)
 			time.Sleep(delay)
 		}
 	}
@@ -325,7 +327,7 @@ func collectLatestReplaceable(ctx context.Context, sub *Subscription, totalRelay
 
 		case err := <-sub.Errors:
 			// One relay failing isn't fatal — others may still answer.
-			log.ClientCore().Debug("Subscription error while collecting event",
+			clog().Debug("Subscription error while collecting event",
 				"sub_id", sub.ID, "error", err)
 
 		case <-ctx.Done():
@@ -337,7 +339,7 @@ func collectLatestReplaceable(ctx context.Context, sub *Subscription, totalRelay
 }
 
 func (c *Client) GetUserProfile(ctx context.Context, pubkey string, relayHints []string) (*nostr.Event, error) {
-	log.ClientCore().Debug("Fetching user profile", "pubkey", pubkey, "relay_hints", relayHints)
+	clog().Debug("Fetching user profile", "pubkey", pubkey, "relay_hints", relayHints)
 
 	// Background-warm this user's mailbox relays into the directory (and thus
 	// the "known" set), without blocking this fetch. Resolution only queries the
@@ -358,7 +360,7 @@ func (c *Client) GetUserProfile(ctx context.Context, pubkey string, relayHints [
 	targetRelays := relayHints
 	if len(targetRelays) == 0 {
 		targetRelays = c.RouteMetadata(pubkey)
-		log.ClientCore().Debug("No relay hints provided, routing metadata fetch",
+		clog().Debug("No relay hints provided, routing metadata fetch",
 			"pubkey", pubkey, "relays", targetRelays)
 	}
 
@@ -370,11 +372,11 @@ func (c *Client) GetUserProfile(ctx context.Context, pubkey string, relayHints [
 
 	event := collectLatestReplaceable(ctx, sub, len(targetRelays), 5*time.Second)
 	if event == nil {
-		log.ClientCore().Warn("No profile found", "pubkey", pubkey)
+		clog().Warn("No profile found", "pubkey", pubkey)
 		return nil, &ClientError{Message: "profile not found"}
 	}
 
-	log.ClientCore().Debug("Fetched user profile",
+	clog().Debug("Fetched user profile",
 		"pubkey", pubkey, "event_id", event.ID, "created_at", event.CreatedAt)
 	return event, nil
 }
@@ -432,7 +434,7 @@ func (c *Client) PublishEvent(ctx context.Context, event *nostr.Event, targetRel
 		return nil, &ClientError{Message: "no relays available for publishing"}
 	}
 
-	log.ClientCore().Info("Publishing event", "event_id", event.ID, "relay_count", len(relays))
+	clog().Info("Publishing event", "event_id", event.ID, "relay_count", len(relays))
 
 	return BroadcastEvent(ctx, event, relays, c.relayPool), nil
 }
@@ -453,12 +455,12 @@ func (c *Client) PublishEventWithRetry(ctx context.Context, event *nostr.Event, 
 		return nil, &ClientError{Message: "no relays available for publishing"}
 	}
 
-	log.ClientCore().Info("Publishing event with retry", "event_id", event.ID, "relay_count", len(relays), "max_retries", maxRetries)
+	clog().Info("Publishing event with retry", "event_id", event.ID, "relay_count", len(relays), "max_retries", maxRetries)
 
 	return BroadcastWithRetry(ctx, event, relays, c.relayPool, maxRetries), nil
 }
 func (c *Client) Close() error {
-	log.ClientCore().Info("Shutting down client")
+	clog().Info("Shutting down client")
 
 	// Close all subscriptions
 	c.mu.Lock()
@@ -495,7 +497,7 @@ func generateSubscriptionID() string {
 // parseMailboxEvent parses a kind 10002 event into a Mailboxes struct
 func parseMailboxEvent(event *nostr.Event) *Mailboxes {
 	if event.Kind != 10002 {
-		log.ClientCore().Warn("Event is not a mailbox event", "kind", event.Kind, "expected", 10002)
+		clog().Warn("Event is not a mailbox event", "kind", event.Kind, "expected", 10002)
 		return &Mailboxes{}
 	}
 
@@ -522,7 +524,7 @@ func parseMailboxEvent(event *nostr.Event) *Mailboxes {
 		}
 	}
 
-	log.ClientCore().Debug("Parsed mailbox event", "event_id", event.ID,
+	clog().Debug("Parsed mailbox event", "event_id", event.ID,
 		"read_count", len(mailboxes.Read),
 		"write_count", len(mailboxes.Write),
 		"both_count", len(mailboxes.Both))
@@ -563,7 +565,7 @@ func (c *Client) ReplaceRelayConnections(newRelays []RelayConfig) error {
 	acquired := make([]string, 0, len(urls))
 	for _, u := range urls {
 		if _, err := c.relayPool.Acquire(u); err != nil {
-			log.ClientCore().Debug("Failed to acquire session relay", "relay", u, "error", err)
+			clog().Debug("Failed to acquire session relay", "relay", u, "error", err)
 			continue
 		}
 		acquired = append(acquired, u)
@@ -577,7 +579,7 @@ func (c *Client) ReplaceRelayConnections(newRelays []RelayConfig) error {
 		return fmt.Errorf("failed to connect to any of the %d requested relays", len(urls))
 	}
 
-	log.ClientCore().Info("Switched session relays (additive)",
+	clog().Info("Switched session relays (additive)",
 		"requested", len(urls), "acquired", len(acquired))
 	return nil
 }
@@ -586,10 +588,10 @@ func (c *Client) ReplaceRelayConnections(newRelays []RelayConfig) error {
 // ReplaceRelayConnections). Index relays stay connected alongside them.
 func (c *Client) SwitchToUserRelays(userRelays []RelayConfig) error {
 	if len(userRelays) == 0 {
-		log.ClientCore().Warn("No user relays provided, keeping current session relays")
+		clog().Warn("No user relays provided, keeping current session relays")
 		return nil
 	}
-	log.ClientCore().Info("Switching to user relays", "relay_count", len(userRelays))
+	clog().Info("Switching to user relays", "relay_count", len(userRelays))
 	return c.ReplaceRelayConnections(userRelays)
 }
 
@@ -604,7 +606,7 @@ func (c *Client) SwitchToIndexRelays() error {
 	for _, u := range previous {
 		c.relayPool.Release(u)
 	}
-	log.ClientCore().Info("Released session relays; pinned index relays remain", "released", len(previous))
+	clog().Info("Released session relays; pinned index relays remain", "released", len(previous))
 	return nil
 }
 

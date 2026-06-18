@@ -8,7 +8,6 @@ import (
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils/log"
 	"golang.org/x/net/websocket"
 )
 
@@ -144,7 +143,7 @@ func (mr *MessageRouter) RouteMessage(subID string, messageType string, data int
 	mr.mu.RUnlock()
 
 	if !exists {
-		log.ClientCore().Debug("No subscription found for message", "sub_id", subID, "message_type", messageType)
+		clog().Debug("No subscription found for message", "sub_id", subID, "message_type", messageType)
 		return
 	}
 
@@ -154,9 +153,9 @@ func (mr *MessageRouter) RouteMessage(subID string, messageType string, data int
 			if event := parseEventFromData(eventData); event != nil {
 				select {
 				case sub.Events <- event:
-					log.ClientCore().Debug("Event routed to subscription", "sub_id", subID, "event_id", event.ID)
+					clog().Debug("Event routed to subscription", "sub_id", subID, "event_id", event.ID)
 				default:
-					log.ClientCore().Warn("Subscription event channel full", "sub_id", subID)
+					clog().Warn("Subscription event channel full", "sub_id", subID)
 				}
 			}
 		}
@@ -164,17 +163,17 @@ func (mr *MessageRouter) RouteMessage(subID string, messageType string, data int
 		// Send relay URL to EOSE channel
 		select {
 		case sub.EOSE <- relayURL:
-			log.ClientCore().Debug("EOSE routed to subscription", "sub_id", subID, "relay", relayURL)
+			clog().Debug("EOSE routed to subscription", "sub_id", subID, "relay", relayURL)
 		default:
-			log.ClientCore().Debug("EOSE channel full or closed", "sub_id", subID, "relay", relayURL)
+			clog().Debug("EOSE channel full or closed", "sub_id", subID, "relay", relayURL)
 		}
 	case "CLOSED":
 		// Handle subscription closed by relay
 		select {
 		case sub.Errors <- fmt.Errorf("subscription closed by relay %s", relayURL):
-			log.ClientCore().Debug("CLOSED message routed to subscription", "sub_id", subID, "relay", relayURL)
+			clog().Debug("CLOSED message routed to subscription", "sub_id", subID, "relay", relayURL)
 		default:
-			log.ClientCore().Debug("Could not send CLOSED error to subscription", "sub_id", subID)
+			clog().Debug("Could not send CLOSED error to subscription", "sub_id", subID)
 		}
 	}
 }
@@ -219,19 +218,19 @@ func (rp *RelayPool) Connect(url string) error {
 	// Check if already connected
 	if conn, exists := rp.connections[url]; exists {
 		if conn.Status == StatusConnected {
-			log.ClientCore().Debug("Already connected to relay", "relay", url)
+			clog().Debug("Already connected to relay", "relay", url)
 			return nil
 		}
 		// Close existing dead connection before reconnecting
-		log.ClientCore().Debug("Closing existing dead connection before reconnecting", "relay", url, "status", conn.Status)
+		clog().Debug("Closing existing dead connection before reconnecting", "relay", url, "status", conn.Status)
 		if err := conn.close(); err != nil {
-			log.ClientCore().Warn("Error closing dead connection", "relay", url, "error", err)
+			clog().Warn("Error closing dead connection", "relay", url, "error", err)
 		}
 		// Remove from map
 		delete(rp.connections, url)
 	}
 
-	log.ClientCore().Debug("Connecting to relay", "relay", url)
+	clog().Debug("Connecting to relay", "relay", url)
 
 	// Create relay connection
 	relayConn := &RelayConnection{
@@ -250,7 +249,7 @@ func (rp *RelayPool) Connect(url string) error {
 	config, err := websocket.NewConfig(url, origin)
 	if err != nil {
 		relayConn.Status = StatusError
-		log.ClientCore().Error("Failed to create WebSocket config", "relay", url, "error", err)
+		clog().Error("Failed to create WebSocket config", "relay", url, "error", err)
 		return fmt.Errorf("failed to create config for relay %s: %w", url, err)
 	}
 
@@ -262,7 +261,7 @@ func (rp *RelayPool) Connect(url string) error {
 	conn, err := websocket.DialConfig(config)
 	if err != nil {
 		relayConn.Status = StatusError
-		log.ClientCore().Error("Failed to connect to relay", "relay", url, "error", err)
+		clog().Error("Failed to connect to relay", "relay", url, "error", err)
 		return fmt.Errorf("failed to connect to relay %s: %w", url, err)
 	}
 
@@ -277,7 +276,7 @@ func (rp *RelayPool) Connect(url string) error {
 	go relayConn.writeHandler()
 	go relayConn.readHandler()
 
-	log.ClientCore().Info("Connected to relay", "relay", url)
+	clog().Info("Connected to relay", "relay", url)
 	return nil
 }
 
@@ -298,7 +297,7 @@ func (rp *RelayPool) SendMessage(url string, message interface{}) error {
 
 	select {
 	case conn.writeChan <- data:
-		log.ClientCore().Debug("Message queued for relay", "relay", url)
+		clog().Debug("Message queued for relay", "relay", url)
 		return nil
 	case <-time.After(rp.config.WriteTimeout):
 		return fmt.Errorf("timeout sending message to relay %s", url)
@@ -312,7 +311,7 @@ func (rp *RelayPool) BroadcastMessage(message interface{}, urls []string) error 
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
 
-	log.ClientCore().Debug("Broadcasting message", "relay_count", len(urls))
+	clog().Debug("Broadcasting message", "relay_count", len(urls))
 
 	var lastErr error
 	sent := 0
@@ -339,7 +338,7 @@ func (rp *RelayPool) BroadcastMessage(message interface{}, urls []string) error 
 		return lastErr
 	}
 
-	log.ClientCore().Debug("Message broadcast complete", "sent", sent, "total", len(urls))
+	clog().Debug("Message broadcast complete", "sent", sent, "total", len(urls))
 	return nil
 }
 
@@ -399,11 +398,11 @@ func (rp *RelayPool) Close() error {
 	rp.mu.Lock()
 	defer rp.mu.Unlock()
 
-	log.ClientCore().Info("Closing relay pool", "connection_count", len(rp.connections))
+	clog().Info("Closing relay pool", "connection_count", len(rp.connections))
 
 	for url, conn := range rp.connections {
 		if err := conn.close(); err != nil {
-			log.ClientCore().Error("Error closing relay connection", "relay", url, "error", err)
+			clog().Error("Error closing relay connection", "relay", url, "error", err)
 		}
 	}
 
@@ -427,14 +426,14 @@ func (rc *RelayConnection) writeHandler() {
 		select {
 		case data := <-rc.writeChan:
 			if err := websocket.Message.Send(rc.Conn, string(data)); err != nil {
-				log.ClientCore().Error("Failed to send message to relay", "relay", rc.URL, "error", err)
+				clog().Error("Failed to send message to relay", "relay", rc.URL, "error", err)
 				rc.setStatus(StatusError)
 				return
 			}
-			log.ClientCore().Debug("Message sent to relay", "relay", rc.URL)
+			clog().Debug("Message sent to relay", "relay", rc.URL)
 
 		case <-rc.done:
-			log.ClientCore().Debug("Write handler stopped", "relay", rc.URL)
+			clog().Debug("Write handler stopped", "relay", rc.URL)
 			return
 		}
 	}
@@ -451,13 +450,13 @@ func (rc *RelayConnection) readHandler() {
 		if rc.Conn != nil {
 			rc.Conn.Close()
 		}
-		log.ClientCore().Debug("Read handler terminated", "relay", rc.URL)
+		clog().Debug("Read handler terminated", "relay", rc.URL)
 	}()
 
 	for {
 		select {
 		case <-rc.done:
-			log.ClientCore().Debug("Read handler stopped", "relay", rc.URL)
+			clog().Debug("Read handler stopped", "relay", rc.URL)
 			return
 		default:
 			// Set a longer read timeout to avoid frequent timeouts
@@ -467,7 +466,7 @@ func (rc *RelayConnection) readHandler() {
 			if err := websocket.Message.Receive(rc.Conn, &message); err != nil {
 				// Don't log timeout errors as errors - they're normal for keep-alive
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-					log.ClientCore().Debug("Read timeout from relay (normal keep-alive)", "relay", rc.URL)
+					clog().Debug("Read timeout from relay (normal keep-alive)", "relay", rc.URL)
 					continue // Continue loop, don't terminate connection
 				}
 
@@ -475,7 +474,7 @@ func (rc *RelayConnection) readHandler() {
 				// network read errors are normal flakiness for third-party
 				// relays we have no control over, not grain bugs. Operators
 				// can opt in by lowering the log level when diagnosing.
-				log.ClientCore().Debug("Failed to read message from relay", "relay", rc.URL, "error", err)
+				clog().Debug("Failed to read message from relay", "relay", rc.URL, "error", err)
 				rc.setStatus(StatusError)
 				return
 			}
@@ -485,7 +484,7 @@ func (rc *RelayConnection) readHandler() {
 			// strings) that fail our parser. Logging at WARN drowned the
 			// real signal in the v0.5.0 RC.
 			if err := rc.processMessage(message); err != nil {
-				log.ClientCore().Debug("Failed to process message from relay", "relay", rc.URL, "error", err)
+				clog().Debug("Failed to process message from relay", "relay", rc.URL, "error", err)
 			}
 		}
 	}
@@ -533,22 +532,22 @@ func (rc *RelayConnection) close() error {
 		return nil
 	}
 
-	log.ClientCore().Debug("Closing relay connection", "relay", rc.URL)
+	clog().Debug("Closing relay connection", "relay", rc.URL)
 	if conn != nil {
 		// The handler defers may also close the socket; a double close is
 		// benign, so log it at debug rather than failing the close.
 		if err := conn.Close(); err != nil {
-			log.ClientCore().Debug("Relay socket close returned error (likely already closed)",
+			clog().Debug("Relay socket close returned error (likely already closed)",
 				"relay", rc.URL, "error", err)
 		}
 	}
-	log.ClientCore().Debug("Relay connection closed", "relay", rc.URL)
+	clog().Debug("Relay connection closed", "relay", rc.URL)
 	return nil
 }
 
 // Also update processMessage in relays.go to pass relay URL:
 func (rc *RelayConnection) processMessage(message string) error {
-	log.ClientCore().Debug("Processing message from relay", "relay", rc.URL, "message_length", len(message))
+	clog().Debug("Processing message from relay", "relay", rc.URL, "message_length", len(message))
 
 	// Parse the message as JSON array
 	var messageArray []interface{}
@@ -578,7 +577,7 @@ func (rc *RelayConnection) processMessage(message string) error {
 				return fmt.Errorf("invalid event data in EVENT")
 			}
 
-			log.ClientCore().Debug("Received EVENT message", "relay", rc.URL, "sub_id", subID)
+			clog().Debug("Received EVENT message", "relay", rc.URL, "sub_id", subID)
 			rc.messageRouter.RouteMessage(subID, "EVENT", eventData, rc.URL) // Pass relay URL
 		}
 	case "EOSE":
@@ -588,7 +587,7 @@ func (rc *RelayConnection) processMessage(message string) error {
 				return fmt.Errorf("invalid subscription ID in EOSE")
 			}
 
-			log.ClientCore().Debug("Received EOSE message", "relay", rc.URL, "sub_id", subID)
+			clog().Debug("Received EOSE message", "relay", rc.URL, "sub_id", subID)
 			rc.messageRouter.RouteMessage(subID, "EOSE", nil, rc.URL) // Pass relay URL
 		}
 	case "CLOSED":
@@ -598,7 +597,7 @@ func (rc *RelayConnection) processMessage(message string) error {
 				return fmt.Errorf("invalid subscription ID in CLOSED")
 			}
 
-			log.ClientCore().Debug("Received CLOSED message", "relay", rc.URL, "sub_id", subID)
+			clog().Debug("Received CLOSED message", "relay", rc.URL, "sub_id", subID)
 			rc.messageRouter.RouteMessage(subID, "CLOSED", nil, rc.URL) // Pass relay URL
 		}
 	case "NOTICE":
@@ -607,7 +606,7 @@ func (rc *RelayConnection) processMessage(message string) error {
 			if !ok {
 				notice = "unknown notice"
 			}
-			log.ClientCore().Info("Relay notice", "relay", rc.URL, "notice", notice)
+			clog().Info("Relay notice", "relay", rc.URL, "notice", notice)
 		}
 	case "OK":
 		// NIP-20: ["OK", <event-id>, <accepted bool>, <reason string>]
@@ -618,7 +617,7 @@ func (rc *RelayConnection) processMessage(message string) error {
 			if len(messageArray) >= 4 {
 				reason, _ = messageArray[3].(string)
 			}
-			log.ClientCore().Debug("Received OK message", "relay", rc.URL, "accepted", accepted, "reason", reason)
+			clog().Debug("Received OK message", "relay", rc.URL, "accepted", accepted, "reason", reason)
 			rc.messageRouter.RouteOK(eventID, OKResult{Relay: rc.URL, Accepted: accepted, Reason: reason})
 		}
 	case "AUTH":
@@ -626,12 +625,12 @@ func (rc *RelayConnection) processMessage(message string) error {
 		// the relay manager can surface it and the browser signer can answer it.
 		if len(messageArray) >= 2 {
 			if challenge, ok := messageArray[1].(string); ok && challenge != "" {
-				log.ClientCore().Debug("Received AUTH challenge", "relay", rc.URL)
+				clog().Debug("Received AUTH challenge", "relay", rc.URL)
 				rc.messageRouter.RouteAuth(rc.URL, challenge)
 			}
 		}
 	default:
-		log.ClientCore().Debug("Unknown message type", "relay", rc.URL, "type", messageType)
+		clog().Debug("Unknown message type", "relay", rc.URL, "type", messageType)
 	}
 
 	return nil
@@ -642,13 +641,13 @@ func parseEventFromData(data map[string]interface{}) *nostr.Event {
 	// Convert the map to JSON and back to parse properly
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		log.ClientCore().Error("Failed to marshal event data", "error", err)
+		clog().Error("Failed to marshal event data", "error", err)
 		return nil
 	}
 
 	var event nostr.Event
 	if err := json.Unmarshal(jsonData, &event); err != nil {
-		log.ClientCore().Error("Failed to unmarshal event", "error", err)
+		clog().Error("Failed to unmarshal event", "error", err)
 		return nil
 	}
 

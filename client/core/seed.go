@@ -5,7 +5,6 @@ import (
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // FetchEvents collects up to limit distinct events (deduped by id) matching
@@ -20,7 +19,7 @@ func (c *Client) FetchEvents(ctx context.Context, filters []nostr.Filter, relays
 
 	sub, err := c.Subscribe(ctx, filters, relays)
 	if err != nil {
-		log.ClientCore().Debug("FetchEvents subscribe failed", "error", err)
+		clog().Debug("FetchEvents subscribe failed", "error", err)
 		return nil
 	}
 	defer sub.Close()
@@ -98,6 +97,6 @@ func (c *Client) SeedKnownRelays() {
 		}
 	}
 
-	log.ClientCore().Info("Seeded known relays from indexers",
+	clog().Info("Seeded known relays from indexers",
 		"events", len(events), "stored", stored, "known", c.PoolStats().Known)
 }

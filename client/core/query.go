@@ -5,7 +5,6 @@ import (
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // streamConfig is the resolved set of [StreamOption]s.
@@ -55,7 +54,7 @@ func (c *Client) StreamEvents(ctx context.Context, filter nostr.Filter, relays [
 		}
 		sub, err := c.Subscribe(ctx, []nostr.Filter{filter}, relays)
 		if err != nil {
-			log.ClientCore().Debug("StreamEvents subscribe failed", "error", err)
+			clog().Debug("StreamEvents subscribe failed", "error", err)
 			return
 		}
 		defer sub.Close()
@@ -96,7 +95,7 @@ func (c *Client) StreamEvents(ctx context.Context, filter nostr.Filter, relays [
 					return // every relay has sent all its stored events
 				}
 			case err := <-sub.Errors:
-				log.ClientCore().Debug("StreamEvents relay error", "error", err)
+				clog().Debug("StreamEvents relay error", "error", err)
 			}
 		}
 	}()

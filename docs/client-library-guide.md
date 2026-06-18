@@ -22,9 +22,9 @@ on it, not part of its import contract.
 > both the read/fetch **and** publish paths take a `context.Context` for
 > caller-set deadlines and cancellation. Remaining items are non-blocking 1.0
 > hardening, **not** new surface:
-> - `RelayListStore` (pluggable persistence) and a pluggable `Logger` are seams
->   planned for 1.0; today the directory caches in memory and logs via
->   `server/utils/log`.
+> - a pluggable `Logger` lets a consumer replace grain's logging (`SetLogger`);
+>   `RelayListStore` (pluggable directory persistence) is the one remaining seam
+>   planned for 1.0 — today the directory caches in memory.
 > - `PublishDM` (gift-wrapped NIP-17) is still pending — the NIP-44 primitives it
 >   needs now exist (below), but the seal/gift-wrap assembly isn't wired yet.
 >
@@ -44,7 +44,7 @@ on it, not part of its import contract.
 - [AUTH (NIP-42)](#auth-nip-42)
 - [The known-relays browser](#the-known-relays-browser)
 - [The client tag (NIP-89)](#the-client-tag-nip-89)
-- [Pluggable seam: the Signer](#pluggable-seam-the-signer)
+- [Pluggable seams: Signer & Logger](#pluggable-seams-signer--logger)
 - [The HTTP API (reference consumer)](#the-http-api-reference-consumer)
 - [API reference (essentials)](#api-reference-essentials)
 - [Runnable examples](#runnable-examples)
@@ -359,7 +359,7 @@ tag honest without leaking which app a foreign event came through.
 
 ---
 
-## Pluggable seam: the Signer
+## Pluggable seams: Signer & Logger
 
 A `Signer` produces signatures for one pubkey. Supply one to publish; omit it
 for a read-only context.
@@ -374,8 +374,15 @@ type Signer interface {
 The built-in `EventSigner` (a local secp256k1 key via `NewEventSigner(hex)` or
 `NewEventSignerFromRandom()`) satisfies it, and adds the NIP-44 methods above. A
 consumer can plug in their own — NIP-46 remote signer, hardware, HSM — by
-implementing the two methods. (A `RelayListStore` persistence seam and a
-pluggable `Logger` are planned for 1.0; today the directory caches in memory.)
+implementing the two methods.
+
+**Logging.** The library logs through a pluggable `Logger` — the four
+`*slog.Logger` methods (`Debug`/`Info`/`Warn`/`Error`). It defaults to grain's
+own logging, so nothing changes until you opt out: `core.SetLogger(yourLogger)`
+(any `*slog.Logger` works, or implement the four methods) routes all
+client-library logging through your stack instead. (A `RelayListStore`
+directory-persistence seam is the last planned 1.0 seam; today the directory
+caches in memory.)
 
 ---
 

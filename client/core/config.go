@@ -30,6 +30,11 @@ type Config struct {
 	RelayListTTL    time.Duration `json:"relay_list_ttl"`     // per-user relay-list directory cache TTL
 	RelayListNegTTL time.Duration `json:"relay_list_neg_ttl"` // shorter TTL for "no list published"
 	OpenTimeout     time.Duration `json:"open_timeout"`       // per-dial cap for on-demand outbox dials (< ConnectionTimeout)
+
+	// Logger, when non-nil, replaces the process-wide client-library logger at
+	// NewClient time (see [SetLogger]). Not serialized; defaults to grain's
+	// client-core logging so behaviour is unchanged when unset.
+	Logger Logger `json:"-"`
 }
 
 // DefaultConfig returns a sensible default configuration. The IndexRelays
