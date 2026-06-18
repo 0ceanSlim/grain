@@ -144,7 +144,10 @@ func (c *Client) WarmMediaServers(pubkey string) {
 // outbox, where these lists most often live.
 func (c *Client) FetchMediaServerList(pubkey string, kind int) *nostr.Event {
 	relays := c.indexRelays()
-	if ur, ok := c.directory.Cached(pubkey); ok {
+	// Blocking relay-list resolve so the outbox (where the list usually lives) is
+	// included — otherwise a cold directory makes the rebuild miss the existing
+	// event and drop its non-server tags (#83).
+	if ur := c.directory.Lookup(pubkey); ur != nil {
 		relays = appendUnique(relays, ur.Outbox)
 	}
 	return c.fetchLatestEvent(context.Background(), pubkey, kind, relays)
@@ -211,15 +214,20 @@ func AssembleMediaServerEvent(existing *nostr.Event, kind int, pubkey string, se
 //
 // The outbox matters here more than for profiles: media-server lists are often
 // published only to the user's own write relays, not the metadata indexers, so
-// querying indexers alone can miss a list the user really has. The cached
-// outbox is included without a blocking resolve (same rule as RouteMetadata);
-// for the logged-in user it is warmed by the mailbox lookup done at login.
+// querying indexers alone can miss a list the user really has. The outbox is
+// resolved blocking, so an expired directory cache can't silently fall back to
+// indexers-only and cache a false negative (#83).
 func (c *Client) fetchUserMediaServersFromNetwork(pubkey string) *MediaServers {
 	relays := c.indexRelays()
 	if len(relays) == 0 {
 		relays = c.GetConnectedRelays()
 	}
-	if ur, ok := c.directory.Cached(pubkey); ok {
+	// Include the user's outbox, where 10063/10096 are most often published.
+	// Resolve the relay list *blocking* (not a non-blocking cache peek): a cold
+	// or expired directory would otherwise skip the outbox, query only the
+	// indexers, miss the list, and cache a false negative — the user sees "no
+	// media servers" even though they have some (#83).
+	if ur := c.directory.Lookup(pubkey); ur != nil {
 		relays = appendUnique(relays, ur.Outbox)
 	}
 
