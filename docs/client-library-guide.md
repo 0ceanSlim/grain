@@ -7,7 +7,7 @@ each user's relay lists, and routes every operation to the right relays under th
 [outbox model](https://mikedilger.com/gossip-model/): you read a user's notes
 from *their* outbox, and a reply you publish reaches the *parent author's* inbox.
 
-```
+```go
 import "github.com/0ceanslim/grain/client/core"
 ```
 
@@ -16,13 +16,38 @@ import "github.com/0ceanslim/grain/client/core"
 are the **reference consumer** of this surface — a worked example of how to build
 on it, not part of its import contract.
 
-> **Status (0.8.0, pre-1.0).** The surface below is stable enough to build on,
-> with known gaps: the **read/fetch** methods take a `context.Context`
-> (`Subscribe`, `GetUserProfile`, `StreamEvents`/`QueryEvents`, `FetchNotes`,
-> `StreamNotes`) so a fetch can be cancelled; the **publish** methods don't yet
-> (they carry their own deadlines). `PublishDM` (gift-wrapped NIP-17) is deferred
-> until NIP-44 encryption lands, and NIP-42 AUTH-for-`trusted` is not yet
-> implemented. See [the design doc](design/outbox-relay-pool.md) §11.
+> **Status (0.8.0).** This is the **feature-complete client-library surface** —
+> 0.8.0 is the bulk of the client work, and everything documented here is usable
+> today. NIP-44 encryption (v2 + v3) and NIP-42 AUTH both landed this cycle.
+> Remaining items are non-blocking 0.x→1.0 polish, **not** new surface:
+> - the **publish** methods don't yet take a `context.Context` (they carry their
+>   own deadlines); the **read/fetch** methods do, so a fetch can be cancelled.
+> - `RelayListStore` (pluggable persistence) and a pluggable `Logger` are seams
+>   planned for 1.0; today the directory caches in memory and logs via
+>   `server/utils/log`.
+> - `PublishDM` (gift-wrapped NIP-17) is still pending — the NIP-44 primitives it
+>   needs now exist (below), but the seal/gift-wrap assembly isn't wired yet.
+>
+> See [the design doc](design/outbox-relay-pool.md) §11 for the rationale.
+
+---
+
+## Contents
+
+- [Quick start](#quick-start)
+- [The outbox model & routing](#the-outbox-model--routing)
+- [The role model](#the-role-model)
+- [Streaming fetches](#streaming-fetches)
+- [Relay lists & mailboxes](#relay-lists--mailboxes)
+- [Media servers (Blossom + NIP-96)](#media-servers-blossom--nip-96)
+- [Encryption (NIP-44)](#encryption-nip-44)
+- [AUTH (NIP-42)](#auth-nip-42)
+- [The known-relays browser](#the-known-relays-browser)
+- [The client tag (NIP-89)](#the-client-tag-nip-89)
+- [Pluggable seam: the Signer](#pluggable-seam-the-signer)
+- [The HTTP API (reference consumer)](#the-http-api-reference-consumer)
+- [API reference (essentials)](#api-reference-essentials)
+- [Runnable examples](#runnable-examples)
 
 ---
 
@@ -145,6 +170,194 @@ user's outbox set for an outbox feed.
 
 ---
 
+## Relay lists & mailboxes
+
+The engine reads, parses, and assembles a user's replaceable relay-list events.
+`FetchUserRelayLists` resolves every kind a relay manager shows, concurrently:
+
+```go
+lists := client.FetchUserRelayLists(pubkey) // *UserRelayLists
+for _, e := range lists.NIP65 {             // 10002 entries
+    fmt.Println(e.URL, e.Read, e.Write)     // read=inbox, write=outbox, both=unmarked
+}
+fmt.Println(lists.DM, lists.Search, lists.Favorites) // 10050, 10007, 10012
+```
+
+`UserRelayLists` covers NIP-65 (`NIP65 []RelayListEntry`, with `Read`/`Write`
+markers) plus the NIP-51/37 string lists: `DM` (10050), `Blocked` (10006),
+`Search` (10007), `Favorites` (10012), `Private` (10013). For lists whose
+`.content` is encrypted, the `Encrypted` flags say which, and `EncryptedContent`
+carries the **raw, still-encrypted** blob per list — **grain never decrypts**; it
+passes the opaque content through so the consumer's signer can decrypt on demand
+(see [Encryption](#encryption-nip-44)).
+
+Parse a single 10002 yourself with `core.ParseNIP65Entries(event)`; it dedupes
+and merges read/write markers. To **write** a list, assemble an unsigned event
+and sign it with the user context:
+
+```go
+entries := []core.RelayListEntry{
+    {URL: "wss://out.example.com", Write: true},          // outbox only
+    {URL: "wss://in.example.com", Read: true},            // inbox only
+    {URL: "wss://both.example.com", Read: true, Write: true},
+}
+unsigned, err := core.AssembleRelayListEvent(existing, 10002, pubkey, entries)
+// unsigned has no ID/Sig — the caller signs:
+_, results, err := uc.SignAndPublish(unsigned)
+```
+
+`AssembleRelayListEvent` rewrites only the relay tags and **preserves the content
+and every non-relay tag** — the same conservative "don't drop data" rule the
+profile and media editors use. Tag shape is `["r", url[, "read"|"write"]]` for
+10002 and `["relay", url]` for 10050/10006/10007/10012. `existing` may be `nil`
+for a first list. Resolution is cached; `WarmUserRelayLists`,
+`InvalidateUserRelayLists`, and `ResolveUserRelayLists` (cache-first) manage the
+cache — invalidate after the user republishes their own list.
+
+---
+
+## Media servers (Blossom + NIP-96)
+
+The engine resolves a user's media-server lists — Blossom (kind 10063,
+[BUD-03](https://github.com/hzrd149/blossom/blob/master/buds/03.md)) and legacy
+NIP-96 (kind 10096) — with the same TTL-cached, single-flight directory as relay
+lists:
+
+```go
+ms := client.ResolveMediaServers(pubkey) // *MediaServers (blocking, cached)
+if ms.HasAny() {
+    fmt.Println("blossom:", ms.Blossom)  // primary first
+    fmt.Println("nip96:", ms.NIP96)
+}
+```
+
+`MediaServers` is `{Blossom, NIP96 []string; FetchedAt; Negative}` — `Negative`
+marks "user has published neither list" (cached briefly so a cold miss doesn't
+re-hit the network on every call). `HasAny()` is the "open the picker vs. prompt
+to set some up" decision.
+
+- `core.AssembleMediaServerEvent(existing, kind, pubkey, servers)` builds the
+  unsigned 10063/10096 event to sign and publish (same preserve-other-tags rule).
+- `core.SuggestedMediaServers()` is grain's curated quick-add list
+  (`MediaServerInfo`: URL, Kind, Cost, Retention, Mirror, Note, CTA);
+  `core.LookupMediaServerInfo(url)` returns capability chips for a known server.
+- `WarmMediaServers` / `InvalidateMediaServers` manage the cache.
+
+> The **upload** itself is client-side: the browser computes the file's sha256,
+> builds and signs a [BUD-01](https://github.com/hzrd149/blossom/blob/master/buds/01.md)
+> (Blossom, PUT) or NIP-96 (multipart POST) authorization with the user's signer,
+> and uploads directly to the server (see `www/static/js/blossom-upload.js`). The
+> Go library's job is to **resolve which servers** to target; the signed upload
+> stays with whoever holds the key.
+
+---
+
+## Encryption (NIP-44)
+
+The built-in `EventSigner` exposes NIP-44 conversation encryption, validated
+against the official test vectors. **v2** is the deployed standard and the
+default; **v3** is the in-progress draft, opt-in, and binds the event `kind` and
+a `scope` into the MAC's authenticated data.
+
+```go
+// v2 (default) — the interoperable standard
+ciphertext, err := signer.NIP44Encrypt(peerPubKey, "hello")
+plaintext, err := signer.NIP44Decrypt(peerPubKey, ciphertext)
+
+// v3 (draft, opt-in) — kind + scope bound into the MAC
+ct, err := signer.NIP44V3Encrypt(peerPubKey, kind, scope, []byte("hello"))
+pt, err := signer.NIP44V3Decrypt(peerPubKey, kind, scope, ct)
+```
+
+The conversation key is derived from the ECDH of the signer's key and the peer's
+pubkey, so the **same key holder** decrypts. This is the primitive behind the
+private NIP-51/37 lists ([Relay lists & mailboxes](#relay-lists--mailboxes)):
+grain hands the consumer the raw encrypted blob, and the consumer decrypts it
+with the session signer. The gift-wrapped NIP-17 DM flow (`PublishDM`) is built
+on these primitives but not yet wired (see the status note above).
+
+---
+
+## AUTH (NIP-42)
+
+The engine tracks per-relay AUTH challenges so a consumer can answer them with
+the session signer. A relay that issues a challenge appears in `AuthRequests()`;
+the consumer builds and signs a kind-22242 event and forwards it with
+`SendAuth`:
+
+```go
+for _, req := range client.AuthRequests() { // []AuthState
+    if req.Authed {
+        continue // already answered this session
+    }
+    // Build + sign a kind-22242 event echoing the relay URL and challenge:
+    ev := &nostr.Event{
+        Kind: 22242,
+        Tags: [][]string{
+            {"relay", req.Relay},
+            {"challenge", req.Challenge},
+        },
+    }
+    if err := uc.Sign(ev); err != nil {
+        continue
+    }
+    if err := client.SendAuth(req.Relay, ev); err != nil { // forwarded on the challenged conn
+        // log + surface
+    }
+}
+```
+
+`AuthState` is `{Relay, Challenge, Authed, At}`. Once a relay is answered it
+stays authed for the **session**; a fresh challenge from the relay clears the
+flag so the consumer re-prompts (your signer will pop up automatically). Drop a
+relay with `RemoveAuth(url)`. In grain's reference UI this list **is** the
+"Trusted" list — relays you've chosen to authenticate to — so AUTH-for-`trusted`
+is opt-in per relay rather than a blanket auto-sign.
+
+---
+
+## The known-relays browser
+
+Everything the engine has seen — from resolutions and config — is browsable, with
+live status, NIP-11 metadata, and latency:
+
+```go
+all := client.KnownRelays()                 // []string, every relay seen
+status := client.KnownRelaysWithStatus()    // []KnownRelayStatus: connected/pinned/leased
+
+info := client.FetchRelayInfo(url)          // *RelayInfo (NIP-11; HTTP GET, TTL-cached)
+if info != nil && info.Limitation != nil && info.Limitation.AuthRequired {
+    // relay requires NIP-42 AUTH
+}
+
+latency := client.PingRelay(url)            // ms (TCP dial), -1 on failure
+pings := client.PingRelays(urls)            // map[url]ms, concurrent — for "sort: fastest"
+```
+
+`FetchRelayInfo` is a plain HTTP GET with `Accept: application/nostr+json` (not a
+pool/WebSocket connection), so the browser can show name, software, supported
+NIPs, and the auth/payment flags without holding a relay connection open. It
+returns `nil` (cached) when a relay advertises no NIP-11, to avoid retry storms.
+
+---
+
+## The client tag (NIP-89)
+
+`ApplyClientTag` stamps (or strips) the `client` tag on an event you're about to
+sign:
+
+```go
+core.ApplyClientTag(event, enabled, "grain") // enabled=false strips any client tag
+```
+
+It always removes any **foreign** `client` tag first (so re-published events
+don't leak another app's attribution), then adds `["client", name]` only when
+`enabled`. grain's reference UI defaults the name to `grain` and exposes a
+user-facing toggle plus admin defaults; the privacy-respecting default keeps the
+tag honest without leaking which app a foreign event came through.
+
+---
+
 ## Pluggable seam: the Signer
 
 A `Signer` produces signatures for one pubkey. Supply one to publish; omit it
@@ -158,10 +371,34 @@ type Signer interface {
 ```
 
 The built-in `EventSigner` (a local secp256k1 key via `NewEventSigner(hex)` or
-`NewEventSignerFromRandom()`) satisfies it. A consumer can plug in their own —
-NIP-46 remote signer, hardware, HSM — by implementing the two methods. (A
-`RelayListStore` persistence seam and a pluggable `Logger` are planned; today the
-directory caches in memory.)
+`NewEventSignerFromRandom()`) satisfies it, and adds the NIP-44 methods above. A
+consumer can plug in their own — NIP-46 remote signer, hardware, HSM — by
+implementing the two methods. (A `RelayListStore` persistence seam and a
+pluggable `Logger` are planned for 1.0; today the directory caches in memory.)
+
+---
+
+## The HTTP API (reference consumer)
+
+grain's `client/api` package wraps this library in an HTTP API for the bundled
+web client — the worked reference for consuming `client/core`. The endpoint
+groups mirror the sections above:
+
+| Group | What it exposes |
+|---|---|
+| keys | generate / validate / derive / NIP-19 encode-decode |
+| session, login, logout | signer login + session lifecycle |
+| profile | resolve + publish kind-0 metadata |
+| relay-list | the relay-list build/fetch + fixed-relay endpoints |
+| known-relays, relay-ping | the browser + latency sort |
+| media-servers | resolve + assemble media-server lists |
+| auth | the NIP-42 challenge list + answer/remove |
+| stream, events | the streaming feed + event publish |
+| client-tag | the client-tag default + toggle |
+
+The full request/response contract is the OpenAPI spec, generated at build via
+`make generate` and served by the dashboard at `/api/docs`. Treat that spec as
+the authoritative HTTP reference; this guide is the library reference beneath it.
 
 ---
 
@@ -176,6 +413,15 @@ directory caches in memory.)
   `QueryEvents(...) []*nostr.Event`.
 - `GetUserProfile(pubkey, relayHints) (*nostr.Event, error)`,
   `PublishEvent(event, relays) ([]BroadcastResult, error)`.
+- **Relay lists:** `FetchUserRelayLists(pubkey) *UserRelayLists`,
+  `ResolveUserRelayLists`, `WarmUserRelayLists`, `InvalidateUserRelayLists`,
+  `FetchRelayList(pubkey, kind)`, `OwnListRelays(pubkey)`.
+- **Media:** `ResolveMediaServers(pubkey) *MediaServers`, `FetchMediaServerList`,
+  `WarmMediaServers`, `InvalidateMediaServers`.
+- **Known relays:** `KnownRelays() []string`, `KnownRelaysWithStatus()`,
+  `FetchRelayInfo(url) *RelayInfo`, `PingRelay(url) int`, `PingRelays(urls)`.
+- **AUTH:** `AuthRequests() []AuthState`, `AuthChallenge(url)`,
+  `SendAuth(url, signed)`, `RemoveAuth(url)`.
 
 ### `UserContext`
 - `PublicKey()`, `Client()`, `Signer()`, `Relays() *SessionRelays`.
@@ -183,6 +429,13 @@ directory caches in memory.)
 - `FetchNotes(ctx, author, ...)`, `StreamNotes(ctx, author, ...)`,
   `Reply(parent, content)`.
 - `PinFixedRelays(read, write)`, `ClearFixedRelays()`, `FixedRelaysEnabled()`.
+
+### `EventSigner` (implements `Signer`)
+- `NewEventSigner(hex)`, `NewEventSignerFromRandom()`; `PublicKey()`,
+  `SignEvent(event)`.
+- NIP-44 v2: `NIP44Encrypt(peer, plaintext)`, `NIP44Decrypt(peer, payload)`.
+- NIP-44 v3 (draft): `NIP44V3Encrypt(peer, kind, scope, plaintext)`,
+  `NIP44V3Decrypt(peer, kind, scope, payload)`.
 
 ### `Role`
 A `uint16` bitmask; `Has(x)`, `String()`, and the `Role*` constants above.
@@ -193,6 +446,22 @@ A `uint16` bitmask; `Has(x)`, `String()`, and the `Role*` constants above.
 
 ### `UserRelays`
 Per-target resolution: `Outbox`, `Inbox`, `DMInbox []string`; `ForRole(role)`.
+
+### `UserRelayLists`
+`NIP65 []RelayListEntry`; `DM`, `Blocked`, `Search`, `Favorites`,
+`Private []string`; `Encrypted EncryptedFlags`, `EncryptedContent` (raw blobs).
+Build with `AssembleRelayListEvent`; parse 10002 with `ParseNIP65Entries`.
+
+### `MediaServers`
+`Blossom`, `NIP96 []string` (primary first); `HasAny()`. Build with
+`AssembleMediaServerEvent`; suggestions via `SuggestedMediaServers()`.
+
+### `RelayInfo`
+NIP-11: `Name`, `Description`, `Software`, `Version`, `SupportedNIPs []int`,
+`Icon`, `Limitation *RelayLimits` (`AuthRequired`, `PaymentRequired`, …).
+
+### `AuthState`
+`Relay`, `Challenge string`; `Authed bool`; `At time.Time`.
 
 ### `BroadcastResult`
 `RelayURL`, `Success`, `Accepted`, `Reason`, `Error`, `Message`, `Duration` —
