@@ -1,0 +1,278 @@
+// Reusable media upload (#83). Uploads a File to the user's chosen media server
+// — Blossom (BUD-01/02, kind 24242 PUT) or NIP-96 (kind 27235 NIP-98 POST) —
+// signing the auth event with the connected signer (window.grainSigner). Every
+// upload pops a small pre-upload modal: pick the primary server + optionally
+// mirror to the others. Returns the hosted URL to the caller.
+//
+// Public API:
+//   window.grainUpload.pick(onUrl, opts)        — open a file picker, then upload
+//   window.grainUpload.open(file, onUrl, opts)  — upload an already-chosen File
+//   opts: { accept: "image/*", title: "Upload" }
+(function () {
+  "use strict";
+
+  // ── crypto + auth ──────────────────────────────────────────────────────────
+
+  async function sha256Hex(buf) {
+    const digest = await crypto.subtle.digest("SHA-256", buf);
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  async function ensureSigner() {
+    if (typeof window.restoreSigner === "function") {
+      try {
+        await window.restoreSigner();
+      } catch (e) {}
+    }
+    return window.grainSigner && typeof window.grainSigner.signEvent === "function"
+      ? window.grainSigner
+      : null;
+  }
+
+  function b64Event(evt) {
+    return btoa(JSON.stringify(evt));
+  }
+
+  // ── Blossom (BUD-01/02) ────────────────────────────────────────────────────
+
+  async function uploadBlossom(file, serverUrl, hash, onProgress) {
+    const signer = await ensureSigner();
+    if (!signer) throw new Error("No signer connected");
+    const auth = await signer.signEvent({
+      kind: 24242,
+      created_at: Math.floor(Date.now() / 1000),
+      content: "Upload " + file.name,
+      tags: [
+        ["t", "upload"],
+        ["x", hash],
+        ["expiration", String(Math.floor(Date.now() / 1000) + 3600)],
+      ],
+    });
+    const base = serverUrl.replace(/\/+$/, "");
+    const desc = await xhrSend("PUT", base + "/upload", file, {
+      Authorization: "Nostr " + b64Event(auth),
+    }, onProgress);
+    const json = JSON.parse(desc);
+    if (!json || !json.url) throw new Error("Server returned no blob URL");
+    return json.url;
+  }
+
+  // ── NIP-96 ──────────────────────────────────────────────────────────────────
+
+  async function uploadNIP96(file, serverUrl, hash, onProgress) {
+    const signer = await ensureSigner();
+    if (!signer) throw new Error("No signer connected");
+    // Discover the API endpoint (BUD-style well-known).
+    const base = serverUrl.replace(/\/+$/, "");
+    let apiUrl = base;
+    try {
+      const wk = await fetch(base + "/.well-known/nostr/nip96.json");
+      if (wk.ok) {
+        const cfg = await wk.json();
+        if (cfg && cfg.api_url) apiUrl = cfg.api_url;
+      }
+    } catch (e) {
+      /* fall back to the base URL */
+    }
+    const auth = await signer.signEvent({
+      kind: 27235,
+      created_at: Math.floor(Date.now() / 1000),
+      content: "",
+      tags: [
+        ["u", apiUrl],
+        ["method", "POST"],
+        ["payload", hash],
+      ],
+    });
+    const form = new FormData();
+    form.append("file", file);
+    const respText = await xhrSend("POST", apiUrl, form, {
+      Authorization: "Nostr " + b64Event(auth),
+    }, onProgress);
+    const json = JSON.parse(respText);
+    // NIP-96 returns nip94_event with a ["url", <url>] tag.
+    const tags = (json && json.nip94_event && json.nip94_event.tags) || [];
+    const urlTag = tags.find((t) => t[0] === "url");
+    if (!urlTag) throw new Error(json && json.message ? json.message : "Upload failed");
+    return urlTag[1];
+  }
+
+  // xhrSend wraps XMLHttpRequest so we get upload progress for large files.
+  function xhrSend(method, url, body, headers, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(method, url, true);
+      Object.keys(headers || {}).forEach((k) => xhr.setRequestHeader(k, headers[k]));
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) onProgress(e.loaded / e.total);
+        };
+      }
+      xhr.onload = () =>
+        xhr.status >= 200 && xhr.status < 300
+          ? resolve(xhr.responseText)
+          : reject(new Error("HTTP " + xhr.status + (xhr.responseText ? ": " + xhr.responseText.slice(0, 200) : "")));
+      xhr.onerror = () => reject(new Error("Network error (CORS or server unreachable)"));
+      xhr.send(body);
+    });
+  }
+
+  async function uploadTo(file, server, hash, onProgress) {
+    return server.kind === "nip96"
+      ? uploadNIP96(file, server.url, hash, onProgress)
+      : uploadBlossom(file, server.url, hash, onProgress);
+  }
+
+  // ── Pre-upload modal ──────────────────────────────────────────────────────
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  }
+  function shortUrl(u) {
+    return String(u || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
+  }
+  function fmtSize(n) {
+    return n < 1024 * 1024 ? Math.round(n / 1024) + " KB" : (n / 1024 / 1024).toFixed(1) + " MB";
+  }
+
+  function showModal(file, servers, onUrl, opts) {
+    const all = [].concat((servers && servers.blossom) || [], (servers && servers.nip96) || []);
+    const hasAny = servers && servers.hasAny && all.length > 0;
+
+    const overlay = document.createElement("div");
+    overlay.className = "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60";
+    const card = document.createElement("div");
+    card.className = "w-full max-w-md p-5 border rounded-xl bg-surface border-border shadow-lg";
+    overlay.appendChild(card);
+    function close() {
+      overlay.remove();
+    }
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+
+    if (!hasAny) {
+      card.innerHTML =
+        `<h3 class="mb-2 text-lg font-semibold text-text">No media server set up</h3>` +
+        `<p class="mb-4 text-sm text-text-muted">Add a Blossom or NIP-96 server in Settings → Media servers before uploading.</p>` +
+        `<div class="flex justify-end gap-2">` +
+        `<button data-act="cancel" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">Close</button>` +
+        `<a href="/settings" class="px-3 py-2 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Open settings</a>` +
+        `</div>`;
+      card.querySelector('[data-act="cancel"]').onclick = close;
+      document.body.appendChild(overlay);
+      return;
+    }
+
+    const options = all
+      .map((s, i) => {
+        const tags = [s.kind, s.cost, s.retention].filter(Boolean).join(" · ");
+        return `<option value="${i}"${s.primary ? " selected" : ""}>${esc(shortUrl(s.url))}${tags ? " — " + esc(tags) : ""}</option>`;
+      })
+      .join("");
+
+    card.innerHTML =
+      `<h3 class="mb-1 text-lg font-semibold text-text">Upload file</h3>` +
+      `<p class="mb-3 text-xs text-text-muted">${esc(file.name)} · ${fmtSize(file.size)}</p>` +
+      `<label class="block mb-1 text-xs font-medium text-text-secondary">Upload to</label>` +
+      `<select data-ref="server" class="w-full px-3 py-2 mb-2 text-sm border rounded-lg bg-surface-elevated text-text border-border">${options}</select>` +
+      `<label class="flex items-center gap-2 mb-1 text-sm cursor-pointer text-text">` +
+      `<input data-ref="mirror" type="checkbox" />Mirror to my other servers</label>` +
+      `<p data-ref="ephemeral" class="hidden mb-2 text-xs text-warning">⚠ This server is ephemeral — uploads may be deleted after a while.</p>` +
+      `<div data-ref="progress" class="hidden h-1.5 my-3 overflow-hidden rounded bg-surface-inset"><div data-ref="bar" class="h-full bg-accent" style="width:0%"></div></div>` +
+      `<p data-ref="status" class="mt-2 mb-3 text-xs text-text-secondary"></p>` +
+      `<div class="flex justify-end gap-2">` +
+      `<button data-ref="cancel" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">Cancel</button>` +
+      `<button data-ref="go" class="px-4 py-2 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Upload</button>` +
+      `</div>`;
+
+    const $ = (ref) => card.querySelector('[data-ref="' + ref + '"]');
+    const sel = $("server"),
+      mirror = $("mirror"),
+      ephemeral = $("ephemeral"),
+      progress = $("progress"),
+      bar = $("bar"),
+      status = $("status"),
+      go = $("go");
+
+    function reflectServer() {
+      const s = all[Number(sel.value)];
+      ephemeral.classList.toggle("hidden", !(s && s.retention === "ephemeral"));
+      const others = all.length > 1;
+      mirror.disabled = !others;
+      mirror.parentElement.classList.toggle("opacity-50", !others);
+    }
+    sel.onchange = reflectServer;
+    reflectServer();
+    $("cancel").onclick = close;
+
+    go.onclick = async function () {
+      const server = all[Number(sel.value)];
+      go.disabled = true;
+      sel.disabled = true;
+      progress.classList.remove("hidden");
+      status.textContent = "Hashing…";
+      try {
+        const buf = await file.arrayBuffer();
+        const hash = await sha256Hex(buf);
+        status.textContent = "Uploading to " + shortUrl(server.url) + "…";
+        const url = await uploadTo(file, server, hash, (p) => {
+          bar.style.width = Math.round(p * 100) + "%";
+        });
+        if (mirror.checked && all.length > 1) {
+          status.textContent = "Mirroring…";
+          for (let i = 0; i < all.length; i++) {
+            if (i === Number(sel.value)) continue;
+            try {
+              await uploadTo(file, all[i], hash, null);
+            } catch (e) {
+              /* best-effort mirror */
+            }
+          }
+        }
+        status.textContent = "✓ Uploaded";
+        onUrl(url);
+        setTimeout(close, 700);
+      } catch (e) {
+        go.disabled = false;
+        sel.disabled = false;
+        progress.classList.add("hidden");
+        status.textContent = "Upload failed: " + (e && e.message ? e.message : e);
+      }
+    };
+
+    document.body.appendChild(overlay);
+  }
+
+  // ── Public entry points ──────────────────────────────────────────────────────
+
+  function pick(onUrl, opts) {
+    opts = opts || {};
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = opts.accept || "image/*";
+    input.style.display = "none";
+    input.onchange = () => {
+      if (input.files && input.files[0]) open(input.files[0], onUrl, opts);
+      input.remove();
+    };
+    document.body.appendChild(input);
+    input.click();
+  }
+
+  async function open(file, onUrl, opts) {
+    opts = opts || {};
+    let servers;
+    try {
+      const r = await fetch("/api/v1/user/media-servers");
+      servers = r.ok ? await r.json() : null;
+    } catch (e) {
+      servers = null;
+    }
+    showModal(file, servers, onUrl, opts);
+  }
+
+  window.grainUpload = { pick: pick, open: open, _uploadTo: uploadTo, _sha256Hex: sha256Hex };
+})();
