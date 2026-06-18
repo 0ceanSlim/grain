@@ -39,7 +39,7 @@ func ExampleUserContext_Reply() {
 	uc := client.NewUserContext(signer.PublicKey(), core.WithSigner(signer))
 
 	parent := &nostr.Event{ID: "parent-id", PubKey: "parent-author", Kind: 1}
-	reply, results, err := uc.Reply(parent, "well said!")
+	reply, results, err := uc.Reply(context.Background(), parent, "well said!")
 	if err != nil {
 		return
 	}
@@ -119,7 +119,7 @@ func ExampleAssembleRelayListEvent() {
 	if err != nil {
 		return
 	}
-	results, err := uc.SignAndPublish(unsigned)
+	results, err := uc.SignAndPublish(context.Background(), unsigned)
 	if err != nil {
 		return
 	}

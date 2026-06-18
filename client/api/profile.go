@@ -145,7 +145,7 @@ func PublishSignedHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	relays := coreClient.RoutePublish(req.Event)
-	results, err := coreClient.PublishEvent(req.Event, relays)
+	results, err := coreClient.PublishEvent(r.Context(), req.Event, relays)
 	if err != nil {
 		writeSignedResponse(w, http.StatusInternalServerError, PublishSignedResponse{Error: err.Error(), Relays: relays})
 		return
@@ -264,7 +264,7 @@ func PublishSignedStreamHandler(w http.ResponseWriter, r *http.Request) {
 	_ = enc.Encode(publishStreamMsg{Type: "start", Relays: relays})
 	flusher.Flush()
 
-	for res := range coreClient.PublishEventStream(req.Event, relays) {
+	for res := range coreClient.PublishEventStream(r.Context(), req.Event, relays) {
 		msg := publishStreamMsg{
 			Type:     "result",
 			RelayURL: res.RelayURL,

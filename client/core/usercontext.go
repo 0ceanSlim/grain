@@ -75,17 +75,17 @@ func (uc *UserContext) Sign(event *nostr.Event) error {
 // Publish routes an already-signed event under the outbox model (the author's
 // outbox ∪ each p-tagged recipient's inbox; metadata also to the indexers) and
 // broadcasts it, returning the per-relay results.
-func (uc *UserContext) Publish(event *nostr.Event) ([]BroadcastResult, error) {
+func (uc *UserContext) Publish(ctx context.Context, event *nostr.Event) ([]BroadcastResult, error) {
 	relays := uc.client.RoutePublish(event)
-	return uc.client.PublishEvent(event, relays)
+	return uc.client.PublishEvent(ctx, event, relays)
 }
 
 // SignAndPublish signs event as this user and then publishes it.
-func (uc *UserContext) SignAndPublish(event *nostr.Event) ([]BroadcastResult, error) {
+func (uc *UserContext) SignAndPublish(ctx context.Context, event *nostr.Event) ([]BroadcastResult, error) {
 	if err := uc.Sign(event); err != nil {
 		return nil, err
 	}
-	return uc.Publish(event)
+	return uc.Publish(ctx, event)
 }
 
 // PinFixedRelays enables the fixed-relay override — reads come from readRelays,
@@ -124,7 +124,7 @@ func (uc *UserContext) FetchNotes(ctx context.Context, author string, opts ...St
 // publishes it under the outbox model so it reaches the parent author's inbox as
 // well as the user's own audience. It returns the signed reply and the per-relay
 // broadcast results. Requires a signer.
-func (uc *UserContext) Reply(parent *nostr.Event, content string) (*nostr.Event, []BroadcastResult, error) {
+func (uc *UserContext) Reply(ctx context.Context, parent *nostr.Event, content string) (*nostr.Event, []BroadcastResult, error) {
 	if parent == nil {
 		return nil, nil, fmt.Errorf("reply: parent event is nil")
 	}
@@ -134,7 +134,7 @@ func (uc *UserContext) Reply(parent *nostr.Event, content string) (*nostr.Event,
 		CreatedAt: time.Now().Unix(),
 		Tags:      buildReplyTags(parent),
 	}
-	results, err := uc.SignAndPublish(evt)
+	results, err := uc.SignAndPublish(ctx, evt)
 	return evt, results, err
 }
 

@@ -18,10 +18,10 @@ on it, not part of its import contract.
 
 > **Status (0.8.0).** This is the **feature-complete client-library surface** —
 > 0.8.0 is the bulk of the client work, and everything documented here is usable
-> today. NIP-44 encryption (v2 + v3) and NIP-42 AUTH both landed this cycle.
-> Remaining items are non-blocking 0.x→1.0 polish, **not** new surface:
-> - the **publish** methods don't yet take a `context.Context` (they carry their
->   own deadlines); the **read/fetch** methods do, so a fetch can be cancelled.
+> today. NIP-44 encryption (v2 + v3) and NIP-42 AUTH both landed this cycle, and
+> both the read/fetch **and** publish paths take a `context.Context` for
+> caller-set deadlines and cancellation. Remaining items are non-blocking 1.0
+> hardening, **not** new surface:
 > - `RelayListStore` (pluggable persistence) and a pluggable `Logger` are seams
 >   planned for 1.0; today the directory caches in memory and logs via
 >   `server/utils/log`.
@@ -75,8 +75,9 @@ per-relay failures are logged, so an empty slice means "none found".
 signer, _ := core.NewEventSigner(privateKeyHex)            // local-key Signer
 uc := client.NewUserContext(signer.PublicKey(), core.WithSigner(signer))
 
+ctx := context.Background()
 parent := /* the event being replied to */
-reply, results, err := uc.Reply(parent, "well said!")
+reply, results, err := uc.Reply(ctx, parent, "well said!")
 ```
 
 `Reply` builds a NIP-10 reply (thread root + parent markers, thread-wide `p`
@@ -84,8 +85,8 @@ tags), signs it as the context user, and publishes it under the outbox model —
 the author's own outbox **plus** the parent author's inbox — returning the
 per-relay [`BroadcastResult`](#broadcastresult)s.
 
-To publish an event you've built yourself: `uc.SignAndPublish(event)` (sign +
-route + broadcast), or `uc.Sign(event)` then `uc.Publish(event)` separately.
+To publish an event you've built yourself: `uc.SignAndPublish(ctx, event)` (sign +
+route + broadcast), or `uc.Sign(event)` then `uc.Publish(ctx, event)` separately.
 
 ---
 
@@ -203,7 +204,7 @@ entries := []core.RelayListEntry{
 }
 unsigned, err := core.AssembleRelayListEvent(existing, 10002, pubkey, entries)
 // unsigned has no ID/Sig — the caller signs:
-_, results, err := uc.SignAndPublish(unsigned)
+_, results, err := uc.SignAndPublish(context.Background(), unsigned)
 ```
 
 `AssembleRelayListEvent` rewrites only the relay tags and **preserves the content
@@ -411,8 +412,8 @@ the authoritative HTTP reference; this guide is the library reference beneath it
   `RoutePublish(event)`, `ResolveRelays(pubkey) *UserRelays`.
 - `StreamEvents(ctx, filter, relays, ...StreamOption) <-chan *nostr.Event`,
   `QueryEvents(...) []*nostr.Event`.
-- `GetUserProfile(pubkey, relayHints) (*nostr.Event, error)`,
-  `PublishEvent(event, relays) ([]BroadcastResult, error)`.
+- `GetUserProfile(ctx, pubkey, relayHints) (*nostr.Event, error)`,
+  `PublishEvent(ctx, event, relays) ([]BroadcastResult, error)`.
 - **Relay lists:** `FetchUserRelayLists(pubkey) *UserRelayLists`,
   `ResolveUserRelayLists`, `WarmUserRelayLists`, `InvalidateUserRelayLists`,
   `FetchRelayList(pubkey, kind)`, `OwnListRelays(pubkey)`.
@@ -425,9 +426,9 @@ the authoritative HTTP reference; this guide is the library reference beneath it
 
 ### `UserContext`
 - `PublicKey()`, `Client()`, `Signer()`, `Relays() *SessionRelays`.
-- `Sign(event)`, `Publish(event)`, `SignAndPublish(event)`.
+- `Sign(event)`, `Publish(ctx, event)`, `SignAndPublish(ctx, event)`.
 - `FetchNotes(ctx, author, ...)`, `StreamNotes(ctx, author, ...)`,
-  `Reply(parent, content)`.
+  `Reply(ctx, parent, content)`.
 - `PinFixedRelays(read, write)`, `ClearFixedRelays()`, `FixedRelaysEnabled()`.
 
 ### `EventSigner` (implements `Signer`)

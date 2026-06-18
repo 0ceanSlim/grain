@@ -417,7 +417,7 @@ func (c *Client) GetUserRelays(pubkey string) (*Mailboxes, error) {
 }
 
 // PublishEvent publishes an event to specified relays
-func (c *Client) PublishEvent(event *nostr.Event, targetRelays []string) ([]BroadcastResult, error) {
+func (c *Client) PublishEvent(ctx context.Context, event *nostr.Event, targetRelays []string) ([]BroadcastResult, error) {
 	if event == nil {
 		return nil, &ClientError{Message: "event cannot be nil"}
 	}
@@ -434,11 +434,11 @@ func (c *Client) PublishEvent(event *nostr.Event, targetRelays []string) ([]Broa
 
 	log.ClientCore().Info("Publishing event", "event_id", event.ID, "relay_count", len(relays))
 
-	return BroadcastEvent(event, relays, c.relayPool), nil
+	return BroadcastEvent(ctx, event, relays, c.relayPool), nil
 }
 
 // PublishEventWithRetry publishes an event with retry logic
-func (c *Client) PublishEventWithRetry(event *nostr.Event, targetRelays []string, maxRetries int) ([]BroadcastResult, error) {
+func (c *Client) PublishEventWithRetry(ctx context.Context, event *nostr.Event, targetRelays []string, maxRetries int) ([]BroadcastResult, error) {
 	if event == nil {
 		return nil, &ClientError{Message: "event cannot be nil"}
 	}
@@ -455,7 +455,7 @@ func (c *Client) PublishEventWithRetry(event *nostr.Event, targetRelays []string
 
 	log.ClientCore().Info("Publishing event with retry", "event_id", event.ID, "relay_count", len(relays), "max_retries", maxRetries)
 
-	return BroadcastWithRetry(event, relays, c.relayPool, maxRetries), nil
+	return BroadcastWithRetry(ctx, event, relays, c.relayPool, maxRetries), nil
 }
 func (c *Client) Close() error {
 	log.ClientCore().Info("Shutting down client")

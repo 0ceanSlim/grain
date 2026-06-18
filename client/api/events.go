@@ -111,7 +111,7 @@ func PublishEventHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build, sign, and publish
-	event, results, err := core.PublishEvent(coreClient, signer, eventBuilder, req.Relays)
+	event, results, err := core.PublishEvent(r.Context(), coreClient, signer, eventBuilder, req.Relays)
 	if err != nil {
 		log.ClientAPI().Error("Failed to publish event", "error", err)
 		sendEventResponse(w, PublishEventResponse{

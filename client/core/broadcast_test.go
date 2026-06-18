@@ -1,6 +1,9 @@
 package core
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestMessageRouterOKWaiter(t *testing.T) {
 	mr := NewMessageRouter()
@@ -32,7 +35,7 @@ func TestCollectOKResponses(t *testing.T) {
 	okCh <- OKResult{Relay: "wss://a", Accepted: true}
 	okCh <- OKResult{Relay: "wss://b", Accepted: false, Reason: "blocked: spam"}
 
-	collectOKResponses(okCh, results)
+	collectOKResponses(context.Background(), okCh, results)
 
 	if !results[0].Accepted {
 		t.Error("relay a should be accepted")
