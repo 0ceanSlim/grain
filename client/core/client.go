@@ -1,13 +1,14 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // Client represents the main Nostr client with connection pooling
@@ -16,6 +17,56 @@ type Client struct {
 	subscriptions map[string]*Subscription
 	config        *Config
 	mu            sync.RWMutex
+
+	// sessionRelays are the urls Acquired for the currently logged-in session
+	// (a lease held on each for the session's lifetime). Guarded by mu. They're
+	// released when the session switches relays or ends, so they can be
+	// idle-evicted — the outbox pool stays additive rather than torn down.
+	sessionRelays []string
+
+	// directory resolves and caches per-target users' event-derived relay roles
+	// (outbox / inbox / DM inbox) for outbox routing.
+	directory *RelayDirectory
+
+	// mediaDir resolves and caches per-user media-server lists (Blossom kind
+	// 10063 / NIP-96 kind 10096) for the upload flow.
+	mediaDir *MediaDirectory
+
+	// relayListsCache caches a user's resolved relay lists (all kinds) so the
+	// settings page renders from cache once login-hydration has warmed it.
+	// relayListsInflight collapses concurrent resolves for the same pubkey onto
+	// one network fetch (e.g. the relay-pool dropdown's warm prefetch and the
+	// relay manager's own load), so the second caller waits for the first
+	// instead of duplicating a multi-second cold resolve.
+	relayListsMu       sync.Mutex
+	relayListsCache    map[string]relayListsEntry
+	relayListsInflight map[string]chan struct{}
+
+	// Fixed-relay override (opt-out, default OFF). When enabled, every read uses
+	// fixedRead and every write uses fixedWrite, bypassing outbox routing
+	// entirely — replies stop reaching other users' inboxes. Only for users who
+	// explicitly want a fixed-/single-relay client. Guarded by mu.
+	fixedMode  bool
+	fixedRead  []string
+	fixedWrite []string
+
+	// appRelays holds the session's editable overrides for the locally-configured
+	// roles (Indexer/Broadcast/Local/Trusted), seeded from config. An unset role
+	// falls back to config (the index relays) or has no effect. Guarded by
+	// appRelaysMu. These are session preferences, not published Nostr lists.
+	appRelaysMu sync.Mutex
+	appRelays   map[Role][]string
+
+	// relayInfoCache TTL-caches relays' NIP-11 documents for the known-relays
+	// browser (#98). A plain HTTP GET per relay, not a pool connection.
+	relayInfoMu    sync.Mutex
+	relayInfoCache map[string]relayInfoEntry
+
+	// relayPingCache short-TTL-caches TCP-connect latency per relay for the
+	// known-relays "fastest first" sort (#98). A cheap reachability probe, not a
+	// pool/WebSocket round-trip.
+	relayPingMu    sync.Mutex
+	relayPingCache map[string]relayPingEntry
 }
 
 // NewClient creates a new Nostr client instance
@@ -23,18 +74,29 @@ func NewClient(config *Config) *Client {
 	if config == nil {
 		config = DefaultConfig()
 	}
+	config.IndexRelays = normalizeRelayURLs(config.IndexRelays)
+	if config.Logger != nil {
+		SetLogger(config.Logger)
+	}
 
-	return &Client{
+	c := &Client{
 		relayPool:     NewRelayPool(config),
 		subscriptions: make(map[string]*Subscription),
 		config:        config,
-		mu:            sync.RWMutex{},
 	}
+	c.directory = newRelayDirectoryWithStore(config.RelayListTTL, config.RelayListNegTTL, config.RelayListStore, c.fetchUserRelaysFromNetwork)
+	c.mediaDir = newMediaDirectory(config.RelayListTTL, config.RelayListNegTTL, c.fetchUserMediaServersFromNetwork)
+	c.relayListsCache = make(map[string]relayListsEntry)
+	c.relayListsInflight = make(map[string]chan struct{})
+	c.appRelays = make(map[Role][]string)
+	c.relayInfoCache = make(map[string]relayInfoEntry)
+	c.relayPingCache = make(map[string]relayPingEntry)
+	return c
 }
 
 // ConnectToRelays establishes connections to multiple relay URLs
 func (c *Client) ConnectToRelays(urls []string) error {
-	log.ClientCore().Info("Connecting to relays", "relay_count", len(urls), "relays", urls)
+	clog().Info("Connecting to relays", "relay_count", len(urls), "relays", urls)
 
 	if len(urls) == 0 {
 		return fmt.Errorf("no relay URLs provided")
@@ -47,31 +109,31 @@ func (c *Client) ConnectToRelays(urls []string) error {
 	for _, url := range urls {
 		// Validate URL format
 		if url == "" || (!strings.HasPrefix(url, "ws://") && !strings.HasPrefix(url, "wss://")) {
-			log.ClientCore().Warn("Invalid relay URL format", "relay", url)
+			clog().Warn("Invalid relay URL format", "relay", url)
 			failed = append(failed, url)
 			lastErr = fmt.Errorf("invalid URL format: %s", url)
 			continue
 		}
 
 		if err := c.relayPool.Connect(url); err != nil {
-			log.ClientCore().Warn("Failed to connect to relay", "relay", url, "error", err)
+			clog().Warn("Failed to connect to relay", "relay", url, "error", err)
 			failed = append(failed, url)
 			lastErr = err
 			continue
 		}
 		connected++
-		log.ClientCore().Debug("Successfully connected to relay", "relay", url)
+		clog().Debug("Successfully connected to relay", "relay", url)
 	}
 
 	if connected == 0 && lastErr != nil {
-		log.ClientCore().Error("Failed to connect to any relays",
+		clog().Error("Failed to connect to any relays",
 			"attempted", len(urls),
 			"failed_relays", failed,
 			"last_error", lastErr)
 		return fmt.Errorf("failed to connect to any relays: %w", lastErr)
 	}
 
-	log.ClientCore().Info("Connected to relays",
+	clog().Info("Connected to relays",
 		"connected", connected,
 		"failed", len(failed),
 		"total", len(urls))
@@ -81,7 +143,7 @@ func (c *Client) ConnectToRelays(urls []string) error {
 
 	// Verify connections are actually established
 	actuallyConnected := c.GetConnectedRelays()
-	log.ClientCore().Info("Relay connection verification",
+	clog().Info("Relay connection verification",
 		"reported_connected", connected,
 		"actually_connected", len(actuallyConnected),
 		"connected_relays", actuallyConnected)
@@ -91,15 +153,15 @@ func (c *Client) ConnectToRelays(urls []string) error {
 
 // DisconnectFromRelay closes a specific relay connection
 func (c *Client) DisconnectFromRelay(relayURL string) error {
-	log.ClientCore().Info("Disconnecting from relay", "relay", relayURL)
+	clog().Info("Disconnecting from relay", "relay", relayURL)
 
 	// Use the relay pool's existing CloseConnection method
 	if err := c.relayPool.CloseConnection(relayURL); err != nil {
-		log.ClientCore().Error("Failed to close relay connection", "relay", relayURL, "error", err)
+		clog().Error("Failed to close relay connection", "relay", relayURL, "error", err)
 		return err
 	}
 
-	log.ClientCore().Info("Successfully disconnected from relay", "relay", relayURL)
+	clog().Info("Successfully disconnected from relay", "relay", relayURL)
 	return nil
 }
 
@@ -108,18 +170,18 @@ func (c *Client) DisconnectFromRelays(relayURLs []string) error {
 	var lastErr error
 	disconnected := 0
 
-	log.ClientCore().Info("Disconnecting from multiple relays", "relay_count", len(relayURLs))
+	clog().Info("Disconnecting from multiple relays", "relay_count", len(relayURLs))
 
 	for _, relayURL := range relayURLs {
 		if err := c.DisconnectFromRelay(relayURL); err != nil {
-			log.ClientCore().Warn("Failed to disconnect from relay", "relay", relayURL, "error", err)
+			clog().Warn("Failed to disconnect from relay", "relay", relayURL, "error", err)
 			lastErr = err
 		} else {
 			disconnected++
 		}
 	}
 
-	log.ClientCore().Info("Relay disconnection complete", "requested", len(relayURLs), "disconnected", disconnected)
+	clog().Info("Relay disconnection complete", "requested", len(relayURLs), "disconnected", disconnected)
 
 	if disconnected == 0 && lastErr != nil {
 		return fmt.Errorf("failed to disconnect from any relays: %w", lastErr)
@@ -129,7 +191,10 @@ func (c *Client) DisconnectFromRelays(relayURLs []string) error {
 }
 
 // Subscribe creates a new subscription with filters and relay hints
-func (c *Client) Subscribe(filters []nostr.Filter, relayHints []string) (*Subscription, error) {
+func (c *Client) Subscribe(ctx context.Context, filters []nostr.Filter, relayHints []string) (*Subscription, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err // already cancelled / past deadline
+	}
 	subID := generateSubscriptionID()
 
 	// Use all connected relays if no hints provided
@@ -148,7 +213,7 @@ func (c *Client) Subscribe(filters []nostr.Filter, relayHints []string) (*Subscr
 	c.subscriptions[subID] = sub
 	c.mu.Unlock()
 
-	log.ClientCore().Debug("Created subscription", "sub_id", subID, "relay_count", len(targetRelays))
+	clog().Debug("Created subscription", "sub_id", subID, "relay_count", len(targetRelays))
 
 	if err := sub.Start(); err != nil {
 		c.mu.Lock()
@@ -197,7 +262,7 @@ func (c *Client) ConnectToRelaysWithRetry(urls []string, maxRetries int) error {
 	var lastErr error
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		log.ClientCore().Debug("Connection attempt", "attempt", attempt, "max_retries", maxRetries)
+		clog().Debug("Connection attempt", "attempt", attempt, "max_retries", maxRetries)
 
 		err := c.ConnectToRelays(urls)
 		if err == nil {
@@ -209,13 +274,13 @@ func (c *Client) ConnectToRelaysWithRetry(urls []string, maxRetries int) error {
 		// Check if any relays are connected
 		connected := c.relayPool.GetConnectedRelays()
 		if len(connected) > 0 {
-			log.ClientCore().Info("Partial connection success", "connected_relays", len(connected))
+			clog().Info("Partial connection success", "connected_relays", len(connected))
 			return nil // Partial success is acceptable
 		}
 
 		if attempt < maxRetries {
 			delay := time.Duration(attempt) * c.config.RetryDelay
-			log.ClientCore().Info("Retrying connection", "attempt", attempt, "delay", delay)
+			clog().Info("Retrying connection", "attempt", attempt, "delay", delay)
 			time.Sleep(delay)
 		}
 	}
@@ -223,8 +288,63 @@ func (c *Client) ConnectToRelaysWithRetry(urls []string, maxRetries int) error {
 	return fmt.Errorf("failed to connect after %d attempts: %w", maxRetries, lastErr)
 }
 
-func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Event, error) {
-	log.ClientCore().Debug("Fetching user profile", "pubkey", pubkey, "relay_hints", relayHints)
+// collectLatestReplaceable drains a subscription and returns the newest event
+// (by created_at) as soon as any relay signals EOSE, once every target relay
+// has, or on timeout — whichever comes first. It returns nil when no matching
+// event arrived; callers decide what that means (a hard error for a required
+// profile, an empty result for an optional relay list).
+//
+// This is the shared core of GetUserProfile and GetUserRelays, and the fix for
+// the GetUserRelays latency bug (#77): that method used to wait on sub.Done —
+// which EOSE never closes — so every mailbox fetch burned the full timeout
+// instead of returning the moment a relay reported EOSE.
+func collectLatestReplaceable(ctx context.Context, sub *Subscription, totalRelays int, timeout time.Duration) *nostr.Event {
+	deadline := time.After(timeout)
+	eoseRelays := make(map[string]bool)
+	var latest *nostr.Event
+
+	for {
+		select {
+		case event := <-sub.Events:
+			if event == nil {
+				continue
+			}
+			// Keep the newest by created_at (these are replaceable events).
+			if latest == nil || event.CreatedAt > latest.CreatedAt {
+				latest = event
+			}
+
+		case relayURL := <-sub.EOSE:
+			eoseRelays[relayURL] = true
+			// Newest event in hand and a relay has nothing more to send.
+			if latest != nil {
+				return latest
+			}
+			// Every target relay reported end-of-stored-events; none had it.
+			if len(eoseRelays) >= totalRelays {
+				return nil
+			}
+
+		case err := <-sub.Errors:
+			// One relay failing isn't fatal — others may still answer.
+			clog().Debug("Subscription error while collecting event",
+				"sub_id", sub.ID, "error", err)
+
+		case <-ctx.Done():
+			return latest
+		case <-deadline:
+			return latest
+		}
+	}
+}
+
+func (c *Client) GetUserProfile(ctx context.Context, pubkey string, relayHints []string) (*nostr.Event, error) {
+	clog().Debug("Fetching user profile", "pubkey", pubkey, "relay_hints", relayHints)
+
+	// Background-warm this user's mailbox relays into the directory (and thus
+	// the "known" set), without blocking this fetch. Resolution only queries the
+	// already-connected index relays, so it adds no new dials.
+	c.WarmRelays(pubkey)
 
 	// Create filter for metadata (kind 0)
 	filter := nostr.Filter{
@@ -233,163 +353,73 @@ func (c *Client) GetUserProfile(pubkey string, relayHints []string) (*nostr.Even
 		Limit:   &[]int{1}[0], // Get latest only
 	}
 
-	// Use relay hints if provided, otherwise use connected relays
+	// Use relay hints if provided, otherwise query the index/profile-indexer
+	// relays plus the author's outbox when already cached (RouteMetadata) —
+	// metadata lives on the indexers, and resolving the outbox synchronously on
+	// every profile view is what made the dashboard crawl.
 	targetRelays := relayHints
 	if len(targetRelays) == 0 {
-		targetRelays = c.GetConnectedRelays()
-		log.ClientCore().Debug("No relay hints provided, using connected relays",
-			"pubkey", pubkey,
-			"connected_relays", targetRelays)
+		targetRelays = c.RouteMetadata(pubkey)
+		clog().Debug("No relay hints provided, routing metadata fetch",
+			"pubkey", pubkey, "relays", targetRelays)
 	}
 
-	// Subscribe with the specific relays
-	sub, err := c.Subscribe([]nostr.Filter{filter}, targetRelays)
+	sub, err := c.Subscribe(ctx, []nostr.Filter{filter}, targetRelays)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create subscription: %w", err)
 	}
 	defer sub.Close()
 
-	// Wait for events with timeout
-	timeout := time.After(5 * time.Second)
-
-	// Track which relays have sent EOSE
-	eoseRelays := make(map[string]bool)
-	totalRelays := len(targetRelays)
-
-	// We might receive multiple events, keep the latest
-	var latestEvent *nostr.Event
-
-	for {
-		select {
-		case event := <-sub.Events:
-			log.ClientCore().Debug("Received profile event",
-				"pubkey", pubkey,
-				"event_id", event.ID,
-				"created_at", event.CreatedAt)
-			// Keep the latest event (highest created_at)
-			if latestEvent == nil || event.CreatedAt > latestEvent.CreatedAt {
-				latestEvent = event
-			}
-
-		case relayURL := <-sub.EOSE:
-			// Track EOSE from this relay
-			eoseRelays[relayURL] = true
-			log.ClientCore().Debug("EOSE received from relay",
-				"pubkey", pubkey,
-				"relay", relayURL,
-				"eose_count", len(eoseRelays),
-				"total_relays", totalRelays)
-
-			// If we have an event and at least one EOSE, we can return early
-			if latestEvent != nil {
-				log.ClientCore().Debug("Returning profile after EOSE",
-					"pubkey", pubkey,
-					"event_id", latestEvent.ID,
-					"eose_count", len(eoseRelays))
-				return latestEvent, nil
-			}
-
-			// If all relays have sent EOSE and no event found
-			if len(eoseRelays) >= totalRelays {
-				log.ClientCore().Debug("All relays sent EOSE, no profile found",
-					"pubkey", pubkey)
-				return nil, &ClientError{Message: "profile not found"}
-			}
-
-			// Continue waiting for events from other relays
-
-		case err := <-sub.Errors:
-			log.ClientCore().Error("Subscription error", "pubkey", pubkey, "error", err)
-			// Don't fail immediately on error, other relays might succeed
-
-		case <-timeout:
-			log.ClientCore().Warn("Timeout waiting for profile",
-				"pubkey", pubkey,
-				"eose_count", len(eoseRelays),
-				"total_relays", totalRelays,
-				"has_event", latestEvent != nil)
-			// If we got any event before timeout, return it
-			if latestEvent != nil {
-				return latestEvent, nil
-			}
-			return nil, &ClientError{Message: "timeout waiting for profile"}
-		}
+	event := collectLatestReplaceable(ctx, sub, len(targetRelays), 5*time.Second)
+	if event == nil {
+		clog().Warn("No profile found", "pubkey", pubkey)
+		return nil, &ClientError{Message: "profile not found"}
 	}
+
+	clog().Debug("Fetched user profile",
+		"pubkey", pubkey, "event_id", event.ID, "created_at", event.CreatedAt)
+	return event, nil
 }
 
-// GetUserRelays retrieves user relay list (kind 10002)
+// GetUserRelays retrieves a user's relay list (NIP-65), resolved through the
+// directory — an index-relay query that is TTL-cached and single-flighted —
+// rather than fanning a REQ out to every connected relay. That fan-out is what
+// melted the dashboard during a mutelist sync once the outbox pool had grown to
+// dozens of connections: each author's lookup blasted all of them. Returns
+// empty mailboxes (not an error) when the user has published no relay list.
 func (c *Client) GetUserRelays(pubkey string) (*Mailboxes, error) {
-	log.ClientCore().Debug("Fetching user relays", "pubkey", pubkey)
+	ur := c.ResolveRelays(pubkey)
 
-	filter := nostr.Filter{
-		Authors: []string{pubkey},
-		Kinds:   []int{10002},
-		Limit:   &[]int{1}[0],
+	// Reconstruct the read/write/both split callers expect from the directory's
+	// outbox (write+both) / inbox (read+both) view: a relay in both is "both",
+	// outbox-only is "write", inbox-only is "read".
+	inbox := make(map[string]bool, len(ur.Inbox))
+	for _, r := range ur.Inbox {
+		inbox[r] = true
+	}
+	outbox := make(map[string]bool, len(ur.Outbox))
+	for _, r := range ur.Outbox {
+		outbox[r] = true
 	}
 
-	// Use connected relays for relay list queries
-	connectedRelays := c.relayPool.GetConnectedRelays()
-	if len(connectedRelays) == 0 {
-		return nil, &ClientError{Message: "no connected relays available"}
-	}
-
-	sub, err := c.Subscribe([]nostr.Filter{filter}, connectedRelays)
-	if err != nil {
-		return nil, err
-	}
-	defer sub.Close()
-
-	timeout := time.After(5 * time.Second)
-
-	// Keep track of the latest relay list event
-	var latestEvent *nostr.Event
-
-	for {
-		select {
-		case event := <-sub.Events:
-			log.ClientCore().Debug("Received relay list event",
-				"pubkey", pubkey,
-				"event_id", event.ID,
-				"created_at", event.CreatedAt)
-			// Keep the latest event (highest created_at)
-			if latestEvent == nil || event.CreatedAt > latestEvent.CreatedAt {
-				latestEvent = event
-			}
-
-		case <-sub.Done:
-			// EOSE received - all stored events have been sent
-			log.ClientCore().Debug("EOSE received for relay list request", "pubkey", pubkey)
-			if latestEvent != nil {
-				mailboxes := parseMailboxEvent(latestEvent)
-				log.ClientCore().Debug("Parsed user relays", "pubkey", pubkey,
-					"read_count", len(mailboxes.Read),
-					"write_count", len(mailboxes.Write),
-					"both_count", len(mailboxes.Both))
-				return mailboxes, nil
-			}
-			// No relay list found (user might not have published one)
-			log.ClientCore().Debug("No relay list found for user", "pubkey", pubkey)
-			return &Mailboxes{}, nil
-
-		case err := <-sub.Errors:
-			log.ClientCore().Error("Subscription error", "pubkey", pubkey, "error", err)
-			return nil, err
-
-		case <-timeout:
-			log.ClientCore().Warn("Timeout waiting for relay list", "pubkey", pubkey)
-			// If we got any event before timeout, use it
-			if latestEvent != nil {
-				mailboxes := parseMailboxEvent(latestEvent)
-				return mailboxes, nil
-			}
-			// Return empty mailboxes on timeout (not an error - user might not have relay list)
-			return &Mailboxes{}, nil
+	mb := &Mailboxes{}
+	for _, r := range ur.Outbox {
+		if inbox[r] {
+			mb.Both = append(mb.Both, r)
+		} else {
+			mb.Write = append(mb.Write, r)
 		}
 	}
+	for _, r := range ur.Inbox {
+		if !outbox[r] {
+			mb.Read = append(mb.Read, r)
+		}
+	}
+	return mb, nil
 }
 
 // PublishEvent publishes an event to specified relays
-func (c *Client) PublishEvent(event *nostr.Event, targetRelays []string) ([]BroadcastResult, error) {
+func (c *Client) PublishEvent(ctx context.Context, event *nostr.Event, targetRelays []string) ([]BroadcastResult, error) {
 	if event == nil {
 		return nil, &ClientError{Message: "event cannot be nil"}
 	}
@@ -404,13 +434,13 @@ func (c *Client) PublishEvent(event *nostr.Event, targetRelays []string) ([]Broa
 		return nil, &ClientError{Message: "no relays available for publishing"}
 	}
 
-	log.ClientCore().Info("Publishing event", "event_id", event.ID, "relay_count", len(relays))
+	clog().Info("Publishing event", "event_id", event.ID, "relay_count", len(relays))
 
-	return BroadcastEvent(event, relays, c.relayPool), nil
+	return BroadcastEvent(ctx, event, relays, c.relayPool), nil
 }
 
 // PublishEventWithRetry publishes an event with retry logic
-func (c *Client) PublishEventWithRetry(event *nostr.Event, targetRelays []string, maxRetries int) ([]BroadcastResult, error) {
+func (c *Client) PublishEventWithRetry(ctx context.Context, event *nostr.Event, targetRelays []string, maxRetries int) ([]BroadcastResult, error) {
 	if event == nil {
 		return nil, &ClientError{Message: "event cannot be nil"}
 	}
@@ -425,12 +455,12 @@ func (c *Client) PublishEventWithRetry(event *nostr.Event, targetRelays []string
 		return nil, &ClientError{Message: "no relays available for publishing"}
 	}
 
-	log.ClientCore().Info("Publishing event with retry", "event_id", event.ID, "relay_count", len(relays), "max_retries", maxRetries)
+	clog().Info("Publishing event with retry", "event_id", event.ID, "relay_count", len(relays), "max_retries", maxRetries)
 
-	return BroadcastWithRetry(event, relays, c.relayPool, maxRetries), nil
+	return BroadcastWithRetry(ctx, event, relays, c.relayPool, maxRetries), nil
 }
 func (c *Client) Close() error {
-	log.ClientCore().Info("Shutting down client")
+	clog().Info("Shutting down client")
 
 	// Close all subscriptions
 	c.mu.Lock()
@@ -453,16 +483,21 @@ func (e *ClientError) Error() string {
 	return e.Message
 }
 
+// subSeq guarantees subscription IDs are unique even when two subscriptions are
+// created within the same microsecond — which happens now that login fetches
+// mailboxes and metadata concurrently (#77). A collision would cross-wire the
+// two subscriptions' events in the message router.
+var subSeq atomic.Uint64
+
 // generateSubscriptionID creates a unique subscription identifier
 func generateSubscriptionID() string {
-	// Simple time-based ID for now
-	return "sub_" + time.Now().Format("20060102150405.000000")
+	return fmt.Sprintf("sub_%s_%d", time.Now().Format("20060102150405.000000"), subSeq.Add(1))
 }
 
 // parseMailboxEvent parses a kind 10002 event into a Mailboxes struct
 func parseMailboxEvent(event *nostr.Event) *Mailboxes {
 	if event.Kind != 10002 {
-		log.ClientCore().Warn("Event is not a mailbox event", "kind", event.Kind, "expected", 10002)
+		clog().Warn("Event is not a mailbox event", "kind", event.Kind, "expected", 10002)
 		return &Mailboxes{}
 	}
 
@@ -471,7 +506,10 @@ func parseMailboxEvent(event *nostr.Event) *Mailboxes {
 	// Parse relay tags
 	for _, tag := range event.Tags {
 		if len(tag) >= 2 && tag[0] == "r" {
-			relayURL := tag[1]
+			relayURL, ok := normalizeRelayURL(tag[1])
+			if !ok {
+				continue
+			}
 			if len(tag) >= 3 {
 				switch tag[2] {
 				case "read":
@@ -486,7 +524,7 @@ func parseMailboxEvent(event *nostr.Event) *Mailboxes {
 		}
 	}
 
-	log.ClientCore().Debug("Parsed mailbox event", "event_id", event.ID,
+	clog().Debug("Parsed mailbox event", "event_id", event.ID,
 		"read_count", len(mailboxes.Read),
 		"write_count", len(mailboxes.Write),
 		"both_count", len(mailboxes.Both))
@@ -501,97 +539,85 @@ type RelayConfig struct {
 	Write bool   `json:"write"`
 }
 
-// ReplaceRelayConnections replaces current relay connections with a new set
+// ReplaceRelayConnections swaps the relays held for the current session.
+//
+// In the outbox model this is ADDITIVE: it does not tear the shared pool down.
+// It releases the previous session's leases (so those connections become
+// idle-evictable once nothing else needs them) and acquires the new set,
+// holding one lease on each for the session's lifetime. Index/seed relays are
+// pinned separately and are never affected by a session switch.
 func (c *Client) ReplaceRelayConnections(newRelays []RelayConfig) error {
-	log.ClientCore().Info("Replacing relay connections", "new_relay_count", len(newRelays))
-
-	// Extract URLs for connection
-	var relayURLs []string
+	urls := make([]string, 0, len(newRelays))
 	for _, relay := range newRelays {
-		relayURLs = append(relayURLs, relay.URL)
+		urls = append(urls, relay.URL)
 	}
 
-	// Close existing connections (need to do this with lock)
+	// Drop the previous session's holds first.
 	c.mu.Lock()
-	if err := c.relayPool.Close(); err != nil {
-		log.ClientCore().Warn("Error closing existing relay pool", "error", err)
+	previous := c.sessionRelays
+	c.sessionRelays = nil
+	c.mu.Unlock()
+	for _, u := range previous {
+		c.relayPool.Release(u)
 	}
 
-	// Create new relay pool with current config
-	c.relayPool = NewRelayPool(c.config)
-	c.mu.Unlock() // IMPORTANT: Unlock before trying to connect to avoid deadlock
-
-	// Connect to new relays (this needs to happen without the lock)
-	if err := c.ConnectToRelaysWithRetry(relayURLs, 2); err != nil {
-		log.ClientCore().Error("Failed to connect to new relay set", "error", err)
-		// Try to recover by connecting to index relays
-		c.mu.Lock()
-		c.relayPool = NewRelayPool(c.config)
-		c.mu.Unlock()
-
-		// Try index relays as fallback
-		if len(c.config.IndexRelays) > 0 {
-			log.ClientCore().Info("Attempting to reconnect to index relays as fallback")
-			if fallbackErr := c.ConnectToRelaysWithRetry(c.config.IndexRelays, 1); fallbackErr != nil {
-				log.ClientCore().Error("Failed to connect to index relays as fallback", "error", fallbackErr)
-			}
+	// Acquire the new set, holding one lease each for the session duration.
+	acquired := make([]string, 0, len(urls))
+	for _, u := range urls {
+		if _, err := c.relayPool.Acquire(u); err != nil {
+			clog().Debug("Failed to acquire session relay", "relay", u, "error", err)
+			continue
 		}
-
-		return fmt.Errorf("failed to connect to new relay set: %w", err)
+		acquired = append(acquired, u)
 	}
 
-	// Log relay permissions
-	for _, relay := range newRelays {
-		permissions := []string{}
-		if relay.Read {
-			permissions = append(permissions, "read")
-		}
-		if relay.Write {
-			permissions = append(permissions, "write")
-		}
-		log.ClientCore().Debug("Relay permissions set",
-			"relay", relay.URL,
-			"permissions", permissions)
+	c.mu.Lock()
+	c.sessionRelays = acquired
+	c.mu.Unlock()
+
+	if len(acquired) == 0 && len(urls) > 0 {
+		return fmt.Errorf("failed to connect to any of the %d requested relays", len(urls))
 	}
 
-	connectedRelays := c.GetConnectedRelays()
-	log.ClientCore().Info("Successfully replaced relay connections",
-		"requested_count", len(newRelays),
-		"connected_count", len(connectedRelays),
-		"connected_relays", connectedRelays)
-
+	clog().Info("Switched session relays (additive)",
+		"requested", len(urls), "acquired", len(acquired))
 	return nil
 }
 
-// SwitchToUserRelays switches the client to use user's cached relays
+// SwitchToUserRelays holds the user's relays for the session (additive — see
+// ReplaceRelayConnections). Index relays stay connected alongside them.
 func (c *Client) SwitchToUserRelays(userRelays []RelayConfig) error {
-	log.ClientCore().Info("Switching to user relays", "relay_count", len(userRelays))
-
 	if len(userRelays) == 0 {
-		log.ClientCore().Warn("No user relays found, keeping current connections")
+		clog().Warn("No user relays provided, keeping current session relays")
 		return nil
 	}
-
-	// Replace connections with user's relays
+	clog().Info("Switching to user relays", "relay_count", len(userRelays))
 	return c.ReplaceRelayConnections(userRelays)
 }
 
-// SwitchToIndexRelays switches the client back to the configured index
-// (seed/discovery) relays — used when a session ends or when no per-user
-// mailbox set is known.
+// SwitchToIndexRelays releases the current session's relay leases. There is
+// nothing to "switch back" to in the additive model: the index/seed relays are
+// pinned and kept up by the health check, so they remain connected regardless.
 func (c *Client) SwitchToIndexRelays() error {
-	log.ClientCore().Info("Switching to index relays")
-
-	// Convert index relays to RelayConfig format (both read and write)
-	var indexRelayConfigs []RelayConfig
-	for _, url := range c.config.IndexRelays {
-		indexRelayConfigs = append(indexRelayConfigs, RelayConfig{
-			URL:   url,
-			Read:  true,
-			Write: true,
-		})
+	c.mu.Lock()
+	previous := c.sessionRelays
+	c.sessionRelays = nil
+	c.mu.Unlock()
+	for _, u := range previous {
+		c.relayPool.Release(u)
 	}
+	clog().Info("Released session relays; pinned index relays remain", "released", len(previous))
+	return nil
+}
 
-	// Replace connections with index relays
-	return c.ReplaceRelayConnections(indexRelayConfigs)
+// PinRelays marks relays so the idle sweeper never evicts them — used for the
+// index/seed relays. Pinning does not dial; the connection is still established
+// on demand by Acquire or the startup connect.
+func (c *Client) PinRelays(urls ...string) {
+	c.relayPool.Pin(urls...)
+}
+
+// StartEvictionSweeper starts the pool's idle-connection sweeper, bounded to ctx.
+func (c *Client) StartEvictionSweeper(ctx context.Context, interval time.Duration) {
+	c.relayPool.StartEvictionSweeper(ctx, interval)
 }

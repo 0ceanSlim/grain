@@ -1,0 +1,117 @@
+{{define "admin-client"}}
+<!-- Built-in Nostr client config (#80) + client-tag policy (#99). Enclosing
+     <details> supplies data-section="client" and data-method="grain_updateclient".
+     Dot is cfgType.ClientConfig.
+
+     index_relays seed the client library's discovery (NIP-65 mailbox + metadata
+     lookups). The client_tag block controls grain's NIP-89 `client` tag default;
+     a logged-in user can still opt out for their own events via Settings. -->
+<form class="grid gap-4 mt-3 sm:grid-cols-2" autocomplete="off">
+  <!-- ── Client tag (#99) ── -->
+  <label class="flex items-start gap-3 sm:col-span-2 p-3 rounded bg-surface-elevated">
+    <input
+      type="checkbox"
+      name="client_tag.enabled"
+      data-shape="bool"
+      {{if .ClientTag.Enabled}}checked{{end}}
+      class="w-4 h-4 mt-0.5 accent-accent"
+    />
+    <span class="flex-1">
+      <span class="block text-sm font-medium text-text">Stamp grain's client tag (default)</span>
+      <span class="block mt-1 text-xs text-text-secondary">
+        When on, events grain authors carry a <span class="font-mono">client</span> tag
+        with the name below. Foreign client tags are always stripped. Users can
+        override this for their own events on the settings page.
+      </span>
+    </span>
+  </label>
+  <label class="flex flex-col gap-1 text-sm sm:col-span-2">
+    <span class="font-medium text-text-secondary">Client tag name</span>
+    <input
+      type="text"
+      name="client_tag.name"
+      value="{{.ClientTag.Name}}"
+      placeholder="grain"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+    />
+  </label>
+
+  <!-- ── Discovery: index relays ── -->
+  <div class="flex flex-col gap-2 text-sm sm:col-span-2">
+    <span class="font-medium text-text-secondary">Index relays</span>
+    <span class="text-xs text-text-secondary">
+      Discovery seeds — NIP-65 mailbox lookups and profile metadata are resolved
+      through these when no per-user relay set is known.
+    </span>
+    <div data-list="index_relays" data-list-shape="ws_url" class="flex flex-col gap-2">
+      <div class="flex gap-2">
+        <input
+          type="text"
+          data-list-input
+          placeholder="wss://relay.example.com"
+          class="flex-1 px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+        />
+        <button
+          type="button"
+          data-list-add
+          class="px-3 py-2 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover"
+        >Add</button>
+      </div>
+      <div data-list-items class="flex flex-col gap-1">
+        {{range .IndexRelays}}
+        <div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface-elevated">
+          <input type="hidden" name="index_relays" data-shape="string_names" value="{{.}}" />
+          <span class="font-mono text-sm text-text truncate flex-1">{{.}}</span>
+          <button type="button" data-list-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Remove">✕</button>
+        </div>
+        {{end}}
+      </div>
+      <span class="text-xs text-text-secondary">
+        Each must start with <span class="font-mono">ws://</span> or <span class="font-mono">wss://</span>.
+      </span>
+    </div>
+  </div>
+
+  <!-- ── Connection settings ── -->
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Connection timeout (s)</span>
+    <input type="number" min="0" name="connection_timeout" data-shape="number" value="{{.ConnectionTimeout}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text" />
+  </label>
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Read timeout (s)</span>
+    <input type="number" min="0" name="read_timeout" data-shape="number" value="{{.ReadTimeout}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text" />
+  </label>
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Write timeout (s)</span>
+    <input type="number" min="0" name="write_timeout" data-shape="number" value="{{.WriteTimeout}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text" />
+  </label>
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Max connections</span>
+    <input type="number" min="0" name="max_connections" data-shape="number" value="{{.MaxConnections}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text" />
+  </label>
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Retry attempts</span>
+    <input type="number" min="0" name="retry_attempts" data-shape="number" value="{{.RetryAttempts}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text" />
+  </label>
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Retry delay (s)</span>
+    <input type="number" min="0" name="retry_delay" data-shape="number" value="{{.RetryDelay}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text" />
+  </label>
+  <label class="flex flex-col gap-1 text-sm sm:col-span-2">
+    <span class="font-medium text-text-secondary">User agent</span>
+    <input type="text" name="user_agent" value="{{.UserAgent}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text" />
+  </label>
+  <label class="flex items-center gap-3 sm:col-span-2 p-3 rounded bg-surface-elevated">
+    <input type="checkbox" name="keep_alive" data-shape="bool" {{if .KeepAlive}}checked{{end}}
+      class="w-4 h-4 accent-accent" />
+    <span class="text-sm font-medium text-text">Keep connections alive</span>
+  </label>
+</form>
+{{end}}

@@ -102,6 +102,10 @@
     }
 
     function openPanel() {
+      // Close any other open header dropdown (profile, relay pool).
+      window.dispatchEvent(
+        new CustomEvent("grain:dropdown-open", { detail: "theme" })
+      );
       panelEl.classList.remove("hidden");
       setTimeout(function () {
         document.addEventListener("click", clickOutside);
@@ -111,6 +115,10 @@
       panelEl.classList.add("hidden");
       document.removeEventListener("click", clickOutside);
     }
+    // When another header dropdown opens, close this one.
+    window.addEventListener("grain:dropdown-open", function (e) {
+      if (e.detail !== "theme") closePanel();
+    });
     function clickOutside(e) {
       if (!panelEl.contains(e.target) && !buttonEl.contains(e.target)) {
         closePanel();

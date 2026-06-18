@@ -14,7 +14,7 @@
 // @securityDefinitions.apikey  NostrAuth
 // @in                          header
 // @name                        Authorization
-// @description                 NIP-98 HTTP Auth. Value is `Nostr <base64-encoded-kind-27235-event>` signed by the relay owner.
+// @description                 NIP-98 HTTP Auth (owner-signed kind-27235). In these docs, just click Authorize — "Try it out" then signs each request automatically with your connected signer (mill / NIP-07); no token to paste.
 package main
 
 import (

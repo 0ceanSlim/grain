@@ -5,6 +5,8 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
+	"strconv"
+	"time"
 )
 
 type PageData struct {
@@ -19,10 +21,18 @@ var assetVersion = "dev"
 
 // SetAssetVersion wires the build version in so {{assetVersion}} in the
 // templates resolves to it. Called from main once the version is known.
+//
+// Dev builds carry no release version (Version == "dev"), and a fixed "dev"
+// stamp lets the browser and the PWA service worker stale-serve old JS across
+// rebuilds — the SW caches some scripts cache-first, so a constant ?v=dev URL
+// never re-fetches. Use a per-process value for dev instead, so every rebuild /
+// restart produces fresh ?v= URLs that bust both caches.
 func SetAssetVersion(v string) {
-	if v != "" {
-		assetVersion = v
+	if v == "" || v == "dev" {
+		assetVersion = "dev-" + strconv.FormatInt(time.Now().Unix(), 10)
+		return
 	}
+	assetVersion = v
 }
 
 // baseTemplateFuncs are the helpers every layout-rendered page needs.

@@ -19,6 +19,27 @@ type Config struct {
 	RetryDelay        time.Duration `json:"retry_delay"`
 	KeepAlive         bool          `json:"keep_alive"`
 	UserAgent         string        `json:"user_agent"`
+
+	// Outbox-pool lifecycle (#56). Zero values fall back to built-in defaults
+	// in NewRelayPool / the lease methods, so older callers that build a Config
+	// by hand keep working.
+	DialConcurrency int           `json:"dial_concurrency"`   // max simultaneous dials
+	IdleTTL         time.Duration `json:"idle_ttl"`           // evict a 0-lease conn after this idle span
+	BackoffBase     time.Duration `json:"backoff_base"`       // first dial-retry backoff
+	BackoffMax      time.Duration `json:"backoff_max"`        // dial-retry backoff ceiling
+	RelayListTTL    time.Duration `json:"relay_list_ttl"`     // per-user relay-list directory cache TTL
+	RelayListNegTTL time.Duration `json:"relay_list_neg_ttl"` // shorter TTL for "no list published"
+	OpenTimeout     time.Duration `json:"open_timeout"`       // per-dial cap for on-demand outbox dials (< ConnectionTimeout)
+
+	// Logger, when non-nil, replaces the process-wide client-library logger at
+	// NewClient time (see [SetLogger]). Not serialized; defaults to grain's
+	// client-core logging so behaviour is unchanged when unset.
+	Logger Logger `json:"-"`
+
+	// RelayListStore, when non-nil, backs the relay directory's per-user
+	// resolutions with a custom store (see [RelayListStore]) — e.g. a database
+	// for persistence across restarts. Not serialized; defaults to in-memory.
+	RelayListStore RelayListStore `json:"-"`
 }
 
 // DefaultConfig returns a sensible default configuration. The IndexRelays
@@ -37,11 +58,18 @@ func DefaultConfig() *Config {
 		ConnectionTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      10 * time.Second,
-		MaxConnections:    10,
+		MaxConnections:    256, // soft cap; the outbox pool holds many users' relays
 		RetryAttempts:     3,
 		RetryDelay:        2 * time.Second,
 		KeepAlive:         true,
 		UserAgent:         "grain-client/1.0",
+		DialConcurrency:   16,
+		IdleTTL:           120 * time.Second,
+		BackoffBase:       2 * time.Second,
+		BackoffMax:        60 * time.Second,
+		RelayListTTL:      time.Hour,
+		RelayListNegTTL:   time.Minute,
+		OpenTimeout:       4 * time.Second,
 	}
 }
 

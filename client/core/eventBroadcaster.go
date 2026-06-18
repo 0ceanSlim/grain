@@ -1,25 +1,48 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// BroadcastResult represents the result of broadcasting to a single relay
+// BroadcastResult represents the result of broadcasting to a single relay.
+// Success means the EVENT was sent; Accepted is the relay's NIP-20 OK verdict
+// (whether it actually stored the event), with Reason carrying any message.
 type BroadcastResult struct {
 	RelayURL string
 	Success  bool
+	Accepted bool
+	Reason   string
 	Error    error
 	Message  string
 	Duration time.Duration
 }
 
-// BroadcastEvent sends an event to multiple relays using the relay pool
-func BroadcastEvent(event *nostr.Event, relays []string, pool *RelayPool) []BroadcastResult {
+// effectiveTimeout returns max, shortened to the caller's context deadline when
+// that deadline is sooner — so a caller-set deadline actually bounds the per-relay
+// connect rather than being ignored in favour of the fixed publish timeout.
+func effectiveTimeout(ctx context.Context, max time.Duration) time.Duration {
+	dl, ok := ctx.Deadline()
+	if !ok {
+		return max
+	}
+	if d := time.Until(dl); d < max {
+		if d < 0 {
+			return 0
+		}
+		return d
+	}
+	return max
+}
+
+// BroadcastEvent sends an event to multiple relays using the relay pool. The
+// context bounds the per-relay connect and the NIP-20 OK-collection wait, so a
+// caller can cancel or deadline the whole publish.
+func BroadcastEvent(ctx context.Context, event *nostr.Event, relays []string, pool *RelayPool) []BroadcastResult {
 	if event == nil {
 		return []BroadcastResult{{
 			Success: false,
@@ -36,7 +59,12 @@ func BroadcastEvent(event *nostr.Event, relays []string, pool *RelayPool) []Broa
 		}}
 	}
 
-	log.ClientCore().Info("Broadcasting event", "event_id", event.ID, "relay_count", len(relays))
+	clog().Info("Broadcasting event", "event_id", event.ID, "relay_count", len(relays))
+
+	// Start collecting NIP-20 OK responses BEFORE sending, so a relay that
+	// replies fast can't beat the waiter into place.
+	okCh := pool.messageRouter.RegisterOKWaiter(event.ID, len(relays))
+	defer pool.messageRouter.UnregisterOKWaiter(event.ID)
 
 	// Create EVENT message
 	eventMessage := []interface{}{"EVENT", event}
@@ -51,13 +79,18 @@ func BroadcastEvent(event *nostr.Event, relays []string, pool *RelayPool) []Broa
 			defer wg.Done()
 
 			start := time.Now()
-			results[index] = broadcastToSingleRelay(relay, eventMessage, pool)
+			results[index] = broadcastToSingleRelay(ctx, relay, eventMessage, pool)
 			results[index].RelayURL = relay
 			results[index].Duration = time.Since(start)
 		}(i, relayURL)
 	}
 
 	wg.Wait()
+
+	// Collect OK responses for the relays we successfully sent to, matched by
+	// relay URL, within a short window. A relay that never answers is left as
+	// Accepted=false (sent but unconfirmed).
+	collectOKResponses(ctx, okCh, results)
 
 	// Log summary
 	successful := 0
@@ -70,7 +103,7 @@ func BroadcastEvent(event *nostr.Event, relays []string, pool *RelayPool) []Broa
 		}
 	}
 
-	log.ClientCore().Info("Broadcast completed",
+	clog().Info("Broadcast completed",
 		"event_id", event.ID,
 		"successful", successful,
 		"failed", failed,
@@ -79,11 +112,184 @@ func BroadcastEvent(event *nostr.Event, relays []string, pool *RelayPool) []Broa
 	return results
 }
 
+// collectOKResponses waits on okCh for NIP-20 OK responses and fills the
+// Accepted/Reason fields of the matching results, for up to a short window. It
+// only waits for relays we successfully sent to; a relay that never answers is
+// left Accepted=false (sent but unconfirmed). Returns early if ctx is cancelled.
+func collectOKResponses(ctx context.Context, okCh <-chan OKResult, results []BroadcastResult) {
+	relayIndex := make(map[string]int, len(results))
+	pending := 0
+	for i := range results {
+		relayIndex[results[i].RelayURL] = i
+		if results[i].Success {
+			pending++
+		}
+	}
+	if pending == 0 {
+		return
+	}
+
+	deadline := time.After(5 * time.Second)
+	received := make(map[string]bool, pending)
+	for pending > 0 {
+		select {
+		case ok := <-okCh:
+			if received[ok.Relay] {
+				continue
+			}
+			received[ok.Relay] = true
+			if idx, found := relayIndex[ok.Relay]; found {
+				results[idx].Accepted = ok.Accepted
+				results[idx].Reason = ok.Reason
+			}
+			pending--
+		case <-ctx.Done():
+			return
+		case <-deadline:
+			return
+		}
+	}
+}
+
+// broadcastEventStream broadcasts like BroadcastEvent but emits each relay's
+// result on the returned channel the moment it resolves: a send failure right
+// away, an accept/reject when that relay's NIP-20 OK arrives, and a "sent but no
+// response" at the collect deadline (or on ctx cancellation). The channel is
+// closed once every relay has resolved. This powers the live, count-up publish
+// toast.
+func broadcastEventStream(ctx context.Context, event *nostr.Event, relays []string, pool *RelayPool) <-chan BroadcastResult {
+	out := make(chan BroadcastResult, len(relays)) // buffered to the relay count: each relay emits exactly once, so sends never block
+
+	go func() {
+		defer close(out)
+		if event == nil || len(relays) == 0 {
+			return
+		}
+
+		// Register the OK waiter BEFORE sending so a fast relay can't beat it.
+		okCh := pool.messageRouter.RegisterOKWaiter(event.ID, len(relays))
+		defer pool.messageRouter.UnregisterOKWaiter(event.ID)
+
+		eventMessage := []interface{}{"EVENT", event}
+
+		sent := make([]BroadcastResult, len(relays))
+		relayIndex := make(map[string]int, len(relays))
+		for i, u := range relays {
+			relayIndex[u] = i
+		}
+
+		// Send to every relay concurrently. A send FAILURE is final — emit it
+		// immediately; a successful send waits for the relay's OK below.
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		for i, relayURL := range relays {
+			wg.Add(1)
+			go func(index int, relay string) {
+				defer wg.Done()
+				start := time.Now()
+				r := broadcastToSingleRelay(ctx, relay, eventMessage, pool)
+				r.RelayURL = relay
+				r.Duration = time.Since(start)
+				mu.Lock()
+				sent[index] = r
+				mu.Unlock()
+				if !r.Success {
+					out <- r
+				}
+			}(i, relayURL)
+		}
+		wg.Wait()
+
+		pending := 0
+		for i := range sent {
+			if sent[i].Success {
+				pending++
+			}
+		}
+		if pending == 0 {
+			return
+		}
+
+		deadline := time.After(5 * time.Second)
+		received := make(map[string]bool, pending)
+		for pending > 0 {
+			select {
+			case ok := <-okCh:
+				if received[ok.Relay] {
+					continue
+				}
+				idx, found := relayIndex[ok.Relay]
+				if !found || !sent[idx].Success {
+					continue
+				}
+				received[ok.Relay] = true
+				sent[idx].Accepted = ok.Accepted
+				sent[idx].Reason = ok.Reason
+				out <- sent[idx]
+				pending--
+			case <-ctx.Done():
+				// Cancelled: flush the sent-but-unanswered relays and stop.
+				for i := range sent {
+					if sent[i].Success && !received[sent[i].RelayURL] {
+						out <- sent[i]
+					}
+				}
+				return
+			case <-deadline:
+				// Emit the relays that were sent but never answered.
+				for i := range sent {
+					if sent[i].Success && !received[sent[i].RelayURL] {
+						out <- sent[i] // Accepted=false, no reason => "no response"
+					}
+				}
+				return
+			}
+		}
+	}()
+
+	return out
+}
+
+// PublishEventStream broadcasts an already-signed event to the given relays and
+// returns a channel that emits each relay's result as it resolves. The caller
+// ranges the channel until it closes. Used by the streaming publish endpoint to
+// drive the live broadcast toast.
+func (c *Client) PublishEventStream(ctx context.Context, event *nostr.Event, relays []string) <-chan BroadcastResult {
+	return broadcastEventStream(ctx, event, relays, c.relayPool)
+}
+
 // broadcastToSingleRelay broadcasts to a single relay
-func broadcastToSingleRelay(relayURL string, message []interface{}, pool *RelayPool) BroadcastResult {
+// publishConnectTimeout bounds the redial of a dropped publish target before the
+// broadcast gives up on it with a server-timeout result.
+const publishConnectTimeout = 10 * time.Second
+
+func broadcastToSingleRelay(ctx context.Context, relayURL string, message []interface{}, pool *RelayPool) BroadcastResult {
+	// Honour a cancelled/expired context before doing any work.
+	if err := ctx.Err(); err != nil {
+		return BroadcastResult{
+			Success: false,
+			Error:   err,
+			Message: "cancelled",
+		}
+	}
+
+	// Make sure the target relay is connected before sending. A publish target
+	// that has dropped would otherwise fail instantly with "not connected";
+	// redial it (an explicit publish ignores dial backoff), bounded by
+	// publishConnectTimeout or the caller's deadline if sooner, and report a
+	// server timeout if it won't come up.
+	if err := pool.EnsureConnectedForSend(relayURL, effectiveTimeout(ctx, publishConnectTimeout)); err != nil {
+		clog().Warn("Couldn't connect to relay to broadcast", "relay", relayURL, "error", err)
+		return BroadcastResult{
+			Success: false,
+			Error:   err,
+			Message: "unreachable (server timeout)",
+		}
+	}
+
 	err := pool.SendMessage(relayURL, message)
 	if err != nil {
-		log.ClientCore().Warn("Failed to broadcast to relay", "relay", relayURL, "error", err)
+		clog().Warn("Failed to broadcast to relay", "relay", relayURL, "error", err)
 		return BroadcastResult{
 			Success: false,
 			Error:   err,
@@ -91,7 +297,7 @@ func broadcastToSingleRelay(relayURL string, message []interface{}, pool *RelayP
 		}
 	}
 
-	log.ClientCore().Debug("Event broadcast successful", "relay", relayURL)
+	clog().Debug("Event broadcast successful", "relay", relayURL)
 	return BroadcastResult{
 		Success: true,
 		Message: "broadcast successful",
@@ -99,7 +305,7 @@ func broadcastToSingleRelay(relayURL string, message []interface{}, pool *RelayP
 }
 
 // BroadcastToUserRelays broadcasts an event to a user's preferred relays
-func BroadcastToUserRelays(event *nostr.Event, pubkey string, client *Client) []BroadcastResult {
+func BroadcastToUserRelays(ctx context.Context, event *nostr.Event, pubkey string, client *Client) []BroadcastResult {
 	if client == nil {
 		return []BroadcastResult{{
 			Success: false,
@@ -108,13 +314,13 @@ func BroadcastToUserRelays(event *nostr.Event, pubkey string, client *Client) []
 		}}
 	}
 
-	log.ClientCore().Debug("Getting user relays for broadcast", "pubkey", pubkey)
+	clog().Debug("Getting user relays for broadcast", "pubkey", pubkey)
 
 	// Get user's relay list
 	mailboxes, err := client.GetUserRelays(pubkey)
 	if err != nil {
-		log.ClientCore().Warn("Failed to get user relays, using index relays", "pubkey", pubkey, "error", err)
-		return BroadcastEvent(event, client.config.IndexRelays, client.relayPool)
+		clog().Warn("Failed to get user relays, using index relays", "pubkey", pubkey, "error", err)
+		return BroadcastEvent(ctx, event, client.indexRelays(), client.relayPool)
 	}
 
 	// Use write relays for broadcasting
@@ -126,16 +332,16 @@ func BroadcastToUserRelays(event *nostr.Event, pubkey string, client *Client) []
 
 	if len(relays) == 0 {
 		// Fall back to index relays if user has no relay preferences
-		log.ClientCore().Warn("User has no relay preferences, using index relays", "pubkey", pubkey)
-		relays = client.config.IndexRelays
+		clog().Warn("User has no relay preferences, using index relays", "pubkey", pubkey)
+		relays = client.indexRelays()
 	}
 
-	log.ClientCore().Info("Broadcasting to user relays", "pubkey", pubkey, "relay_count", len(relays))
-	return BroadcastEvent(event, relays, client.relayPool)
+	clog().Info("Broadcasting to user relays", "pubkey", pubkey, "relay_count", len(relays))
+	return BroadcastEvent(ctx, event, relays, client.relayPool)
 }
 
 // BroadcastWithRetry broadcasts an event with retry logic
-func BroadcastWithRetry(event *nostr.Event, relays []string, pool *RelayPool, maxRetries int) []BroadcastResult {
+func BroadcastWithRetry(ctx context.Context, event *nostr.Event, relays []string, pool *RelayPool, maxRetries int) []BroadcastResult {
 	if maxRetries < 1 {
 		maxRetries = 1
 	}
@@ -143,10 +349,10 @@ func BroadcastWithRetry(event *nostr.Event, relays []string, pool *RelayPool, ma
 	var results []BroadcastResult
 	failedRelays := make([]string, 0)
 
-	log.ClientCore().Info("Broadcasting with retry", "event_id", event.ID, "max_retries", maxRetries)
+	clog().Info("Broadcasting with retry", "event_id", event.ID, "max_retries", maxRetries)
 
 	// Initial broadcast attempt
-	results = BroadcastEvent(event, relays, pool)
+	results = BroadcastEvent(ctx, event, relays, pool)
 
 	// Collect failed relays for retry
 	for _, result := range results {
@@ -157,12 +363,17 @@ func BroadcastWithRetry(event *nostr.Event, relays []string, pool *RelayPool, ma
 
 	// Retry failed relays
 	for attempt := 2; attempt <= maxRetries && len(failedRelays) > 0; attempt++ {
-		log.ClientCore().Debug("Retry attempt", "attempt", attempt, "failed_relay_count", len(failedRelays))
+		clog().Debug("Retry attempt", "attempt", attempt, "failed_relay_count", len(failedRelays))
 
-		// Wait before retry
-		time.Sleep(time.Duration(attempt) * time.Second)
+		// Wait before retry — cancellable so a deadline/cancel stops the backoff.
+		select {
+		case <-time.After(time.Duration(attempt) * time.Second):
+		case <-ctx.Done():
+			clog().Debug("Broadcast retry cancelled", "error", ctx.Err())
+			return results
+		}
 
-		retryResults := BroadcastEvent(event, failedRelays, pool)
+		retryResults := BroadcastEvent(ctx, event, failedRelays, pool)
 
 		// Update results and collect still-failed relays
 		newFailedRelays := make([]string, 0)
@@ -192,7 +403,7 @@ func BroadcastWithRetry(event *nostr.Event, relays []string, pool *RelayPool, ma
 		}
 	}
 
-	log.ClientCore().Info("Broadcast with retry completed",
+	clog().Info("Broadcast with retry completed",
 		"event_id", event.ID,
 		"successful", successful,
 		"total", len(relays),
@@ -202,7 +413,7 @@ func BroadcastWithRetry(event *nostr.Event, relays []string, pool *RelayPool, ma
 }
 
 // PublishEvent is a high-level function to build, sign, and broadcast an event
-func PublishEvent(client *Client, signer *EventSigner, eventBuilder *EventBuilder, targetRelays []string) (*nostr.Event, []BroadcastResult, error) {
+func PublishEvent(ctx context.Context, client *Client, signer *EventSigner, eventBuilder *EventBuilder, targetRelays []string) (*nostr.Event, []BroadcastResult, error) {
 	if client == nil {
 		return nil, nil, fmt.Errorf("client cannot be nil")
 	}
@@ -228,33 +439,23 @@ func PublishEvent(client *Client, signer *EventSigner, eventBuilder *EventBuilde
 		return nil, nil, fmt.Errorf("event validation failed: %w", err)
 	}
 
-	// Use provided relays or fall back to user's write relays
+	// Use provided relays, or route by the outbox model: the author's outbox
+	// plus every p-tagged recipient's inbox (so replies / mentions reach them).
 	relays := targetRelays
 	if len(relays) == 0 {
-		mailboxes, err := client.GetUserRelays(signer.GetPublicKey())
-		if err == nil && mailboxes != nil {
-			relays = mailboxes.Write
-			if len(relays) == 0 {
-				relays = mailboxes.Both
-			}
-		}
-
-		// Final fallback to index relays
-		if len(relays) == 0 {
-			relays = client.config.IndexRelays
-		}
+		relays = client.RoutePublish(event)
 	}
 
-	log.ClientCore().Info("Publishing event", "event_id", event.ID, "kind", event.Kind, "relay_count", len(relays))
+	clog().Info("Publishing event", "event_id", event.ID, "kind", event.Kind, "relay_count", len(relays))
 
 	// Broadcast the event
-	results := BroadcastEvent(event, relays, client.relayPool)
+	results := BroadcastEvent(ctx, event, relays, client.relayPool)
 
 	return event, results, nil
 }
 
 // PublishEventWithRetry publishes an event with retry logic
-func PublishEventWithRetry(client *Client, signer *EventSigner, eventBuilder *EventBuilder, targetRelays []string, maxRetries int) (*nostr.Event, []BroadcastResult, error) {
+func PublishEventWithRetry(ctx context.Context, client *Client, signer *EventSigner, eventBuilder *EventBuilder, targetRelays []string, maxRetries int) (*nostr.Event, []BroadcastResult, error) {
 	if client == nil {
 		return nil, nil, fmt.Errorf("client cannot be nil")
 	}
@@ -280,27 +481,17 @@ func PublishEventWithRetry(client *Client, signer *EventSigner, eventBuilder *Ev
 		return nil, nil, fmt.Errorf("event validation failed: %w", err)
 	}
 
-	// Use provided relays or fall back to user's write relays
+	// Use provided relays, or route by the outbox model: the author's outbox
+	// plus every p-tagged recipient's inbox (so replies / mentions reach them).
 	relays := targetRelays
 	if len(relays) == 0 {
-		mailboxes, err := client.GetUserRelays(signer.GetPublicKey())
-		if err == nil && mailboxes != nil {
-			relays = mailboxes.Write
-			if len(relays) == 0 {
-				relays = mailboxes.Both
-			}
-		}
-
-		// Final fallback to index relays
-		if len(relays) == 0 {
-			relays = client.config.IndexRelays
-		}
+		relays = client.RoutePublish(event)
 	}
 
-	log.ClientCore().Info("Publishing event with retry", "event_id", event.ID, "kind", event.Kind, "relay_count", len(relays))
+	clog().Info("Publishing event with retry", "event_id", event.ID, "kind", event.Kind, "relay_count", len(relays))
 
 	// Broadcast the event with retry
-	results := BroadcastWithRetry(event, relays, client.relayPool, maxRetries)
+	results := BroadcastWithRetry(ctx, event, relays, client.relayPool, maxRetries)
 
 	return event, results, nil
 }

@@ -13,6 +13,22 @@
   before someone else does.
 </div>
 
+<!-- No-relay-list nudge for a logged-in user who hasn't published a NIP-65
+     relay list yet (new identity). Revealed by navigation.js. -->
+<div
+  id="no-relays-banner"
+  class="hidden px-4 py-2 text-sm font-medium text-center bg-warning-dim text-warning"
+>
+  ⚠ You haven't set up your relays —
+  <a
+    href="/settings"
+    class="underline"
+    onclick="if(window.openRelaySettings){event.preventDefault();window.openRelaySettings();}"
+    >set up relays</a
+  >
+  so your notes and lists reach the right places.
+</div>
+
 <header
   class="relative flex items-center gap-3 px-4 mt-6 mb-6"
   hx-boost="true"
@@ -208,6 +224,60 @@
          navigation.js. -->
     <div id="profile-nav">{{template "login-button"}}</div>
 
+    <!-- Relay-pool indicator: connected / known relays, between the login
+         button and the theme swapper. Clicking toggles a breakdown panel; the
+         full relay manager lands in a later slice. Updated by the poller below
+         from /api/v1/client/status. -->
+    <div class="relative">
+      <button
+        id="relay-pool-button"
+        type="button"
+        title="Relay pool — connected / known relays"
+        class="flex items-center gap-1 px-2 py-1 text-xs rounded text-text-secondary hover:text-text hover:bg-surface-hover"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"
+          ></path>
+        </svg>
+        <span id="relay-pool-count" class="font-mono">—/—</span>
+      </button>
+      <div
+        id="relay-pool-panel"
+        class="absolute right-0 z-50 hidden p-3 mt-2 text-xs border rounded-lg shadow w-52 bg-surface border-border top-full"
+      >
+        <div class="mb-2 font-semibold text-text">Relay pool</div>
+        <div class="space-y-1">
+          <div class="flex justify-between">
+            <span class="text-text-secondary">Known</span>
+            <span id="rp-known" class="font-mono text-text">—</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-text-secondary">Connected</span>
+            <span id="rp-connected" class="font-mono text-text">—</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-text-secondary">In use</span>
+            <span id="rp-leased" class="font-mono text-text">—</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-text-secondary">Pinned (index)</span>
+            <span id="rp-pinned" class="font-mono text-text">—</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          onclick="openRelaySettings()"
+          class="flex items-center w-full gap-2 px-2 py-1.5 mt-2 text-xs text-left transition-colors border-t rounded text-text-secondary hover:text-text hover:bg-surface-hover border-border"
+        >
+          ⚙️ Manage relays
+        </button>
+      </div>
+    </div>
+
     <!-- Theme swapper. Icon-only trigger + dropdown panel populated
          by theme.js. Sits to the right of the login button per the
          pubkey-quest convention. Compact on every viewport. -->
@@ -252,6 +322,85 @@
       var input = document.getElementById("search-input");
       if (input) setTimeout(function () { input.focus(); }, 50);
     }
+  };
+
+  // Relay-pool indicator. Polls /api/v1/client/status and shows
+  // connected/known relays; the button toggles a breakdown panel. Best-effort:
+  // if the relay is unreachable the indicator keeps its last value.
+  (function () {
+    var btn = document.getElementById("relay-pool-button");
+    var panel = document.getElementById("relay-pool-panel");
+    var count = document.getElementById("relay-pool-count");
+    if (!count) return;
+
+    function set(id, v) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = v;
+    }
+
+    function refresh() {
+      fetch("/api/v1/client/status")
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (s) {
+          if (!s || !s.initialized) return;
+          count.textContent = (s.pool_connected || 0) + "/" + (s.pool_known || 0);
+          set("rp-known", s.pool_known || 0);
+          set("rp-connected", s.pool_connected || 0);
+          set("rp-leased", s.pool_leased || 0);
+          set("rp-pinned", s.pool_pinned || 0);
+        })
+        .catch(function () {});
+    }
+
+    if (btn && panel) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        // Opening: close any other header dropdown (profile, theme) first, and
+        // warm the relay-list + media-server caches (once) so "Manage relays"
+        // lands on already-resolved data instead of a cold ~5s relay fetch.
+        if (panel.classList.contains("hidden")) {
+          window.dispatchEvent(
+            new CustomEvent("grain:dropdown-open", { detail: "relay-pool" })
+          );
+          if (!window.__relayCachesWarmed) {
+            window.__relayCachesWarmed = true;
+            fetch("/api/v1/user/relay-lists").catch(function () {});
+            fetch("/api/v1/user/media-servers").catch(function () {});
+          }
+        }
+        panel.classList.toggle("hidden");
+      });
+      document.addEventListener("click", function () {
+        panel.classList.add("hidden");
+      });
+      // When another header dropdown opens, close this one.
+      window.addEventListener("grain:dropdown-open", function (e) {
+        if (e.detail !== "relay-pool") panel.classList.add("hidden");
+      });
+    }
+
+    refresh();
+    setInterval(refresh, 4000);
+  })();
+
+  // "Manage relays" → open Settings and jump straight to the relay section.
+  // Done in JS rather than hx-get on the button: the button lives inside the
+  // relay-pool panel, which the document-click handler hides on the same click
+  // — that stranded the htmx request and left it spinning. Mirror routing.js's
+  // settings swap, then scroll to #relay-manager-section once the settings
+  // content becomes visible (it loads behind its own spinner / watchdog).
+  window.openRelaySettings = function () {
+    var panel = document.getElementById("relay-pool-panel");
+    if (panel) panel.classList.add("hidden");
+    // settings.js scrolls here once the content is visible (handles both the
+    // normal load and the watchdog-reveal path deterministically).
+    window.__grainScrollTarget = "relay-manager-section";
+    if (typeof htmx === "undefined") {
+      window.location.href = "/settings";
+      return;
+    }
+    window.history.pushState({}, "", "/settings");
+    htmx.ajax("GET", "/views/settings.html", { target: "#main-content" });
   };
 </script>
 

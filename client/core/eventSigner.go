@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils/log"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
@@ -38,7 +37,7 @@ func NewEventSigner(privateKeyHex string) (*EventSigner, error) {
 		publicKey:  pubKeyHex,
 	}
 
-	log.ClientCore().Debug("Event signer created", "pubkey", pubKeyHex)
+	clog().Debug("Event signer created", "pubkey", pubKeyHex)
 	return signer, nil
 }
 
@@ -79,7 +78,7 @@ func (es *EventSigner) SignEvent(event *nostr.Event) error {
 	}
 	event.Sig = signature
 
-	log.ClientCore().Debug("Event signed", "event_id", eventID, "pubkey", es.publicKey)
+	clog().Debug("Event signed", "event_id", eventID, "pubkey", es.publicKey)
 	return nil
 }
 
@@ -98,6 +97,12 @@ func (es *EventSigner) signHash(hashHex string) (string, error) {
 	return hex.EncodeToString(signature.Serialize()), nil
 }
 
+// PublicKey returns the public key in hex format. It satisfies the [Signer]
+// seam; GetPublicKey is retained as an alias for existing callers.
+func (es *EventSigner) PublicKey() string {
+	return es.publicKey
+}
+
 // GetPublicKey returns the public key in hex format
 func (es *EventSigner) GetPublicKey() string {
 	return es.publicKey
@@ -111,12 +116,12 @@ func (es *EventSigner) GetPrivateKeyHex() string {
 // VerifyEventSignature verifies an event's signature
 func VerifyEventSignature(event *nostr.Event) bool {
 	if event == nil {
-		log.ClientCore().Warn("Cannot verify nil event")
+		clog().Warn("Cannot verify nil event")
 		return false
 	}
 
 	if event.ID == "" || event.PubKey == "" || event.Sig == "" {
-		log.ClientCore().Warn("Event missing required fields for verification",
+		clog().Warn("Event missing required fields for verification",
 			"has_id", event.ID != "",
 			"has_pubkey", event.PubKey != "",
 			"has_sig", event.Sig != "")
@@ -126,45 +131,45 @@ func VerifyEventSignature(event *nostr.Event) bool {
 	// Verify the event ID matches the computed ID
 	computedID, err := ComputeEventID(event)
 	if err != nil {
-		log.ClientCore().Error("Failed to compute event ID for verification", "error", err)
+		clog().Error("Failed to compute event ID for verification", "error", err)
 		return false
 	}
 
 	if event.ID != computedID {
-		log.ClientCore().Warn("Event ID mismatch", "event_id", event.ID, "computed_id", computedID)
+		clog().Warn("Event ID mismatch", "event_id", event.ID, "computed_id", computedID)
 		return false
 	}
 
 	// Parse public key
 	pubKeyBytes, err := hex.DecodeString(event.PubKey)
 	if err != nil {
-		log.ClientCore().Error("Invalid public key hex", "pubkey", event.PubKey, "error", err)
+		clog().Error("Invalid public key hex", "pubkey", event.PubKey, "error", err)
 		return false
 	}
 
 	publicKey, err := schnorr.ParsePubKey(pubKeyBytes)
 	if err != nil {
-		log.ClientCore().Error("Failed to parse public key", "error", err)
+		clog().Error("Failed to parse public key", "error", err)
 		return false
 	}
 
 	// Parse signature
 	sigBytes, err := hex.DecodeString(event.Sig)
 	if err != nil {
-		log.ClientCore().Error("Invalid signature hex", "signature", event.Sig, "error", err)
+		clog().Error("Invalid signature hex", "signature", event.Sig, "error", err)
 		return false
 	}
 
 	signature, err := schnorr.ParseSignature(sigBytes)
 	if err != nil {
-		log.ClientCore().Error("Failed to parse signature", "error", err)
+		clog().Error("Failed to parse signature", "error", err)
 		return false
 	}
 
 	// Parse event ID as hash
 	hashBytes, err := hex.DecodeString(event.ID)
 	if err != nil {
-		log.ClientCore().Error("Invalid event ID hex", "event_id", event.ID, "error", err)
+		clog().Error("Invalid event ID hex", "event_id", event.ID, "error", err)
 		return false
 	}
 
@@ -172,9 +177,9 @@ func VerifyEventSignature(event *nostr.Event) bool {
 	valid := signature.Verify(hashBytes, publicKey)
 
 	if valid {
-		log.ClientCore().Debug("Event signature verified", "event_id", event.ID)
+		clog().Debug("Event signature verified", "event_id", event.ID)
 	} else {
-		log.ClientCore().Warn("Event signature verification failed", "event_id", event.ID)
+		clog().Warn("Event signature verification failed", "event_id", event.ID)
 	}
 
 	return valid
@@ -186,7 +191,7 @@ func VerifyEventSignature(event *nostr.Event) bool {
 func SignEventWithExtension(event *nostr.Event) error {
 	// This is a placeholder for browser extension integration
 	// In a real implementation, this would use JavaScript bridge to call window.nostr.signEvent()
-	log.ClientCore().Warn("Browser extension signing not implemented - this is a server-side client")
+	clog().Warn("Browser extension signing not implemented - this is a server-side client")
 	return fmt.Errorf("browser extension signing not available in server environment")
 }
 
@@ -194,7 +199,7 @@ func SignEventWithExtension(event *nostr.Event) error {
 func GetPublicKeyFromExtension() (string, error) {
 	// This is a placeholder for browser extension integration
 	// In a real implementation, this would use JavaScript bridge to call window.nostr.getPublicKey()
-	log.ClientCore().Warn("Browser extension key retrieval not implemented - this is a server-side client")
+	clog().Warn("Browser extension key retrieval not implemented - this is a server-side client")
 	return "", fmt.Errorf("browser extension not available in server environment")
 }
 

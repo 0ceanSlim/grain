@@ -102,13 +102,32 @@ func GetCoreClientStatus() map[string]interface{} {
 	}
 
 	connectedRelays := coreClient.GetConnectedRelays()
+	stats := coreClient.PoolStats()
 
 	return map[string]interface{}{
 		"initialized":      true,
 		"connected_relays": connectedRelays,
 		"connected_count":  len(connectedRelays),
 		"index_relays":     indexRelays,
+		"pool_known":       stats.Known,     // relays the client is aware of
+		"pool_total":       stats.Total,     // relays tracked in the pool
+		"pool_connected":   stats.Connected, // currently connected
+		"pool_pinned":      stats.Pinned,    // index/seed relays
+		"pool_leased":      stats.Leased,    // in active use
 	}
+}
+
+// StartRelayEvictionSweeper starts the core client's idle-connection sweeper,
+// bounded to ctx so it doesn't outlive the server instance (#93). Companion to
+// StartRelayHealthCheck: the health check keeps the pinned index relays up,
+// while the sweeper reclaims the per-user connections the outbox pool dials on
+// demand once they go idle.
+func StartRelayEvictionSweeper(ctx context.Context, interval time.Duration) {
+	if coreClient == nil {
+		log.ClientConnection().Warn("Core client not initialized; eviction sweeper not started")
+		return
+	}
+	coreClient.StartEvictionSweeper(ctx, interval)
 }
 
 // StartRelayHealthCheck starts a background goroutine to maintain relay

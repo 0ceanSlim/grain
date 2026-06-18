@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -559,7 +560,7 @@ func FetchAuthorMuteListEvents(author string) ([]*nostr.Event, error) {
 		Authors: []string{author},
 		Kinds:   muteListKinds,
 	}
-	sub, err := client.Subscribe([]nostr.Filter{filter}, targets)
+	sub, err := client.Subscribe(context.Background(), []nostr.Filter{filter}, targets)
 	if err != nil {
 		return nil, fmt.Errorf("subscribe failed: %w", err)
 	}
@@ -588,7 +589,7 @@ func fetchAuthorMuteListPubkeys(client *core.Client, author string) []string {
 		Authors: []string{author},
 		Kinds:   muteListKinds,
 	}
-	sub, err := client.Subscribe([]nostr.Filter{filter}, targets)
+	sub, err := client.Subscribe(context.Background(), []nostr.Filter{filter}, targets)
 	if err != nil {
 		log.Config().Error("Failed to subscribe for mute list",
 			"author", author, "error", err)

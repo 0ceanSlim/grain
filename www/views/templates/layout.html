@@ -55,6 +55,11 @@
          doesn't flash the wrong palette during paint. theme.js
          exposes window.GrainTheme for the header swapper. -->
     <script src="/static/js/theme.js?v={{assetVersion}}"></script>
+    <!-- Per-user client-tag preference (#99); read by the build-request callers. -->
+    <script src="/static/js/client-tag.js?v={{assetVersion}}"></script>
+    <!-- Reusable media upload (#83): the pre-upload modal + Blossom/NIP-96 flow,
+         and declarative [data-upload-target] button wiring. -->
+    <script src="/static/js/blossom-upload.js?v={{assetVersion}}" defer></script>
 
     <!-- Load external libraries first. These will be replaced on build with local minified
      versions and the build step will replace the tailwind cdn and compile the full minified css -->
@@ -72,6 +77,9 @@
          grain's session API loads right after. -->
     <script src="/static/mill/mill.umd.min.js?v={{assetVersion}}"></script>
     <script src="/static/js/mill-bridge.js?v={{assetVersion}}" defer></script>
+    <!-- Live update channel (SSE): opens one EventSource when logged in and
+         re-broadcasts pushes as `grain:stream` events. -->
+    <script src="/static/js/grain-stream.js?v={{assetVersion}}" defer></script>
 
     <title>{{.Title}}</title>
     <style>

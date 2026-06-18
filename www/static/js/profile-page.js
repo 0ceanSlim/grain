@@ -46,7 +46,12 @@
         profileData.profile = profile;
         displayProfile(profile);
       } else {
-        throw new Error("Profile not found");
+        // No kind-0 yet (e.g. a brand-new identity). Show an empty profile rather
+        // than an error: the owner gets the Edit button (via checkOwnProfile) to
+        // create one, and a stranger just sees a blank profile.
+        const empty = { pubkey: pubkey, kind: 0, content: "{}", tags: [] };
+        profileData.profile = empty;
+        displayProfile(empty);
       }
     } catch (error) {
       console.error("Failed to load profile:", error);
@@ -83,23 +88,22 @@
   }
 
   async function fetchProfile(pubkey) {
-    try {
-      // Use existing profile API
-      const response = await fetch(
-        `/api/v1/user/profile?pubkey=${encodeURIComponent(pubkey)}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Profile API returned ${response.status}`);
-      }
-
-      const profile = await response.json();
-      console.log("Profile data loaded:", profile);
-      return profile;
-    } catch (error) {
-      console.error("Failed to fetch profile:", error);
+    // Use existing profile API. A 404 means "no kind-0 published yet" → return
+    // null so the caller shows an empty editable profile. Other failures
+    // (network, 5xx) throw, so the caller errors instead of risking the owner
+    // overwriting a real profile that just failed to load.
+    const response = await fetch(
+      `/api/v1/user/profile?pubkey=${encodeURIComponent(pubkey)}`
+    );
+    if (response.status === 404) {
       return null;
     }
+    if (!response.ok) {
+      throw new Error(`Profile API returned ${response.status}`);
+    }
+    const profile = await response.json();
+    console.log("Profile data loaded:", profile);
+    return profile;
   }
 
   function displayProfile(profile) {
@@ -136,6 +140,11 @@
 
     // Update external identities from event tags (NIP-39)
     updateExternalIdentities(profile);
+
+    // Keep the parsed content for the editor's diff, and reveal the Edit button
+    // if this is the logged-in user's own profile.
+    profileData.content = profileContent;
+    checkOwnProfile();
 
     console.log("Profile component display complete");
   }
@@ -184,9 +193,10 @@
       showElement("profile-website-container");
     }
 
-    // Lightning address
-    if (profileContent.lud16) {
-      setElementText("profile-lightning", profileContent.lud16);
+    // Lightning address (lud16 preferred; lud06 LNURL as fallback)
+    const lightning = profileContent.lud16 || profileContent.lud06;
+    if (lightning) {
+      setElementText("profile-lightning", lightning);
       showElement("profile-lightning-container");
     }
   }
@@ -289,9 +299,7 @@
 
   // Add external identity link to UI
   function addExternalIdentityLink(platform, identity) {
-    const socialLinksContainer = document.querySelector(
-      ".flex.justify-center.gap-6.mb-8"
-    );
+    const socialLinksContainer = document.getElementById("social-links-container");
     if (!socialLinksContainer) return;
 
     // Platform configuration
@@ -383,7 +391,7 @@
       const bannerImg = document.getElementById("profile-banner-img");
       bannerImg.src = profileContent.banner;
       bannerImg.onload = function () {
-        showElement("profile-banner");
+        showElement("profile-banner-img");
       };
       bannerImg.onerror = function () {
         console.warn("Failed to load profile banner:", profileContent.banner);
@@ -458,6 +466,326 @@
     }
   };
 
+  // ── Profile editing (own profile only) ─────────────────────────
+  // Editable kind-0 content fields. The input id is edit-<field> where <field>
+  // is the content key, so we map both ways generically.
+  const EDITABLE_FIELDS = [
+    "name", "display_name", "about", "picture", "banner", "nip05", "lud16", "website",
+  ];
+
+  // Reveal the Edit button only when the logged-in user is viewing their own
+  // profile (session pubkey === this profile's pubkey).
+  let pfIsOwn = false;
+  async function checkOwnProfile() {
+    try {
+      const r = await fetch("/api/v1/session", { cache: "no-store" });
+      if (!r.ok) return;
+      const sess = await r.json();
+      const mine =
+        sess &&
+        sess.publicKey &&
+        sess.publicKey.toLowerCase() === (profileData.pubkey || "").toLowerCase();
+      pfIsOwn = !!mine;
+      if (mine) {
+        showElement("profile-edit-btn");
+        showElement("profile-advanced-btn");
+        // Brand-new identity (no kind-0 → empty content): drop the owner straight
+        // into the editor so they can set up their profile metadata.
+        const empty = Object.keys(profileData.content || {}).length === 0;
+        if (empty && !pfEditing && typeof window.toggleProfileEdit === "function") {
+          window.toggleProfileEdit();
+        }
+      }
+    } catch (_) {
+      /* not logged in — leave the Edit buttons hidden */
+    }
+  }
+
+  let pfEditing = false;
+
+  // Flip the page between view and edit: .pf-view elements show when viewing,
+  // .pf-edit when editing. The conditional contact cards live inside a .pf-view
+  // wrapper, so hiding the wrapper doesn't disturb their own visibility.
+  function setEditMode(on) {
+    pfEditing = on;
+    document.querySelectorAll(".pf-view").forEach((e) => e.classList.toggle("hidden", on));
+    document.querySelectorAll(".pf-edit").forEach((e) => e.classList.toggle("hidden", !on));
+  }
+
+  function advPanelOpen() {
+    const p = document.getElementById("profile-advanced-panel");
+    return p && !p.classList.contains("hidden");
+  }
+
+  window.toggleProfileEdit = function () {
+    if (!pfEditing) {
+      if (advPanelOpen()) window.toggleAdvancedEdit(); // one editor at a time
+      const content = profileData.content || {};
+      EDITABLE_FIELDS.forEach((f) => {
+        const el = document.getElementById("edit-" + f);
+        if (el) el.value = content[f] != null ? String(content[f]) : "";
+      });
+      setElementText("profile-save-status", "");
+      setEditMode(true);
+    } else {
+      setEditMode(false);
+      // Re-render the view so the contact cards reapply their conditional
+      // visibility (and any saved changes show).
+      if (profileData.profile) displayProfile(profileData.profile);
+    }
+  };
+
+  window.focusPictureField = function () {
+    if (!pfEditing) window.toggleProfileEdit();
+    const el = document.getElementById("edit-picture");
+    if (el) el.focus();
+  };
+
+  window.saveProfile = async function () {
+    const status = (m) => setElementText("profile-save-status", m);
+    const content = profileData.content || {};
+
+    // Collect ONLY the fields the user actually changed, so we add tags for
+    // exactly those and leave everything else in the kind-0 untouched.
+    const edits = {};
+    EDITABLE_FIELDS.forEach((f) => {
+      const el = document.getElementById("edit-" + f);
+      if (!el) return;
+      const newVal = el.value.trim();
+      const oldVal = content[f] != null ? String(content[f]) : "";
+      if (newVal !== oldVal) edits[f] = newVal;
+    });
+    if (Object.keys(edits).length === 0) {
+      status("No changes to save.");
+      return;
+    }
+
+    const saveBtn = document.getElementById("profile-save-btn");
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      // Server merges the edits over the existing event → unsigned kind-0.
+      status("Assembling event…");
+      const buildResp = await fetch("/api/v1/user/profile/build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: profileData.profile,
+          edits,
+          client_tag: window.grainClientTag ? window.grainClientTag.enabled() : true,
+        }),
+      });
+      if (!buildResp.ok) throw new Error(await buildResp.text());
+      const unsigned = await buildResp.json();
+      await signAndPublish(unsigned, status, () => window.toggleProfileEdit());
+    } catch (err) {
+      console.error("Save profile failed:", err);
+      status("Error: " + (err.message || err));
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  };
+
+  // Shared: sign an unsigned event with the user's signer, publish via the
+  // outbox, show the OK toast, and hydrate the page in place once a relay
+  // accepts. Throws on failure (the caller surfaces the error).
+  async function signAndPublish(unsigned, status, onAccepted) {
+    status("");
+    if (!window.grainPublish || typeof window.grainPublish.signAndPublish !== "function") {
+      status("Publish helper not loaded — reload the page.");
+      return;
+    }
+    // Delegate to the shared live broadcast toast (nostr-publish.js); hydrate the
+    // profile in place once at least one relay accepts.
+    await window.grainPublish.signAndPublish(unsigned, {
+      title: "Publishing profile…",
+      onAccepted: function (signed) {
+        profileData.profile = signed;
+        displayProfile(signed);
+        if (onAccepted) onAccepted();
+      },
+    });
+  }
+
+  // ── Advanced editor: full control over content fields and tags ──
+  let advState = { content: [], tags: [] };
+  let advDragFrom = null;
+
+  function escAttr(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  window.toggleAdvancedEdit = function () {
+    const panel = document.getElementById("profile-advanced-panel");
+    if (!panel) return;
+    const opening = panel.classList.contains("hidden");
+    if (opening) {
+      if (pfEditing) {
+        // Leave inline edit first — one editor at a time.
+        setEditMode(false);
+        if (profileData.profile) displayProfile(profileData.profile);
+      }
+      loadAdvState();
+      setElementText("adv-status", "");
+    }
+    panel.classList.toggle("hidden");
+    if (opening) {
+      // Bring the advanced inputs into view (the panel sits below the card).
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  function loadAdvState() {
+    const evt = profileData.profile || {};
+    const content = profileData.content || {};
+    advState.content = Object.keys(content).map((k) => ({
+      key: k,
+      value: content[k] == null ? "" : String(content[k]),
+    }));
+    advState.tags = (evt.tags || []).map((t) => t.slice());
+    const id = profileData.identifier || profileData.pubkey || "";
+    setElementText("adv-meta", `kind 0 · ${id} · created_at: set on sign`);
+    renderAdvContent();
+    renderAdvTags();
+  }
+
+  function renderAdvContent() {
+    const box = document.getElementById("adv-content");
+    if (!box) return;
+    box.innerHTML = "";
+    advState.content.forEach((row, i) => {
+      const div = document.createElement("div");
+      div.className = "flex items-center gap-2";
+      div.innerHTML =
+        `<input value="${escAttr(row.key)}" placeholder="field" class="w-1/3 px-2 py-1 text-sm border rounded bg-surface-elevated text-text border-border" data-ck="${i}" />` +
+        `<input value="${escAttr(row.value)}" placeholder="value" class="flex-1 px-2 py-1 text-sm border rounded bg-surface-elevated text-text border-border" data-cv="${i}" />` +
+        `<button class="px-2 text-danger hover:opacity-80" data-cdel="${i}" title="Remove">×</button>`;
+      box.appendChild(div);
+    });
+    box.querySelectorAll("[data-ck]").forEach((el) => {
+      el.oninput = () => (advState.content[+el.dataset.ck].key = el.value);
+    });
+    box.querySelectorAll("[data-cv]").forEach((el) => {
+      el.oninput = () => (advState.content[+el.dataset.cv].value = el.value);
+    });
+    box.querySelectorAll("[data-cdel]").forEach((el) => {
+      el.onclick = () => {
+        advState.content.splice(+el.dataset.cdel, 1);
+        renderAdvContent();
+      };
+    });
+  }
+
+  function renderAdvTags() {
+    const box = document.getElementById("adv-tags");
+    if (!box) return;
+    box.innerHTML = "";
+    advState.tags.forEach((tag, i) => {
+      const row = document.createElement("div");
+      row.className = "flex items-center gap-2 p-1 rounded bg-surface-elevated";
+      row.dataset.row = i;
+      row.ondragover = (e) => e.preventDefault();
+      row.ondrop = (e) => {
+        e.preventDefault();
+        advMoveTag(advDragFrom, i);
+      };
+      const els = tag
+        .map(
+          (el, j) =>
+            `<input value="${escAttr(el)}" class="px-2 py-1 text-sm border rounded bg-surface text-text border-border" data-te="${i}_${j}" />`
+        )
+        .join("");
+      row.innerHTML =
+        `<span class="cursor-grab select-none text-text-secondary" draggable="true" title="Drag to reorder" data-grip="${i}">⠿</span>` +
+        `<div class="flex flex-wrap items-center flex-1 gap-1">${els}` +
+        `<button class="px-1 text-xs text-accent hover:opacity-80" data-teadd="${i}" title="Add element">+</button></div>` +
+        `<button class="px-2 text-danger hover:opacity-80" data-tdel="${i}" title="Remove tag">×</button>`;
+      box.appendChild(row);
+    });
+    box.querySelectorAll("[data-grip]").forEach((el) => {
+      el.ondragstart = (e) => {
+        advDragFrom = +el.dataset.grip;
+        // Firefox won't start a drag unless some data is set.
+        if (e.dataTransfer) e.dataTransfer.setData("text/plain", "");
+      };
+    });
+    box.querySelectorAll("[data-te]").forEach((el) => {
+      el.oninput = () => {
+        const [i, j] = el.dataset.te.split("_").map(Number);
+        advState.tags[i][j] = el.value;
+      };
+    });
+    box.querySelectorAll("[data-teadd]").forEach((el) => {
+      el.onclick = () => {
+        advState.tags[+el.dataset.teadd].push("");
+        renderAdvTags();
+      };
+    });
+    box.querySelectorAll("[data-tdel]").forEach((el) => {
+      el.onclick = () => {
+        advState.tags.splice(+el.dataset.tdel, 1);
+        renderAdvTags();
+      };
+    });
+  }
+
+  function advMoveTag(from, to) {
+    if (from == null || from === to) return;
+    const [item] = advState.tags.splice(from, 1);
+    advState.tags.splice(to, 0, item);
+    advDragFrom = null;
+    renderAdvTags();
+  }
+
+  window.advAddContent = function () {
+    advState.content.push({ key: "", value: "" });
+    renderAdvContent();
+  };
+  window.advAddTag = function () {
+    advState.tags.push(["", ""]);
+    renderAdvTags();
+  };
+
+  window.advSave = async function () {
+    const status = (m) => setElementText("adv-status", m);
+
+    // Content: keep rows with a non-empty key, re-serialized to the content JSON.
+    const content = {};
+    advState.content.forEach((row) => {
+      const k = (row.key || "").trim();
+      if (k) content[k] = row.value;
+    });
+
+    // Tags: trim trailing empty elements, drop empty rows; order is preserved.
+    const tags = advState.tags
+      .map((t) => {
+        const c = t.slice();
+        while (c.length && c[c.length - 1] === "") c.pop();
+        return c;
+      })
+      .filter((t) => t.length > 0);
+
+    // Advanced = full control: assemble the event directly (no server merge).
+    // created_at is stamped now; kind/pubkey are fixed.
+    const unsigned = {
+      kind: 0,
+      pubkey: profileData.pubkey,
+      created_at: Math.floor(Date.now() / 1000),
+      content: JSON.stringify(content),
+      tags: tags,
+    };
+
+    try {
+      await signAndPublish(unsigned, status, () => window.toggleAdvancedEdit());
+    } catch (err) {
+      console.error("Advanced save failed:", err);
+      status("Error: " + (err.message || err));
+    }
+  };
+
   // Utility functions
   function showElement(elementId) {
     const element = document.getElementById(elementId);
@@ -509,6 +837,18 @@
       }
     }, 3000);
   }
+
+  // Live-sync (#87): if your own profile (kind 0) changes in another client and
+  // you're viewing it here (and not mid-edit), re-pull it so the page is current.
+  if (window.__pfStreamHandler)
+    window.removeEventListener("grain:stream", window.__pfStreamHandler);
+  window.__pfStreamHandler = function (e) {
+    const m = e.detail || {};
+    if (m.type === "list-updated" && m.kind === 0 && pfIsOwn && !pfEditing) {
+      window.refreshProfile();
+    }
+  };
+  window.addEventListener("grain:stream", window.__pfStreamHandler);
 
   // Initialize when DOM is ready
   if (document.readyState === "loading") {

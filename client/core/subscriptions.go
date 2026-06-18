@@ -5,7 +5,6 @@ import (
 	//"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 // Subscription manages a Nostr subscription across multiple relays
@@ -21,6 +20,7 @@ type Subscription struct {
 	mu         sync.RWMutex
 	active     bool
 	eoseRelays map[string]bool // NEW: Track which relays sent EOSE
+	acquired   []string        // relays this sub holds a pool lease on (released on Close)
 }
 
 // NewSubscription creates a new subscription instance
@@ -48,7 +48,7 @@ func (s *Subscription) Start() error {
 		return &ClientError{Message: "subscription already active"}
 	}
 
-	log.ClientCore().Debug("Starting subscription", "sub_id", s.ID, "relay_count", len(s.Relays))
+	clog().Debug("Starting subscription", "sub_id", s.ID, "relay_count", len(s.Relays))
 
 	// Register with relay pool for message routing
 	s.client.relayPool.RegisterSubscription(s.ID, s)
@@ -59,15 +59,40 @@ func (s *Subscription) Start() error {
 		reqMessage = append(reqMessage, filter)
 	}
 
+	// Connect to all target relays CONCURRENTLY (bounded by the pool's dial
+	// semaphore) rather than one at a time, so a slow or dead relay in someone's
+	// outbox only costs its own dial timeout instead of stacking up serially
+	// behind the others. Each goroutine writes its own index, so no shared-write
+	// race; wg.Wait synchronises before we read the results.
+	connected := make([]bool, len(s.Relays))
+	var wg sync.WaitGroup
+	for i, relayURL := range s.Relays {
+		wg.Add(1)
+		go func(i int, url string) {
+			defer wg.Done()
+			if _, err := s.client.relayPool.Acquire(url); err != nil {
+				clog().Debug("Failed to acquire relay for subscription", "relay", url, "sub_id", s.ID, "error", err)
+				return
+			}
+			connected[i] = true
+		}(i, relayURL)
+	}
+	wg.Wait()
+
+	// Fire the REQ to every relay that came up, holding its lease for the
+	// subscription's lifetime so it isn't idle-evicted out from under us.
 	var lastErr error
 	sent := 0
+	for i, relayURL := range s.Relays {
+		if !connected[i] {
+			continue
+		}
+		s.acquired = append(s.acquired, relayURL)
 
-	for _, relayURL := range s.Relays {
 		if err := s.client.relayPool.SendMessage(relayURL, reqMessage); err != nil {
-			// Demoted to Debug: races with upstream disconnect are
-			// normal flakiness, not grain bugs. The subscription's
-			// caller still sees the failure via the lastErr return.
-			log.ClientCore().Debug("Failed to send subscription to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
+			// Demoted to Debug: races with upstream disconnect are normal
+			// flakiness, not grain bugs.
+			clog().Debug("Failed to send subscription to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
 			lastErr = err
 			continue
 		}
@@ -83,8 +108,12 @@ func (s *Subscription) Start() error {
 	}
 
 	if sent == 0 && lastErr != nil {
-		// Unregister since we failed to start
+		// Unregister and release any leases taken before bailing out.
 		s.client.relayPool.UnregisterSubscription(s.ID)
+		for _, relayURL := range s.acquired {
+			s.client.relayPool.Release(relayURL)
+		}
+		s.acquired = nil
 		return lastErr
 	}
 
@@ -92,7 +121,7 @@ func (s *Subscription) Start() error {
 
 	// No need for processMessages goroutine - routing happens directly from readHandler
 
-	log.ClientCore().Info("Subscription started", "sub_id", s.ID, "sent_to", sent, "total_relays", len(s.Relays))
+	clog().Info("Subscription started", "sub_id", s.ID, "sent_to", sent, "total_relays", len(s.Relays))
 	return nil
 }
 
@@ -105,28 +134,29 @@ func (s *Subscription) Close() error {
 		return nil
 	}
 
-	log.ClientCore().Debug("Closing subscription", "sub_id", s.ID)
+	clog().Debug("Closing subscription", "sub_id", s.ID)
 
 	// Unregister from relay pool
 	s.client.relayPool.UnregisterSubscription(s.ID)
 
-	// Send CLOSE message to all relays
+	// Send CLOSE to, and release the lease on, each relay this subscription
+	// actually acquired (the connected subset — others never got a REQ). This
+	// also lets the connections be idle-evicted once nothing else needs them.
 	closeMessage := []interface{}{"CLOSE", s.ID}
-
-	for _, relayURL := range s.Relays {
+	for _, relayURL := range s.acquired {
 		if err := s.client.relayPool.SendMessage(relayURL, closeMessage); err != nil {
-			// Demoted to Debug: closing a sub on an already-disconnected
-			// relay is expected during teardown, not a problem.
-			log.ClientCore().Debug("Failed to send close to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
+			// Demoted to Debug: closing a sub on an already-disconnected relay
+			// is expected during teardown, not a problem.
+			clog().Debug("Failed to send close to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
 		}
-
-		// Remove subscription from relay
 		if conn, err := s.client.relayPool.GetConnection(relayURL); err == nil {
 			conn.mu.Lock()
 			delete(conn.Subscriptions, s.ID)
 			conn.mu.Unlock()
 		}
+		s.client.relayPool.Release(relayURL)
 	}
+	s.acquired = nil
 
 	s.active = false
 	close(s.Done)
@@ -134,7 +164,7 @@ func (s *Subscription) Close() error {
 	close(s.Errors)
 	close(s.EOSE) // NEW: Close EOSE channel
 
-	log.ClientCore().Debug("Subscription closed", "sub_id", s.ID)
+	clog().Debug("Subscription closed", "sub_id", s.ID)
 	return nil
 }
 
@@ -155,14 +185,23 @@ func (s *Subscription) AddRelay(url string) error {
 
 	// If subscription is active, send REQ to new relay
 	if s.active {
+		// Connect-on-demand and hold a lease, mirroring Start.
+		if _, err := s.client.relayPool.Acquire(url); err != nil {
+			s.Relays = s.Relays[:len(s.Relays)-1]
+			return err
+		}
+		s.acquired = append(s.acquired, url)
+
 		reqMessage := []interface{}{"REQ", s.ID}
 		for _, filter := range s.Filters {
 			reqMessage = append(reqMessage, filter)
 		}
 
 		if err := s.client.relayPool.SendMessage(url, reqMessage); err != nil {
-			// Remove from list if send failed
+			// Remove from list and drop the lease if send failed
 			s.Relays = s.Relays[:len(s.Relays)-1]
+			s.acquired = s.acquired[:len(s.acquired)-1]
+			s.client.relayPool.Release(url)
 			return err
 		}
 
@@ -174,7 +213,7 @@ func (s *Subscription) AddRelay(url string) error {
 		}
 	}
 
-	log.ClientCore().Debug("Relay added to subscription", "sub_id", s.ID, "relay", url)
+	clog().Debug("Relay added to subscription", "sub_id", s.ID, "relay", url)
 	return nil
 }
 
@@ -201,7 +240,7 @@ func (s *Subscription) RemoveRelay(url string) error {
 	if s.active {
 		closeMessage := []interface{}{"CLOSE", s.ID}
 		if err := s.client.relayPool.SendMessage(url, closeMessage); err != nil {
-			log.ClientCore().Warn("Failed to send close to removed relay", "relay", url, "sub_id", s.ID, "error", err)
+			clog().Warn("Failed to send close to removed relay", "relay", url, "sub_id", s.ID, "error", err)
 		}
 
 		// Remove subscription from relay
@@ -212,7 +251,16 @@ func (s *Subscription) RemoveRelay(url string) error {
 		}
 	}
 
-	log.ClientCore().Debug("Relay removed from subscription", "sub_id", s.ID, "relay", url)
+	// Drop the lease if this sub was holding one for the removed relay.
+	for i, u := range s.acquired {
+		if u == url {
+			s.acquired = append(s.acquired[:i], s.acquired[i+1:]...)
+			s.client.relayPool.Release(url)
+			break
+		}
+	}
+
+	clog().Debug("Relay removed from subscription", "sub_id", s.ID, "relay", url)
 	return nil
 }
 
@@ -227,11 +275,11 @@ func (s *Subscription) RemoveRelay(url string) error {
 //	for {
 //		select {
 //		case <-s.Done:
-//			log.ClientCore().Debug("Message processor stopped", "sub_id", s.ID)
+//			clog().Debug("Message processor stopped", "sub_id", s.ID)
 //			return
 //		case <-ticker.C:
 //			// Periodic heartbeat - could be used for subscription health checks
-//			log.ClientCore().Debug("Subscription heartbeat", "sub_id", s.ID)
+//			clog().Debug("Subscription heartbeat", "sub_id", s.ID)
 //		}
 //	}
 //}

@@ -228,6 +228,36 @@ func UpdateBackupRelayConfig(br cfgType.BackupRelayConfig) error {
 	return saveServerConfig(*c)
 }
 
+// UpdateClientConfig stages the built-in Nostr client's connection settings +
+// the client-tag policy (#80/#99). index_relays must be ws/wss; a blank
+// client-tag name is filled with "grain" so it doesn't read as "unconfigured"
+// (which the loader treats as default-on).
+func UpdateClientConfig(cc cfgType.ClientConfig) error {
+	cleaned := cc.IndexRelays[:0]
+	for _, u := range cc.IndexRelays {
+		u = strings.TrimSpace(u)
+		if u == "" {
+			continue
+		}
+		if !strings.HasPrefix(u, "ws://") && !strings.HasPrefix(u, "wss://") {
+			return fmt.Errorf("each index relay must start with ws:// or wss:// (got %q)", u)
+		}
+		cleaned = append(cleaned, u)
+	}
+	cc.IndexRelays = cleaned
+	if cc.ClientTag.Name == "" {
+		cc.ClientTag.Name = "grain"
+	}
+	ConfigMu.Lock()
+	defer ConfigMu.Unlock()
+	c := GetConfig()
+	if c == nil {
+		return fmt.Errorf("config not loaded")
+	}
+	c.Client = cc
+	return saveServerConfig(*c)
+}
+
 // UpdateResourceLimits stages CPU/memory caps. The runtime/debug
 // hooks (GOMAXPROCS, soft memory limit) are applied at startup;
 // reload reapplies them.

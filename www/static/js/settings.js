@@ -94,7 +94,28 @@ function displaySettings(data) {
 
   // Update key information
   updateKeyInformation(data);
+
+  // If we were sent here to land on a specific section (e.g. "Manage relays"
+  // from the header), scroll to it now that the content is visible.
+  scrollToSettingsTarget();
 }
+
+// Scroll to the section named in window.__grainScrollTarget (set by whatever
+// navigated here), once. Called when the settings content becomes visible —
+// from displaySettings and from the page's watchdog — so it works whether the
+// cache fetch resolved or the watchdog revealed the page.
+function scrollToSettingsTarget() {
+  const id = window.__grainScrollTarget;
+  if (!id) return;
+  window.__grainScrollTarget = null;
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Let layout settle (sections render async) before scrolling.
+  requestAnimationFrame(() => {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+window.scrollToSettingsTarget = scrollToSettingsTarget;
 
 // Tab switching functionality - updated for new tab names
 function switchRelayTab(tabName) {

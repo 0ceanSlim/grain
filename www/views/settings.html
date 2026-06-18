@@ -41,179 +41,387 @@
         </div>
       </div>
 
-      <!-- Relay Management -->
-      <div class="p-6 mb-8 bg-surface rounded-lg">
-        <h2 class="mb-4 text-xl font-semibold text-text">
-          📡 Relay Management
-        </h2>
+      <!-- Relay Manager (#98). The full role model; lists are rendered + edited
+           by relay-manager.js from /api/v1/user/relay-lists, published via the
+           relay-list build + streaming publish endpoints. -->
+      <div
+        id="relay-manager-section"
+        class="p-6 mb-8 text-left bg-surface rounded-lg"
+      >
+        <h2 class="mb-1 text-xl font-semibold text-text">📡 Relays</h2>
+        <p class="mb-4 text-sm text-text-secondary">
+          grain connects on demand under the outbox model — your mailboxes say
+          where you publish and where others reach you.
+        </p>
 
-        <!-- Tab Navigation -->
-        <div class="flex mb-6 border-b border-border-strong">
-          <button
-            id="client-relays-tab"
-            class="px-4 py-2 text-sm font-medium text-accent transition-colors border-b-2 border-blue-500"
-            onclick="switchRelayTab('client-relays')"
-          >
-            Client Relays
-          </button>
-          <button
-            id="mailboxes-tab"
-            class="px-4 py-2 text-sm font-medium text-text-secondary transition-colors border-b-2 border-transparent hover:text-text"
-            onclick="switchRelayTab('mailboxes')"
-          >
-            Mailboxes
-          </button>
-        </div>
-
-        <!-- Client Relays Tab Content -->
-        <div id="client-relays-content" class="relay-tab-content">
-          <div class="flex items-center justify-between mb-4">
-            <p class="text-sm text-text-secondary">Your configured client relays</p>
-            <div id="client-relay-buttons" class="space-x-2">
-              <button
-                id="edit-relays-btn"
-                onclick="toggleEditMode()"
-                class="px-4 py-2 text-sm text-text transition-colors bg-blue-600 rounded-lg hover:bg-accent-hover"
-              >
-                Edit
-              </button>
-              <button
-                id="save-relays-btn"
-                onclick="saveRelayChanges()"
-                class="hidden px-4 py-2 text-sm text-text transition-colors bg-green-600 rounded-lg hover:opacity-80"
-              >
-                Save
-              </button>
-              <button
-                id="import-mailboxes-btn"
-                onclick="importFromMailboxes()"
-                class="hidden px-4 py-2 text-sm text-text transition-colors bg-accent rounded-lg hover:bg-accent-hover"
-              >
-                Import from Mailboxes
-              </button>
-              <button
-                id="cancel-edit-btn"
-                onclick="cancelEdit()"
-                class="hidden px-4 py-2 text-sm text-text transition-colors bg-surface-overlay rounded-lg hover:bg-surface-hover"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-
-          <!-- View Mode: Client Relays Table -->
-          <div id="client-relays-view" class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-border-strong">
-                  <th class="px-2 py-3 font-medium text-left text-text-secondary">
-                    Relay
-                  </th>
-                  <th
-                    class="w-20 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Status
-                  </th>
-                  <th
-                    class="w-20 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Ping
-                  </th>
-                  <th
-                    class="w-16 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Read
-                  </th>
-                  <th
-                    class="w-16 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Write
-                  </th>
-                </tr>
-              </thead>
-              <tbody id="client-relays-table">
-                <tr>
-                  <td colspan="5" class="py-8 text-center text-text-secondary">
-                    <div
-                      class="inline-block w-4 h-4 mr-2 border-2 border-white rounded-full animate-spin border-t-transparent"
-                    ></div>
-                    Loading relays...
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Edit Mode: Client Relays Form -->
-          <div id="client-relays-edit" class="hidden space-y-4">
-            <div class="p-4 bg-surface-elevated rounded-lg">
-              <h3 class="mb-4 text-lg font-medium text-text">
-                Edit Client Relays
-              </h3>
-              <div id="relay-form-list" class="space-y-3">
-                <!-- Dynamic relay form entries will be inserted here -->
-              </div>
-              <button
-                onclick="addNewRelayInput()"
-                class="px-4 py-2 mt-4 text-sm text-text transition-colors bg-blue-600 rounded-lg hover:bg-accent-hover"
-              >
-                + Add Relay
-              </button>
-            </div>
+        <!-- Connection overview (filled by relay-manager.js from client/status) -->
+        <div id="rm-overview" class="grid grid-cols-2 gap-2 mb-2 sm:grid-cols-4">
+          <div class="px-3 py-2 rounded-lg bg-surface-elevated">
+            <div class="text-xs text-text-secondary">Known</div>
+            <div class="text-xl font-semibold text-text">—</div>
           </div>
         </div>
 
-        <!-- Mailboxes Tab Content -->
-        <div id="mailboxes-content" class="hidden relay-tab-content">
-          <div class="mb-4">
-            <p class="text-sm text-text-secondary">
-              Your configured mailbox relays (NIP-65)
+        <!-- ── Public (NIP-65 / NIP-17) ── -->
+        <h3
+          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
+        >
+          Public · others can read these
+        </h3>
+
+        <div class="mt-3">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">↑ Outbox</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10002 · write</span>
+          </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">Where you publish. Others fetch your notes here.</p>
+          <div id="rm-outbox-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 mt-2">
+            <input id="rm-outbox-input" type="text" placeholder="Add an outbox relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" list="rm-known-options" />
+            <button onclick="rmAddOutbox()" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">↓ Inbox</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10002 · read</span>
+          </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">Where replies, mentions, and zaps reach you.</p>
+          <div id="rm-inbox-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 mt-2">
+            <input id="rm-inbox-input" type="text" placeholder="Add an inbox relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" list="rm-known-options" />
+            <button onclick="rmAddInbox()" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-3 pt-3 mt-3 border-t border-border">
+          <span class="text-xs text-text-muted">Outbox + Inbox publish together as <code>kind 10002</code>.</span>
+          <button id="rm-nip65-save" onclick="rmSaveNip65()" class="px-4 py-2 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Save &amp; sign</button>
+        </div>
+        <p id="rm-nip65-status" class="mt-1 text-xs text-right text-text-secondary"></p>
+
+        <div class="mt-5">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">✉ DM inbox</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10050 · NIP-17</span>
+          </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">Where your private (gift-wrapped) direct messages are delivered.</p>
+          <div id="rm-dm-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 mt-2">
+            <input id="rm-dm-input" type="text" placeholder="Add a DM relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" list="rm-known-options" />
+            <button onclick="rmAdd('dm')" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
+          </div>
+          <div class="flex items-center justify-between gap-3 mt-2">
+            <span class="text-xs text-text-muted">Publishes <code>kind 10050</code>.</span>
+            <button onclick="rmSave('dm')" class="px-4 py-1.5 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Save &amp; sign</button>
+          </div>
+          <p id="rm-dm-status" class="mt-1 text-xs text-right text-text-secondary"></p>
+        </div>
+
+        <!-- ── Your lists (NIP-51 / NIP-37) ── -->
+        <h3
+          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
+        >
+          Your lists
+        </h3>
+
+        <div class="mt-3">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">🔍 Search</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10007</span>
+          </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">Relays grain queries when you search.</p>
+          <div id="rm-search-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 mt-2">
+            <input id="rm-search-input" type="text" placeholder="Add a search relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" list="rm-known-options" />
+            <button onclick="rmAdd('search')" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
+          </div>
+          <div class="flex items-center justify-between gap-3 mt-2">
+            <span class="text-xs text-text-muted">Publishes <code>kind 10007</code>.</span>
+            <button onclick="rmSave('search')" class="px-4 py-1.5 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Save &amp; sign</button>
+          </div>
+          <p id="rm-search-status" class="mt-1 text-xs text-right text-text-secondary"></p>
+        </div>
+
+        <div class="mt-5">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">★ Favorites</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10012</span>
+          </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">Relays you've starred to browse.</p>
+          <div id="rm-favorites-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 mt-2">
+            <input id="rm-favorites-input" type="text" placeholder="Add a favorite relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" list="rm-known-options" />
+            <button onclick="rmAdd('favorites')" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
+          </div>
+          <div class="flex items-center justify-between gap-3 mt-2">
+            <span class="text-xs text-text-muted">Publishes <code>kind 10012</code>.</span>
+            <button onclick="rmSave('favorites')" class="px-4 py-1.5 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Save &amp; sign</button>
+          </div>
+          <p id="rm-favorites-status" class="mt-1 text-xs text-right text-text-secondary"></p>
+        </div>
+
+        <div class="mt-5">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">⛔ Blocked</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10006</span>
+          </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">grain never connects to these.</p>
+          <div id="rm-blocked-list" class="space-y-1.5"></div>
+          <div class="flex gap-2 mt-2">
+            <input id="rm-blocked-input" type="text" placeholder="Add a blocked relay…" class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border" list="rm-known-options" />
+            <button onclick="rmAdd('blocked')" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">+ Add</button>
+          </div>
+          <div class="flex items-center justify-between gap-3 mt-2">
+            <span class="text-xs text-text-muted">Publishes <code>kind 10006</code>.</span>
+            <button onclick="rmSave('blocked')" class="px-4 py-1.5 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Save &amp; sign</button>
+          </div>
+          <p id="rm-blocked-status" class="mt-1 text-xs text-right text-text-secondary"></p>
+        </div>
+
+        <div class="mt-5">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-text">🔒 Private</span>
+            <span class="px-1.5 py-0.5 font-mono text-xs rounded bg-surface-inset-strong text-text-secondary">10013 · NIP-37</span>
+          </div>
+          <p class="mt-0.5 mb-2 text-xs text-text-muted">Encrypted relay list — only you can read it. Decrypt to reveal (read-only for now; editing comes with the encrypt side).</p>
+          <div id="rm-private-list" class="space-y-1.5"></div>
+          <p id="rm-private-status" class="mt-1 text-xs text-right text-text-secondary"></p>
+        </div>
+
+        <!-- ── App relays (local config) ── -->
+        <h3
+          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
+        >
+          App relays · grain's plumbing
+        </h3>
+        <div id="rm-app-relays" class="space-y-3"></div>
+
+        <!-- ── NIP-42 AUTH requests (was "Trusted") ── -->
+        <h3
+          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
+        >
+          Relays requesting AUTH · NIP-42
+        </h3>
+        <p class="mb-2 text-xs text-text-muted">
+          Relays that asked grain to authenticate this session. Authenticate with
+          your signer to use them — each stays trusted until you remove it or your
+          session ends. If a relay re-challenges, your signer prompts you again.
+        </p>
+        <div id="rm-auth-list" class="space-y-1.5"></div>
+        <p id="rm-auth-status" class="mt-1 text-xs text-text-secondary"></p>
+
+        <!-- Shared autocomplete source for every "add a relay" input above —
+             populated from the known set by relay-manager.js. -->
+        <datalist id="rm-known-options"></datalist>
+
+        <!-- ── Known relays (browse + add) — accent card so it stands apart ── -->
+        <div class="p-4 mt-6 border rounded-xl border-accent bg-accent-dim">
+          <div class="flex items-center gap-2">
+            <span class="text-lg leading-none">🌐</span>
+            <h3 class="text-sm font-semibold tracking-wide uppercase text-accent">
+              Known relays · browse &amp; add
+            </h3>
+          </div>
+          <p class="mt-1 mb-3 text-xs text-text-secondary">
+            Every relay grain has seen — defaults, your mailboxes, and ones it's
+            connected to. Expand a row for its NIP-11 info; add any to your lists.
+          </p>
+          <div class="flex gap-2 mb-2">
+            <input
+              id="rm-known-search"
+              type="text"
+              placeholder="Filter known relays…"
+              oninput="rmKnownSearch(this.value)"
+              class="flex-1 min-w-0 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"
+            />
+            <select
+              id="rm-known-sort"
+              onchange="rmKnownSort(this.value)"
+              title="How to order the list"
+              class="px-2 py-2 text-sm border rounded-lg shrink-0 bg-surface-elevated text-text border-border"
+            >
+              <option value="relevance">Sort: relevant</option>
+              <option value="ping">Sort: fastest</option>
+            </select>
+          </div>
+          <div id="rm-known-list" class="space-y-1.5 overflow-y-auto max-h-96"></div>
+        </div>
+
+        <!-- Fixed-relay override -->
+        <div class="p-4 mt-6 border rounded-lg border-warning bg-warning-dim">
+          <label class="flex items-center justify-between gap-3 cursor-pointer">
+            <span class="text-sm font-medium text-warning">⚠ Fixed relays (advanced)</span>
+            <input id="rm-fixed-toggle" type="checkbox" onchange="rmToggleFixed()" />
+          </label>
+          <p class="mt-1 text-xs text-warning">
+            Read from / write to one fixed set only. <span class="font-semibold">Turns off the outbox model</span> — your replies won't reach others' inboxes. Off by default; not recommended.
+          </p>
+          <div id="rm-fixed-inputs" class="hidden mt-3 space-y-2">
+            <textarea id="rm-fixed-read" rows="2" placeholder="Read relays — one per line" class="w-full px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"></textarea>
+            <textarea id="rm-fixed-write" rows="2" placeholder="Write relays — one per line" class="w-full px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"></textarea>
+            <button onclick="rmApplyFixed()" class="px-4 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">Apply fixed relays</button>
+          </div>
+          <p id="rm-fixed-status" class="mt-1 text-xs text-warning"></p>
+        </div>
+      </div>
+
+      <!-- Media Servers (#83): where uploads go. The user's Blossom (kind
+           10063) + NIP-96 (kind 10096) lists, plus grain's recommended
+           quick-adds. Lists/rows are rendered by media-servers.js. -->
+      <div id="media-servers-section" class="p-6 mb-8 text-left bg-surface rounded-lg">
+        <h2 class="mb-1 text-xl font-semibold text-text">🗂️ Media servers</h2>
+        <p class="mb-4 text-sm text-text-secondary">
+          Where grain uploads your pictures and files. Add a server to upload
+          from the app — or just paste image URLs without one.
+        </p>
+
+        <!-- Blossom explainer -->
+        <div class="flex gap-3 p-3 mb-5 text-sm rounded-lg bg-info-dim text-info">
+          <span aria-hidden="true">🌸</span>
+          <p>
+            <span class="font-semibold">Blossom</span> stores media as files
+            addressed by their hash. Upload once, mirror to several servers, and
+            any Blossom app can still find your media by hash — even if one
+            server drops it. <span class="font-semibold">Recommended.</span>
+          </p>
+        </div>
+
+        <!-- Your Blossom servers -->
+        <h3 class="text-sm font-medium text-text">Your Blossom servers</h3>
+        <p class="mb-2 text-xs text-text-muted">
+          First is your primary — uploads go here. The rest are mirrors. Drag
+          the ⠿ to reorder.
+        </p>
+        <div id="ms-blossom-list" class="space-y-2"></div>
+
+        <h4
+          class="mt-4 mb-2 text-xs font-medium tracking-wide uppercase text-text-secondary"
+        >
+          Recommended
+        </h4>
+        <div id="ms-blossom-suggested" class="space-y-2"></div>
+
+        <div class="flex gap-2 mt-3">
+          <input
+            id="ms-blossom-input"
+            type="text"
+            placeholder="Add a Blossom server by URL…"
+            class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"
+          />
+          <button
+            onclick="msAddBlossomFromInput()"
+            class="px-4 py-2 text-sm transition-colors rounded-lg text-text bg-surface-elevated hover:bg-surface-hover"
+          >
+            + Add
+          </button>
+        </div>
+        <p class="mt-2 text-xs text-text-muted">
+          Want to pick your own? Browse
+          <a
+            href="https://blossomservers.com"
+            target="_blank"
+            rel="noopener"
+            class="text-accent"
+            >blossomservers.com ↗</a
+          >
+        </p>
+
+        <!-- Save the Blossom (kind 10063) list on its own -->
+        <div
+          class="flex items-center justify-between gap-3 pt-3 mt-4 border-t border-border"
+        >
+          <p class="text-xs text-text-muted">
+            Publishes your <code>kind 10063</code> Blossom list.
+          </p>
+          <button
+            id="ms-blossom-save"
+            onclick="msSave('blossom')"
+            class="px-4 py-2 text-sm transition-colors rounded-lg text-text-on-accent bg-accent hover:opacity-80"
+          >
+            Save &amp; sign
+          </button>
+        </div>
+        <p
+          id="ms-blossom-status"
+          class="mt-1 text-sm text-right text-text-secondary"
+        ></p>
+
+        <!-- Legacy NIP-96 -->
+        <details class="mt-6">
+          <summary
+            class="text-sm font-medium cursor-pointer text-text-secondary hover:text-text"
+          >
+            Legacy — HTTP servers (NIP-96)
+          </summary>
+          <p class="mt-2 mb-3 text-xs text-text-muted">
+            Traditional HTTP file storage, authed with NIP-98. Works, but has no
+            mirroring and isn't hash-addressed.
+            <span class="font-semibold text-text-secondary">Prefer Blossom</span>
+            unless you specifically need an existing NIP-96 host.
+          </p>
+          <div id="ms-nip96-list" class="space-y-2"></div>
+          <h4
+            class="mt-3 mb-2 text-xs font-medium tracking-wide uppercase text-text-secondary"
+          >
+            Recommended
+          </h4>
+          <div id="ms-nip96-suggested" class="space-y-2"></div>
+          <div class="flex gap-2 mt-3">
+            <input
+              id="ms-nip96-input"
+              type="text"
+              placeholder="Add a NIP-96 server by URL…"
+              class="flex-1 px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"
+            />
+            <button
+              onclick="msAddNip96FromInput()"
+              class="px-4 py-2 text-sm transition-colors rounded-lg text-text bg-surface-elevated hover:bg-surface-hover"
+            >
+              + Add
+            </button>
+          </div>
+
+          <!-- Save the NIP-96 (kind 10096) list on its own -->
+          <div
+            class="flex items-center justify-between gap-3 pt-3 mt-4 border-t border-border"
+          >
+            <p class="text-xs text-text-muted">
+              Publishes your <code>kind 10096</code> NIP-96 list.
             </p>
+            <button
+              id="ms-nip96-save"
+              onclick="msSave('nip96')"
+              class="px-4 py-2 text-sm transition-colors rounded-lg text-text-on-accent bg-accent hover:opacity-80"
+            >
+              Save &amp; sign
+            </button>
           </div>
+          <p
+            id="ms-nip96-status"
+            class="mt-1 text-sm text-right text-text-secondary"
+          ></p>
+        </details>
+      </div>
 
-          <!-- Mailboxes Table -->
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-border-strong">
-                  <th class="px-2 py-3 font-medium text-left text-text-secondary">
-                    Mailbox
-                  </th>
-                  <th
-                    class="w-20 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Status
-                  </th>
-                  <th
-                    class="w-20 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Ping
-                  </th>
-                  <th
-                    class="w-16 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Read
-                  </th>
-                  <th
-                    class="w-16 px-2 py-3 font-medium text-center text-text-secondary"
-                  >
-                    Write
-                  </th>
-                </tr>
-              </thead>
-              <tbody id="mailboxes-table">
-                <tr>
-                  <td colspan="5" class="py-8 text-center text-text-secondary">
-                    <div
-                      class="inline-block w-4 h-4 mr-2 border-2 border-white rounded-full animate-spin border-t-transparent"
-                    ></div>
-                    Loading mailboxes...
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <!-- Client tag (#99) -->
+      <div class="p-6 mb-8 text-left bg-surface rounded-lg">
+        <h2 class="mb-1 text-xl font-semibold text-text">🏷️ Client tag</h2>
+        <p class="mb-3 text-sm text-text-muted">
+          When on, grain stamps a <code>client:grain</code> tag on events you
+          publish (profile, relay &amp; media lists, notes) so others can see they
+          came from grain. grain always removes other apps' client tags. Turn this
+          off to publish without any client tag.
+        </p>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input
+            id="client-tag-toggle"
+            type="checkbox"
+            onchange="window.grainClientTag && window.grainClientTag.set(this.checked)"
+          />
+          <span class="text-sm text-text">Stamp grain's client tag on my events</span>
+        </label>
       </div>
 
       <!-- Key Information -->
@@ -275,6 +483,12 @@
   </div>
 
   <script src="/static/js/settings.js"></script>
+  <!-- Shared publish helper + media-servers section (#83). nostr-publish.js
+       must load first; media-servers.js self-initialises when its section is in
+       the DOM. -->
+  <script src="/static/js/nostr-publish.js"></script>
+  <script src="/static/js/relay-manager.js"></script>
+  <script src="/static/js/media-servers.js"></script>
   <script>
     // Safe initialization that waits for both DOM and script to be ready
     function safeInitializeSettings() {
@@ -300,5 +514,32 @@
       // Give the script tag time to load
       setTimeout(safeInitializeSettings, 10);
     }
+
+    // Reflect the stored client-tag preference into its toggle (#99).
+    (function initClientTagToggle() {
+      var cb = document.getElementById("client-tag-toggle");
+      if (cb && window.grainClientTag) {
+        cb.checked = window.grainClientTag.enabled();
+      } else {
+        setTimeout(initClientTagToggle, 50);
+      }
+    })();
+
+    // Watchdog: the relay-manager and media-servers sections load themselves,
+    // independently of the cache fetch that hides this spinner. If that fetch
+    // stalls, don't hold the whole page hostage — reveal the content anyway so
+    // those sections are usable. (Session/key fields just stay "Loading…".)
+    setTimeout(function () {
+      var loadingEl = document.getElementById("loading");
+      var contentEl = document.getElementById("settings-content");
+      if (loadingEl && !loadingEl.classList.contains("hidden")) {
+        console.warn("Settings: cache fetch stalled — revealing content via watchdog");
+        loadingEl.classList.add("hidden");
+        if (contentEl) contentEl.classList.remove("hidden");
+        if (typeof window.scrollToSettingsTarget === "function") {
+          window.scrollToSettingsTarget();
+        }
+      }
+    }, 8000);
   </script>
 </div>

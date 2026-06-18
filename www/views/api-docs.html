@@ -5,8 +5,8 @@
      swagger-overrides.css file applies grain's design tokens on top
      of the default Swagger stylesheet — this is the seam where the
      embedded docs join the rest of the app's look. -->
-<link rel="stylesheet" href="/static/swagger/swagger-ui.css" />
-<link rel="stylesheet" href="/static/css/swagger-overrides.css" />
+<link rel="stylesheet" href="/static/swagger/swagger-ui.css?v={{assetVersion}}" />
+<link rel="stylesheet" href="/static/css/swagger-overrides.css?v={{assetVersion}}" />
 
 <main
   id="main-content"
@@ -19,6 +19,55 @@
 <script src="/static/swagger/swagger-ui-bundle.js" charset="UTF-8"></script>
 <script src="/static/swagger/swagger-ui-standalone-preset.js" charset="UTF-8"></script>
 <script>
+  // NIP-98 auth for "Try it out": the only protected operation is the NIP-86 RPC
+  // (POST /). Instead of pasting a base64 kind-27235 event by hand (which only
+  // authorizes one request, since NIP-98 binds the signature to the URL +
+  // payload), sign each protected request on the fly with the connected signer —
+  // the same flow as nip86-submit.js. preauthorizeApiKey arms the lock so
+  // SwaggerUI attaches the Authorization header; the interceptor swaps in a
+  // freshly-signed event.
+  async function sha256Hex(str) {
+    const bytes = new TextEncoder().encode(str);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest))
+      .map(function (b) {
+        return b.toString(16).padStart(2, "0");
+      })
+      .join("");
+  }
+
+  async function signNostrAuth(req) {
+    if (typeof window.restoreSigner === "function") {
+      try {
+        await window.restoreSigner();
+      } catch (e) {}
+    }
+    if (!window.grainSigner || typeof window.grainSigner.signEvent !== "function") {
+      return req; // no signer — the request will 401, the honest result
+    }
+    const u = /^https?:\/\//.test(req.url) ? req.url : window.location.origin + req.url;
+    const tags = [
+      ["u", u],
+      ["method", (req.method || "GET").toUpperCase()],
+    ];
+    if (req.body) {
+      const body = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+      tags.push(["payload", await sha256Hex(body)]);
+    }
+    try {
+      const signed = await window.grainSigner.signEvent({
+        kind: 27235,
+        created_at: Math.floor(Date.now() / 1000),
+        content: "",
+        tags: tags,
+      });
+      req.headers.Authorization = "Nostr " + btoa(JSON.stringify(signed));
+    } catch (e) {
+      console.warn("NIP-98 signing failed:", e);
+    }
+    return req;
+  }
+
   window.addEventListener("load", function () {
     window.ui = SwaggerUIBundle({
       url: "/api/docs/openapi.json",
@@ -36,6 +85,16 @@
       docExpansion: "list",
       defaultModelsExpandDepth: 1,
       tryItOutEnabled: true,
+      // Sign NIP-98-protected requests with the connected signer (the header is
+      // only present on protected operations, so others pass through untouched).
+      requestInterceptor: function (req) {
+        return req.headers && req.headers.Authorization ? signNostrAuth(req) : req;
+      },
+      onComplete: function () {
+        try {
+          window.ui.preauthorizeApiKey("NostrAuth", "signer");
+        } catch (e) {}
+      },
     });
   });
 </script>

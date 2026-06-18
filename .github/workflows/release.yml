@@ -361,6 +361,10 @@ jobs:
         run: |
           set -euo pipefail
           go install github.com/swaggo/swag/cmd/swag@v1.16.4
+          # Seed a placeholder so `go list` (run by swag) can resolve the
+          # //go:embed of swagger.json before swag regenerates the real spec.
+          mkdir -p docs/openapi
+          printf '%s' '{"swagger":"2.0","info":{"title":"grain","version":"dev"},"paths":{}}' > docs/openapi/swagger.json
           "$(go env GOPATH)/bin/swag" init --parseDependency --parseInternal -g main.go -o docs/openapi -ot json
 
       - name: Build grain binary (Unix)
@@ -385,6 +389,10 @@ jobs:
         run: |
           set -euo pipefail
           go install github.com/swaggo/swag/cmd/swag@v1.16.4
+          # Seed a placeholder so `go list` (run by swag) can resolve the
+          # //go:embed of swagger.json before swag regenerates the real spec.
+          mkdir -p docs/openapi
+          printf '%s' '{"swagger":"2.0","info":{"title":"grain","version":"dev"},"paths":{}}' > docs/openapi/swagger.json
           "$(go env GOPATH)/bin/swag" init --parseDependency --parseInternal -g main.go -o docs/openapi -ot json
 
       - name: Build grain binary (Windows)

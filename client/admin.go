@@ -395,6 +395,21 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 	wl := config.GetWhitelistConfig()
 
 	sections := []AdminSection{
+		{ID: "ops", Title: "Operations", Icon: "🛠️", Method: "", Config: nil},
+		{ID: "relay_info", Title: "Relay information", Icon: "🪪", Method: "",
+			Config: func() OpsSectionData {
+				m := utils.GetRelayMetadataCopy()
+				return OpsSectionData{
+					RelayName:           m.Name,
+					RelayDescription:    m.Description,
+					RelayIcon:           m.Icon,
+					RelayBanner:         m.Banner,
+					RelayContact:        m.Contact,
+					RelayPrivacyPolicy:  m.PrivacyPolicy,
+					RelayTermsOfService: m.TermsOfService,
+					RelayPostingPolicy:  m.PostingPolicy,
+				}
+			}()},
 		{ID: "logging", Title: "Logging", Icon: "📜", Method: "grain_updatelogging",
 			Config: LoggingSectionData{Config: cfg.Logging, AllComponents: log.GetAllComponents()}},
 		{ID: "auth", Title: "Auth", Icon: "🔐", Method: "grain_updateauth", Config: cfg.Auth},
@@ -407,6 +422,7 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 			}},
 		{ID: "event_time_constraints", Title: "Event time constraints", Icon: "⏱️", Method: "grain_updateeventtimeconstraints", Config: cfg.EventTimeConstraints},
 		{ID: "backup_relay", Title: "Backup relay", Icon: "🪞", Method: "grain_updatebackuprelay", Config: cfg.BackupRelay},
+		{ID: "client", Title: "Client", Icon: "🧩", Method: "grain_updateclient", Config: cfg.Client},
 		{ID: "rate_limit", Title: "Rate limit", Icon: "🚦", Method: "grain_updateratelimit",
 			Config: RateLimitSectionData{
 				Config:              cfg.RateLimit,
@@ -468,21 +484,11 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 					OwnerMutelistPubkeys:  ownerMutes,
 				}
 			}()},
-		{ID: "ops", Title: "Operations", Icon: "🛠️", Method: "",
-			Config: func() OpsSectionData {
-				m := utils.GetRelayMetadataCopy()
-				return OpsSectionData{
-					RelayName:           m.Name,
-					RelayDescription:    m.Description,
-					RelayIcon:           m.Icon,
-					RelayBanner:         m.Banner,
-					RelayContact:        m.Contact,
-					RelayPrivacyPolicy:  m.PrivacyPolicy,
-					RelayTermsOfService: m.TermsOfService,
-					RelayPostingPolicy:  m.PostingPolicy,
-				}
-			}()},
 	}
+
+	// Operator-facing display order: the highest-traffic sections first; any not
+	// listed keep their definition order behind them.
+	sections = orderSections(sections, "ops", "relay_info", "server", "rate_limit", "resource_limits", "whitelist", "blacklist")
 
 	data := AdminPageData{
 		Title:      "🌾 grain — admin",
@@ -491,6 +497,31 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 		KindLabels: KindLabels,
 	}
 	renderAdmin(w, data)
+}
+
+// orderSections returns sections with the given IDs first, in the order given;
+// any section not named keeps its original position behind them. Lets the
+// definition block stay grouped by concern while the display order is curated.
+func orderSections(sections []AdminSection, firstIDs ...string) []AdminSection {
+	listed := make(map[string]bool, len(firstIDs))
+	for _, id := range firstIDs {
+		listed[id] = true
+	}
+	out := make([]AdminSection, 0, len(sections))
+	for _, id := range firstIDs {
+		for _, s := range sections {
+			if s.ID == id {
+				out = append(out, s)
+				break
+			}
+		}
+	}
+	for _, s := range sections {
+		if !listed[s.ID] {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // renderAdmin parses the admin template against the shared layout and

@@ -232,11 +232,18 @@
   border-bottom-color: var(--color-border);
 }
 
-/* Servers / scheme selector */
-.swagger-ui .scheme-container {
-  background: var(--color-surface);
-  border-color: var(--color-border);
-  box-shadow: none;
+/* Auth UI. Protected requests are signed automatically by the connected signer
+ * (the requestInterceptor in api-docs.html), so the manual Authorize modal is
+ * redundant — and swagger's default dialog isn't themed, so it reads badly
+ * against the dark palette. Hide the Authorize bar + the auth dialog; the
+ * per-operation lock icons stay as inert "needs owner auth" indicators. */
+.swagger-ui .scheme-container,
+.swagger-ui .dialog-ux {
+  display: none !important;
+}
+
+.swagger-ui .authorization__btn {
+  pointer-events: none;
 }
 
 /* Mobile breathing room — Swagger UI's default `wrapper` is wide */

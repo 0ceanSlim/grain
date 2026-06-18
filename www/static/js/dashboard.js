@@ -602,22 +602,24 @@ const dashboardManager = {
       return `<div class="text-center text-text-secondary text-sm">No NIPs specified</div>`;
     }
 
-    const nipLinks = supported_nips
-      .slice(0, 12)
-      .map((nip) => {
-        const nipNum = String(nip).padStart(2, "0");
-        return `<a href="https://github.com/nostr-protocol/nips/blob/master/${nipNum}.md" target="_blank" class="inline-flex px-2 py-1 text-xs font-medium bg-info-dim text-info rounded-full hover:opacity-80 transition-colors">NIP-${nipNum}</a>`;
-      })
-      .join("");
+    const nipLink = (nip) => {
+      const nipNum = String(nip).padStart(2, "0");
+      return `<a href="https://github.com/nostr-protocol/nips/blob/master/${nipNum}.md" target="_blank" class="inline-flex px-2 py-1 text-xs font-medium bg-info-dim text-info rounded-full hover:opacity-80 transition-colors">NIP-${nipNum}</a>`;
+    };
 
-    const remaining =
-      supported_nips.length > 12
-        ? `<span class="text-xs text-text-secondary">+${
-            supported_nips.length - 12
-          } more</span>`
-        : "";
+    const shown = supported_nips.slice(0, 12).map(nipLink).join("");
+    const hidden = supported_nips.slice(12);
+    if (hidden.length === 0) return shown;
 
-    return nipLinks + remaining;
+    // "+N more" reveals the rest in place and removes itself — no extra
+    // page or modal for a handful of badges.
+    const moreId = "nips-more-" + Math.random().toString(36).slice(2, 8);
+    const hiddenLinks = `<span id="${moreId}" class="hidden">${hidden
+      .map(nipLink)
+      .join("")}</span>`;
+    const moreBtn = `<button type="button" onclick="document.getElementById('${moreId}').classList.remove('hidden');this.remove();" class="inline-flex px-2 py-1 text-xs font-medium bg-surface-elevated text-text-secondary rounded-full hover:text-text transition-colors cursor-pointer">+${hidden.length} more</button>`;
+
+    return shown + hiddenLinks + moreBtn;
   },
 
   // Helper function to create tags links
@@ -664,7 +666,7 @@ const dashboardManager = {
               ? "bg-success-dim text-success"
               : "bg-surface-elevated text-text-secondary"
           } rounded-full">
-            ${authOn ? "Enabled" : "Disabled"}
+            ${authOn ? "Required" : "Not required"}
           </div>
           ${
             authOn && authData.relay_url

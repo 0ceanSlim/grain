@@ -60,6 +60,9 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/ping/", api.PingHandler)
 	mux.HandleFunc("/api/v1/keys/decode/nip19/", api.Nip19DecodeHandler) // Decode NIP-19 entities
 
+	// Kind → human-readable label table (for the relay-stream feed).
+	mux.HandleFunc("/api/v1/kinds", KindLabelsHandler)
+
 	// OpenAPI / Swagger UI. The spec is served standalone so other
 	// tooling (Postman, openapi-generator, etc.) can consume it
 	// without scraping the UI shell. The UI itself is grain's own
@@ -132,13 +135,46 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 
 	// User data fetching endpoints
 	mux.HandleFunc("/api/v1/user/profile", api.GetUserProfileHandler)
+	mux.HandleFunc("/api/v1/user/profile/build", api.BuildProfileHandler)
 	mux.HandleFunc("/api/v1/user/relays", api.GetUserRelaysHandler)
+
+	// Media-server lists (Blossom kind 10063 + NIP-96 kind 10096) for the
+	// upload flow: the user's resolved lists, plus grain's quick-add suggestions.
+	mux.HandleFunc("/api/v1/user/media-servers", api.GetUserMediaServersHandler)
+	mux.HandleFunc("/api/v1/user/media-servers/build", api.BuildMediaServersHandler)
+	mux.HandleFunc("/api/v1/media-servers/suggested", api.GetSuggestedMediaServersHandler)
+
+	// Relay-list management: build a NIP-65 / NIP-17 / NIP-51 relay list to sign,
+	// and the fixed-relay override (advanced opt-out of the outbox model).
+	mux.HandleFunc("/api/v1/user/relay-lists", api.GetUserRelayListsHandler)
+	mux.HandleFunc("/api/v1/user/relay-list/build", api.BuildRelayListHandler)
+	mux.HandleFunc("/api/v1/client/fixed-relays", api.FixedRelaysHandler)
+	// Session app-relay preferences (local roles: indexer/broadcast/local/trusted).
+	mux.HandleFunc("/api/v1/client/app-relays", api.AppRelaysHandler)
+	// Known-relays browser: list the known set + per-relay NIP-11 (cached).
+	mux.HandleFunc("/api/v1/client/known-relays", api.KnownRelaysHandler)
+	mux.HandleFunc("/api/v1/relay-info", api.RelayInfoHandler)
+	// TCP-connect latency for a set of relays — the browser's "fastest first" sort.
+	mux.HandleFunc("/api/v1/relays/ping", api.PingRelaysHandler)
+	// NIP-42 AUTH: relays that have challenged us, answer one, revoke one.
+	mux.HandleFunc("/api/v1/client/auth-requests", api.AuthRequestsHandler)
+	mux.HandleFunc("/api/v1/client/auth", api.SubmitAuthHandler)
+	mux.HandleFunc("/api/v1/client/auth/remove", api.RemoveAuthHandler)
 
 	// Event querying endpoints
 	mux.HandleFunc("/api/v1/events/query", api.QueryEventsHandler)
+	mux.HandleFunc("/api/v1/events/publish", api.PublishSignedHandler)
+	mux.HandleFunc("/api/v1/events/publish/stream", api.PublishSignedStreamHandler)
 
 	// Relay management endpoints
 	mux.HandleFunc("/api/v1/client/relays", api.ClientRelaysHandler)
 	mux.HandleFunc("/api/v1/client/connect/", api.ClientConnectHandler)
 	mux.HandleFunc("/api/v1/client/disconnect/", api.ClientDisconnectHandler)
+
+	// Relay-pool status (total vs connected) for the dashboard indicator
+	mux.HandleFunc("/api/v1/client/status", api.ClientStatusHandler)
+
+	// Live update channel (SSE) — server->browser push for live-sync (#87) and
+	// the streaming fetch path (#77).
+	mux.HandleFunc("/api/v1/stream", api.StreamHandler)
 }

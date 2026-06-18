@@ -133,6 +133,18 @@ func runUpdateBackupRelay(params []any, signer string) (any, string) {
 	return updateResult(), ""
 }
 
+func runUpdateClient(params []any, signer string) (any, string) {
+	var cc cfgType.ClientConfig
+	if err := paramJSON(params, 0, &cc); err != nil {
+		return nil, err.Error()
+	}
+	if err := config.UpdateClientConfig(cc); err != nil {
+		return nil, err.Error()
+	}
+	log.RelayAPI().Info("NIP-86 grain_updateclient", "signer", signer, "client_tag", cc.ClientTag.Enabled)
+	return updateResult(), ""
+}
+
 func runUpdateResourceLimits(params []any, signer string) (any, string) {
 	var rl cfgType.ResourceLimits
 	if err := paramJSON(params, 0, &rl); err != nil {
