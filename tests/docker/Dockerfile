@@ -23,11 +23,15 @@ RUN find server/db/nostrdb -type f \! -name '*.o' \! -name '*.a' \! -name '*.png
 RUN cd server/db/nostrdb && bash build.sh
 
 # Generate the OpenAPI spec from swag annotations. main.go embeds
-# docs/openapi/swagger.json via //go:embed, so a missing file fails
-# the build with a clear "no matching files found" error. This step
-# is the build-time half of the contract; the runtime half lives in
-# server/api/docs.
+# docs/openapi/swagger.json via //go:embed — and `swag init` itself runs
+# `go list` over the module, which fails on that missing embed BEFORE swag
+# can generate it (chicken-and-egg: go list then can't resolve cross-package
+# types like core.KnownRelayStatus). Seed a placeholder so `go list` succeeds;
+# swag overwrites it with the real spec. Build-time half of the contract; the
+# runtime half lives in server/api/docs.
 RUN go install github.com/swaggo/swag/cmd/swag@v1.16.4 \
+    && mkdir -p docs/openapi \
+    && printf '%s' '{"swagger":"2.0","info":{"title":"grain","version":"dev"},"paths":{}}' > docs/openapi/swagger.json \
     && swag init --parseDependency --parseInternal -g main.go -o docs/openapi -ot json
 
 # Bundle swagger-ui-dist for the API docs page. The version is pinned

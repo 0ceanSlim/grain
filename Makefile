@@ -28,6 +28,8 @@ DEV_COMPOSE = docker compose -f docs/docker/docker-compose.dev.yml
 # package directory and pull in swaggo/swag's API surface, which we
 # don't actually consume at runtime.
 generate:
+	mkdir -p docs/openapi
+	@[ -s docs/openapi/swagger.json ] || printf '%s' '{"swagger":"2.0","info":{"title":"grain","version":"dev"},"paths":{}}' > docs/openapi/swagger.json
 	swag init --parseDependency --parseInternal -g main.go -o docs/openapi -ot json
 
 # Bring up a single fresh dev relay built from the working tree.
