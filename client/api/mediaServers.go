@@ -63,6 +63,12 @@ func GetUserMediaServersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ?refresh=1 drops any cached (possibly stale/negative) result first, so the
+	// "no media servers" prompt can recover from a transient empty resolve.
+	if r.URL.Query().Get("refresh") == "1" {
+		coreClient.InvalidateMediaServers(pubkey)
+	}
+
 	media := coreClient.ResolveMediaServers(pubkey)
 	resp := UserMediaServersResponse{
 		Pubkey:  pubkey,

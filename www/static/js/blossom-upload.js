@@ -137,7 +137,7 @@
     return n < 1024 * 1024 ? Math.round(n / 1024) + " KB" : (n / 1024 / 1024).toFixed(1) + " MB";
   }
 
-  function showModal(file, servers, onUrl, opts) {
+  function showModal(file, servers, onUrl, opts, fetchOk) {
     const all = [].concat((servers && servers.blossom) || [], (servers && servers.nip96) || []);
     const hasAny = servers && servers.hasAny && all.length > 0;
 
@@ -154,14 +154,23 @@
     });
 
     if (!hasAny) {
+      const failed = !fetchOk;
       card.innerHTML =
-        `<h3 class="mb-2 text-lg font-semibold text-text">No media server set up</h3>` +
-        `<p class="mb-4 text-sm text-text-muted">Add a Blossom or NIP-96 server in Settings → Media servers before uploading.</p>` +
-        `<div class="flex justify-end gap-2">` +
+        (failed
+          ? `<h3 class="mb-2 text-lg font-semibold text-text">Couldn't load your media servers</h3>` +
+            `<p class="mb-4 text-sm text-text-muted">Make sure you're signed in, then re-check.</p>`
+          : `<h3 class="mb-2 text-lg font-semibold text-text">No media server set up</h3>` +
+            `<p class="mb-4 text-sm text-text-muted">If you just added one it may not have synced yet — re-check, or add one in Settings → Media servers.</p>`) +
+        `<div class="flex flex-wrap justify-end gap-2">` +
         `<button data-act="cancel" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">Close</button>` +
+        `<button data-act="recheck" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">Re-check</button>` +
         `<a href="/settings" class="px-3 py-2 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Open settings</a>` +
         `</div>`;
       card.querySelector('[data-act="cancel"]').onclick = close;
+      card.querySelector('[data-act="recheck"]').onclick = function () {
+        close();
+        open(file, onUrl, Object.assign({}, opts, { refresh: true }));
+      };
       document.body.appendChild(overlay);
       return;
     }
@@ -264,14 +273,16 @@
 
   async function open(file, onUrl, opts) {
     opts = opts || {};
-    let servers;
+    let servers = null,
+      fetchOk = false;
     try {
-      const r = await fetch("/api/v1/user/media-servers");
-      servers = r.ok ? await r.json() : null;
-    } catch (e) {
-      servers = null;
-    }
-    showModal(file, servers, onUrl, opts);
+      const r = await fetch("/api/v1/user/media-servers" + (opts.refresh ? "?refresh=1" : ""));
+      if (r.ok) {
+        servers = await r.json();
+        fetchOk = true;
+      }
+    } catch (e) {}
+    showModal(file, servers, onUrl, opts, fetchOk);
   }
 
   window.grainUpload = { pick: pick, open: open, _uploadTo: uploadTo, _sha256Hex: sha256Hex };
