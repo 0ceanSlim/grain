@@ -13,6 +13,22 @@
   before someone else does.
 </div>
 
+<!-- No-relay-list nudge for a logged-in user who hasn't published a NIP-65
+     relay list yet (new identity). Revealed by navigation.js. -->
+<div
+  id="no-relays-banner"
+  class="hidden px-4 py-2 text-sm font-medium text-center bg-warning-dim text-warning"
+>
+  ⚠ You haven't set up your relays —
+  <a
+    href="/settings"
+    class="underline"
+    onclick="if(window.openRelaySettings){event.preventDefault();window.openRelaySettings();}"
+    >set up relays</a
+  >
+  so your notes and lists reach the right places.
+</div>
+
 <header
   class="relative flex items-center gap-3 px-4 mt-6 mb-6"
   hx-boost="true"

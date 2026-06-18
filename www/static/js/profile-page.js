@@ -46,7 +46,12 @@
         profileData.profile = profile;
         displayProfile(profile);
       } else {
-        throw new Error("Profile not found");
+        // No kind-0 yet (e.g. a brand-new identity). Show an empty profile rather
+        // than an error: the owner gets the Edit button (via checkOwnProfile) to
+        // create one, and a stranger just sees a blank profile.
+        const empty = { pubkey: pubkey, kind: 0, content: "{}", tags: [] };
+        profileData.profile = empty;
+        displayProfile(empty);
       }
     } catch (error) {
       console.error("Failed to load profile:", error);
@@ -83,23 +88,22 @@
   }
 
   async function fetchProfile(pubkey) {
-    try {
-      // Use existing profile API
-      const response = await fetch(
-        `/api/v1/user/profile?pubkey=${encodeURIComponent(pubkey)}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Profile API returned ${response.status}`);
-      }
-
-      const profile = await response.json();
-      console.log("Profile data loaded:", profile);
-      return profile;
-    } catch (error) {
-      console.error("Failed to fetch profile:", error);
+    // Use existing profile API. A 404 means "no kind-0 published yet" → return
+    // null so the caller shows an empty editable profile. Other failures
+    // (network, 5xx) throw, so the caller errors instead of risking the owner
+    // overwriting a real profile that just failed to load.
+    const response = await fetch(
+      `/api/v1/user/profile?pubkey=${encodeURIComponent(pubkey)}`
+    );
+    if (response.status === 404) {
       return null;
     }
+    if (!response.ok) {
+      throw new Error(`Profile API returned ${response.status}`);
+    }
+    const profile = await response.json();
+    console.log("Profile data loaded:", profile);
+    return profile;
   }
 
   function displayProfile(profile) {
@@ -485,6 +489,12 @@
       if (mine) {
         showElement("profile-edit-btn");
         showElement("profile-advanced-btn");
+        // Brand-new identity (no kind-0 → empty content): drop the owner straight
+        // into the editor so they can set up their profile metadata.
+        const empty = Object.keys(profileData.content || {}).length === 0;
+        if (empty && !pfEditing && typeof window.toggleProfileEdit === "function") {
+          window.toggleProfileEdit();
+        }
       }
     } catch (_) {
       /* not logged in — leave the Edit buttons hidden */

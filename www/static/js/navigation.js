@@ -285,6 +285,27 @@
     link.classList.toggle("flex", isOwner);
   }
 
+  // Reveal the "set up your relays" banner for a logged-in user with no NIP-65
+  // relay list yet (new identity). Deterministic: shown only when logged in and
+  // the list is empty, hidden otherwise.
+  async function maybeRevealRelaysBanner(sessionPubkey) {
+    const banner = document.getElementById("no-relays-banner");
+    if (!banner) return;
+    if (!sessionPubkey) {
+      banner.classList.add("hidden");
+      return;
+    }
+    try {
+      const r = await fetch("/api/v1/user/relay-lists");
+      if (!r.ok) return;
+      const d = await r.json();
+      const hasRelays = d && Array.isArray(d.nip65) && d.nip65.length > 0;
+      banner.classList.toggle("hidden", hasRelays);
+    } catch (_) {
+      /* leave hidden on error */
+    }
+  }
+
   function applyDropdownProfile(info) {
     if (!info) return;
     const nameEl = document.getElementById("user-dropdown-name");
@@ -292,6 +313,7 @@
     const pfpWrap = document.getElementById("user-dropdown-pfp-wrap");
     if (!nameEl || !npubEl || !pfpWrap) return;
     maybeRevealAdminLink(info.pubkey);
+    maybeRevealRelaysBanner(info.pubkey);
     const c = info.content || {};
     const display =
       c.display_name ||
