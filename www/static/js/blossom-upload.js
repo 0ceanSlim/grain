@@ -275,4 +275,25 @@
   }
 
   window.grainUpload = { pick: pick, open: open, _uploadTo: uploadTo, _sha256Hex: sha256Hex };
+
+  // Declarative wiring: a button with data-upload-target="<css selector>" opens
+  // the picker and writes the resulting URL into the target field (firing input +
+  // change so any framework/handler picks it up). data-upload-accept overrides
+  // the file filter (default image/*). Delegated so it works on dynamically
+  // rendered fields (profile edit form, admin sections).
+  document.addEventListener("click", function (e) {
+    const btn = e.target.closest && e.target.closest("[data-upload-target]");
+    if (!btn) return;
+    e.preventDefault();
+    const target = document.querySelector(btn.getAttribute("data-upload-target"));
+    if (!target) return;
+    pick(
+      function (url) {
+        target.value = url;
+        target.dispatchEvent(new Event("input", { bubbles: true }));
+        target.dispatchEvent(new Event("change", { bubbles: true }));
+      },
+      { accept: btn.getAttribute("data-upload-accept") || "image/*" }
+    );
+  });
 })();
