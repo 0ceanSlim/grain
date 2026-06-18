@@ -137,6 +137,19 @@
     return n < 1024 * 1024 ? Math.round(n / 1024) + " KB" : (n / 1024 / 1024).toFixed(1) + " MB";
   }
 
+  // Navigate to Settings and scroll to the media-servers section (settings.js
+  // reads window.__grainScrollTarget once the content is visible). Mirrors
+  // header.html's openRelaySettings so it works from any page, SPA or not.
+  function openMediaSettings() {
+    window.__grainScrollTarget = "media-servers-section";
+    if (typeof window.htmx === "undefined") {
+      window.location.href = "/settings";
+      return;
+    }
+    window.history.pushState({}, "", "/settings");
+    window.htmx.ajax("GET", "/views/settings.html", { target: "#main-content" });
+  }
+
   function showModal(file, servers, onUrl, opts, fetchOk) {
     const all = [].concat((servers && servers.blossom) || [], (servers && servers.nip96) || []);
     const hasAny = servers && servers.hasAny && all.length > 0;
@@ -166,12 +179,16 @@
         `<div class="flex flex-wrap justify-end gap-2">` +
         `<button data-act="cancel" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">Close</button>` +
         `<button data-act="recheck" class="px-3 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">Re-check</button>` +
-        `<a href="/settings" class="px-3 py-2 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Open settings</a>` +
+        `<button data-act="settings" class="px-3 py-2 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80">Open settings</button>` +
         `</div>`;
       card.querySelector('[data-act="cancel"]').onclick = close;
       card.querySelector('[data-act="recheck"]').onclick = function () {
         close();
         open(file, onUrl, Object.assign({}, opts, { refresh: true }));
+      };
+      card.querySelector('[data-act="settings"]').onclick = function () {
+        close();
+        openMediaSettings();
       };
       document.body.appendChild(overlay);
       return;
