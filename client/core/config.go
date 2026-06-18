@@ -35,6 +35,11 @@ type Config struct {
 	// NewClient time (see [SetLogger]). Not serialized; defaults to grain's
 	// client-core logging so behaviour is unchanged when unset.
 	Logger Logger `json:"-"`
+
+	// RelayListStore, when non-nil, backs the relay directory's per-user
+	// resolutions with a custom store (see [RelayListStore]) — e.g. a database
+	// for persistence across restarts. Not serialized; defaults to in-memory.
+	RelayListStore RelayListStore `json:"-"`
 }
 
 // DefaultConfig returns a sensible default configuration. The IndexRelays

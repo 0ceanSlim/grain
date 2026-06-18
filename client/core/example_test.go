@@ -205,3 +205,27 @@ func ExampleApplyClientTag() {
 func ExampleSetLogger() {
 	core.SetLogger(slog.Default())
 }
+
+// exampleStore is a minimal RelayListStore — a pubkey -> *UserRelays map. The
+// directory owns the TTL and single-flight logic, so a store only needs to be a
+// correct key-value map; a real one would persist to a database.
+type exampleStore struct{ m map[string]*core.UserRelays }
+
+func (s exampleStore) Get(pk string) (*core.UserRelays, bool) { ur, ok := s.m[pk]; return ur, ok }
+func (s exampleStore) Set(pk string, ur *core.UserRelays)     { s.m[pk] = ur }
+func (s exampleStore) Delete(pk string)                       { delete(s.m, pk) }
+func (s exampleStore) Range(fn func(string, *core.UserRelays) bool) {
+	for k, v := range s.m {
+		if !fn(k, v) {
+			return
+		}
+	}
+}
+
+// Backing the relay directory with a custom store (e.g. a database) instead of
+// the default in-memory cache.
+func ExampleConfig_relayListStore() {
+	cfg := core.DefaultConfig()
+	cfg.RelayListStore = exampleStore{m: map[string]*core.UserRelays{}}
+	_ = core.NewClient(cfg)
+}

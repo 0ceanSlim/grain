@@ -25,7 +25,7 @@ type UserRelays struct {
 // concurrent lookups for the same pubkey into a single network fetch.
 type RelayDirectory struct {
 	mu       sync.Mutex
-	entries  map[string]*UserRelays
+	store    RelayListStore
 	inflight map[string]chan struct{}
 	ttl      time.Duration
 	negTTL   time.Duration
@@ -33,14 +33,23 @@ type RelayDirectory struct {
 }
 
 func newRelayDirectory(ttl, negTTL time.Duration, resolve func(string) *UserRelays) *RelayDirectory {
+	return newRelayDirectoryWithStore(ttl, negTTL, nil, resolve)
+}
+
+// newRelayDirectoryWithStore is newRelayDirectory with an explicit persistence
+// store; a nil store falls back to the default in-memory one.
+func newRelayDirectoryWithStore(ttl, negTTL time.Duration, store RelayListStore, resolve func(string) *UserRelays) *RelayDirectory {
 	if ttl <= 0 {
 		ttl = time.Hour
 	}
 	if negTTL <= 0 {
 		negTTL = time.Minute
 	}
+	if store == nil {
+		store = newMemRelayListStore()
+	}
 	return &RelayDirectory{
-		entries:  make(map[string]*UserRelays),
+		store:    store,
 		inflight: make(map[string]chan struct{}),
 		ttl:      ttl,
 		negTTL:   negTTL,
@@ -67,7 +76,7 @@ func (d *RelayDirectory) fresh(ur *UserRelays) bool {
 func (d *RelayDirectory) Lookup(pubkey string) *UserRelays {
 	for {
 		d.mu.Lock()
-		if ur, ok := d.entries[pubkey]; ok && d.fresh(ur) {
+		if ur, ok := d.store.Get(pubkey); ok && d.fresh(ur) {
 			d.mu.Unlock()
 			return ur
 		}
@@ -90,7 +99,7 @@ func (d *RelayDirectory) Lookup(pubkey string) *UserRelays {
 		ur.FetchedAt = time.Now()
 
 		d.mu.Lock()
-		d.entries[pubkey] = ur
+		d.store.Set(pubkey, ur)
 		delete(d.inflight, pubkey)
 		close(ch)
 		d.mu.Unlock()
@@ -102,7 +111,7 @@ func (d *RelayDirectory) Lookup(pubkey string) *UserRelays {
 // observing a newer relay-list event for the user.
 func (d *RelayDirectory) Invalidate(pubkey string) {
 	d.mu.Lock()
-	delete(d.entries, pubkey)
+	d.store.Delete(pubkey)
 	d.mu.Unlock()
 }
 
@@ -117,11 +126,11 @@ func (d *RelayDirectory) Store(pubkey string, ur *UserRelays) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	existing, ok := d.entries[pubkey]
+	existing, ok := d.store.Get(pubkey)
 	if !ok {
 		ur.FetchedAt = time.Now()
 		ur.Negative = false
-		d.entries[pubkey] = ur
+		d.store.Set(pubkey, ur)
 		return
 	}
 	if len(ur.Outbox) > 0 {
@@ -135,6 +144,7 @@ func (d *RelayDirectory) Store(pubkey string, ur *UserRelays) {
 	}
 	existing.FetchedAt = time.Now()
 	existing.Negative = false
+	d.store.Set(pubkey, existing) // persist the merge (no-op for the in-memory store, required for a persistent one)
 }
 
 // KnownRelays returns the distinct relay URLs across every resolved entry —
@@ -145,7 +155,7 @@ func (d *RelayDirectory) KnownRelays() []string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	set := make(map[string]struct{})
-	for _, ur := range d.entries {
+	d.store.Range(func(_ string, ur *UserRelays) bool {
 		for _, r := range ur.Outbox {
 			set[r] = struct{}{}
 		}
@@ -155,7 +165,8 @@ func (d *RelayDirectory) KnownRelays() []string {
 		for _, r := range ur.DMInbox {
 			set[r] = struct{}{}
 		}
-	}
+		return true
+	})
 	out := make([]string, 0, len(set))
 	for r := range set {
 		out = append(out, r)
@@ -169,7 +180,7 @@ func (d *RelayDirectory) KnownRelays() []string {
 func (d *RelayDirectory) Cached(pubkey string) (*UserRelays, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if ur, ok := d.entries[pubkey]; ok && d.fresh(ur) {
+	if ur, ok := d.store.Get(pubkey); ok && d.fresh(ur) {
 		return ur, true
 	}
 	return nil, false

@@ -37,8 +37,8 @@ func TestAppendUniqueDedupsPreservingOrder(t *testing.T) {
 
 func TestKnownRelays(t *testing.T) {
 	d := newRelayDirectory(time.Hour, time.Minute, func(string) *UserRelays { return nil })
-	d.entries["a"] = &UserRelays{Outbox: []string{"wss://o1"}, Inbox: []string{"wss://i1"}}
-	d.entries["b"] = &UserRelays{Outbox: []string{"wss://o1", "wss://o2"}, DMInbox: []string{"wss://dm"}}
+	d.store.Set("a", &UserRelays{Outbox: []string{"wss://o1"}, Inbox: []string{"wss://i1"}})
+	d.store.Set("b", &UserRelays{Outbox: []string{"wss://o1", "wss://o2"}, DMInbox: []string{"wss://dm"}})
 
 	// Distinct across both entries: o1, i1, o2, dm = 4.
 	if got := d.KnownRelays(); len(got) != 4 {

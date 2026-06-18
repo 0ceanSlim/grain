@@ -84,7 +84,7 @@ func NewClient(config *Config) *Client {
 		subscriptions: make(map[string]*Subscription),
 		config:        config,
 	}
-	c.directory = newRelayDirectory(config.RelayListTTL, config.RelayListNegTTL, c.fetchUserRelaysFromNetwork)
+	c.directory = newRelayDirectoryWithStore(config.RelayListTTL, config.RelayListNegTTL, config.RelayListStore, c.fetchUserRelaysFromNetwork)
 	c.mediaDir = newMediaDirectory(config.RelayListTTL, config.RelayListNegTTL, c.fetchUserMediaServersFromNetwork)
 	c.relayListsCache = make(map[string]relayListsEntry)
 	c.relayListsInflight = make(map[string]chan struct{})

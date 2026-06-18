@@ -20,13 +20,11 @@ on it, not part of its import contract.
 > 0.8.0 is the bulk of the client work, and everything documented here is usable
 > today. NIP-44 encryption (v2 + v3) and NIP-42 AUTH both landed this cycle, and
 > both the read/fetch **and** publish paths take a `context.Context` for
-> caller-set deadlines and cancellation. Remaining items are non-blocking 1.0
-> hardening, **not** new surface:
-> - a pluggable `Logger` lets a consumer replace grain's logging (`SetLogger`);
->   `RelayListStore` (pluggable directory persistence) is the one remaining seam
->   planned for 1.0 — today the directory caches in memory.
-> - `PublishDM` (gift-wrapped NIP-17) is still pending — the NIP-44 primitives it
->   needs now exist (below), but the seal/gift-wrap assembly isn't wired yet.
+> caller-set deadlines and cancellation. The pluggable seams — `Signer`,
+> `Logger` (`SetLogger`), and `RelayListStore` (custom directory persistence) —
+> are all in place. The one still-pending item is **not** new library surface:
+> - `PublishDM` (gift-wrapped NIP-17) — the NIP-44 primitives it needs now exist
+>   (below), but the seal/gift-wrap assembly isn't wired yet.
 >
 > See [the design doc](design/outbox-relay-pool.md) §11 for the rationale.
 
@@ -44,7 +42,7 @@ on it, not part of its import contract.
 - [AUTH (NIP-42)](#auth-nip-42)
 - [The known-relays browser](#the-known-relays-browser)
 - [The client tag (NIP-89)](#the-client-tag-nip-89)
-- [Pluggable seams: Signer & Logger](#pluggable-seams-signer--logger)
+- [Pluggable seams](#pluggable-seams)
 - [The HTTP API (reference consumer)](#the-http-api-reference-consumer)
 - [API reference (essentials)](#api-reference-essentials)
 - [Runnable examples](#runnable-examples)
@@ -359,7 +357,7 @@ tag honest without leaking which app a foreign event came through.
 
 ---
 
-## Pluggable seams: Signer & Logger
+## Pluggable seams
 
 A `Signer` produces signatures for one pubkey. Supply one to publish; omit it
 for a read-only context.
@@ -380,9 +378,13 @@ implementing the two methods.
 `*slog.Logger` methods (`Debug`/`Info`/`Warn`/`Error`). It defaults to grain's
 own logging, so nothing changes until you opt out: `core.SetLogger(yourLogger)`
 (any `*slog.Logger` works, or implement the four methods) routes all
-client-library logging through your stack instead. (A `RelayListStore`
-directory-persistence seam is the last planned 1.0 seam; today the directory
-caches in memory.)
+client-library logging through your stack instead.
+
+**Persistence.** The relay directory caches per-user resolutions in memory by
+default. Set `Config.RelayListStore` to a custom `RelayListStore` — a
+`pubkey -> *UserRelays` store (`Get` / `Set` / `Delete` / `Range`) — to back it
+with a database that survives restarts or is shared across instances; the
+directory keeps the TTL and single-flight logic.
 
 ---
 
