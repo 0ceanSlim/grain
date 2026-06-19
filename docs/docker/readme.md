@@ -1,6 +1,6 @@
 # GRAIN Docker Setup
 
-Run GRAIN relay with Docker using either the latest stable release or pre-release binaries. Starting with v0.5.0, GRAIN is zero-dependency and does not require an external database like MongoDB.
+Run GRAIN relay with Docker using either the latest stable release or pre-release binaries. GRAIN is zero-dependency and requires no external database.
 
 ## Table of Contents
 
@@ -42,7 +42,7 @@ Your relay is now running at:
 
 ## Docker Compose Configuration
 
-Starting with v0.5.0, the `docker-compose.yml` is significantly simplified as it no longer requires a MongoDB service.
+The `docker-compose.yml` is simple — there's no separate database service to run.
 
 ### Default `docker-compose.yml`
 
@@ -76,7 +76,7 @@ volumes:
 
 ## Data Persistence
 
-GRAIN v0.5.0 uses an embedded **nostrdb** engine. It is critical to use a Docker volume to persist your data, otherwise your database and configurations will be lost when the container is removed.
+GRAIN uses an embedded **nostrdb** engine. It is critical to use a Docker volume to persist your data, otherwise your database and configurations will be lost when the container is removed.
 
 The default `docker-compose.yml` mounts a named volume on `/home/grain/.grain`, which is GRAIN's data directory inside the container — it holds `config.yml`, `blacklist.yml`, `whitelist.yml`, `relay_metadata.json`, the LMDB store under `data/`, and the runtime log file `debug.log`. Mounting the entire directory persists the relay's full operational state across container recreation.
 

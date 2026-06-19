@@ -102,6 +102,14 @@ This reference implementation serves as both a functional interface and document
 - **NIP-11 compliance** for relay discovery and metadata
 - **Progressive Web App** features for mobile-friendly usage
 
+## 📚 Documentation
+
+Full documentation lives in **[`docs/`](docs/readme.md)** — start at the **[documentation hub](docs/readme.md)**, organized by what you're doing:
+
+- **Operators** — [installation](docs/installation.md) · [configuration](docs/configuration.md) · [Docker](docs/docker/readme.md)
+- **Library developers** — [client library guide](docs/client-library-guide.md) · [HTTP API](docs/api.md) · [design notes](docs/design/outbox-relay-pool.md)
+- **Contributors** — [development](docs/development/readme.md) · [testing](tests/readme.md)
+
 ## 🌾 Wheat Relay Status
 [![Wheat Status](https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2F0ceanSlim%2Fupptime%2FHEAD%2Fhistory%2Fwheat.yml&query=%24.status&label=Status&logo=statuspage)](https://0ceanSlim.github.io/upptime/history/wheat)
 [![24h Uptime](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F0ceanSlim%2Fupptime%2FHEAD%2Fapi%2Fwheat%2Fuptime-day.json)](https://0ceanSlim.github.io/upptime/history/wheat)
@@ -168,39 +176,32 @@ GRAIN can be imported as a Go module for building Nostr clients:
 package main
 
 import (
-    "fmt"
-    "github.com/0ceanslim/grain/client/core"
-    nostr "github.com/0ceanslim/grain/server/types"
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/0ceanslim/grain/client/core"
+	nostr "github.com/0ceanslim/grain/server/types"
 )
 
 func main() {
-    // Create client with default configuration
-    client := core.NewClient(nil)
+	// The client owns a shared, outbox-routed relay pool.
+	client := core.NewClient(core.DefaultConfig())
+	ctx := context.Background()
 
-    // Connect to relays
-    relays := []string{"wss://relay.damus.io", "wss://nos.lol"}
-    if err := client.ConnectToRelays(relays); err != nil {
-        panic(err)
-    }
+	// Read-only: fetch a user's notes from THEIR outbox relays — no signer needed.
+	author := "author-pubkey-hex"
+	notes := client.NewUserContext(author).FetchNotes(ctx, author, core.WithLimit(20))
+	fmt.Printf("fetched %d notes\n", len(notes))
 
-    // Create and sign an event
-    signer, _ := core.NewEventSigner("your-private-key-hex")
-    event := signer.CreateEvent(1, "Hello Nostr!", nil)
+	// Publishing: attach a signer. The outbox model routes the event to your write
+	// relays (and any mentioned recipient's inbox) — no manual relay list needed.
+	signer, _ := core.NewEventSigner("your-private-key-hex")
+	uc := client.NewUserContext(signer.PublicKey(), core.WithSigner(signer))
 
-    // Broadcast to all connected relays
-    results := client.BroadcastEvent(event, nil)
-    fmt.Printf("Broadcast results: %+v\n", results)
-
-    // Subscribe to events
-    filters := []nostr.Filter{{Kinds: []int{1}, Limit: 10}}
-    sub, _ := client.Subscribe(filters, nil)
-
-    // Handle incoming events
-    go func() {
-        for event := range sub.Events {
-            fmt.Printf("Received event: %s\n", event.Content)
-        }
-    }()
+	note := &nostr.Event{Kind: 1, Content: "Hello Nostr!", CreatedAt: time.Now().Unix()}
+	results, _ := uc.SignAndPublish(ctx, note)
+	fmt.Printf("published to %d relays\n", len(results))
 }
 ```
 

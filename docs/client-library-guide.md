@@ -1,4 +1,4 @@
-# grain client library guide (0.8.0)
+# grain client library guide
 
 grain's `client/core` package is an **importable, outbox-model Nostr client
 engine** in Go. A downstream app builds its own client on it — it does not
@@ -16,13 +16,12 @@ import "github.com/0ceanslim/grain/client/core"
 are the **reference consumer** of this surface — a worked example of how to build
 on it, not part of its import contract.
 
-> **Status (0.8.0).** This is the **feature-complete client-library surface** —
-> 0.8.0 is the bulk of the client work, and everything documented here is usable
-> today. NIP-44 encryption (v2 + v3) and NIP-42 AUTH both landed this cycle, and
-> both the read/fetch **and** publish paths take a `context.Context` for
-> caller-set deadlines and cancellation. The pluggable seams — `Signer`,
-> `Logger` (`SetLogger`), and `RelayListStore` (custom directory persistence) —
-> are all in place. The one still-pending item is **not** new library surface:
+> **Status.** The surface documented here is **stable enough to build on**.
+> NIP-44 encryption (v2 + v3) and NIP-42 AUTH are implemented, and both the
+> read/fetch **and** publish paths take a `context.Context` for caller-set
+> deadlines and cancellation. The pluggable seams — `Signer`, `Logger`
+> (`SetLogger`), and `RelayListStore` (custom directory persistence) — are all in
+> place. One item is still pending, and it's **not** new library surface:
 > - `PublishDM` (gift-wrapped NIP-17) — the NIP-44 primitives it needs now exist
 >   (below), but the seal/gift-wrap assembly isn't wired yet.
 >

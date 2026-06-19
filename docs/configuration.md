@@ -202,7 +202,7 @@ Available components for `suppress_components`:
 
 ### Database Configuration
 
-As of v0.5.0, GRAIN uses an embedded [nostrdb](https://github.com/damus-io/nostrdb) (LMDB-based) store — no external database service is required.
+GRAIN uses an embedded [nostrdb](https://github.com/damus-io/nostrdb) (LMDB-based) store — no external database service is required.
 
 ```yaml
 database:

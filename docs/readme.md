@@ -1,34 +1,24 @@
-# GRAIN Documentation
+# GRAIN documentation
 
-Documentation directory for GRAIN Nostr relay.
+GRAIN is a Nostr **relay** and an importable Go **client library**, with a web frontend that doubles as the reference client. Start here and follow the path for what you're doing.
 
-## 🚀 Installation & Setup
+## 🛠️ Running a relay (operators)
 
-**[installation.md](installation.md)** - Complete installation guide for all platforms
+- **[installation.md](installation.md)** — install from a binary, source, or Docker; the data directory, first-run setup, and running GRAIN as a service (systemd / Windows NSSM / macOS launchd).
+- **[configuration.md](configuration.md)** — the full configuration reference: server, rate limits, whitelist / blacklist, event purging, relay metadata, and the hot-reload system.
+- **[docker/readme.md](docker/readme.md)** — Docker and docker-compose deployment.
 
-- Binary releases, building from source, Embedded storage setup (nostrdb)
-- System service configuration, troubleshooting
-- **[docker/readme.md](docker/readme.md)** - Docker deployment and container setup
+## 📦 Building on the client library (developers)
 
-## ⚙️ Configuration
+- **[client-library-guide.md](client-library-guide.md)** — the importable `client/core` engine: the outbox model, automatic routing, streaming fetches, the pluggable Signer / Logger / RelayListStore seams, and runnable examples.
+- **[api.md](api.md)** — the relay's HTTP API (OpenAPI / Swagger UI), served live by every relay at `/api/docs`.
+- **[design/outbox-relay-pool.md](design/outbox-relay-pool.md)** — the architecture and rationale behind the outbox-model relay pool and streaming-fetch primitive.
 
-**[configuration.md](configuration.md)** - Configuration reference and examples
+## 🔧 Contributing
 
-- Server settings, rate limiting, database options
-- Whitelist/blacklist policies, relay metadata
-- Hot-reload configuration system
+- **[development/readme.md](development/readme.md)** — development environment, the Docker build system, code standards, and the release process.
+- **[../tests/readme.md](../tests/readme.md)** — the integration test suite and test-environment tooling.
 
-## 🔧 Development
+---
 
-**[development/readme.md](development/readme.md)** - Development environment and build system
-
-- Docker-based cross-platform builds, code standards
-- Go conventions, structured logging guidelines
-- Release process and contribution workflow
-
-## 🧪 Testing
-
-**[../tests/readme.md](../tests/readme.md)** - Testing framework and procedures
-
-- Integration test suite, test environment management
-- Debugging tools, log collection and analysis
+The API reference is generated from the code — every running relay serves its own Swagger UI at `<relay>/api/docs` (raw spec at `/api/docs/openapi.json`).

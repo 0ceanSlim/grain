@@ -21,7 +21,7 @@ Complete installation instructions for setting up your GRAIN relay server.
 
 ## Overview
 
-GRAIN is a zero-dependency, single-binary Nostr relay and client library. Starting with v0.5.0, it no longer requires an external database like MongoDB. All storage is handled by an embedded, high-performance engine (**nostrdb**).
+GRAIN is a zero-dependency, single-binary Nostr relay and client library. It requires no external database — all storage is handled by an embedded, high-performance engine (**nostrdb**).
 
 GRAIN can be installed in three ways:
 
@@ -81,9 +81,9 @@ sudo mv grain /usr/local/bin/
 grain --version
 ```
 
-Expected output:
+Expected output (your version will match the release you installed):
 ```
-GRAIN v0.5.0
+GRAIN vX.Y.Z
 Go Relay Architecture for Implementing Nostr
 ```
 
@@ -114,11 +114,11 @@ On Windows, it is recommended to use **MSYS2** with the `mingw-w64-x86_64-gcc` p
 
 ---
 
-## Method 4: Docker Deployment
+## Method 3: Docker Deployment
 
-For containerized deployment, please refer to the [Docker Documentation](docker/README.md).
+For containerized deployment, see the [Docker guide](docker/readme.md).
 
-Since v0.5.0, the Docker image is significantly smaller as it no longer bundles MongoDB.
+The Docker image is lightweight — there's no external database to bundle.
 
 ---
 
@@ -185,36 +185,102 @@ GRAIN uses hot-reloading for all configuration files. You can edit them while th
 - **`blacklist.yml`**: Banned content and users.
 - **`relay_metadata.json`**: Public info served via NIP-11.
 
-See the [Configuration Guide](../docs/configuration.md) for full details.
+See the [Configuration Guide](configuration.md) for full details.
 
 ---
 
 ## Service Installation
 
+Run GRAIN unattended so it starts on boot and restarts on failure.
+
 ### Linux (systemd)
 
-Create `/etc/systemd/system/grain.service`:
+Create a dedicated service user, install the binary, then add the unit file:
+
+```bash
+sudo useradd --system --home /var/lib/grain --create-home grain
+sudo install -m 0755 grain /usr/local/bin/grain
+```
+
+Write `/etc/systemd/system/grain.service`:
 
 ```ini
 [Unit]
 Description=GRAIN Nostr Relay
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=grain
 Group=grain
+Environment=GRAIN_DATA_DIR=/var/lib/grain
+WorkingDirectory=/var/lib/grain
 ExecStart=/usr/local/bin/grain
 Restart=always
 RestartSec=5
 
-# Security settings
+# Hardening
 NoNewPrivileges=true
-ProtectSystem=full
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/grain
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+Enable, start, and inspect it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now grain
+sudo systemctl status grain
+journalctl -u grain -f          # follow the logs
+```
+
+### Windows (NSSM)
+
+GRAIN has no built-in Windows service mode; use [NSSM](https://nssm.cc/) (the "Non-Sucking Service Manager") to run `grain.exe` as a service. From an **elevated** PowerShell (adjust the paths):
+
+```powershell
+nssm install GRAIN "C:\grain\grain.exe"
+nssm set GRAIN AppDirectory "C:\grain"
+nssm set GRAIN AppEnvironmentExtra GRAIN_DATA_DIR=C:\ProgramData\grain
+nssm set GRAIN Start SERVICE_AUTO_START
+nssm start GRAIN
+```
+
+Manage it with `nssm status GRAIN`, `nssm restart GRAIN`, or the Services console (`services.msc`). To remove it: `nssm remove GRAIN confirm`.
+
+### macOS (launchd)
+
+Create `~/Library/LaunchAgents/co.grain.relay.plist` (per-user), or place it in `/Library/LaunchDaemons/` for a system-wide service:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>            <string>co.grain.relay</string>
+  <key>ProgramArguments</key> <array><string>/usr/local/bin/grain</string></array>
+  <key>RunAtLoad</key>        <true/>
+  <key>KeepAlive</key>        <true/>
+</dict>
+</plist>
+```
+
+Load and check it:
+
+```bash
+launchctl load ~/Library/LaunchAgents/co.grain.relay.plist
+launchctl list | grep grain
+```
+
+### Docker (as a service)
+
+A container with a restart policy effectively runs as a service — it comes back on failure and on host reboot. The provided compose setup already does this (`restart: unless-stopped`); see the [Docker guide](docker/readme.md).
 
 ---
 
