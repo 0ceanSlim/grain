@@ -15,9 +15,8 @@ services:
     container_name: grain-dev
     ports:
       - "8181:8181"
-    environment:
-      - GRAIN_ENV=development
-      # GRAIN_OWNER_PUBKEY intentionally unset so the /setup flow
-      # is exercised end-to-end. Set this to your hex/npub to skip
-      # the click-through path on subsequent boots.
+    # GRAIN_OWNER_PUBKEY is intentionally unset so the /setup claim flow is
+    # exercised end-to-end. To skip the click-through on subsequent boots, add:
+    #   environment:
+    #     - GRAIN_OWNER_PUBKEY=<your hex or npub>
     restart: unless-stopped

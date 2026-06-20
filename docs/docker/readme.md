@@ -1,72 +1,75 @@
 # GRAIN Docker Setup
 
-Run GRAIN relay with Docker using either the latest stable release or pre-release binaries. GRAIN is zero-dependency and requires no external database.
+Run a GRAIN relay with Docker — zero-dependency, no external database. For most deployments you only need to start the container and then **set everything up from the web dashboard**; no config-file editing required.
 
 ## Table of Contents
 
 1. [Quick Start](#quick-start)
-2. [Docker Compose Configuration](#docker-compose-configuration)
-3. [Data Persistence](#data-persistence)
-4. [Manual Docker Build Commands](#manual-docker-build-commands)
-5. [Configuration](#configuration)
+2. [Set up your relay (web dashboard)](#set-up-your-relay-web-dashboard)
+3. [Docker Compose Configuration](#docker-compose-configuration)
+4. [Data Persistence](#data-persistence)
+5. [Advanced: environment variables & config files](#advanced-environment-variables--config-files)
 6. [Viewing Logs](#viewing-logs)
 7. [Management Commands](#management-commands)
-8. [Security Considerations](#security-considerations)
-9. [Troubleshooting](#troubleshooting)
+8. [Troubleshooting](#troubleshooting)
 
 ## Quick Start
 
-### 1. Create project directory
+### 1. Create a project directory
 ```bash
 mkdir grain-docker
 cd grain-docker
 ```
 
-### 2. Download Docker files
+### 2. Download the Docker files
 ```bash
-# Download Dockerfile and docker-compose.yml
 curl -O https://raw.githubusercontent.com/0ceanslim/grain/main/docs/docker/Dockerfile
 curl -O https://raw.githubusercontent.com/0ceanslim/grain/main/docs/docker/docker-compose.yml
 ```
 
-### 3. Start relay
+### 3. Start the relay
 ```bash
 docker compose up -d
 ```
 
-Your relay is now running at:
+Your relay is now running:
 - WebSocket: `ws://localhost:8181`
-- Web: `http://localhost:8181`
+- Web dashboard: `http://localhost:8181`
+
+### 4. Set it up in the browser
+
+Open `http://localhost:8181` and finish setup from the web UI — see the next section.
+
+---
+
+## Set up your relay (web dashboard)
+
+**This is all most operators need.** GRAIN is configured live from its web dashboard — no YAML editing, no restarts.
+
+1. Open `http://localhost:8181`. A banner shows the relay is **unclaimed**.
+2. Go to **`/setup`** (or click the banner), **sign in with your Nostr key**, and **claim ownership**.
+3. Open **`/admin`** and configure everything from forms: relay identity (name, icon, description, policy URLs), rate limits, whitelist / blacklist, event purging, time constraints, NIP-42 AUTH, resource limits, and more. Changes apply live.
+
+That's the whole flow — start the container, claim, and run the relay from the browser. (To pre-assign the owner without visiting `/setup` — handy for scripted deployments — set `GRAIN_OWNER_PUBKEY`; see [Advanced](#advanced-environment-variables--config-files).)
 
 ---
 
 ## Docker Compose Configuration
 
-The `docker-compose.yml` is simple — there's no separate database service to run.
-
-### Default `docker-compose.yml`
+The shipped `docker-compose.yml` is all you need — there's no separate database service to run:
 
 ```yaml
-version: "3.8"
-
 services:
   grain:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: . # Uses the Dockerfile in current directory
+    container_name: grain-relay
     ports:
       - "8181:8181"
-    environment:
-      - GRAIN_ENV=production
-      - LOG_LEVEL=info
     volumes:
+      # GRAIN writes config + the LMDB store + logs under /home/grain/.grain.
+      # A named volume here persists the relay's full state across recreation.
       - grain_data:/home/grain/.grain
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8181/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 volumes:
   grain_data:
@@ -76,24 +79,31 @@ volumes:
 
 ## Data Persistence
 
-GRAIN uses an embedded **nostrdb** engine. It is critical to use a Docker volume to persist your data, otherwise your database and configurations will be lost when the container is removed.
+GRAIN uses an embedded **nostrdb** engine. It is critical to use a Docker volume to persist your data, otherwise your database and configuration will be lost when the container is removed.
 
 The default `docker-compose.yml` mounts a named volume on `/home/grain/.grain`, which is GRAIN's data directory inside the container — it holds `config.yml`, `blacklist.yml`, `whitelist.yml`, `relay_metadata.json`, the LMDB store under `data/`, and the runtime log file `debug.log`. Mounting the entire directory persists the relay's full operational state across container recreation.
 
 ---
 
-## Configuration
+## Advanced: environment variables & config files
 
-GRAIN automatically creates default configuration files on first startup.
+For development, scripted deployments, or fine-grained control, you can override settings outside the dashboard.
 
-### Method 1: Environment Variables
-You can set basic options directly in `docker-compose.yml`:
-- `GRAIN_ENV`: `production` or `development`
-- `LOG_LEVEL`: `debug`, `info`, `warn`, `error`
-- `SERVER_PORT`: Internal port (default 8181)
+### Environment variables
 
-### Method 2: Volume Mapping (Recommended)
-Bind a local directory to the container's data directory to manage config files from the host:
+Set these under `environment:` in `docker-compose.yml`:
+
+| Variable | Effect |
+|---|---|
+| `GRAIN_OWNER_PUBKEY` | pre-assign the relay owner (hex or npub) so you skip the `/setup` claim |
+| `SERVER_PORT` | listen port inside the container (default `8181`) |
+| `LOG_LEVEL` | `debug`, `info`, `warn`, or `error` |
+| `NDB_PATH` | override the nostrdb data path |
+| `GRAIN_DATA_DIR` | override the data directory (config + database + logs) |
+
+### Editing config files directly
+
+Bind a host directory to the data directory to edit the YAML by hand:
 
 ```yaml
 services:
@@ -102,9 +112,7 @@ services:
       - ./my-grain-config:/home/grain/.grain
 ```
 
-You can then edit `config.yml`, `whitelist.yml`, etc., directly on your host machine. GRAIN supports **hot-reloading**, so changes are applied instantly without restarting the container.
-
-The host directory should be writable by uid/gid `1001:1001` (the non-root `grain` user inside the container). On first run GRAIN will populate the directory with default config files if it is empty.
+Edit `config.yml`, `whitelist.yml`, `blacklist.yml`, etc. on the host. GRAIN **hot-reloads** config, so changes apply without restarting the container. The host directory must be writable by uid/gid `1001:1001` (the non-root `grain` user inside the container); GRAIN populates it with default files on first run if it's empty.
 
 ---
 

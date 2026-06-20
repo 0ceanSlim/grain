@@ -4,8 +4,6 @@ services:
     container_name: grain-relay
     ports:
       - "8181:8181"
-    environment:
-      - GRAIN_ENV=production
     volumes:
       # Grain writes config + LMDB store + logs under $HOME/.grain (i.e.
       # /home/grain/.grain inside the container). A volume on /app/data
