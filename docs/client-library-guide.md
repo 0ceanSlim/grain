@@ -24,14 +24,13 @@ on it, not part of its import contract.
 > place. One item is still pending, and it's **not** new library surface:
 > - `PublishDM` (gift-wrapped NIP-17) — the NIP-44 primitives it needs now exist
 >   (below), but the seal/gift-wrap assembly isn't wired yet.
->
-> See [the design doc](design/outbox-relay-pool.md) §11 for the rationale.
 
 ---
 
 ## Contents
 
 - [Quick start](#quick-start)
+- [Configuration](#configuration)
 - [The outbox model & routing](#the-outbox-model--routing)
 - [The role model](#the-role-model)
 - [Streaming fetches](#streaming-fetches)
@@ -84,6 +83,28 @@ per-relay [`BroadcastResult`](#broadcastresult)s.
 
 To publish an event you've built yourself: `uc.SignAndPublish(ctx, event)` (sign +
 route + broadcast), or `uc.Sign(event)` then `uc.Publish(ctx, event)` separately.
+
+---
+
+## Configuration
+
+`NewClient(DefaultConfig())` is the usual entry point; override fields on the
+`*Config` to tune the shared pool and the resolution caches. The pool grows
+*additively* to many connections under the outbox model, so the connection cap is
+a soft ceiling (idle connections are LRU-evicted), not a limit on what you can
+route to.
+
+| Field | Controls | Default |
+|---|---|---|
+| `IndexRelays` | seed relays for resolving any user's NIP-65 / NIP-17 lists | built-in set |
+| `MaxConnections` | soft cap on live sockets; idle ones evict over this | 256 |
+| `DialConcurrency` | max simultaneous relay dials | 16 |
+| `IdleTTL` | evict a 0-lease connection after this idle span | 120s |
+| `RelayListTTL` / `RelayListNegTTL` | per-user relay-list cache TTL / "no list" TTL | 1h / 1m |
+| `OpenTimeout` | per-dial cap for on-demand outbox dials | 4s |
+| `Logger` / `RelayListStore` | the pluggable seams (see [Pluggable seams](#pluggable-seams)) | grain's defaults |
+
+Zero values fall back to the built-in defaults, so a partial `Config` is fine.
 
 ---
 
@@ -485,6 +506,3 @@ Compile-checked examples of the public surface live in
 `core_test` package, so they import the library exactly as you would). They run
 in CI via `go test ./...`, so the public API can't drift without breaking the
 build.
-
-See also the [outbox relay-pool design doc](design/outbox-relay-pool.md) for the
-full architecture and rationale.

@@ -12,7 +12,6 @@ GRAIN is a Nostr **relay** and an importable Go **client library**, with a web f
 
 - **[client-library-guide.md](client-library-guide.md)** — the importable `client/core` engine: the outbox model, automatic routing, streaming fetches, the pluggable Signer / Logger / RelayListStore seams, and runnable examples.
 - **[api.md](api.md)** — the relay's HTTP API (OpenAPI / Swagger UI), served live by every relay at `/api/docs`.
-- **[design/outbox-relay-pool.md](design/outbox-relay-pool.md)** — the architecture and rationale behind the outbox-model relay pool and streaming-fetch primitive.
 
 ## 🔧 Contributing
 

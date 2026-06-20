@@ -107,7 +107,7 @@ This reference implementation serves as both a functional interface and document
 Full documentation lives in **[`docs/`](docs/readme.md)** — start at the **[documentation hub](docs/readme.md)**, organized by what you're doing:
 
 - **Operators** — [installation](docs/installation.md) · [configuration](docs/configuration.md) · [Docker](docs/docker/readme.md)
-- **Library developers** — [client library guide](docs/client-library-guide.md) · [HTTP API](docs/api.md) · [design notes](docs/design/outbox-relay-pool.md)
+- **Library developers** — [client library guide](docs/client-library-guide.md) · [HTTP API](docs/api.md)
 - **Contributors** — [development](docs/development/readme.md) · [testing](tests/readme.md)
 
 ## 🌾 Wheat Relay Status
