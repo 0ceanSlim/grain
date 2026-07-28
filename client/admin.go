@@ -18,6 +18,7 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -343,11 +344,40 @@ var rateLimitCategories = []string{
 // 40000+ experimental) ARE stored as regular and an operator may
 // want to purge them separately. Keep this list and
 // purgeCategoryForKind in sync as new ranges are added.
+// purgeCategories is the baseline set of category checkboxes the event-purge
+// form always shows: the categories that are actually stored and that an
+// operator meaningfully tunes. purgeCategoriesFor unions in any other keys the
+// config carries (a legacy "deprecated", or "unknown" for 40000+ kinds) so the
+// form mirrors the dashboard, which renders the same config map. Deprecated
+// (kind 2) and ephemeral (20000–29999) events are never stored (see nostrdb
+// store.go), so those categories surface only when a config explicitly lists
+// them and purging them is a no-op. "addressable" is the current name for the
+// 30000–39999 range (the purger still aliases the old
+// "parameterized_replaceable").
 var purgeCategories = []string{
-	"replaceable",
 	"regular",
-	"parameterized_replaceable",
-	"unknown",
+	"replaceable",
+	"addressable",
+}
+
+// purgeCategoriesFor returns the categories the event-purge form renders: the
+// canonical set above plus any extra keys the operator's config happens to
+// carry. Seeding from the live config map (not just the static list) means the
+// form always mirrors what the dashboard shows from that same map — no
+// configured category can silently go missing from the editor.
+func purgeCategoriesFor(configured map[string]bool) []string {
+	seen := make(map[string]bool, len(purgeCategories))
+	for _, c := range purgeCategories {
+		seen[c] = true
+	}
+	extra := make([]string, 0, len(configured))
+	for c := range configured {
+		if !seen[c] {
+			extra = append(extra, c)
+		}
+	}
+	sort.Strings(extra) // stable order — map iteration is randomized
+	return append(append([]string(nil), purgeCategories...), extra...)
 }
 
 // AdminSection is one panel in the accordion. Config is the typed
@@ -416,7 +446,7 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 		{ID: "event_purge", Title: "Event purge", Icon: "🧹", Method: "grain_updateeventpurge",
 			Config: EventPurgeSectionData{
 				Config:      cfg.EventPurge,
-				Categories:  purgeCategories,
+				Categories:  purgeCategoriesFor(cfg.EventPurge.PurgeByCategory),
 				CommonKinds: commonPurgeKinds,
 				KindLabels:  KindLabels,
 			}},

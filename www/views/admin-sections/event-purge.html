@@ -85,11 +85,10 @@
       <span class="text-text-secondary">(checked = purge events in this category)</span>
     </legend>
     <p class="mt-1 text-xs text-text-secondary">
-      Ephemeral (20000–29999) and deprecated (kind 2) events are dropped at
-      ingest and never reach the purger, so they aren't listed here.
-      <span class="font-mono">unknown</span> covers kinds outside NIP-01's
-      defined ranges (mostly 40000+ experimental NIPs) which are stored as
-      regular.
+      Ephemeral (20000–29999) and deprecated (kind 2) events are never stored,
+      so those categories only appear if your config lists them and toggling
+      them has no effect. <span class="font-mono">unknown</span> covers stored
+      kinds outside NIP-01's defined ranges (mostly 40000+ experimental NIPs).
     </p>
     {{$cur := .PurgeByCategory}}
     <div class="grid grid-cols-2 gap-2 mt-2 sm:grid-cols-3">

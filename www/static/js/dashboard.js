@@ -696,11 +696,17 @@ const dashboardManager = {
         <span class="text-text-secondary">Backup Relay</span>
         <div class="text-right">
           <div class="inline-flex px-2 py-1 text-xs font-medium ${
-            backupData.enabled
+            backupData.enabled && urls.length > 0
               ? "bg-info-dim text-info"
               : "bg-surface-elevated text-text-secondary"
           } rounded-full">
-            ${backupData.enabled ? "Enabled" : "Disabled"}
+            ${
+              !backupData.enabled
+                ? "Disabled"
+                : urls.length > 0
+                  ? "Enabled"
+                  : "Enabled · no URLs"
+            }
           </div>
           ${
             showURLs
