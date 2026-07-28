@@ -44,6 +44,10 @@ type ServerSettings struct {
 type BackupRelayConfig struct {
 	Enabled bool     `yaml:"enabled" json:"enabled"`
 	URLs    []string `yaml:"urls" json:"urls"`
+	// URL is the deprecated single-URL field from before the multi-backup
+	// change. It's migrated into URLs on load (normalizeLegacyConfig) so old
+	// configs keep working without hand-editing YAML; not exposed via JSON.
+	URL string `yaml:"url,omitempty" json:"-"`
 }
 
 type ServerConfig struct {

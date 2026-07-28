@@ -132,6 +132,11 @@ func LoadConfig(filename string) (*cfgType.ServerConfig, error) {
 		return nil, err
 	}
 
+	// Auto-correct deprecated config shapes in memory so old configs keep
+	// working without the operator hand-editing YAML. Saving any admin section
+	// persists the corrected shape.
+	normalizeLegacyConfig(&config)
+
 	// Detect outdated config format (e.g., old mongodb section)
 	if err := CheckAndMigrateConfig(filename); err != nil {
 		fmt.Fprintf(os.Stderr, "WARNING: config migration check failed: %v\n", err)
@@ -159,6 +164,37 @@ func LoadConfig(filename string) (*cfgType.ServerConfig, error) {
 	})
 
 	return cfg, nil
+}
+
+// normalizeLegacyConfig migrates deprecated config shapes on the in-memory
+// struct so old configs keep working without the operator hand-editing YAML:
+//   - backup_relay.url (the removed single-URL field) -> backup_relay.urls
+//   - event_purge.purge_by_category "parameterized_replaceable" -> "addressable"
+//     (the admin form + docs use "addressable"; the purger aliases both)
+//
+// It warns when it changes anything so the operator knows to re-save from /admin
+// to persist the corrected shape to disk.
+func normalizeLegacyConfig(c *cfgType.ServerConfig) {
+	// Backup relay: fold the old single `url` into the `urls` list.
+	if c.BackupRelay.URL != "" {
+		if len(c.BackupRelay.URLs) == 0 {
+			c.BackupRelay.URLs = []string{c.BackupRelay.URL}
+		}
+		c.BackupRelay.URL = ""
+		log.Config().Warn("Migrated deprecated backup_relay.url into backup_relay.urls — open /admin and save the Backup Relay section to persist")
+	}
+
+	// Purge categories: canonicalize the addressable alias so the admin form
+	// (which uses "addressable") mirrors the stored config.
+	if m := c.EventPurge.PurgeByCategory; m != nil {
+		if v, ok := m["parameterized_replaceable"]; ok {
+			if _, has := m["addressable"]; !has {
+				m["addressable"] = v
+			}
+			delete(m, "parameterized_replaceable")
+			log.Config().Warn("Migrated event_purge.purge_by_category 'parameterized_replaceable' to 'addressable' — open /admin and save the Event Purge section to persist")
+		}
+	}
 }
 
 // LoadWhitelistConfig loads the whitelist configuration from whitelist.yml.
