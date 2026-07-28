@@ -412,6 +412,13 @@ func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Access-Control-Allow-Methods", "GET")
+	// The relay root ("/") serves both this NIP-11 document and the HTML
+	// app shell, distinguished only by Accept. Vary: Accept stops a shared
+	// cache from returning one representation for the other. no-cache keeps
+	// the dynamic fields (owner pubkey for the claim banner, auth_required)
+	// fresh so the dashboard never reads a stale "unowned" document.
+	w.Header().Set("Vary", "Accept")
+	w.Header().Set("Cache-Control", "no-cache")
 
 	// Override the version field with the build-time version so the NIP-11
 	// info document always matches the running binary, regardless of what

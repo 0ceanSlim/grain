@@ -238,20 +238,26 @@
   // unclaimed-relay banner. Fetched once on load (kick-off below)
   // so the banner appears immediately rather than only after the
   // user opens the dropdown.
-  let cachedRelayOwner = null;
+  // undefined = not fetched yet; null = last fetch failed (retry
+  // allowed, deliberately NOT cached); "" = confirmed unowned;
+  // "<hex>" = claimed. Only successful reads are cached, so a transient
+  // blip (e.g. a hot-reload restart landing mid-refresh) can't poison
+  // the page with a false "unclaimed" banner for the rest of its life.
+  let cachedRelayOwner;
   async function getRelayOwnerPubkey() {
-    if (cachedRelayOwner !== null) return cachedRelayOwner;
+    if (cachedRelayOwner !== undefined && cachedRelayOwner !== null)
+      return cachedRelayOwner;
     try {
       const resp = await fetch("/", {
         headers: { Accept: "application/nostr+json" },
+        cache: "no-store",
       });
-      if (!resp.ok) return (cachedRelayOwner = "");
+      if (!resp.ok) return (cachedRelayOwner = null);
       const info = await resp.json();
-      cachedRelayOwner = (info && info.pubkey) || "";
+      return (cachedRelayOwner = (info && info.pubkey) || "");
     } catch (_) {
-      cachedRelayOwner = "";
+      return (cachedRelayOwner = null);
     }
-    return cachedRelayOwner;
   }
 
   // Reveal the unowned-relay banner if NIP-11's pubkey field is
@@ -265,7 +271,10 @@
     const banner = document.getElementById("unowned-banner");
     if (!banner) return;
     const owner = await getRelayOwnerPubkey();
-    if (!owner || owner === ALL_ZEROS_PUBKEY) {
+    // Only assert "unclaimed" on a definitive read. owner === null means
+    // the NIP-11 lookup failed — fail safe (leave the banner hidden)
+    // rather than telling the operator their owned relay is unclaimed.
+    if (owner === "" || owner === ALL_ZEROS_PUBKEY) {
       banner.classList.remove("hidden");
     }
   }
