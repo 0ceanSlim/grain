@@ -12,16 +12,17 @@ import (
 
 // RateLimitConfigResponse represents the rate limiting configuration response
 type RateLimitConfigResponse struct {
-	WsLimit        float64                            `json:"ws_limit"`
-	WsBurst        int                                `json:"ws_burst"`
-	EventLimit     float64                            `json:"event_limit"`
-	EventBurst     int                                `json:"event_burst"`
-	ReqLimit       float64                            `json:"req_limit"`
-	ReqBurst       int                                `json:"req_burst"`
-	MaxEventSize   int                                `json:"max_event_size"`
-	KindSizeLimits []cfgType.KindSizeLimitConfig      `json:"kind_size_limits"`
-	CategoryLimits map[string]cfgType.KindLimitConfig `json:"category_limits"`
-	KindLimits     []cfgType.KindLimitConfig          `json:"kind_limits"`
+	WsLimit          float64                            `json:"ws_limit"`
+	WsBurst          int                                `json:"ws_burst"`
+	EventLimit       float64                            `json:"event_limit"`
+	EventBurst       int                                `json:"event_burst"`
+	ReqLimit         float64                            `json:"req_limit"`
+	ReqBurst         int                                `json:"req_burst"`
+	MaxEventSize     int                                `json:"max_event_size"`
+	MaxContentLength int                                `json:"max_content_length"`
+	KindSizeLimits   []cfgType.KindSizeLimitConfig      `json:"kind_size_limits"`
+	CategoryLimits   map[string]cfgType.KindLimitConfig `json:"category_limits"`
+	KindLimits       []cfgType.KindLimitConfig          `json:"kind_limits"`
 }
 
 // GetRateLimitConfig handles the request to return rate limiting configuration
@@ -49,16 +50,17 @@ func GetRateLimitConfig(w http.ResponseWriter, r *http.Request) {
 
 	// Prepare response with rate limiting configuration
 	response := RateLimitConfigResponse{
-		WsLimit:        cfg.RateLimit.WsLimit,
-		WsBurst:        cfg.RateLimit.WsBurst,
-		EventLimit:     cfg.RateLimit.EventLimit,
-		EventBurst:     cfg.RateLimit.EventBurst,
-		ReqLimit:       cfg.RateLimit.ReqLimit,
-		ReqBurst:       cfg.RateLimit.ReqBurst,
-		MaxEventSize:   cfg.RateLimit.MaxEventSize,
-		KindSizeLimits: cfg.RateLimit.KindSizeLimits,
-		CategoryLimits: cfg.RateLimit.CategoryLimits,
-		KindLimits:     cfg.RateLimit.KindLimits,
+		WsLimit:          cfg.RateLimit.WsLimit,
+		WsBurst:          cfg.RateLimit.WsBurst,
+		EventLimit:       cfg.RateLimit.EventLimit,
+		EventBurst:       cfg.RateLimit.EventBurst,
+		ReqLimit:         cfg.RateLimit.ReqLimit,
+		ReqBurst:         cfg.RateLimit.ReqBurst,
+		MaxEventSize:     cfg.RateLimit.MaxEventSize,
+		MaxContentLength: cfg.RateLimit.MaxContentLength,
+		KindSizeLimits:   cfg.RateLimit.KindSizeLimits,
+		CategoryLimits:   cfg.RateLimit.CategoryLimits,
+		KindLimits:       cfg.RateLimit.KindLimits,
 	}
 
 	// Set response headers

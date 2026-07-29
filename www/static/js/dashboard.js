@@ -1027,6 +1027,14 @@ const dashboardManager = {
                   rateLimitData.max_event_size
                 )}</td>
               </tr>
+              <tr class="border-b border-border/30">
+                <td class="py-1 text-text text-xs">Max Content Length</td>
+                <td class="py-1 text-right text-accent font-mono text-xs">${
+                  rateLimitData.max_content_length > 0
+                    ? rateLimitData.max_content_length + " chars"
+                    : "No limit"
+                }</td>
+              </tr>
             </tbody>
           </table>
         `;

@@ -12,37 +12,49 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// AuthRequiredProvider is set by higher-level packages to report the current
-// auth requirement without introducing an import cycle into config.
-var AuthRequiredProvider func() bool
+// LimitationProvider is set by higher-level packages (server startup) to
+// overlay the config-derived NIP-11 limitation fields onto the served
+// document — without introducing an import cycle into config. It mutates the
+// passed limitation in place, overriding only the fields backed by live config
+// (message/content/subscription/limit caps, auth_required, restricted_writes)
+// and leaving anything not config-derived (e.g. created_at bounds set in
+// relay_metadata.json) untouched.
+var LimitationProvider func(*RelayLimitation)
 
 type RelayMetadata struct {
-	Name           string `json:"name"`
-	Description    string `json:"description"`
-	Banner         string `json:"banner"`
-	Icon           string `json:"icon"`
-	Pubkey         string `json:"pubkey"`
-	Contact        string `json:"contact"`
-	SupportedNIPs  []int  `json:"supported_nips"`
-	Software       string `json:"software"`
-	Version        string `json:"version"`
-	PrivacyPolicy  string `json:"privacy_policy"`
-	TermsOfService string `json:"terms_of_service"`
-	Limitation     struct {
-		MaxMessageLength    int    `json:"max_message_length"`
-		MaxContentLength    int    `json:"max_content_length"`
-		MaxSubscriptions    int    `json:"max_subscriptions"`
-		MaxLimit            int    `json:"max_limit"`
-		AuthRequired        bool   `json:"auth_required"`
-		PaymentRequired     bool   `json:"payment_required"`
-		RestrictedWrites    bool   `json:"restricted_writes"`
-		CreatedAtLowerLimit *int64 `json:"created_at_lower_limit"`
-		CreatedAtUpperLimit *int64 `json:"created_at_upper_limit"`
-	} `json:"limitation"`
-	RelayCountries []string `json:"relay_countries"`
-	LanguageTags   []string `json:"language_tags"`
-	Tags           []string `json:"tags"`
-	PostingPolicy  string   `json:"posting_policy"`
+	Name           string          `json:"name"`
+	Description    string          `json:"description"`
+	Banner         string          `json:"banner"`
+	Icon           string          `json:"icon"`
+	Pubkey         string          `json:"pubkey"`
+	Contact        string          `json:"contact"`
+	SupportedNIPs  []int           `json:"supported_nips"`
+	Software       string          `json:"software"`
+	Version        string          `json:"version"`
+	PrivacyPolicy  string          `json:"privacy_policy"`
+	TermsOfService string          `json:"terms_of_service"`
+	Limitation     RelayLimitation `json:"limitation"`
+	RelayCountries []string        `json:"relay_countries"`
+	LanguageTags   []string        `json:"language_tags"`
+	Tags           []string        `json:"tags"`
+	PostingPolicy  string          `json:"posting_policy"`
+}
+
+// RelayLimitation is the NIP-11 limitation block. As of the config-derived
+// rework it is computed at serve time from live config (via LimitationProvider)
+// rather than served from relay_metadata.json — so the doc always advertises
+// what the relay actually enforces. The numeric caps use omitempty so an unset
+// (0) value is dropped rather than advertised as a misleading "0".
+type RelayLimitation struct {
+	MaxMessageLength    int    `json:"max_message_length,omitempty"`
+	MaxContentLength    int    `json:"max_content_length,omitempty"`
+	MaxSubscriptions    int    `json:"max_subscriptions,omitempty"`
+	MaxLimit            int    `json:"max_limit,omitempty"`
+	AuthRequired        bool   `json:"auth_required"`
+	PaymentRequired     bool   `json:"payment_required"`
+	RestrictedWrites    bool   `json:"restricted_writes"`
+	CreatedAtLowerLimit *int64 `json:"created_at_lower_limit,omitempty"`
+	CreatedAtUpperLimit *int64 `json:"created_at_upper_limit,omitempty"`
 }
 
 var relayMetadata RelayMetadata
@@ -238,6 +250,41 @@ func SetRelayMetadataField(field, value string) error {
 	return nil
 }
 
+// SetRelayMetadataArrayField writes a single top-level array field to
+// relay_metadata.json and reloads the in-memory copy. The multi-value sibling
+// of SetRelayMetadataField, used by the NIP-86 changerelay{languagetags,
+// countries,tags} handlers so operators can edit relay_countries /
+// language_tags / tags from the admin dashboard. A nil/empty slice clears the
+// field. Same atomic-write + watcher-suppression pipeline; caller validates.
+func SetRelayMetadataArrayField(field string, values []string) error {
+	raw, err := os.ReadFile(relayMetadataWritePath)
+	if err != nil {
+		return fmt.Errorf("read relay metadata: %w", err)
+	}
+	var patched map[string]any
+	if err := json.Unmarshal(raw, &patched); err != nil {
+		return fmt.Errorf("parse relay metadata: %w", err)
+	}
+	if len(values) == 0 {
+		patched[field] = []string{}
+	} else {
+		patched[field] = values
+	}
+
+	out, err := json.MarshalIndent(patched, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal relay metadata: %w", err)
+	}
+	if err := suppressAndWrite(relayMetadataWritePath, out, 0644); err != nil {
+		return err
+	}
+	if err := LoadRelayMetadata(relayMetadataWritePath); err != nil {
+		log.Util().Warn("Failed to reload relay metadata after array-field write",
+			"field", field, "error", err)
+	}
+	return nil
+}
+
 // UpdateRelayMetadata applies non-nil patches to relay_metadata.json
 // and reloads the in-memory copy so NIP-11 responses + the owner
 // check see the new values immediately.
@@ -428,8 +475,10 @@ func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
 		response.Version = buildVersion
 	}
 
-	if AuthRequiredProvider != nil {
-		response.Limitation.AuthRequired = AuthRequiredProvider()
+	// Overlay the config-derived limitation fields so the doc reflects what
+	// the relay actually enforces, not the (often stale/zero) values on disk.
+	if LimitationProvider != nil {
+		LimitationProvider(&response.Limitation)
 	}
 
 	err := json.NewEncoder(w).Encode(response)

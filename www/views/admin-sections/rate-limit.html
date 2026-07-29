@@ -92,6 +92,20 @@
       </label>
     </div>
     <input type="hidden" name="max_event_size" data-shape="number" value="{{.MaxEventSize}}" />
+
+    <div class="pt-3 mt-3 border-t border-border">
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Max content length</span>
+        <input type="number" name="max_content_length" data-shape="number" min="0" step="1" value="{{.MaxContentLength}}"
+          class="w-40 px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">
+          Max characters in an event's <span class="font-mono">content</span> field.
+          <span class="font-mono">0</span> = no limit (<span class="font-mono">max_event_size</span>
+          still applies). Enforced at ingest and advertised over NIP-11 as
+          <span class="font-mono">limitation.max_content_length</span>.
+        </span>
+      </label>
+    </div>
   </fieldset>
 
   <!-- ─── Category limits ─────────────────────────────────────── -->

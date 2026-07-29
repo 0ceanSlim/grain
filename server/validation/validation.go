@@ -1,6 +1,8 @@
 package validation
 
 import (
+	"unicode/utf8"
+
 	"github.com/0ceanslim/grain/config"
 	noatr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
@@ -53,6 +55,15 @@ func CheckRateAndSizeLimits(client noatr.ClientInterface, evt noatr.Event, event
 			"event_id", evt.ID,
 			"kind", evt.Kind,
 			"size", eventSize)
+		return Result{Valid: false, Message: msg}
+	}
+
+	contentLen := utf8.RuneCountInString(evt.Content)
+	if allowed, msg := sizeLimiter.AllowContentLength(contentLen); !allowed {
+		log.Validation().Info("Event rejected by content-length limiter",
+			"event_id", evt.ID,
+			"kind", evt.Kind,
+			"content_length", contentLen)
 		return Result{Valid: false, Message: msg}
 	}
 

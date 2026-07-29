@@ -39,11 +39,25 @@ func Run() error {
 	}
 	log.InitializeLoggers(cfg)
 
-	utils.AuthRequiredProvider = func() bool {
-		if c := config.GetConfig(); c != nil {
-			return c.Auth.Required
+	// Overlay the NIP-11 limitation block from live config at serve time so
+	// the info document advertises what the relay actually enforces (rather
+	// than the stale/zero values baked into relay_metadata.json). Only the
+	// config-backed fields are set; anything else on disk is left as-is.
+	utils.LimitationProvider = func(lim *utils.RelayLimitation) {
+		c := config.GetConfig()
+		if c == nil {
+			return
 		}
-		return false
+		lim.MaxMessageLength = c.RateLimit.MaxEventSize     // whole-event byte cap
+		lim.MaxContentLength = c.RateLimit.MaxContentLength // content-field char cap (0 = unset)
+		lim.MaxSubscriptions = c.Server.MaxSubscriptionsPerClient
+		lim.MaxLimit = c.Server.ImplicitReqLimit // max events returned per REQ
+		lim.AuthRequired = c.Auth.Required
+		lim.PaymentRequired = false // grain has no payment gate
+		// restricted_writes: true when a gate governs *who* may write.
+		if wl := config.GetWhitelistConfig(); wl != nil {
+			lim.RestrictedWrites = wl.PubkeyWhitelist.Enabled || wl.DomainWhitelist.Enabled
+		}
 	}
 
 	// Setup configuration file watchers and signal handlers

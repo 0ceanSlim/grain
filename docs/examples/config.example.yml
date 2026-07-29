@@ -135,6 +135,7 @@ rate_limit:
   req_limit: 10 # REQ subscription messages per second per client. Clients commonly fire several REQs at startup (one per filter shape), so don't set this too tight.
   req_burst: 30 # Allowed burst of REQs
   max_event_size: 524288 # 512KB — reasonable for most Nostr events; applies to both event validation AND the WebSocket message buffer
+  max_content_length: 0 # Max characters in an event's `content` field. 0 = no limit (max_event_size still applies). When >0 it's enforced at ingest and advertised as NIP-11 limitation.max_content_length.
 
   # Size limits for specific event kinds. Aligned with the
   # "suggested" chips in the admin dashboard's Rate Limit section

@@ -93,6 +93,9 @@ func ValidateAndApplyDefaults(cfg *cfgType.ServerConfig) (warnings []string, err
 	if !strings.HasPrefix(cfg.Server.Port, ":") {
 		err = fmt.Errorf("server.port %q is invalid: must start with \":\" (e.g. \":8181\")", cfg.Server.Port)
 	}
+	if err == nil && cfg.RateLimit.MaxContentLength < 0 {
+		err = fmt.Errorf("rate_limit.max_content_length %d is invalid: must be >= 0 (0 = no limit)", cfg.RateLimit.MaxContentLength)
+	}
 
 	return warnings, err
 }
