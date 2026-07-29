@@ -80,6 +80,30 @@
         <button type="button" data-upload-target="[data-ops-posting-policy]" data-upload-accept=".pdf,.md,.txt,application/pdf,text/markdown,text/plain"
           class="self-start px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload file</button>
       </label>
+
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Relay countries</span>
+        <input type="text" data-ops-countries data-initial="{{.RelayCountries}}" value="{{.RelayCountries}}"
+          placeholder="US, DE, JP"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">Comma-separated ISO&#8209;3166 country codes. Surfaced over NIP-11.</span>
+      </label>
+
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Language tags</span>
+        <input type="text" data-ops-language-tags data-initial="{{.RelayLanguageTags}}" value="{{.RelayLanguageTags}}"
+          placeholder="en, es, ja"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">Comma-separated IETF language tags (BCP&nbsp;47). Surfaced over NIP-11.</span>
+      </label>
+
+      <label class="flex flex-col gap-1 text-sm sm:col-span-2">
+        <span class="font-medium text-text-secondary">Tags</span>
+        <input type="text" data-ops-tags data-initial="{{.RelayTags}}" value="{{.RelayTags}}"
+          placeholder="sfw-only, bitcoin, art"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">Comma-separated free-form topic tags describing the relay. Surfaced over NIP-11.</span>
+      </label>
     </div>
 
     <div class="flex justify-end mt-3">
@@ -105,6 +129,11 @@
       { sel: "[data-ops-privacy-policy]", method: "changerelayprivacypolicy" },
       { sel: "[data-ops-terms-of-service]", method: "changerelaytermsofservice" },
       { sel: "[data-ops-posting-policy]", method: "changerelaypostingpolicy" },
+      // Array fields: the input is comma-separated text; split into a string
+      // array before submitting (params[0] is the array).
+      { sel: "[data-ops-countries]", method: "changerelaycountries", array: true },
+      { sel: "[data-ops-language-tags]", method: "changerelaylanguagetags", array: true },
+      { sel: "[data-ops-tags]", method: "changerelaytags", array: true },
     ];
 
     panel.querySelector("[data-ops-identity-save]").addEventListener("click", async (ev) => {
@@ -130,7 +159,10 @@
         if (window.adminEnsureSigner) await window.adminEnsureSigner();
         for (const d of dirty) {
           try {
-            await window.grainNIP86.submit(d.field.method, [d.current.trim()]);
+            const payload = d.field.array
+              ? [d.current.split(",").map((s) => s.trim()).filter(Boolean)]
+              : [d.current.trim()];
+            await window.grainNIP86.submit(d.field.method, payload);
             const el = panel.querySelector(d.field.sel);
             if (el) el.dataset.initial = d.current;
             changed++;

@@ -195,6 +195,10 @@ type OpsSectionData struct {
 	RelayPrivacyPolicy  string
 	RelayTermsOfService string
 	RelayPostingPolicy  string
+	// Comma-joined for the admin inputs; split back into arrays on save.
+	RelayCountries    string
+	RelayLanguageTags string
+	RelayTags         string
 }
 
 // BlacklistSectionData wraps BlacklistConfig with the same
@@ -438,6 +442,9 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 					RelayPrivacyPolicy:  m.PrivacyPolicy,
 					RelayTermsOfService: m.TermsOfService,
 					RelayPostingPolicy:  m.PostingPolicy,
+					RelayCountries:      strings.Join(m.RelayCountries, ", "),
+					RelayLanguageTags:   strings.Join(m.LanguageTags, ", "),
+					RelayTags:           strings.Join(m.Tags, ", "),
 				}
 			}()},
 		{ID: "logging", Title: "Logging", Icon: "📜", Method: "grain_updatelogging",

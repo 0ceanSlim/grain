@@ -191,6 +191,12 @@ func dispatchNIP86(req nip86Request, signer string) (any, string) {
 		return runChangeRelayMetadata(req.Params, signer, "terms_of_service")
 	case "changerelaypostingpolicy":
 		return runChangeRelayMetadata(req.Params, signer, "posting_policy")
+	case "changerelaycountries":
+		return runChangeRelayMetadataArray(req.Params, signer, "relay_countries")
+	case "changerelaylanguagetags":
+		return runChangeRelayMetadataArray(req.Params, signer, "language_tags")
+	case "changerelaytags":
+		return runChangeRelayMetadataArray(req.Params, signer, "tags")
 
 	// ─── grain_* phase 2: config section updates ─────────────
 	// Each takes the full section blob as params[0] and stages
@@ -271,6 +277,9 @@ func supportedNIP86Methods() []string {
 		"changerelayprivacypolicy",
 		"changerelaytermsofservice",
 		"changerelaypostingpolicy",
+		"changerelaycountries",
+		"changerelaylanguagetags",
+		"changerelaytags",
 		// grain extensions
 		"grain_updateserver",
 		"grain_updateratelimit",

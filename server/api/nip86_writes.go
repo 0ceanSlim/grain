@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/utils"
@@ -214,7 +215,8 @@ func runUnblockIP(params []any, signer string) (any, string) {
 //
 // To add a new editable single-string field: add a case to the
 // switch + a dispatcher case in nip86.go. Multi-value fields
-// (RelayCountries, LanguageTags, Tags) need their own methods.
+// (relay_countries, language_tags, tags) go through
+// runChangeRelayMetadataArray instead.
 func runChangeRelayMetadata(params []any, signer, field string) (any, string) {
 	value, ok := paramString(params, 0)
 	if !ok {
@@ -242,5 +244,28 @@ func runChangeRelayMetadata(params []any, signer, field string) (any, string) {
 		return nil, err.Error()
 	}
 	log.RelayAPI().Info("NIP-86 changerelay*", "signer", signer, "field", field, "value", value)
+	return true, ""
+}
+
+// runChangeRelayMetadataArray handles the multi-value changerelay* methods
+// (relay_countries, language_tags, tags). params[0] is a JSON array of
+// strings; blank entries are dropped and an empty array clears the field.
+// field is the top-level relay_metadata.json key.
+func runChangeRelayMetadataArray(params []any, signer, field string) (any, string) {
+	var values []string
+	if err := paramJSON(params, 0, &values); err != nil {
+		return nil, err.Error()
+	}
+	cleaned := make([]string, 0, len(values))
+	for _, v := range values {
+		if s := strings.TrimSpace(v); s != "" {
+			cleaned = append(cleaned, s)
+		}
+	}
+	if err := utils.SetRelayMetadataArrayField(field, cleaned); err != nil {
+		return nil, err.Error()
+	}
+	log.RelayAPI().Info("NIP-86 changerelay* (array)",
+		"signer", signer, "field", field, "count", len(cleaned))
 	return true, ""
 }
