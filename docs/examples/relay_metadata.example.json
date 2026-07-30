@@ -15,9 +15,10 @@
   "privacy_policy": "",
   "terms_of_service": "",
   "posting_policy": "",
+  "_comment_limitation": "The limitation block is computed from live config at NIP-11 serve time — max_message_length from rate_limit.max_event_size, max_content_length from rate_limit.max_content_length, max_subscriptions from server.max_subscriptions_per_client, max_limit from server.implicit_req_limit, auth_required from auth.required, restricted_writes from whitelist. Editing the values here has no effect (created_at bounds are the exception — still read from this file).",
   "limitation": {
     "max_message_length": 524288,
-    "max_content_length": 8196,
+    "max_content_length": 0,
     "max_subscriptions": 10,
     "max_limit": 500,
     "auth_required": false,

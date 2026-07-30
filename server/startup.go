@@ -409,6 +409,10 @@ func resetConfigurations() {
 	config.ResetConfig()
 	config.ResetWhitelistConfig()
 	config.ResetBlacklistConfig()
+	// Size limits are held behind a sync.Once; clear it so the reloaded
+	// config's max_event_size / max_content_length / per-kind limits are
+	// re-applied instead of keeping the first-loaded values.
+	config.ResetSizeLimiter()
 }
 
 // initClient initializes the HTTP application routes and middleware

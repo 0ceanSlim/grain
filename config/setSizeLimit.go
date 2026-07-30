@@ -47,6 +47,16 @@ func SizeLimit(sl *SizeLimiter) {
 	})
 }
 
+// ResetSizeLimiter clears the once-guard so the next SetSizeLimit call (on
+// config reload) rebuilds the limiter from fresh config. Without this the size
+// limits (max_event_size, max_content_length, per-kind) would keep their
+// first-loaded values for the whole process lifetime and silently ignore
+// reloads. Called from the server's resetConfigurations, alongside the other
+// Reset*Config helpers.
+func ResetSizeLimiter() {
+	sizeOnce = sync.Once{}
+}
+
 func (sl *SizeLimiter) SetGlobalMaxSize(maxSize int) {
 	sl.mu.Lock()
 	defer sl.mu.Unlock()
