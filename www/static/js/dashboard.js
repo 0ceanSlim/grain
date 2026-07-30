@@ -1418,6 +1418,35 @@ const dashboardManager = {
           </div>
         `
         }
+
+        ${
+          data.keep_kinds && data.keep_kinds.length > 0
+            ? `
+          <!-- Keep Kinds (protected from purging) -->
+          <div class="bg-surface-elevated rounded-lg border border-border-strong">
+            <div class="px-4 py-3 border-b border-border-strong">
+              <h4 class="text-sm font-medium text-text">🛡️ Kinds Kept (never purged)</h4>
+            </div>
+            <div class="p-4">
+              <div class="flex flex-wrap gap-2">
+                ${data.keep_kinds
+                  .map(
+                    (kind) => `
+                  <span class="inline-flex px-3 py-1 text-sm font-medium bg-success-dim text-success rounded-full">
+                    Kind ${kind}
+                  </span>
+                `
+                  )
+                  .join("")}
+              </div>
+              <div class="mt-3 text-xs text-text-secondary">
+                These kinds are never purged — overrides the category filter and kinds-to-purge.
+              </div>
+            </div>
+          </div>
+        `
+            : ""
+        }
       `
           : `
         <!-- Disabled State Information -->

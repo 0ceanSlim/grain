@@ -8,5 +8,9 @@ type EventPurgeConfig struct {
 	PurgeByCategory      map[string]bool `yaml:"purge_by_category" json:"purge_by_category"`
 	PurgeByKindEnabled   bool            `yaml:"purge_by_kind_enabled" json:"purge_by_kind_enabled"`
 	KindsToPurge         []int           `yaml:"kinds_to_purge" json:"kinds_to_purge"`
-	ExcludeWhitelisted   bool            `yaml:"exclude_whitelisted" json:"exclude_whitelisted"`
+	// KeepKinds are never purged, regardless of category or kinds_to_purge —
+	// a protective allow-list that overrides every other purge rule. Use it to
+	// retain specific kinds (e.g. profiles/relay lists) while purging the rest.
+	KeepKinds          []int `yaml:"keep_kinds" json:"keep_kinds"`
+	ExcludeWhitelisted bool  `yaml:"exclude_whitelisted" json:"exclude_whitelisted"`
 }

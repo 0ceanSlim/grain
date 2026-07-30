@@ -199,6 +199,55 @@
     </div>
   </div>
 
+  <!-- Keep kinds: a protective allow-list. Any kind here is never purged,
+       overriding the category filter AND kinds_to_purge. Same admin.js list
+       convention as kinds_to_purge, but always active (not gated on a flag). -->
+  <div class="flex flex-col gap-2 text-sm sm:col-span-2">
+    <span class="font-medium text-text-secondary">Keep kinds (never purge)</span>
+    <p class="text-xs text-text-secondary">
+      Any kind listed here is protected from purging entirely — it overrides the
+      category filter and <span class="font-mono">kinds to purge</span>. Handy
+      for retaining profiles (0), contact/relay lists (3, 10002), and similar.
+    </p>
+
+    <div data-list="keep_kinds" data-list-shape="int" class="flex flex-col gap-2">
+      <div class="flex gap-2">
+        <input
+          type="number"
+          min="0"
+          step="1"
+          data-list-input
+          placeholder="kind number"
+          class="flex-1 px-3 py-2 rounded bg-surface-elevated border border-border text-text font-mono"
+        />
+        <button
+          type="button"
+          data-list-add
+          class="px-3 py-2 text-sm rounded bg-accent text-accent-fg hover:bg-accent-hover"
+        >Add</button>
+      </div>
+
+      <div data-list-items class="flex flex-col gap-1">
+        {{range .KeepKinds}}
+        <div data-list-item class="flex items-center gap-2 py-1 px-2 rounded bg-surface-elevated">
+          <input type="hidden" name="keep_kinds" data-shape="int_names" value="{{.}}" />
+          <span class="font-mono text-sm text-text">{{.}}</span>
+          {{$lbl := index $.KindLabels .}}
+          <span class="text-sm text-text-secondary truncate">— {{if $lbl}}{{$lbl}}{{else}}(no description){{end}}</span>
+          <button
+            type="button"
+            data-list-remove
+            class="ml-auto px-2 text-text-secondary hover:text-danger"
+            title="Remove"
+          >✕</button>
+        </div>
+        {{end}}
+      </div>
+
+      <span class="text-xs text-text-secondary">Non-negative integers only.</span>
+    </div>
+  </div>
+
   <label class="flex items-start gap-3 sm:col-span-2 p-3 rounded bg-surface-elevated">
     <input
       type="checkbox"

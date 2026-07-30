@@ -119,6 +119,7 @@ event_purge:
   kinds_to_purge: # List of event kinds to explicitly purge (kind 2 is deprecated and never stored, so don't list it)
     - 1
     - 1000
+  keep_kinds: [] # Kinds that are NEVER purged, overriding the category filter and kinds_to_purge (e.g. [0, 3, 10002] to always retain profiles + relay lists)
   exclude_whitelisted: true # Exclude events from whitelisted pubkeys during purging
 
 event_time_constraints:

@@ -18,6 +18,7 @@ type EventPurgeConfigResponse struct {
 	PurgeByCategory      map[string]bool `json:"purge_by_category"`
 	PurgeByKindEnabled   bool            `json:"purge_by_kind_enabled"`
 	KindsToPurge         []int           `json:"kinds_to_purge"`
+	KeepKinds            []int           `json:"keep_kinds"`
 	ExcludeWhitelisted   bool            `json:"exclude_whitelisted"`
 }
 
@@ -53,6 +54,7 @@ func GetEventPurgeConfig(w http.ResponseWriter, r *http.Request) {
 		PurgeByCategory:      cfg.EventPurge.PurgeByCategory,
 		PurgeByKindEnabled:   cfg.EventPurge.PurgeByKindEnabled,
 		KindsToPurge:         cfg.EventPurge.KindsToPurge,
+		KeepKinds:            cfg.EventPurge.KeepKinds,
 		ExcludeWhitelisted:   cfg.EventPurge.ExcludeWhitelisted,
 	}
 

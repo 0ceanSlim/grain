@@ -38,6 +38,13 @@ func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys 
 		whitelistSet[pk] = true
 	}
 
+	// keep_kinds: kinds that are never purged, whatever the category /
+	// kinds_to_purge settings say. A protective allow-list checked first.
+	keepKinds := make(map[int]bool, len(cfg.KeepKinds))
+	for _, k := range cfg.KeepKinds {
+		keepKinds[k] = true
+	}
+
 	// Query old events using until filter
 	untilTime := time.Unix(cutoff, 0)
 	limit := 5000
@@ -61,6 +68,11 @@ func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys 
 	purgeCount := 0
 	failCount := 0
 	for _, evt := range events {
+		// keep_kinds wins over every other rule — never purge these.
+		if keepKinds[evt.Kind] {
+			continue
+		}
+
 		// Skip whitelisted ("member") pubkeys.
 		if cfg.ExcludeWhitelisted && whitelistSet[evt.PubKey] {
 			continue
