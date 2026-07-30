@@ -23,14 +23,14 @@ var defaultMinCreatedAt = time.Date(2020, 11, 7, 0, 0, 0, 0, time.UTC).Unix()
 // ballpark.
 var defaultMaxOffset = 5 * time.Minute
 
-func ValidateEventTimestamp(evt nostr.Event, cfg *cfgType.ServerConfig) bool {
-	if cfg == nil {
-		log.Validation().Error("Server configuration is not loaded")
-		return false
-	}
-
+// ResolveTimeBounds resolves the effective min/max created_at the relay
+// enforces at this moment, applying the same "now±offset" / absolute / default
+// rules for both bounds. Both the timestamp validator and the NIP-11
+// limitation advertisement read from here, so the advertised
+// created_at_lower_limit / created_at_upper_limit match what's actually
+// enforced (recomputed per call, so relative "now±X" bounds stay accurate).
+func ResolveTimeBounds(cfg *cfgType.ServerConfig) (minCreatedAt, maxCreatedAt int64) {
 	now := time.Now()
-	var minCreatedAt, maxCreatedAt int64
 
 	// Dynamically calculate min_created_at based on string configuration
 	if strings.HasPrefix(cfg.EventTimeConstraints.MinCreatedAtString, "now") {
@@ -63,6 +63,17 @@ func ValidateEventTimestamp(evt nostr.Event, cfg *cfgType.ServerConfig) bool {
 	} else {
 		maxCreatedAt = cfg.EventTimeConstraints.MaxCreatedAt
 	}
+
+	return minCreatedAt, maxCreatedAt
+}
+
+func ValidateEventTimestamp(evt nostr.Event, cfg *cfgType.ServerConfig) bool {
+	if cfg == nil {
+		log.Validation().Error("Server configuration is not loaded")
+		return false
+	}
+
+	minCreatedAt, maxCreatedAt := ResolveTimeBounds(cfg)
 
 	// Check if the event's created_at timestamp falls within the allowed range
 	if evt.CreatedAt < minCreatedAt || evt.CreatedAt > maxCreatedAt {

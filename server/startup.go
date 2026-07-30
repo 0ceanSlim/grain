@@ -21,6 +21,7 @@ import (
 	"github.com/0ceanslim/grain/server/handlers"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
+	"github.com/0ceanslim/grain/server/validation"
 
 	"golang.org/x/net/websocket"
 )
@@ -58,6 +59,11 @@ func Run() error {
 		if wl := config.GetWhitelistConfig(); wl != nil {
 			lim.RestrictedWrites = wl.PubkeyWhitelist.Enabled || wl.DomainWhitelist.Enabled
 		}
+		// created_at bounds: advertise the same window the timestamp validator
+		// enforces (recomputed per request so relative "now±X" bounds stay live).
+		minTs, maxTs := validation.ResolveTimeBounds(c)
+		lim.CreatedAtLowerLimit = &minTs
+		lim.CreatedAtUpperLimit = &maxTs
 	}
 
 	// Setup configuration file watchers and signal handlers

@@ -15,7 +15,7 @@
   "privacy_policy": "",
   "terms_of_service": "",
   "posting_policy": "",
-  "_comment_limitation": "The limitation block is computed from live config at NIP-11 serve time — max_message_length from rate_limit.max_event_size, max_content_length from rate_limit.max_content_length, max_subscriptions from server.max_subscriptions_per_client, max_limit from server.implicit_req_limit, auth_required from auth.required, restricted_writes from whitelist. Editing the values here has no effect (created_at bounds are the exception — still read from this file).",
+  "_comment_limitation": "The entire limitation block is computed from live config at NIP-11 serve time and editing it here has no effect — max_message_length from rate_limit.max_event_size, max_content_length from rate_limit.max_content_length, max_subscriptions from server.max_subscriptions_per_client, max_limit from server.implicit_req_limit, auth_required from auth.required, restricted_writes from whitelist, created_at_lower/upper_limit from event_time_constraints. Kept here only as documentation of the shape.",
   "limitation": {
     "max_message_length": 524288,
     "max_content_length": 0,
@@ -24,7 +24,7 @@
     "auth_required": false,
     "payment_required": false,
     "restricted_writes": false,
-    "created_at_lower_limit": 1577836800,
+    "created_at_lower_limit": null,
     "created_at_upper_limit": null
   },
   "language_tags": ["en", "en-US"],
