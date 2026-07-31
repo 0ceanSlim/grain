@@ -366,25 +366,69 @@ func (rp *RelayPool) StatusOf(url string) RelayLiveStatus {
 	return st
 }
 
-// KnownRelayStatus pairs a known relay URL with its live pool status, for the
-// known-relays browser. The status fields are inlined rather than embedding
-// RelayLiveStatus so the OpenAPI generator (swag) can resolve the type — the
-// JSON shape is identical either way.
+// KnownRelayStatus pairs a browsable relay URL with its live pool status and,
+// when a NIP-66 monitor reported it, its discovery metadata. The status fields
+// are inlined rather than embedding RelayLiveStatus so the OpenAPI generator
+// (swag) can resolve the type; Discovery points at the flat DiscoveredRelay
+// (not the embedding DiscoveredRelayView) for the same reason.
 type KnownRelayStatus struct {
 	URL       string `json:"url"`
 	Connected bool   `json:"connected"`
 	Pinned    bool   `json:"pinned"`
 	Leased    bool   `json:"leased"`
+	// Discovery is the NIP-66 metadata (RTT, supported NIPs, network,
+	// requirements, …) when a monitor reported this relay; nil otherwise.
+	Discovery *DiscoveredRelay `json:"discovery,omitempty"`
+	// MonitorCount is how many monitors reported this relay — the signal a
+	// Phase 2 consensus filter keys on.
+	MonitorCount int `json:"monitor_count,omitempty"`
 }
 
-// KnownRelaysWithStatus returns every known relay (sorted) annotated with its
-// live pool status. NIP-11 detail is fetched separately, lazily, per relay.
+// browsableSet is the source for the known-relays browser (#104): configured
+// index relays, everything in the pool, and the NIP-66-discovered set — but NOT
+// the routing directory's mailbox union (the 7k). Routing keeps the directory;
+// the browser shows a bounded, liveness-backed set.
+func (c *Client) browsableSet() map[string]struct{} {
+	set := make(map[string]struct{})
+	for _, u := range c.indexRelays() {
+		set[u] = struct{}{}
+	}
+	for _, u := range c.relayPool.allURLs() {
+		set[u] = struct{}{}
+	}
+	for _, u := range c.DiscoveredRelayURLs() {
+		set[u] = struct{}{}
+	}
+	return set
+}
+
+// KnownRelaysWithStatus returns the browsable relay set (sorted) annotated with
+// live pool status and NIP-66 discovery metadata. NIP-11 detail is still
+// fetched separately, lazily, per relay.
 func (c *Client) KnownRelaysWithStatus() []KnownRelayStatus {
-	urls := c.KnownRelays()
+	disc := c.DiscoveredRelays()
+	byURL := make(map[string]DiscoveredRelayView, len(disc))
+	for _, d := range disc {
+		byURL[d.URL] = d
+	}
+
+	set := c.browsableSet()
+	urls := make([]string, 0, len(set))
+	for u := range set {
+		urls = append(urls, u)
+	}
+	sort.Strings(urls)
+
 	out := make([]KnownRelayStatus, 0, len(urls))
 	for _, u := range urls {
 		st := c.relayPool.StatusOf(u)
-		out = append(out, KnownRelayStatus{URL: u, Connected: st.Connected, Pinned: st.Pinned, Leased: st.Leased})
+		krs := KnownRelayStatus{URL: u, Connected: st.Connected, Pinned: st.Pinned, Leased: st.Leased}
+		if dv, ok := byURL[u]; ok {
+			rec := dv.DiscoveredRelay // copy before taking address (loop var)
+			krs.Discovery = &rec
+			krs.MonitorCount = dv.MonitorCount
+		}
+		out = append(out, krs)
 	}
 	return out
 }

@@ -28,6 +28,11 @@ type Client struct {
 	// (outbox / inbox / DM inbox) for outbox routing.
 	directory *RelayDirectory
 
+	// discovery is the NIP-66 relay-discovery cache (#104): monitors found from
+	// kind 10166 and the relay records (kind 30166) they publish. Sources the
+	// known-relays browser, kept separate from the routing directory.
+	discovery *monitorDiscovery
+
 	// mediaDir resolves and caches per-user media-server lists (Blossom kind
 	// 10063 / NIP-96 kind 10096) for the upload flow.
 	mediaDir *MediaDirectory
@@ -85,6 +90,7 @@ func NewClient(config *Config) *Client {
 		config:        config,
 	}
 	c.directory = newRelayDirectoryWithStore(config.RelayListTTL, config.RelayListNegTTL, config.RelayListStore, c.fetchUserRelaysFromNetwork)
+	c.discovery = newMonitorDiscovery()
 	c.mediaDir = newMediaDirectory(config.RelayListTTL, config.RelayListNegTTL, c.fetchUserMediaServersFromNetwork)
 	c.relayListsCache = make(map[string]relayListsEntry)
 	c.relayListsInflight = make(map[string]chan struct{})

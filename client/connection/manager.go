@@ -1,6 +1,8 @@
 package connection
 
 import (
+	"context"
+
 	"github.com/0ceanslim/grain/client/core"
 	"github.com/0ceanslim/grain/client/stream"
 	cfgType "github.com/0ceanslim/grain/config/types"
@@ -63,9 +65,16 @@ func InitializeCoreClient(serverCfg *cfgType.ServerConfig) error {
 		log.ClientConnection().Info("Core client connected to index relays",
 			"relay_count", len(config.IndexRelays))
 
-		// Seed the known-relays set broadly from the indexers so it starts large
-		// instead of growing only as users get browsed.
-		coreClient.SeedKnownRelays()
+		// Seed the routing directory broadly from the indexers, and bootstrap
+		// NIP-66 relay discovery for the browser (#104) — in independent
+		// goroutines so a slow seed fetch can't delay discovery or vice versa
+		// (both do bulk, timeout-bounded network I/O). Discovery finds monitors
+		// (kind 10166) reachable from the relays grain touches, then pulls their
+		// relay records (kind 30166) that source the known-relays browser. Reach
+		// widens as general relays join the pool; periodic re-discovery +
+		// staleness eviction land in Phase 3.
+		go coreClient.SeedKnownRelays()
+		go coreClient.DiscoverRelays(context.Background())
 	}()
 
 	log.ClientConnection().Info("Core client initialized successfully",
