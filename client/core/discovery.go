@@ -95,6 +95,57 @@ func (md *monitorDiscovery) stamp() {
 	md.mu.Unlock()
 }
 
+// Staleness tuning for the health-roll: a monitor is evicted when its newest
+// 30166 is older than its declared publishing frequency times this grace
+// factor. Monitors that declare no frequency use a default window.
+const (
+	staleGraceFactor   = 2
+	staleDefaultWindow = time.Hour
+)
+
+// evictStale removes monitors whose newest 30166 record has aged past their
+// declared frequency (x grace) — they've gone dark — together with the relay
+// records only they reported. A monitor with no records yet is kept (nothing to
+// judge; it contributes nothing until it publishes). Returns the count evicted.
+// This is what makes the pool self-healing (#104 Phase 3).
+func (md *monitorDiscovery) evictStale(now time.Time, graceFactor int) int {
+	md.mu.Lock()
+	defer md.mu.Unlock()
+
+	newest := make(map[string]int64) // monitor -> newest 30166 created_at seen
+	for _, byMon := range md.relays {
+		for mon, rec := range byMon {
+			if rec.ObservedAt > newest[mon] {
+				newest[mon] = rec.ObservedAt
+			}
+		}
+	}
+
+	evicted := 0
+	for mon, m := range md.monitors {
+		last, ok := newest[mon]
+		if !ok {
+			continue // no records to judge; keep
+		}
+		window := staleDefaultWindow
+		if m.Frequency > 0 {
+			window = time.Duration(m.Frequency) * time.Second
+		}
+		if last >= now.Add(-time.Duration(graceFactor)*window).Unix() {
+			continue // fresh enough
+		}
+		delete(md.monitors, mon)
+		for url, byMon := range md.relays {
+			delete(byMon, mon)
+			if len(byMon) == 0 {
+				delete(md.relays, url)
+			}
+		}
+		evicted++
+	}
+	return evicted
+}
+
 // merged collapses the per-monitor records to one view per URL: the freshest
 // report, annotated with MonitorCount (how many distinct monitors reported it).
 // Sorted by URL for stable output.
@@ -250,13 +301,31 @@ func (c *Client) discoverySources() []string {
 	return appendUnique(c.indexRelays(), c.GetConnectedRelays())
 }
 
-// DiscoverMonitors queries kind-10166 announcements across the discovery sources
-// and folds them into the monitor pool. One monitor is enough to bootstrap.
-// Returns the total number of monitors known after the pass.
+// discoverySubstrateCap bounds the general-relay sample the bootstrap fallback
+// queries for monitor announcements, so the fan-out stays sane.
+const discoverySubstrateCap = 100
+
+// DiscoverMonitors queries kind-10166 announcements and folds them into the
+// monitor pool. It tries the narrow set (index + connected) first, then — if no
+// monitors surfaced — widens to a bounded sample of the mailbox substrate,
+// since dedicated indexers often don't carry 10166 while general relays do
+// (NIP-66 bootstrap caveat). Returns the total monitors known after the pass.
 func (c *Client) DiscoverMonitors(ctx context.Context) int {
-	relays := c.discoverySources()
+	c.discoverMonitorsFrom(ctx, c.discoverySources())
+	if c.discovery.monitorCount() == 0 {
+		if wide := c.discoverySubstrate(discoverySubstrateCap); len(wide) > 0 {
+			clog().Debug("NIP-66 monitor discovery widening to substrate", "sample", len(wide))
+			c.discoverMonitorsFrom(ctx, wide)
+		}
+	}
+	return c.discovery.monitorCount()
+}
+
+// discoverMonitorsFrom runs one 10166 query against the given relays and folds
+// any monitors found into the pool.
+func (c *Client) discoverMonitorsFrom(ctx context.Context, relays []string) {
 	if len(relays) == 0 {
-		return c.discovery.monitorCount()
+		return
 	}
 	const limit = 200
 	lim := limit
@@ -273,7 +342,17 @@ func (c *Client) DiscoverMonitors(ctx context.Context) int {
 	clog().Info("NIP-66 monitor discovery",
 		"queried_relays", len(relays), "events", len(events),
 		"new_monitors", added, "total_monitors", c.discovery.monitorCount())
-	return c.discovery.monitorCount()
+}
+
+// discoverySubstrate returns a bounded sample of the general relays users have
+// listed (the routing directory's mailbox union) — the substrate where
+// monitors publish when indexers don't. Capped at n.
+func (c *Client) discoverySubstrate(n int) []string {
+	known := c.directory.KnownRelays()
+	if len(known) > n {
+		known = known[:n]
+	}
+	return known
 }
 
 // RefreshDiscoveredRelays pulls each known monitor's kind-30166 records into the
@@ -309,10 +388,35 @@ func (c *Client) RefreshDiscoveredRelays(ctx context.Context) int {
 }
 
 // DiscoverRelays runs a full discovery pass: find monitors, then pull their
-// relay sets. Safe to call periodically (Phase 3 will add staleness eviction).
+// relay sets. Kicked once at startup and repeated by StartDiscoveryRoll.
 func (c *Client) DiscoverRelays(ctx context.Context) {
 	c.DiscoverMonitors(ctx)
 	c.RefreshDiscoveredRelays(ctx)
+}
+
+// StartDiscoveryRoll runs the NIP-66 health-roll (#104 Phase 3): on each tick it
+// re-discovers monitors, refreshes their relay sets, and evicts monitors whose
+// data has gone stale — keeping the browse set live and self-healing. Bounded to
+// ctx like the pool's other background loops. The initial bootstrap pass is
+// kicked separately at connect time, so the first tick is one interval out.
+func (c *Client) StartDiscoveryRoll(ctx context.Context, interval time.Duration) {
+	go func() {
+		clog().Info("NIP-66 discovery roll started", "interval", interval)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				clog().Info("NIP-66 discovery roll stopping")
+				return
+			case <-ticker.C:
+				c.DiscoverRelays(ctx)
+				if n := c.discovery.evictStale(time.Now(), staleGraceFactor); n > 0 {
+					clog().Info("NIP-66 stale monitors evicted", "count", n)
+				}
+			}
+		}
+	}()
 }
 
 // DiscoveredRelays returns the consensus NIP-66 discovery set — outliers

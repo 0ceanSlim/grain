@@ -130,6 +130,19 @@ func StartRelayEvictionSweeper(ctx context.Context, interval time.Duration) {
 	coreClient.StartEvictionSweeper(ctx, interval)
 }
 
+// StartRelayDiscoveryRoll starts the core client's periodic NIP-66 discovery
+// roll (#104 Phase 3): re-discover relay monitors, refresh their published relay
+// sets, and evict monitors whose data has gone stale — keeping the known-relays
+// browser a live, self-healing set. Bounded to ctx like the other background
+// services. The initial bootstrap pass is kicked at connect time.
+func StartRelayDiscoveryRoll(ctx context.Context, interval time.Duration) {
+	if coreClient == nil {
+		log.ClientConnection().Warn("Core client not initialized; discovery roll not started")
+		return
+	}
+	coreClient.StartDiscoveryRoll(ctx, interval)
+}
+
 // StartRelayHealthCheck starts a background goroutine to maintain relay
 // connections. It exits when ctx is cancelled so it doesn't outlive the
 // server instance that started it (#93).

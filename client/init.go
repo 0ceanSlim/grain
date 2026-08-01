@@ -58,6 +58,11 @@ func InitializeClient(ctx context.Context, serverCfg *cfgType.ServerConfig) erro
 	// the pool dialed on demand once they go idle).
 	connection.StartRelayEvictionSweeper(ctx, time.Minute)
 
+	// Start the NIP-66 discovery roll (#104 Phase 3): periodic re-discovery of
+	// relay monitors + staleness eviction, so the known-relays browser stays a
+	// live, self-healing set. The initial pass is kicked at connect time.
+	connection.StartRelayDiscoveryRoll(ctx, 30*time.Minute)
+
 	log.ClientMain().Info("Client package initialized successfully")
 	return nil
 }

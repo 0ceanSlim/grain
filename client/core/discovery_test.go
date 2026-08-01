@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMonitorDiscoveryCache(t *testing.T) {
@@ -92,5 +93,29 @@ func TestMonitorDiscoveryConsensus(t *testing.T) {
 		if r.MonitorCount != 2 {
 			t.Errorf("relay %s count = %d, want 2", r.URL, r.MonitorCount)
 		}
+	}
+}
+
+func TestMonitorDiscoveryEvictStale(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	md := newMonitorDiscovery()
+
+	// Fresh: last 30166 is "now" — kept. Stale: last 30166 is 3h old, past the
+	// 2x grace on a 1h frequency — evicted with its relay. No-records: kept
+	// (nothing to judge, contributes nothing until it publishes).
+	md.putMonitor(&RelayMonitor{Pubkey: "fresh", Frequency: 3600})
+	md.putRelay(&DiscoveredRelay{URL: "wss://fresh", MonitorPubkey: "fresh", ObservedAt: now.Unix()})
+	md.putMonitor(&RelayMonitor{Pubkey: "stale", Frequency: 3600})
+	md.putRelay(&DiscoveredRelay{URL: "wss://stale", MonitorPubkey: "stale", ObservedAt: now.Add(-3 * time.Hour).Unix()})
+	md.putMonitor(&RelayMonitor{Pubkey: "norecords", Frequency: 3600})
+
+	if evicted := md.evictStale(now, staleGraceFactor); evicted != 1 {
+		t.Fatalf("expected 1 eviction, got %d", evicted)
+	}
+	if md.monitorCount() != 2 {
+		t.Errorf("monitors remaining = %d, want 2 (fresh + norecords)", md.monitorCount())
+	}
+	if got := md.merged(); len(got) != 1 || got[0].URL != "wss://fresh" {
+		t.Errorf("after eviction expected only wss://fresh, got %+v", got)
 	}
 }
