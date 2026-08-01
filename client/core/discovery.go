@@ -118,6 +118,122 @@ func (md *monitorDiscovery) merged() []DiscoveredRelayView {
 	return out
 }
 
+// Consensus tuning: how many monitors are needed before outlier-discard is
+// meaningful, and the corroboration floor below which a monitor is treated as
+// an outlier (its reports are mostly relays no other monitor has seen).
+const (
+	consensusOutlierMinMonitors = 3
+	consensusOutlierOverlapMin  = 0.20
+)
+
+// consensus returns the trusted, ranked relay set (issue #104, Phase 2):
+//  1. discard outlier monitors — those whose reported relays are mostly
+//     uncorroborated — but only once there are enough monitors (>=3) to judge;
+//  2. require at least K trusted monitors to agree on a relay (K = 2 once two or
+//     more monitors survive, else 1 — a single monitor is never enough to trust
+//     a relay once a second monitor exists);
+//  3. rank by agreement (monitor count) desc, then RTT asc, then URL.
+//
+// Falls back to trusting every monitor if the outlier rule would leave none, so
+// a pathological set never blanks the browser.
+func (md *monitorDiscovery) consensus() []DiscoveredRelayView {
+	md.mu.RLock()
+	defer md.mu.RUnlock()
+
+	reportedBy := make(map[string]int) // monitor -> #relays it reports
+	for _, byMon := range md.relays {
+		for mon := range byMon {
+			reportedBy[mon]++
+		}
+	}
+	n := len(reportedBy)
+	if n == 0 {
+		return nil
+	}
+
+	trusted := make(map[string]bool, n)
+	for mon := range reportedBy {
+		trusted[mon] = true
+	}
+
+	// Step 1: outlier discard (needs enough monitors to compare against).
+	if n >= consensusOutlierMinMonitors {
+		corroborated := make(map[string]int) // monitor -> #its relays another monitor also reported
+		for _, byMon := range md.relays {
+			if len(byMon) < 2 {
+				continue
+			}
+			for mon := range byMon {
+				corroborated[mon]++
+			}
+		}
+		for mon, total := range reportedBy {
+			if total > 0 && float64(corroborated[mon])/float64(total) < consensusOutlierOverlapMin {
+				trusted[mon] = false
+			}
+		}
+	}
+
+	trustedN := 0
+	for _, ok := range trusted {
+		if ok {
+			trustedN++
+		}
+	}
+	if trustedN == 0 { // pathological — a union beats an empty browser
+		for mon := range trusted {
+			trusted[mon] = true
+		}
+		trustedN = n
+	}
+
+	// Step 2: K-of-N threshold.
+	k := 1
+	if trustedN >= 2 {
+		k = 2
+	}
+
+	// Step 3: merge among trusted monitors, keep relays with >= K agreeing.
+	out := make([]DiscoveredRelayView, 0, len(md.relays))
+	for _, byMon := range md.relays {
+		var freshest *DiscoveredRelay
+		count := 0
+		for mon, rec := range byMon {
+			if !trusted[mon] {
+				continue
+			}
+			count++
+			if freshest == nil || rec.ObservedAt > freshest.ObservedAt {
+				freshest = rec
+			}
+		}
+		if freshest == nil || count < k {
+			continue
+		}
+		out = append(out, DiscoveredRelayView{DiscoveredRelay: *freshest, MonitorCount: count})
+	}
+
+	// Rank: most agreement first, then fastest, then URL.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].MonitorCount != out[j].MonitorCount {
+			return out[i].MonitorCount > out[j].MonitorCount
+		}
+		if ri, rj := rttRank(out[i].RTTOpen), rttRank(out[j].RTTOpen); ri != rj {
+			return ri < rj
+		}
+		return out[i].URL < out[j].URL
+	})
+	return out
+}
+
+// rttRank sorts an unmeasured RTT (-1) to the end.
+func rttRank(rtt int) int {
+	if rtt < 0 {
+		return 1 << 30
+	}
+	return rtt
+}
+
 // DiscoveredRelayView is one relay's merged discovery record for the browser:
 // the freshest monitor report plus how many monitors reported it. MonitorCount
 // is what a Phase 2 consensus filter (require >= K) will key on.
@@ -187,7 +303,8 @@ func (c *Client) RefreshDiscoveredRelays(ctx context.Context) int {
 	c.discovery.stamp()
 	clog().Info("NIP-66 relay discovery",
 		"monitors", len(monitors), "events", len(events),
-		"new_records", added, "distinct_relays", c.discovery.relayCount())
+		"new_records", added, "distinct_relays", c.discovery.relayCount(),
+		"consensus_relays", len(c.discovery.consensus()))
 	return c.discovery.relayCount()
 }
 
@@ -198,17 +315,17 @@ func (c *Client) DiscoverRelays(ctx context.Context) {
 	c.RefreshDiscoveredRelays(ctx)
 }
 
-// DiscoveredRelays returns the merged NIP-66 discovery set — one record per URL
-// with its monitor count — for the known-relays browser. Empty until a
-// discovery pass has run.
+// DiscoveredRelays returns the consensus NIP-66 discovery set — outliers
+// discarded, K-of-N agreement required, ranked — for the known-relays browser.
+// Empty until a discovery pass has run.
 func (c *Client) DiscoveredRelays() []DiscoveredRelayView {
-	return c.discovery.merged()
+	return c.discovery.consensus()
 }
 
-// DiscoveredRelayURLs returns just the URLs of the discovered set, for folding
-// into the browser's known list.
+// DiscoveredRelayURLs returns just the URLs of the consensus discovery set, for
+// folding into the browser's known list.
 func (c *Client) DiscoveredRelayURLs() []string {
-	views := c.discovery.merged()
+	views := c.discovery.consensus()
 	out := make([]string, 0, len(views))
 	for _, v := range views {
 		out = append(out, v.URL)

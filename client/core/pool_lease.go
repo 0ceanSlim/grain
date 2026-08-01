@@ -413,24 +413,40 @@ func (c *Client) KnownRelaysWithStatus() []KnownRelayStatus {
 	}
 
 	set := c.browsableSet()
-	urls := make([]string, 0, len(set))
+	out := make([]KnownRelayStatus, 0, len(set))
 	for u := range set {
-		urls = append(urls, u)
-	}
-	sort.Strings(urls)
-
-	out := make([]KnownRelayStatus, 0, len(urls))
-	for _, u := range urls {
 		st := c.relayPool.StatusOf(u)
 		krs := KnownRelayStatus{URL: u, Connected: st.Connected, Pinned: st.Pinned, Leased: st.Leased}
 		if dv, ok := byURL[u]; ok {
-			rec := dv.DiscoveredRelay // copy before taking address (loop var)
+			rec := dv.DiscoveredRelay // copy before taking address (map value)
 			krs.Discovery = &rec
 			krs.MonitorCount = dv.MonitorCount
 		}
 		out = append(out, krs)
 	}
+
+	// Rank by consensus (#104 Phase 2): most-agreed first, then fastest, then
+	// URL. Config/pool relays that no monitor reported (count 0, no RTT) sort
+	// after the discovered set — the browser leads with corroborated relays.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].MonitorCount != out[j].MonitorCount {
+			return out[i].MonitorCount > out[j].MonitorCount
+		}
+		if ri, rj := browserRTT(out[i]), browserRTT(out[j]); ri != rj {
+			return ri < rj
+		}
+		return out[i].URL < out[j].URL
+	})
 	return out
+}
+
+// browserRTT ranks a row by its measured open-RTT, sending unmeasured relays
+// (no discovery record, or RTT -1) to the end.
+func browserRTT(k KnownRelayStatus) int {
+	if k.Discovery == nil {
+		return 1 << 30
+	}
+	return rttRank(k.Discovery.RTTOpen)
 }
 
 // StartEvictionSweeper runs evictIdle on an interval until ctx is cancelled,

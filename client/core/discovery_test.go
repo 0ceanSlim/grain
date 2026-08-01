@@ -1,6 +1,10 @@
 package core
 
-import "testing"
+import (
+	"strconv"
+	"strings"
+	"testing"
+)
 
 func TestMonitorDiscoveryCache(t *testing.T) {
 	md := newMonitorDiscovery()
@@ -42,5 +46,51 @@ func TestMonitorDiscoveryCache(t *testing.T) {
 	md.putRelay(&DiscoveredRelay{URL: "wss://a", MonitorPubkey: "m1", ObservedAt: 300, Network: "i2p"})
 	if got := md.merged()[0]; got.Network != "i2p" || got.MonitorCount != 2 {
 		t.Errorf("newer same-monitor report: network=%q count=%d (want i2p/2)", got.Network, got.MonitorCount)
+	}
+}
+
+func TestMonitorDiscoveryConsensus(t *testing.T) {
+	// N=1 (bootstrap): a single monitor's relays surface (K=1) — nothing else
+	// to corroborate against yet.
+	single := newMonitorDiscovery()
+	single.putRelay(&DiscoveredRelay{URL: "wss://a", MonitorPubkey: "m1", RTTOpen: -1})
+	single.putRelay(&DiscoveredRelay{URL: "wss://b", MonitorPubkey: "m1", RTTOpen: -1})
+	if got := single.consensus(); len(got) != 2 {
+		t.Errorf("N=1: expected both relays (K=1), got %d", len(got))
+	}
+
+	// N=2: K=2 — only relays BOTH monitors report survive; a single-monitor
+	// relay is not trusted.
+	two := newMonitorDiscovery()
+	two.putRelay(&DiscoveredRelay{URL: "wss://shared", MonitorPubkey: "m1"})
+	two.putRelay(&DiscoveredRelay{URL: "wss://shared", MonitorPubkey: "m2"})
+	two.putRelay(&DiscoveredRelay{URL: "wss://solo", MonitorPubkey: "m1"})
+	got := two.consensus()
+	if len(got) != 1 || got[0].URL != "wss://shared" || got[0].MonitorCount != 2 {
+		t.Fatalf("N=2: expected only the shared relay (count 2), got %+v", got)
+	}
+
+	// Outlier discard: A and B agree on x/y/z; C spams 10 relays no one else
+	// sees. C (0% corroboration) is discarded, so its spam never surfaces and
+	// the A/B set remains.
+	md := newMonitorDiscovery()
+	for _, u := range []string{"wss://x", "wss://y", "wss://z"} {
+		md.putRelay(&DiscoveredRelay{URL: u, MonitorPubkey: "A"})
+		md.putRelay(&DiscoveredRelay{URL: u, MonitorPubkey: "B"})
+	}
+	for i := 0; i < 10; i++ {
+		md.putRelay(&DiscoveredRelay{URL: "wss://spam" + strconv.Itoa(i), MonitorPubkey: "C"})
+	}
+	res := md.consensus()
+	if len(res) != 3 {
+		t.Fatalf("outlier: expected 3 consensus relays, got %d", len(res))
+	}
+	for _, r := range res {
+		if strings.HasPrefix(r.URL, "wss://spam") {
+			t.Errorf("outlier monitor's spam relay leaked: %s", r.URL)
+		}
+		if r.MonitorCount != 2 {
+			t.Errorf("relay %s count = %d, want 2", r.URL, r.MonitorCount)
+		}
 	}
 }
