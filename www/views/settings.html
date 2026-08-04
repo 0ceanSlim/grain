@@ -243,8 +243,20 @@
               class="px-2 py-2 text-sm border rounded-lg shrink-0 bg-surface-elevated text-text border-border"
             >
               <option value="relevance">Sort: relevant</option>
+              <option value="monitors">Sort: most monitored</option>
               <option value="ping">Sort: fastest</option>
             </select>
+          </div>
+          <!-- NIP-66 discovery filters (#104) -->
+          <div class="flex flex-wrap gap-4 mb-2 text-xs text-text-secondary">
+            <label class="inline-flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" onchange="rmKnownFilterMonitored(this.checked)" class="w-3.5 h-3.5 accent-accent" />
+              Monitored only
+            </label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" onchange="rmKnownFilterRestricted(this.checked)" class="w-3.5 h-3.5 accent-accent" />
+              Hide auth/paid
+            </label>
           </div>
           <div id="rm-known-list" class="space-y-1.5 overflow-y-auto max-h-96"></div>
         </div>

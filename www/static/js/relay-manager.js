@@ -599,6 +599,34 @@
     return `<span class="font-mono text-xs shrink-0 ${cls}" title="TCP connect latency">${p}ms</span>`;
   }
 
+  // NIP-66 discovery badges (#104): monitor-consensus count, non-clearnet
+  // network, and auth/payment requirements — shown when a monitor reported this
+  // relay. k.discovery / k.monitor_count come from /api/v1/client/known-relays.
+  function knownMetaBadges(k) {
+    let out = "";
+    if (k.monitor_count > 0) {
+      out += `<span class="px-1.5 py-0.5 text-xs rounded shrink-0 bg-info-dim text-info" title="${k.monitor_count} monitor(s) reported this relay">🛡 ${k.monitor_count}</span>`;
+    }
+    const d = k.discovery;
+    if (d) {
+      if (d.network && d.network !== "clearnet") {
+        out += `<span class="px-1.5 py-0.5 text-xs rounded shrink-0 bg-surface-inset text-text-secondary" title="network">${esc(d.network)}</span>`;
+      }
+      const req = d.requirements || [];
+      if (req.indexOf("auth") >= 0)
+        out += `<span class="px-1.5 py-0.5 text-xs rounded shrink-0 bg-warning-dim text-warning" title="requires AUTH">auth</span>`;
+      if (req.indexOf("payment") >= 0)
+        out += `<span class="px-1.5 py-0.5 text-xs rounded shrink-0 bg-warning-dim text-warning" title="requires payment">paid</span>`;
+    }
+    return out;
+  }
+
+  // Monitor-measured open RTT for sorting; unmeasured/absent sorts last.
+  function monitorRtt(k) {
+    const r = k.discovery && k.discovery.rtt_open;
+    return typeof r === "number" && r >= 0 ? r : 2e6;
+  }
+
   function knownRow(k) {
     const expanded = !!RM.knownExpanded[k.url];
     const badges = knownInLists(k.url)
@@ -612,6 +640,7 @@
       `<div class="flex items-center gap-2 px-3 py-2">` +
       dotMarkup(k.connected, k.pinned) +
       `<a href="${esc(httpish(k.url))}" target="_blank" rel="noopener" class="flex-1 min-w-0 text-sm truncate text-text hover:text-accent hover:underline" title="${esc(k.url)}">${esc(shortRelay(k.url))}</a>` +
+      knownMetaBadges(k) +
       pingBadge(k.url) +
       badges +
       `<select data-known-add="${esc(k.url)}" class="px-1 py-1 text-xs border rounded shrink-0 bg-surface-overlay text-text border-border">` +
@@ -639,22 +668,39 @@
   // ping pass so "visible" means the same thing in both.
   function knownOrdered() {
     const q = (RM.knownFilter || "").toLowerCase();
-    const filtered = q
-      ? RM.known.filter((k) => k.url.toLowerCase().indexOf(q) >= 0)
-      : RM.known;
+    let filtered = RM.known.slice();
+    if (q) filtered = filtered.filter((k) => k.url.toLowerCase().indexOf(q) >= 0);
+    if (RM.knownMonitoredOnly)
+      filtered = filtered.filter((k) => k.monitor_count > 0);
+    if (RM.knownHideRestricted)
+      filtered = filtered.filter((k) => {
+        const req = (k.discovery && k.discovery.requirements) || [];
+        return req.indexOf("auth") < 0 && req.indexOf("payment") < 0;
+      });
+
     if (RM.knownSort === "ping") {
-      return filtered
-        .slice()
-        .sort((a, b) => pingRank(a.url) - pingRank(b.url) || a.url.localeCompare(b.url));
+      return filtered.sort(
+        (a, b) => pingRank(a.url) - pingRank(b.url) || a.url.localeCompare(b.url)
+      );
+    }
+    if (RM.knownSort === "monitors") {
+      // Most-corroborated first, then fastest by monitor RTT, then URL.
+      return filtered.sort(
+        (a, b) =>
+          (b.monitor_count || 0) - (a.monitor_count || 0) ||
+          monitorRtt(a) - monitorRtt(b) ||
+          a.url.localeCompare(b.url)
+      );
     }
     // Relevance-first: connected, then pinned, then ones already in your lists,
     // then the rest alphabetically — so the top of 900+ is actually useful.
-    const ranked = filtered.map((k) => ({
-      k,
-      r: k.connected ? 0 : k.pinned ? 1 : knownInLists(k.url).length ? 2 : 3,
-    }));
-    ranked.sort((a, b) => a.r - b.r || a.k.url.localeCompare(b.k.url));
-    return ranked.map((x) => x.k);
+    return filtered
+      .map((k) => ({
+        k,
+        r: k.connected ? 0 : k.pinned ? 1 : knownInLists(k.url).length ? 2 : 3,
+      }))
+      .sort((a, b) => a.r - b.r || a.k.url.localeCompare(b.k.url))
+      .map((x) => x.k);
   }
 
   const KNOWN_CAP = 150; // rows rendered at once
@@ -724,9 +770,22 @@
   }
 
   window.rmKnownSort = function (v) {
-    RM.knownSort = v === "ping" ? "ping" : "relevance";
+    RM.knownSort =
+      v === "ping" ? "ping" : v === "monitors" ? "monitors" : "relevance";
     renderKnown();
     if (RM.knownSort === "ping") rmKnownPingVisible();
+  };
+
+  // NIP-66 discovery filters (#104): show only monitor-corroborated relays, and
+  // hide relays that require AUTH or payment.
+  window.rmKnownFilterMonitored = function (checked) {
+    RM.knownMonitoredOnly = !!checked;
+    renderKnown();
+  };
+
+  window.rmKnownFilterRestricted = function (checked) {
+    RM.knownHideRestricted = !!checked;
+    renderKnown();
   };
 
   window.rmKnownSearch = function (v) {
