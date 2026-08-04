@@ -270,6 +270,7 @@ func (rp *RelayPool) evictIdle(now time.Time, idleTTL time.Duration) int {
 // observability (e.g. an "x / y relays connected" dashboard indicator).
 type PoolStats struct {
 	Known     int `json:"known"`     // relays the client is aware of (defaults + resolved lists + connections)
+	Browsable int `json:"browsable"` // relays the known-relays browser shows (config + pool + NIP-66 discovery, not the mailbox union)
 	Total     int `json:"total"`     // relays tracked in the pool (have a connection slot)
 	Connected int `json:"connected"` // currently connected
 	Pinned    int `json:"pinned"`    // index/seed relays kept alive
@@ -313,6 +314,7 @@ func (rp *RelayPool) allURLs() []string {
 func (c *Client) PoolStats() PoolStats {
 	s := c.relayPool.Stats()
 	s.Known = len(c.knownSet())
+	s.Browsable = len(c.browsableSet())
 	return s
 }
 

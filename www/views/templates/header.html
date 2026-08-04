@@ -343,8 +343,11 @@
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (s) {
           if (!s || !s.initialized) return;
-          count.textContent = (s.pool_connected || 0) + "/" + (s.pool_known || 0);
-          set("rp-known", s.pool_known || 0);
+          // "known" here is the browsable set (config + pool + NIP-66 discovery),
+          // not the routing directory's mailbox union — see #104.
+          var browsable = s.pool_browsable != null ? s.pool_browsable : s.pool_known;
+          count.textContent = (s.pool_connected || 0) + "/" + (browsable || 0);
+          set("rp-known", browsable || 0);
           set("rp-connected", s.pool_connected || 0);
           set("rp-leased", s.pool_leased || 0);
           set("rp-pinned", s.pool_pinned || 0);

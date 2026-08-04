@@ -109,7 +109,8 @@ func GetCoreClientStatus() map[string]interface{} {
 		"connected_relays": connectedRelays,
 		"connected_count":  len(connectedRelays),
 		"index_relays":     indexRelays,
-		"pool_known":       stats.Known,     // relays the client is aware of
+		"pool_known":       stats.Known,     // relays the client is aware of (incl. routing directory)
+		"pool_browsable":   stats.Browsable, // relays the known-relays browser shows (config + pool + NIP-66 discovery)
 		"pool_total":       stats.Total,     // relays tracked in the pool
 		"pool_connected":   stats.Connected, // currently connected
 		"pool_pinned":      stats.Pinned,    // index/seed relays
