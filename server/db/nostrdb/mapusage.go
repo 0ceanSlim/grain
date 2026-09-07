@@ -47,6 +47,14 @@ func (db *NDB) MapUsageFraction() float64 {
 	return float64(used) / float64(total)
 }
 
+// WriteErrorCount returns nostrdb's running total of writer failures (map full,
+// bad txn, etc.). The writer thread only logs these to stderr and events are
+// acked OK before the write commits, so polling this is how grain notices
+// silent write loss. It's a process-global count, valid regardless of db state.
+func (db *NDB) WriteErrorCount() uint64 {
+	return uint64(C.ndb_write_error_count())
+}
+
 // StartMapUsageMonitor logs the LMDB map usage at startup and every interval,
 // escalating WARN at 80% and ERROR at 95% so a filling database is visible in
 // grain's own logs (the writer's MDB_MAP_FULL errors only reach stderr).
@@ -55,6 +63,7 @@ func (db *NDB) StartMapUsageMonitor(ctx context.Context, interval time.Duration)
 	go func() {
 		log.DB().Info("Map usage monitor started", "interval", interval)
 		db.logMapUsage()
+		lastWriteErrs := db.WriteErrorCount()
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -64,6 +73,14 @@ func (db *NDB) StartMapUsageMonitor(ctx context.Context, interval time.Duration)
 				return
 			case <-ticker.C:
 				db.logMapUsage()
+				// Surface silent write loss: the writer only logs to stderr and
+				// events are acked before they commit, so a climbing count means
+				// events were accepted but not stored.
+				if cur := db.WriteErrorCount(); cur > lastWriteErrs {
+					log.DB().Error("nostrdb writer failures detected — accepted events may not have been stored",
+						"new_failures", cur-lastWriteErrs, "total_failures", cur)
+					lastWriteErrs = cur
+				}
 			}
 		}
 	}()
