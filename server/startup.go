@@ -400,6 +400,10 @@ func startBackgroundServices(ctx context.Context, cfg *cfgType.ServerConfig, dbA
 				}
 			}()
 			go db.RunExpirationSweeper(ctx)
+
+			// Surface LMDB map usage (WARN 80% / ERROR 95%) so a filling
+			// database is visible before writes start getting rejected.
+			db.StartMapUsageMonitor(ctx, 10*time.Minute)
 		}
 
 		log.Startup().Info("All background services started")

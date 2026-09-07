@@ -168,6 +168,20 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 		return
 	}
 
+	// Reject new writes before the map fills. A full LMDB map makes nostrdb's
+	// writer thread fail silently (MDB_MAP_FULL) while the event is still
+	// acked OK — the RC's silent data loss. Deletes (kind 5) are allowed
+	// through: they reduce data and are the way back under the ceiling.
+	if evt.Kind != 5 {
+		if frac := db.MapUsageFraction(); frac >= nostrdb.MapUsageRejectFraction {
+			log.Event().Error("Rejecting event: database near capacity",
+				"event_id", evt.ID, "used_pct", int(frac*100))
+			response.SendOK(client, evt.ID, false, "error: relay storage unavailable")
+			response.SendNotice(client, evt.PubKey, fmt.Sprintf("event %s rejected: relay storage is full", evt.ID))
+			return
+		}
+	}
+
 	// Store event in nostrdb
 	var storeErr error
 	if evt.Kind == 5 {
