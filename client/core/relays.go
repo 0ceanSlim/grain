@@ -147,6 +147,20 @@ func (mr *MessageRouter) RouteMessage(subID string, messageType string, data int
 		return
 	}
 
+	// Serialize against Subscription.Close(), which sets sub.closed under
+	// sub.mu.Lock() before closing Events/EOSE/Errors. Holding RLock across the
+	// sends below means each send either completes before Close's Lock (which
+	// waits on this RLock) or is skipped once closed is set. The select/default
+	// on each send only guards a *full* channel — sending on a *closed* one
+	// panics regardless, which is exactly the "send on closed channel" crash
+	// that took the relay down under subscription churn.
+	sub.mu.RLock()
+	defer sub.mu.RUnlock()
+	if sub.closed {
+		clog().Debug("Dropping message for closed subscription", "sub_id", subID, "message_type", messageType)
+		return
+	}
+
 	switch messageType {
 	case "EVENT":
 		if eventData, ok := data.(map[string]interface{}); ok {

@@ -19,6 +19,7 @@ type Subscription struct {
 	client     *Client
 	mu         sync.RWMutex
 	active     bool
+	closed     bool            // set under mu in Close before the channels are closed; gates RouteMessage sends
 	eoseRelays map[string]bool // NEW: Track which relays sent EOSE
 	acquired   []string        // relays this sub holds a pool lease on (released on Close)
 }
@@ -159,6 +160,13 @@ func (s *Subscription) Close() error {
 	s.acquired = nil
 
 	s.active = false
+	// Mark closed before closing the channels so a concurrent RouteMessage —
+	// which takes s.mu.RLock() and checks this flag — either completes its send
+	// before we close (it holds RLock, our Lock waits) or sees closed and drops
+	// the message. Without this, a late EVENT racing Close panicked with "send
+	// on closed channel" (the select/default guards a full channel, not a closed
+	// one).
+	s.closed = true
 	close(s.Done)
 	close(s.Events)
 	close(s.Errors)
