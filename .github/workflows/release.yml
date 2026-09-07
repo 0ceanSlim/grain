@@ -130,9 +130,27 @@ jobs:
       # paths — but docker image is already built by then). `make test-run`
       # runs both integration and review tests, so the host lib must exist
       # before it.
+      # Retry the whole bring-up: nostrdb's CGO/LMDB init crashes
+      # intermittently on the 2-CPU runner, which makes compose's serial
+      # service_healthy gate abort. A clean bring-up lands ~50% of the time, so
+      # retry until one succeeds (mirrors ci.yml; --build is cached). Tracked
+      # separately.
       - name: Start test environment (docker compose)
         working-directory: tests
-        run: make test-start
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            echo "::group::test-start attempt $attempt"
+            if make test-start; then
+              echo "::endgroup::"
+              echo "test environment up on attempt $attempt"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "attempt $attempt failed to bring up cleanly; tearing down"
+            make test-stop || true
+          done
+          echo "test environment failed to start cleanly after 6 attempts"
+          exit 1
       - name: Build nostrdb C library for host-side go build
         run: |
           cd server/db/nostrdb
