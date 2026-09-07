@@ -268,7 +268,9 @@ func GetChallengeForConnection(client nostr.ClientInterface) string {
 func SetChallengeForConnection(client nostr.ClientInterface, challenge string) {
 	authMu.Lock()
 	defer authMu.Unlock()
-	log.Auth().Debug("Setting challenge for connection", "client", client)
+	// Log the challenge (a short public nonce), not the client struct — the
+	// old "client", client dumped the whole struct (~600B) on every AUTH.
+	log.Auth().Debug("Setting challenge for connection", "challenge", challenge)
 	challenges[client] = challenge
 }
 

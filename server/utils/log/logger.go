@@ -92,7 +92,12 @@ func InitializeLoggers(cfg *cfgType.ServerConfig) {
 	if cfg.Logging.Structure {
 		fileHandler = NewJSONLogWriter(logFilePath, logLevel, cfg.Logging.MaxSizeMB, cfg.Logging.BackupCount, suppressedComponents)
 	} else {
-		logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_SYNC, 0644)
+		// No O_SYNC: writes land in the page cache and the kernel flushes
+		// asynchronously, keeping the disk off the request path (the RC's log
+		// path fsynced every record on a saturated disk, causing 11–61s
+		// latencies). Still durable across a process crash — only a kernel
+		// panic / power loss can lose the last unflushed page, fine for logs.
+		logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			fmt.Printf("Failed to open log file: %v\n", err)
 			os.Exit(1)
@@ -105,7 +110,11 @@ func InitializeLoggers(cfg *cfgType.ServerConfig) {
 	}
 
 	var handler slog.Handler = fileHandler
-	if cfg.Logging.Stdout {
+	// Skip the stdout mirror when systemd already pipes our stdout into the
+	// journal (JOURNAL_STREAM is set): the mirror would double every write —
+	// once to the file, once into journald — and journald's copy was 3.9 GB on
+	// the RC. The file sink still has every record.
+	if cfg.Logging.Stdout && os.Getenv("JOURNAL_STREAM") == "" {
 		stdoutHandler := &PrettyLogWriter{
 			output:               os.Stdout,
 			level:                logLevel,

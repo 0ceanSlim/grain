@@ -69,13 +69,14 @@ func (h *PrettyLogWriter) Handle(ctx context.Context, r slog.Record) error {
 		return true
 	})
 
-	// Write to file ( No console output)
+	// Write to file (no console output). No per-record Sync(): flushing to
+	// disk on every record serialized the whole request path behind the disk
+	// on the RC. The write reaches the OS page cache here; the kernel persists
+	// it asynchronously (and the periodic trimmer / clean shutdown flush).
 	if h.output != nil {
-		_, err := fmt.Fprintln(h.output, b.String()) // Write to file
-		if err != nil {
+		if _, err := fmt.Fprintln(h.output, b.String()); err != nil {
 			return err
 		}
-		h.output.Sync() // immediate write to disk
 	}
 
 	return nil

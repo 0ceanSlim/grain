@@ -3,8 +3,6 @@ package utils
 import (
 	"net/http"
 	"strings"
-
-	"github.com/0ceanslim/grain/server/utils/log"
 )
 
 func GetClientIP(r *http.Request) string {
@@ -13,11 +11,10 @@ func GetClientIP(r *http.Request) string {
 	if xff != "" {
 		ips := strings.Split(xff, ",")
 		if len(ips) > 0 {
-			clientIP := strings.TrimSpace(ips[0])
-			log.Util().Debug("Client IP determined from X-Forwarded-For",
-				"ip", clientIP,
-				"original_header", xff)
-			return clientIP
+			// No per-request debug line here: GetClientIP runs on every HTTP
+			// request and the line added ~26k records/hour with nothing
+			// actionable (RC diagnosis §C).
+			return strings.TrimSpace(ips[0])
 		}
 	}
 
@@ -31,8 +28,5 @@ func GetClientIP(r *http.Request) string {
 		clientIP = remoteAddr
 	}
 
-	log.Util().Debug("Client IP determined from RemoteAddr",
-		"ip", clientIP,
-		"remote_addr", remoteAddr)
 	return clientIP
 }
