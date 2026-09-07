@@ -9,6 +9,7 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"unsafe"
 
 	nostr "github.com/0ceanslim/grain/server/types"
@@ -87,6 +88,13 @@ func (txn *Txn) Query(filters []nostr.Filter, limit int) ([]nostr.Event, error) 
 		evt := noteToEventDirect(result.note)
 		events = append(events, evt)
 	}
+
+	// nostrdb returns results in index order — storage order for an unfiltered
+	// query, not created_at. NIP-01 expects newest-first, so sort here; every
+	// caller (REQ fulfilment, the purge scan) then sees a consistent order.
+	sort.Slice(events, func(i, j int) bool {
+		return events[i].CreatedAt > events[j].CreatedAt
+	})
 
 	return events, nil
 }
@@ -178,20 +186,43 @@ func (db *NDB) GetAllAuthors() []string {
 	return authors
 }
 
-// buildNDBFilters converts Go nostr.Filter slice to C ndb_filter array.
+// buildNDBFilters converts a Go nostr.Filter slice to a C ndb_filter array.
+// A filter that fails to convert (e.g. a malformed #q address) is DROPPED with
+// a warning rather than failing the whole REQ — one bad filter shouldn't sink a
+// client's other, valid filters. Only an all-bad request errors.
+//
+// ndb_filter holds pointers into its own buffers, so a built filter can't be
+// value-copied to compact the slice. Instead we probe which filters convert
+// (build + destroy), then rebuild the survivors in-place into a fixed-size
+// slice whose addresses are stable for ndb_query. The extra build is cheap —
+// REQs carry a handful of filters.
 func buildNDBFilters(filters []nostr.Filter) ([]C.struct_ndb_filter, error) {
-	ndbFilters := make([]C.struct_ndb_filter, len(filters))
-
+	good := make([]nostr.Filter, 0, len(filters))
 	for i, filter := range filters {
-		if err := buildSingleNDBFilter(&ndbFilters[i], filter); err != nil {
-			// Clean up already-built filters on error
+		var probe C.struct_ndb_filter
+		if err := buildSingleNDBFilter(&probe, filter); err != nil {
+			// buildSingleNDBFilter already destroyed the failed probe.
+			log.DBQuery().Warn("Dropping unconvertible filter from REQ",
+				"index", i, "error", err)
+			continue
+		}
+		C.ndb_filter_destroy(&probe)
+		good = append(good, filter)
+	}
+
+	if len(good) == 0 {
+		return nil, fmt.Errorf("no convertible filters in request")
+	}
+
+	ndbFilters := make([]C.struct_ndb_filter, len(good))
+	for i := range good {
+		if err := buildSingleNDBFilter(&ndbFilters[i], good[i]); err != nil {
 			for j := 0; j < i; j++ {
 				C.ndb_filter_destroy(&ndbFilters[j])
 			}
 			return nil, fmt.Errorf("filter %d: %w", i, err)
 		}
 	}
-
 	return ndbFilters, nil
 }
 
