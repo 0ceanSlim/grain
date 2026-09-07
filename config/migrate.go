@@ -32,7 +32,7 @@ func CheckAndMigrateConfig(filename string) error {
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "    database:")
 		fmt.Fprintln(os.Stderr, "      path: \"data\"")
-		fmt.Fprintln(os.Stderr, "      map_size_mb: 4096")
+		fmt.Fprintln(os.Stderr, "      map_size_mb: 65536")
 		fmt.Fprintln(os.Stderr, "")
 
 		if !hasDatabase {

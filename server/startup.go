@@ -175,7 +175,7 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 	}
 	mapSizeMB := cfg.Database.MapSizeMB
 	if mapSizeMB <= 0 {
-		mapSizeMB = 4096 // 4GB default
+		mapSizeMB = 65536 // 64GB ceiling (sparse virtual reservation on Linux, not a preallocation)
 	}
 
 	// Ensure data directory exists

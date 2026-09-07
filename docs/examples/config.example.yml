@@ -35,7 +35,11 @@ logging:
 
 database:
   path: "data" # Directory for nostrdb data files (relative to data dir)
-  map_size_mb: 4096 # Maximum database size in MB (4GB default)
+  # Ceiling for the LMDB map, NOT a preallocation: on Linux this is a sparse
+  # virtual reservation and the file only grows with real data. Set it well
+  # above expected size so writes never hit the wall — a full map silently
+  # drops events. 65536 = 64 GB.
+  map_size_mb: 65536
 
 # Client configuration for the built-in Nostr client
 client:

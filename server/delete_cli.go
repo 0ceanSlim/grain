@@ -44,7 +44,7 @@ func DeleteEvents(ids []string) error {
 	}
 	mapSizeMB := cfg.Database.MapSizeMB
 	if mapSizeMB <= 0 {
-		mapSizeMB = 4096
+		mapSizeMB = 65536
 	}
 
 	fmt.Printf("Opening database at %s...\n", dbPath)

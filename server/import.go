@@ -38,7 +38,7 @@ func ImportEvents(filename string) error {
 	}
 	mapSizeMB := cfg.Database.MapSizeMB
 	if mapSizeMB <= 0 {
-		mapSizeMB = 4096
+		mapSizeMB = 65536
 	}
 
 	if err := os.MkdirAll(dbPath, 0755); err != nil {
