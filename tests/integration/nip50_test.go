@@ -45,6 +45,10 @@ func TestNIP50_BasicMatch(t *testing.T) {
 	if ok, reason := c.ExpectOK(noMatch.ID, 3*time.Second); !ok {
 		t.Fatalf("publish rejected: %q", reason)
 	}
+	// FIFO commit: awaiting the last published implies both are searchable.
+	if !c.AwaitCommit(noMatch.ID, 5*time.Second) {
+		t.Fatalf("events not committed in time")
+	}
 
 	sub := tests.RandomSubID()
 	c.Subscribe(sub, map[string]interface{}{"search": tok})
@@ -87,6 +91,9 @@ func TestNIP50_CombinedWithAuthor(t *testing.T) {
 	c.SendEvent(evtB)
 	if ok, _ := c.ExpectOK(evtB.ID, 3*time.Second); !ok {
 		t.Fatalf("authorB publish rejected")
+	}
+	if !c.AwaitCommit(evtB.ID, 5*time.Second) {
+		t.Fatalf("events not committed in time")
 	}
 
 	sub := tests.RandomSubID()

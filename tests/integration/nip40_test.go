@@ -51,6 +51,9 @@ func TestNIP40_AcceptFutureExpiration(t *testing.T) {
 	if ok, reason := c.ExpectOK(evt.ID, 3*time.Second); !ok {
 		t.Fatalf("future-expiration event was rejected: %q", reason)
 	}
+	if !c.AwaitCommit(evt.ID, 5*time.Second) {
+		t.Fatalf("event not committed in time")
+	}
 
 	sub := tests.RandomSubID()
 	c.Subscribe(sub, map[string]interface{}{"ids": []string{evt.ID}})
@@ -64,15 +67,19 @@ func TestNIP40_NotReturnedAfterExpiration(t *testing.T) {
 	c := tests.NewTestClient(t)
 	defer c.Close()
 
-	// Pick a window short enough to keep the test fast but long enough
-	// that the relay has time to ingest before it expires.
-	expireIn := 3 * time.Second
+	// Pick a window short enough to keep the test fast but long enough that the
+	// relay has time to ingest AND commit (OK is acked on enqueue) before it
+	// expires — AwaitCommit below must find the event while it's still live.
+	expireIn := 6 * time.Second
 	expireAt := time.Now().Add(expireIn).Unix()
 
 	evt := kp.SignEvent(1, "ephemeral", [][]string{expirationTag(expireAt)})
 	c.SendEvent(evt)
 	if ok, reason := c.ExpectOK(evt.ID, 3*time.Second); !ok {
 		t.Fatalf("publish rejected: %q", reason)
+	}
+	if !c.AwaitCommit(evt.ID, 4*time.Second) {
+		t.Fatalf("event not committed in time")
 	}
 
 	// Confirm it's visible before expiration.

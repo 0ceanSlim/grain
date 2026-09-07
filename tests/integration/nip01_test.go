@@ -78,6 +78,11 @@ func TestNIP01_TagsNeverNull(t *testing.T) {
 		t.Fatalf("Event rejected: %s", reason)
 	}
 
+	// Wait for the async commit before querying (OK is acked on enqueue).
+	if !client.AwaitCommit(evt.ID, 5*time.Second) {
+		t.Fatal("event not committed in time")
+	}
+
 	// Query it back and check raw JSON
 	subID := tests.RandomSubID()
 	client.Subscribe(subID, map[string]interface{}{
@@ -167,6 +172,11 @@ func TestNIP01_TagFilterE(t *testing.T) {
 	client.SendEvent(unrelated)
 	client.ExpectOK(unrelated.ID, 5*time.Second)
 
+	// Wait for commit (FIFO: the last published implies ref + tagged committed).
+	if !client.AwaitCommit(unrelated.ID, 5*time.Second) {
+		t.Fatal("events not committed in time")
+	}
+
 	// Query with #e filter for the reference event ID
 	subID := tests.RandomSubID()
 	client.Subscribe(subID, map[string]interface{}{
@@ -212,6 +222,10 @@ func TestNIP01_TagFilterP(t *testing.T) {
 		t.Fatalf("Mention event rejected: %s", reason)
 	}
 
+	if !client.AwaitCommit(mentionEvt.ID, 5*time.Second) {
+		t.Fatal("event not committed in time")
+	}
+
 	// Query with #p filter for kp2's pubkey
 	subID := tests.RandomSubID()
 	client.Subscribe(subID, map[string]interface{}{
@@ -253,6 +267,10 @@ func TestNIP01_TagFilterCustom(t *testing.T) {
 		t.Fatalf("Event rejected: %s", reason)
 	}
 
+	if !client.AwaitCommit(taggedEvt.ID, 5*time.Second) {
+		t.Fatal("event not committed in time")
+	}
+
 	// Query with #t filter
 	subID := tests.RandomSubID()
 	client.Subscribe(subID, map[string]interface{}{
@@ -284,6 +302,7 @@ func TestNIP01_FilterLimit(t *testing.T) {
 	defer client.Close()
 
 	// Publish 5 events (unique content so each gets a distinct ID)
+	var lastID string
 	for i := 0; i < 5; i++ {
 		evt := kp.SignEvent(1, fmt.Sprintf("nip01-limit-%d", i), nil)
 		client.SendEvent(evt)
@@ -291,6 +310,10 @@ func TestNIP01_FilterLimit(t *testing.T) {
 		if !ok {
 			t.Fatalf("Event %d rejected: %s", i, reason)
 		}
+		lastID = evt.ID
+	}
+	if !client.AwaitCommit(lastID, 5*time.Second) {
+		t.Fatal("events not committed in time")
 	}
 
 	// Query with limit 2
@@ -394,6 +417,10 @@ func TestNIP01_MultipleFiltersOR(t *testing.T) {
 		t.Fatalf("Kind 30023 event rejected: %s", reason)
 	}
 
+	if !client.AwaitCommit(evt30023.ID, 5*time.Second) {
+		t.Fatal("events not committed in time")
+	}
+
 	// Subscribe with two filters (OR logic)
 	subID := tests.RandomSubID()
 	client.Subscribe(subID,
@@ -457,6 +484,10 @@ func TestNIP01_ReplaceSubscription(t *testing.T) {
 	ok, reason := client.ExpectOK(evt.ID, 5*time.Second)
 	if !ok {
 		t.Fatalf("Event rejected: %s", reason)
+	}
+
+	if !client.AwaitCommit(evt.ID, 5*time.Second) {
+		t.Fatal("event not committed in time")
 	}
 
 	// Replace subscription with same subID, now filtering for kind 1
@@ -616,6 +647,10 @@ func TestNIP01_EventIDIntegrity(t *testing.T) {
 	ok, reason := client.ExpectOK(evt.ID, 5*time.Second)
 	if !ok {
 		t.Fatalf("Event rejected: %s", reason)
+	}
+
+	if !client.AwaitCommit(evt.ID, 5*time.Second) {
+		t.Fatal("event not committed in time")
 	}
 
 	subID := tests.RandomSubID()

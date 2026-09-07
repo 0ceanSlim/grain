@@ -40,6 +40,11 @@ func TestPublishAndQuery(t *testing.T) {
 	}
 	t.Logf("Event %s accepted", evt.ID[:8])
 
+	// OK is acked on enqueue; wait for the commit before querying.
+	if !client.AwaitCommit(evt.ID, 5*time.Second) {
+		t.Fatal("event not committed in time")
+	}
+
 	// Query it back
 	subID := tests.RandomSubID()
 	client.Subscribe(subID, map[string]interface{}{
@@ -69,6 +74,9 @@ func TestQueryByAuthor(t *testing.T) {
 	client.ExpectOK(evt1.ID, 5*time.Second)
 	client.SendEvent(evt2)
 	client.ExpectOK(evt2.ID, 5*time.Second)
+	if !client.AwaitCommit(evt2.ID, 5*time.Second) {
+		t.Fatal("events not committed in time")
+	}
 
 	// Query by author
 	subID := tests.RandomSubID()
@@ -93,6 +101,9 @@ func TestQueryByKind(t *testing.T) {
 	evt1 := kp.SignEvent(1, "kind 1 note", nil)
 	client.SendEvent(evt1)
 	client.ExpectOK(evt1.ID, 5*time.Second)
+	if !client.AwaitCommit(evt1.ID, 5*time.Second) {
+		t.Fatal("event not committed in time")
+	}
 
 	// Query specifically for kind 1 from this author
 	subID := tests.RandomSubID()

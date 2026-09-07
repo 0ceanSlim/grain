@@ -24,6 +24,12 @@ func publishDelete(t *testing.T, c *tests.TestClient, kp *tests.TestKeypair, tag
 	if !ok {
 		t.Fatalf("kind-5 publish rejected: %q", reason)
 	}
+	// OK is acked on enqueue; wait until the kind-5 has committed (and with it
+	// the deletion has been processed by the writer) before callers assert the
+	// target is gone — otherwise the "deleted" query races the async writer.
+	if !c.AwaitCommit(del.ID, 5*time.Second) {
+		t.Fatalf("kind-5 delete not committed in time")
+	}
 	return del.ID
 }
 
@@ -39,7 +45,10 @@ func TestNIP09_DeleteByID(t *testing.T) {
 		t.Fatalf("initial publish rejected: %q", reason)
 	}
 
-	// Verify it's queryable.
+	// Wait for the commit, then verify it's queryable.
+	if !c.AwaitCommit(evt.ID, 5*time.Second) {
+		t.Fatalf("event not committed in time")
+	}
 	sub := tests.RandomSubID()
 	c.Subscribe(sub, map[string]interface{}{"ids": []string{evt.ID}})
 	if got := c.ExpectEOSE(sub, 3*time.Second); len(got) != 1 {
@@ -76,6 +85,9 @@ func TestNIP09_RejectsCrossAuthorDelete(t *testing.T) {
 	if ok, reason := c.ExpectOK(evt.ID, 3*time.Second); !ok {
 		t.Fatalf("alice publish rejected: %q", reason)
 	}
+	if !c.AwaitCommit(evt.ID, 5*time.Second) {
+		t.Fatalf("event not committed in time")
+	}
 
 	// Mallory tries to delete it with her own kind-5. The kind-5 itself is
 	// accepted and stored (grain stores the record regardless), but the
@@ -101,6 +113,9 @@ func TestNIP09_DeleteAddressable(t *testing.T) {
 	c.SendEvent(evt)
 	if ok, reason := c.ExpectOK(evt.ID, 3*time.Second); !ok {
 		t.Fatalf("addressable publish rejected: %q", reason)
+	}
+	if !c.AwaitCommit(evt.ID, 5*time.Second) {
+		t.Fatalf("addressable event not committed in time")
 	}
 
 	// Delete it by a-tag coordinate.

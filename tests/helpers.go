@@ -336,6 +336,57 @@ func (c *TestClient) ExpectEOSE(subID string, timeout time.Duration) []map[strin
 	return nil
 }
 
+// AwaitCommit blocks until an event with id evtID is queryable on the relay, or
+// the deadline passes (returns true once found, false on timeout).
+//
+// nostrdb's ingester acks OK on *enqueue*, not on commit — the writer thread
+// commits a short time later. A read issued immediately after OK can therefore
+// precede the commit and see nothing (the async-commit race). Call this after
+// ExpectOK for any event a subsequent query depends on, so the read is
+// deterministic. Because the ingester→writer queue is FIFO, awaiting the last
+// event of an ordered publish implies the earlier ones have committed too.
+//
+// It uses a dedicated probe subscription that it opens, drains to EOSE, and
+// CLOSEs, and ignores frames for other subscription IDs, so the caller's own
+// message stream is unaffected.
+func (c *TestClient) AwaitCommit(evtID string, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		subID := RandomSubID()
+		c.Subscribe(subID, map[string]interface{}{"ids": []string{evtID}})
+
+		found := false
+		for time.Now().Before(deadline) {
+			msg, err := c.TryReadMessage(time.Until(deadline))
+			if err != nil {
+				break
+			}
+			if len(msg) < 2 {
+				continue
+			}
+			verb, _ := msg[0].(string)
+			sid, _ := msg[1].(string)
+			if sid != subID {
+				continue // not our probe — ignore
+			}
+			if verb == "EVENT" {
+				found = true
+			}
+			if verb == "EOSE" {
+				break
+			}
+		}
+
+		// Stop the probe subscription so it can't deliver into later reads.
+		c.SendMessage([]interface{}{"CLOSE", subID})
+		if found {
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return false
+}
+
 // Close closes the WebSocket connection
 func (c *TestClient) Close() {
 	c.conn.Close()

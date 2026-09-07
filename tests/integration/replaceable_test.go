@@ -28,6 +28,11 @@ func TestReplaceable_OnlyLatestVisible(t *testing.T) {
 		if ok, reason := c.ExpectOK(evt.ID, 3*time.Second); !ok {
 			t.Fatalf("kind-0 v%d rejected: %q", i, reason)
 		}
+		// Await commit so each version's replacement is processed before the
+		// next publish (OK is acked on enqueue) and before the query below.
+		if !c.AwaitCommit(evt.ID, 5*time.Second) {
+			t.Fatalf("kind-0 v%d not committed in time", i)
+		}
 	}
 
 	sub := tests.RandomSubID()
@@ -55,6 +60,9 @@ func TestReplaceable_FollowListCollapses(t *testing.T) {
 		c.SendEvent(evt)
 		if ok, reason := c.ExpectOK(evt.ID, 3*time.Second); !ok {
 			t.Fatalf("kind-3 v%d rejected: %q", i, reason)
+		}
+		if !c.AwaitCommit(evt.ID, 5*time.Second) {
+			t.Fatalf("kind-3 v%d not committed in time", i)
 		}
 	}
 
@@ -85,6 +93,9 @@ func TestAddressable_GroupsByDTag(t *testing.T) {
 		c.SendEvent(evt)
 		if ok, reason := c.ExpectOK(evt.ID, 3*time.Second); !ok {
 			t.Fatalf("addressable publish (%s,%s) rejected: %q", dTag, payload, reason)
+		}
+		if !c.AwaitCommit(evt.ID, 5*time.Second) {
+			t.Fatalf("addressable (%s,%s) not committed in time", dTag, payload)
 		}
 	}
 

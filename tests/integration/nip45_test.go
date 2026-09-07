@@ -53,12 +53,19 @@ func TestNIP45_CountByAuthor(t *testing.T) {
 	// the per-event ID hash differs even when same-second timestamps
 	// collide — otherwise the relay rejects the second/third as
 	// duplicates.
+	var lastID string
 	for i := 0; i < 3; i++ {
 		evt := kp.SignEvent(1, fmt.Sprintf("count me %d", i), nil)
 		c.SendEvent(evt)
 		if ok, reason := c.ExpectOK(evt.ID, 3*time.Second); !ok {
 			t.Fatalf("publish %d rejected: %q", i, reason)
 		}
+		lastID = evt.ID
+	}
+	// OK is acked on enqueue; wait for the commit (FIFO, so the last implies
+	// all three) before counting, else the COUNT races the async writer.
+	if !c.AwaitCommit(lastID, 5*time.Second) {
+		t.Fatalf("events not committed in time")
 	}
 
 	subID := tests.RandomSubID()
@@ -94,6 +101,9 @@ func TestNIP45_CountMultiFilterApproximate(t *testing.T) {
 	c.SendEvent(evt)
 	if ok, reason := c.ExpectOK(evt.ID, 3*time.Second); !ok {
 		t.Fatalf("publish rejected: %q", reason)
+	}
+	if !c.AwaitCommit(evt.ID, 5*time.Second) {
+		t.Fatalf("event not committed in time")
 	}
 
 	subID := tests.RandomSubID()
