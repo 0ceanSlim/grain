@@ -39,6 +39,7 @@ on it, not part of its import contract.
 - [Encryption (NIP-44)](#encryption-nip-44)
 - [AUTH (NIP-42)](#auth-nip-42)
 - [The known-relays browser](#the-known-relays-browser)
+- [Relay discovery (NIP-66 monitors)](#relay-discovery-nip-66-monitors)
 - [The client tag (NIP-89)](#the-client-tag-nip-89)
 - [Pluggable seams](#pluggable-seams)
 - [The HTTP API (reference consumer)](#the-http-api-reference-consumer)
@@ -337,12 +338,19 @@ is opt-in per relay rather than a blanket auto-sign.
 
 ## The known-relays browser
 
-Everything the engine has seen — from resolutions and config — is browsable, with
-live status, NIP-11 metadata, and latency:
+The browsable set is the NIP-66-discovered relays ([see below](#relay-discovery-nip-66-monitors))
+plus your configured and pooled relays — a bounded, liveness-backed list ranked
+by monitor consensus, not the routing directory's mailbox union. Each row carries
+live pool status, NIP-11 metadata, latency, and (when a monitor reported it) its
+discovery metadata:
 
 ```go
-all := client.KnownRelays()                 // []string, every relay seen
-status := client.KnownRelaysWithStatus()    // []KnownRelayStatus: connected/pinned/leased
+all := client.KnownRelays()                 // []string, everything the engine is aware of (incl. routing)
+status := client.KnownRelaysWithStatus()    // []KnownRelayStatus: the browsable set, consensus-ranked
+
+// Each KnownRelayStatus has live pool flags plus, when a monitor reported it,
+// Discovery (*DiscoveredRelay: RTT, supported NIPs, network, requirements) and
+// MonitorCount (how many monitors agree).
 
 info := client.FetchRelayInfo(url)          // *RelayInfo (NIP-11; HTTP GET, TTL-cached)
 if info != nil && info.Limitation != nil && info.Limitation.AuthRequired {
@@ -357,6 +365,51 @@ pings := client.PingRelays(urls)            // map[url]ms, concurrent — for "s
 pool/WebSocket connection), so the browser can show name, software, supported
 NIPs, and the auth/payment flags without holding a relay connection open. It
 returns `nil` (cached) when a relay advertises no NIP-11, to avoid retry storms.
+
+---
+
+## Relay discovery (NIP-66 monitors)
+
+The browsable set is sourced from [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md)
+relay monitors rather than the mailbox union, so it stays bounded and
+liveness-backed. grain discovers monitors itself — no hardcoded monitor list —
+and self-heals:
+
+1. **Discover** monitors from their kind-10166 announcements across the relays
+   grain already touches (widening to a sample of known relays if none surface).
+2. **Pull** each monitor's kind-30166 relay records — URL, RTT, supported NIPs,
+   network, requirements, geohash.
+3. **Trust by consensus**: discard a monitor whose reports are mostly
+   uncorroborated, then surface relays at least K trusted monitors agree on,
+   ranked by agreement then RTT.
+4. **Health-roll**: re-discover on an interval and evict monitors whose data has
+   gone stale past their declared publish frequency — self-propagating and
+   self-healing.
+
+```go
+// One-shot pass: find monitors, then pull their relay sets.
+client.DiscoverRelays(ctx)
+
+// Or run it continuously — re-discover + refresh + evict stale, bounded to ctx.
+client.StartDiscoveryRoll(ctx, 30*time.Minute)
+
+// The consensus set, ranked, with full metadata:
+for _, r := range client.DiscoveredRelays() {
+    // r.URL, r.RTTOpen (ms, -1 if unmeasured), r.SupportedNIPs, r.Network,
+    // r.Requirements ([]string: "auth", "payment", "!payment", …), r.Geohash,
+    // r.MonitorCount (how many distinct monitors reported this relay)
+}
+```
+
+`DiscoveredRelays` returns `[]DiscoveredRelayView` — one record per URL (the
+freshest monitor report) annotated with `MonitorCount`. What you do with it is
+your policy: populate a relay browser (grain's reference UI does, with
+"monitored only" and "hide auth/paid" filters), offer relays to add, or feed a
+fallback routing set. The library hands you the vetted data and metadata; the
+decision is yours.
+
+> Discovery is advisory — per NIP-66 a client must not *require* it. grain always
+> keeps your configured and own relays as a fallback discovery source.
 
 ---
 
@@ -450,6 +503,9 @@ the authoritative HTTP reference; this guide is the library reference beneath it
   `WarmMediaServers`, `InvalidateMediaServers`.
 - **Known relays:** `KnownRelays() []string`, `KnownRelaysWithStatus()`,
   `FetchRelayInfo(url) *RelayInfo`, `PingRelay(url) int`, `PingRelays(urls)`.
+- **Discovery (NIP-66):** `DiscoverRelays(ctx)`, `DiscoveredRelays() []DiscoveredRelayView`,
+  `StartDiscoveryRoll(ctx, interval)`; lower-level `DiscoverMonitors(ctx) int`,
+  `RefreshDiscoveredRelays(ctx) int`.
 - **AUTH:** `AuthRequests() []AuthState`, `AuthChallenge(url)`,
   `SendAuth(url, signed)`, `RemoveAuth(url)`.
 
@@ -489,6 +545,12 @@ Build with `AssembleRelayListEvent`; parse 10002 with `ParseNIP65Entries`.
 ### `RelayInfo`
 NIP-11: `Name`, `Description`, `Software`, `Version`, `SupportedNIPs []int`,
 `Icon`, `Limitation *RelayLimits` (`AuthRequired`, `PaymentRequired`, …).
+
+### `DiscoveredRelayView`
+A NIP-66 relay record (embeds `DiscoveredRelay`) plus `MonitorCount int`.
+`URL`, `RTTOpen`/`RTTRead`/`RTTWrite` (ms, `-1` if unmeasured), `SupportedNIPs
+[]int`, `Network`, `RelayType`, `Requirements []string` (`auth`, `payment`,
+`!payment`, …), `Geohash`, `Language`, `MonitorPubkey`, `ObservedAt`.
 
 ### `AuthState`
 `Relay`, `Challenge string`; `Authed bool`; `At time.Time`.
