@@ -27,12 +27,13 @@ services:
   # That CGO/LMDB-init crash still fires intermittently (~50%/boot) on the
   # constrained runner even serialized — a silent C-level death during
   # nostrdb.Open, self-recovering on restart (it never reproduces on a
-  # faster/unconstrained host). So every service uses `restart: on-failure`
-  # (unlimited) with a widened 20s healthcheck start_period: a container that
-  # crashes on init just restarts until it wins a clean boot, well within the
-  # healthcheck window. A *deterministic* crash still fails fast (the window
-  # marks it unhealthy). Root-causing the init crash is tracked separately;
-  # this keeps CI honest about real regressions meanwhile.
+  # faster/unconstrained host). `restart: on-failure` + a widened 20s
+  # start_period give a crashing container a chance to self-recover within a
+  # single bring-up, but compose's serial service_healthy gate still aborts the
+  # whole `up` on the first mid-startup crash rather than waiting out restarts —
+  # so the CI workflow retries the entire bring-up until one lands clean (see
+  # .github/workflows/ci.yml). Root-causing the init crash is tracked
+  # separately; these two layers keep CI honest about real regressions meanwhile.
 
   # Chain: each scenario waits for the previous one's healthcheck to pass
   # before starting. Pure serial startup — no two CGO init paths overlap.

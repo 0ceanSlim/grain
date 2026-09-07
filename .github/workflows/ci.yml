@@ -44,9 +44,30 @@ jobs:
       # Bring up docker test environment FIRST, while the nostrdb tree is
       # still clean. The host-side build below dirties secp256k1's autotools
       # output with absolute host paths, which would break the docker COPY.
+      # nostrdb's CGO/LMDB init crashes intermittently (~50%/boot) on the 2-CPU
+      # runner (a pre-existing, self-recovering fragility tracked separately).
+      # That makes `docker compose up`'s serial service_healthy gate abort when a
+      # relay crashes mid-startup — regardless of the container restart policy,
+      # compose gives up on the first crash rather than waiting out the restarts.
+      # A fully-clean bring-up lands ~50% of the time, so retry the whole thing
+      # (tearing down between) until one succeeds. --build is cached after the
+      # first attempt, so retries are cheap.
       - name: Start test environment (docker compose)
         working-directory: tests
-        run: make test-start
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            echo "::group::test-start attempt $attempt"
+            if make test-start; then
+              echo "::endgroup::"
+              echo "test environment up on attempt $attempt"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "attempt $attempt failed to bring up cleanly; tearing down"
+            make test-stop || true
+          done
+          echo "test environment failed to start cleanly after 6 attempts"
+          exit 1
 
       # Host-side nostrdb build. Needed by `make test-run` because
       # `go test ./...` also runs tests/review, which shells out to
