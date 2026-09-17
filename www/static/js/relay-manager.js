@@ -952,7 +952,11 @@
         const box = document.getElementById("rm-overview");
         if (!box) return;
         const cells = [
-          ["Known", s.pool_known || 0, "text-text"],
+          // Browsable set (config + pool + NIP-66 discovery) — the same count the
+          // header shows and the same set the browser lists below. NOT pool_known,
+          // which includes the routing directory's mailbox union (the ~7k #104
+          // stopped surfacing); that number is routing-internal, not browsable.
+          ["Known", s.pool_browsable != null ? s.pool_browsable : s.pool_known, "text-text"],
           ["Connected", s.pool_connected || 0, "text-success"],
           ["In use", s.pool_leased || 0, "text-text"],
           ["Pinned", s.pool_pinned || 0, "text-text"],
