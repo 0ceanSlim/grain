@@ -393,6 +393,9 @@ client.DiscoverRelays(ctx)
 // Or run it continuously — re-discover + refresh + evict stale, bounded to ctx.
 client.StartDiscoveryRoll(ctx, 30*time.Minute)
 
+// Cheap counters for a status line: monitors known, distinct relays reported.
+monitors, reported := client.DiscoveryStats()
+
 // The consensus set, ranked, with full metadata:
 for _, r := range client.DiscoveredRelays() {
     // r.URL, r.RTTOpen (ms, -1 if unmeasured), r.SupportedNIPs, r.Network,
@@ -473,7 +476,7 @@ groups mirror the sections above:
 | session, login, logout | signer login + session lifecycle |
 | profile | resolve + publish kind-0 metadata |
 | relay-list | the relay-list build/fetch + fixed-relay endpoints |
-| known-relays, relay-ping | the browser + latency sort |
+| known-relays, discover, relay-ping | the browser, an on-demand NIP-66 discovery pass, and the latency sort |
 | media-servers | resolve + assemble media-server lists |
 | auth | the NIP-42 challenge list + answer/remove |
 | stream, events | the streaming feed + event publish |
@@ -504,7 +507,8 @@ the authoritative HTTP reference; this guide is the library reference beneath it
 - **Known relays:** `KnownRelays() []string`, `KnownRelaysWithStatus()`,
   `FetchRelayInfo(url) *RelayInfo`, `PingRelay(url) int`, `PingRelays(urls)`.
 - **Discovery (NIP-66):** `DiscoverRelays(ctx)`, `DiscoveredRelays() []DiscoveredRelayView`,
-  `StartDiscoveryRoll(ctx, interval)`; lower-level `DiscoverMonitors(ctx) int`,
+  `StartDiscoveryRoll(ctx, interval)`, `DiscoveryStats() (monitors, discovered int)`;
+  lower-level `DiscoverMonitors(ctx) int`,
   `RefreshDiscoveredRelays(ctx) int`.
 - **AUTH:** `AuthRequests() []AuthState`, `AuthChallenge(url)`,
   `SendAuth(url, signed)`, `RemoveAuth(url)`.
