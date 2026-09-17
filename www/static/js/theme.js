@@ -19,7 +19,9 @@
   "use strict";
 
   const STORAGE_KEY = "grain-theme";
-  const DEFAULT = "dark";
+  // grain's own palette is the default for first-time visitors; anyone who has
+  // explicitly picked a theme keeps their choice (persisted in localStorage).
+  const DEFAULT = "grain";
 
   // Keep this list in sync with the data-theme blocks in input.css.
   // `swatch` is a representative surface-base color used in the
