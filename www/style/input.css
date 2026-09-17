@@ -197,23 +197,35 @@
    * the :root selector is included for symmetry with the light block
    * and to give an obvious place to hang dark-specific tweaks later. */
   :root,
+  /* Dark: a true neutral dark — near-black graphite surfaces with no
+   * purple tint and a muted slate accent, so the theme reads nearly
+   * monochrome. Midnight is the purple theme; Grain is the green brand
+   * default. Overriding the accent + border-focus here peels off the
+   * @theme violet that Dark used to inherit. */
   :root[data-theme="dark"] {
     color-scheme: dark;
-    --color-surface-base: #09080f;
-    --color-surface: #100e1b;
-    --color-surface-elevated: #181528;
-    --color-surface-overlay: #1f1c35;
+    --color-surface-base: #0a0a0b;
+    --color-surface: #101012;
+    --color-surface-elevated: #17171a;
+    --color-surface-overlay: #202024;
     --color-surface-inset: rgb(0 0 0 / 0.25);
-    --color-surface-inset-strong: rgb(0 0 0 / 0.35);
+    --color-surface-inset-strong: rgb(0 0 0 / 0.4);
 
-    --color-text: #ede8fc;
-    --color-text-secondary: #9d94c0;
-    --color-text-muted: #5e5880;
+    --color-text: #ededf0;
+    --color-text-secondary: #a1a1aa;
+    --color-text-muted: #6b6b73;
 
-    --color-border: #2a2544;
-    --color-border-strong: #3e3860;
+    --color-border: #26262b;
+    --color-border-strong: #37373e;
+    --color-border-focus: oklch(0.66 0.05 250);
 
-    --color-backdrop: rgb(4 3 10 / 0.78);
+    /* Muted slate — low chroma so buttons/links read gray-blue, not blue. */
+    --color-accent: oklch(0.57 0.04 250);
+    --color-accent-hover: oklch(0.66 0.045 250);
+    --color-accent-dim: oklch(0.57 0.04 250 / 0.18);
+    --color-accent-fg: #ffffff;
+
+    --color-backdrop: rgb(0 0 0 / 0.8);
   }
 
   /* Midnight: deep blue-purple bg, lavender text. Lifted from
