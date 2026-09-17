@@ -103,6 +103,7 @@ func GetCoreClientStatus() map[string]interface{} {
 
 	connectedRelays := coreClient.GetConnectedRelays()
 	stats := coreClient.PoolStats()
+	monitors, discovered := coreClient.DiscoveryStats()
 
 	return map[string]interface{}{
 		"initialized":      true,
@@ -115,6 +116,8 @@ func GetCoreClientStatus() map[string]interface{} {
 		"pool_connected":   stats.Connected, // currently connected
 		"pool_pinned":      stats.Pinned,    // index/seed relays
 		"pool_leased":      stats.Leased,    // in active use
+		"pool_monitors":    monitors,        // NIP-66 relay monitors currently known
+		"pool_discovered":  discovered,      // distinct relays those monitors have reported
 	}
 }
 

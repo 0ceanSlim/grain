@@ -1,13 +1,54 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/0ceanslim/grain/client/connection"
 	"github.com/0ceanslim/grain/client/session"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
+
+// DiscoverRelaysHandler triggers a NIP-66 discovery pass on demand — find
+// monitors, pull their relay sets, refresh consensus — so the known-relays
+// browser (Discovery tab) doesn't have to wait on the periodic roll. Session-
+// gated. Blocks until the pass finishes (a few seconds) under its own timeout,
+// then returns the resulting browsable / discovered counts.
+//
+// @Summary      Trigger NIP-66 relay discovery
+// @Description  Run a monitor-discovery + consensus refresh pass now; returns the new browsable/discovered counts.
+// @Tags         client
+// @Produce      json
+// @Success      200  {object}  map[string]int
+// @Failure      401  {string}  string  "Authentication required"
+// @Router       /api/v1/client/discover [post]
+func DiscoverRelaysHandler(w http.ResponseWriter, r *http.Request) {
+	if session.SessionMgr.GetCurrentUser(r) == nil {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+	cc := connection.GetCoreClient()
+	if cc == nil {
+		http.Error(w, "Client not available", http.StatusInternalServerError)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cc.DiscoverRelays(ctx)
+
+	monitors, discovered := cc.DiscoveryStats()
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]int{
+		"browsable":  cc.PoolStats().Browsable,
+		"monitors":   monitors,
+		"discovered": discovered,
+	}); err != nil {
+		log.ClientAPI().Error("Failed to encode discover result", "error", err)
+	}
+}
 
 // KnownRelaysHandler lists every relay the client is aware of (the "known" set:
 // config seeds + pooled + directory-resolved) with its live pool status, for the

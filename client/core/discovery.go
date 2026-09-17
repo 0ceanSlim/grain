@@ -426,6 +426,14 @@ func (c *Client) DiscoveredRelays() []DiscoveredRelayView {
 	return c.discovery.consensus()
 }
 
+// DiscoveryStats returns read-only NIP-66 discovery counters for status
+// reporting and the Discovery settings tab: how many relay monitors are known,
+// and how many distinct relays those monitors have reported. Both are cheap
+// (map-length reads); no network I/O and no consensus recomputation.
+func (c *Client) DiscoveryStats() (monitors, discovered int) {
+	return c.discovery.monitorCount(), c.discovery.relayCount()
+}
+
 // DiscoveredRelayURLs returns just the URLs of the consensus discovery set, for
 // folding into the browser's known list.
 func (c *Client) DiscoveredRelayURLs() []string {

@@ -110,6 +110,12 @@ function scrollToSettingsTarget() {
   window.__grainScrollTarget = null;
   const el = document.getElementById(id);
   if (!el) return;
+  // The target may live inside a settings tab that isn't showing — activate it
+  // first, otherwise scrollIntoView would land on a hidden element.
+  const panel = el.closest("[data-tab-panel]");
+  if (panel && typeof window.switchSettingsTab === "function") {
+    window.switchSettingsTab(panel.getAttribute("data-tab-panel"));
+  }
   // Let layout settle (sections render async) before scrolling.
   requestAnimationFrame(() => {
     el.scrollIntoView({ behavior: "smooth", block: "start" });

@@ -154,6 +154,8 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 	// Known-relays browser: list the known set + per-relay NIP-11 (cached).
 	mux.HandleFunc("/api/v1/client/known-relays", api.KnownRelaysHandler)
 	mux.HandleFunc("/api/v1/relay-info", api.RelayInfoHandler)
+	// On-demand NIP-66 discovery pass (Discovery tab's "Refresh" button).
+	mux.HandleFunc("/api/v1/client/discover", api.DiscoverRelaysHandler)
 	// TCP-connect latency for a set of relays — the browser's "fastest first" sort.
 	mux.HandleFunc("/api/v1/relays/ping", api.PingRelaysHandler)
 	// NIP-42 AUTH: relays that have challenged us, answer one, revoke one.

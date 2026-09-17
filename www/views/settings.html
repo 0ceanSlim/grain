@@ -9,65 +9,125 @@
 
     <div id="settings-content" class="hidden">
       <!-- Settings Header -->
-      <div class="mb-8 text-center">
+      <div class="mb-4 text-center">
         <h1 class="text-3xl font-bold text-text">⚙️ Settings</h1>
         <p class="mt-2 text-text-secondary">
-          Manage your session and relay preferences
+          Manage your session, relays, and account
         </p>
       </div>
 
-      <!-- Session Information -->
-      <div class="p-6 mb-8 bg-surface rounded-lg">
-        <h2 class="mb-4 text-xl font-semibold text-text">
-          🔐 Session Information
-        </h2>
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label class="block text-sm font-medium text-text-secondary"
-              >Session Mode</label
-            >
-            <span id="session-mode" class="block mt-1 text-text"
-              >Loading...</span
-            >
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-text-secondary"
-              >Signing Method</label
-            >
-            <span id="signing-method" class="block mt-1 text-text"
-              >Loading...</span
-            >
-          </div>
+      <!-- Session strip — always visible (not a tab). Session mode + signing
+           method are context for everything below, so they head the page. -->
+      <div
+        class="flex flex-wrap items-center justify-center px-4 py-3 mb-6 text-sm rounded-lg gap-x-8 gap-y-1 bg-surface"
+      >
+        <div class="flex items-center gap-2">
+          <span class="text-text-secondary">🔐 Session mode</span>
+          <span id="session-mode" class="font-medium text-text">Loading...</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-text-secondary">🖊️ Signing method</span>
+          <span id="signing-method" class="font-medium text-text">Loading...</span>
         </div>
       </div>
 
-      <!-- Relay Manager (#98). The full role model; lists are rendered + edited
-           by relay-manager.js from /api/v1/user/relay-lists, published via the
-           relay-list build + streaming publish endpoints. -->
-      <div
-        id="relay-manager-section"
-        class="p-6 mb-8 text-left bg-surface rounded-lg"
+      <!-- Tab bar. A small JS switcher (switchSettingsTab, defined below) toggles
+           the [data-tab-panel] sections; deep links from elsewhere land on the
+           right tab via scrollToSettingsTarget in settings.js. -->
+      <nav
+        role="tablist"
+        aria-label="Settings sections"
+        class="flex flex-wrap gap-1 p-1 mb-6 rounded-xl bg-surface"
       >
-        <h2 class="mb-1 text-xl font-semibold text-text">📡 Relays</h2>
+        <button
+          type="button"
+          role="tab"
+          data-settings-tab="relays"
+          aria-selected="true"
+          onclick="switchSettingsTab('relays')"
+          class="flex-1 min-w-[6rem] px-3 py-2 text-sm font-medium rounded-lg transition-colors bg-accent text-text-on-accent shadow-sm"
+        >
+          📡 My Relays
+        </button>
+        <button
+          type="button"
+          role="tab"
+          data-settings-tab="discovery"
+          aria-selected="false"
+          onclick="switchSettingsTab('discovery')"
+          class="flex-1 min-w-[6rem] px-3 py-2 text-sm font-medium rounded-lg transition-colors text-text-secondary hover:text-text hover:bg-surface-hover"
+        >
+          🌐 Discovery
+        </button>
+        <button
+          type="button"
+          role="tab"
+          data-settings-tab="media"
+          aria-selected="false"
+          onclick="switchSettingsTab('media')"
+          class="flex-1 min-w-[6rem] px-3 py-2 text-sm font-medium rounded-lg transition-colors text-text-secondary hover:text-text hover:bg-surface-hover"
+        >
+          🗂️ Media
+        </button>
+        <button
+          type="button"
+          role="tab"
+          data-settings-tab="security"
+          aria-selected="false"
+          onclick="switchSettingsTab('security')"
+          class="flex-1 min-w-[6rem] px-3 py-2 text-sm font-medium rounded-lg transition-colors text-text-secondary hover:text-text hover:bg-surface-hover"
+        >
+          🔐 Security
+        </button>
+        <button
+          type="button"
+          role="tab"
+          data-settings-tab="account"
+          aria-selected="false"
+          onclick="switchSettingsTab('account')"
+          class="flex-1 min-w-[6rem] px-3 py-2 text-sm font-medium rounded-lg transition-colors text-text-secondary hover:text-text hover:bg-surface-hover"
+        >
+          👤 Account
+        </button>
+      </nav>
+
+      <!-- ══ Tab: My Relays ══ Your published mailboxes + lists (#98). Rendered +
+           edited by relay-manager.js. This panel carries id relay-manager-section
+           so relay-manager.js knows the settings UI is present (its init guard). -->
+      <div
+        data-tab-panel="relays"
+        id="relay-manager-section"
+        class="p-6 text-left bg-surface rounded-lg"
+      >
+        <h2 class="mb-1 text-xl font-semibold text-text">📡 My relays</h2>
         <p class="mb-4 text-sm text-text-secondary">
           grain connects on demand under the outbox model — your mailboxes say
           where you publish and where others reach you.
         </p>
 
-        <!-- Connection overview (filled by relay-manager.js from client/status) -->
-        <div id="rm-overview" class="grid grid-cols-2 gap-2 mb-2 sm:grid-cols-4">
-          <div class="px-3 py-2 rounded-lg bg-surface-elevated">
-            <div class="text-xs text-text-secondary">Known</div>
-            <div class="text-xl font-semibold text-text">—</div>
-          </div>
+        <!-- Sub-tabs (Mailboxes / Lists / App) — switchRelaySubtab (below) toggles
+             the [data-relay-subtab-panel] sections. Lighter underline style so it
+             reads as a level below the top pill tabs. -->
+        <div
+          role="tablist"
+          aria-label="Relay types"
+          class="flex gap-1 mb-4 border-b border-border"
+        >
+          <button type="button" role="tab" data-relay-subtab="mailboxes" aria-selected="true" onclick="switchRelaySubtab('mailboxes')" class="px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px border-accent text-accent">✉ Mailboxes</button>
+          <button type="button" role="tab" data-relay-subtab="lists" aria-selected="false" onclick="switchRelaySubtab('lists')" class="px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px border-transparent text-text-secondary hover:text-text">📋 Lists</button>
+          <button type="button" role="tab" data-relay-subtab="app" aria-selected="false" onclick="switchRelaySubtab('app')" class="px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px border-transparent text-text-secondary hover:text-text">⚙ App</button>
         </div>
 
-        <!-- ── Public (NIP-65 / NIP-17) ── -->
-        <h3
-          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
-        >
-          Public · others can read these
-        </h3>
+        <!-- Shared autocomplete source for every "add a relay" input — populated
+             from the known set by relay-manager.js. Kept outside the sub-panels so
+             it resolves no matter which sub-tab is showing. -->
+        <datalist id="rm-known-options"></datalist>
+
+        <!-- ── Sub-tab: Mailboxes (NIP-65 outbox/inbox + NIP-17 DM) ── -->
+        <div data-relay-subtab-panel="mailboxes">
+          <p class="mb-3 text-xs text-text-muted">
+            Public · others read these to find your notes and reach you.
+          </p>
 
         <div class="mt-3">
           <div class="flex items-center gap-2">
@@ -119,12 +179,15 @@
           <p id="rm-dm-status" class="mt-1 text-xs text-right text-text-secondary"></p>
         </div>
 
-        <!-- ── Your lists (NIP-51 / NIP-37) ── -->
-        <h3
-          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
-        >
-          Your lists
-        </h3>
+        </div>
+        <!-- /Mailboxes sub-panel -->
+
+        <!-- ── Sub-tab: Lists (NIP-51 / NIP-37) ── -->
+        <div data-relay-subtab-panel="lists" class="hidden">
+          <p class="mb-3 text-xs text-text-muted">
+            Your curated relay preferences — search, favorites, blocks, and your
+            private list.
+          </p>
 
         <div class="mt-3">
           <div class="flex items-center gap-2">
@@ -190,31 +253,84 @@
           <p id="rm-private-status" class="mt-1 text-xs text-right text-text-secondary"></p>
         </div>
 
-        <!-- ── App relays (local config) ── -->
-        <h3
-          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
-        >
-          App relays · grain's plumbing
-        </h3>
-        <div id="rm-app-relays" class="space-y-3"></div>
+        </div>
+        <!-- /Lists sub-panel -->
 
-        <!-- ── NIP-42 AUTH requests (was "Trusted") ── -->
-        <h3
-          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
-        >
-          Relays requesting AUTH · NIP-42
-        </h3>
-        <p class="mb-2 text-xs text-text-muted">
-          Relays that asked grain to authenticate this session. Authenticate with
-          your signer to use them — each stays trusted until you remove it or your
-          session ends. If a relay re-challenges, your signer prompts you again.
+        <!-- ── Sub-tab: App (plumbing + advanced overrides) ── -->
+        <div data-relay-subtab-panel="app" class="hidden">
+          <p class="mb-3 text-xs text-text-muted">
+            grain's plumbing — the seed and broadcast relays it routes through,
+            plus advanced overrides.
+          </p>
+          <div id="rm-app-relays" class="space-y-3"></div>
+
+        <!-- Fixed-relay override -->
+        <div class="p-4 mt-6 border rounded-lg border-warning bg-warning-dim">
+          <label class="flex items-center justify-between gap-3 cursor-pointer">
+            <span class="text-sm font-medium text-warning">⚠ Fixed relays (advanced)</span>
+            <input id="rm-fixed-toggle" type="checkbox" onchange="rmToggleFixed()" />
+          </label>
+          <p class="mt-1 text-xs text-warning">
+            Read from / write to one fixed set only. <span class="font-semibold">Turns off the outbox model</span> — your replies won't reach others' inboxes. Off by default; not recommended.
+          </p>
+          <div id="rm-fixed-inputs" class="hidden mt-3 space-y-2">
+            <textarea id="rm-fixed-read" rows="2" placeholder="Read relays — one per line" class="w-full px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"></textarea>
+            <textarea id="rm-fixed-write" rows="2" placeholder="Write relays — one per line" class="w-full px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"></textarea>
+            <button onclick="rmApplyFixed()" class="px-4 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">Apply fixed relays</button>
+          </div>
+          <p id="rm-fixed-status" class="mt-1 text-xs text-warning"></p>
+        </div>
+        </div>
+        <!-- /App sub-panel -->
+      </div>
+
+      <!-- ══ Tab: Discovery ══ NIP-66 monitor exposure (#104) + the known-relays
+           browser. Overview/stats/known list are all filled by relay-manager.js. -->
+      <div
+        data-tab-panel="discovery"
+        class="hidden p-6 text-left bg-surface rounded-lg"
+      >
+        <h2 class="mb-1 text-xl font-semibold text-text">🌐 Discovery</h2>
+        <p class="mb-4 text-sm text-text-secondary">
+          grain finds relays through <span class="font-medium text-text">NIP-66 monitors</span> —
+          services that publish which relays are up, where they are, and what they
+          require. It cross-checks their reports and keeps the healthy ones.
         </p>
-        <div id="rm-auth-list" class="space-y-1.5"></div>
-        <p id="rm-auth-status" class="mt-1 text-xs text-text-secondary"></p>
 
-        <!-- Shared autocomplete source for every "add a relay" input above —
-             populated from the known set by relay-manager.js. -->
-        <datalist id="rm-known-options"></datalist>
+        <!-- Monitor consensus stats + on-demand refresh -->
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <h3 class="text-xs font-medium tracking-wide uppercase text-text-secondary">
+            Monitor consensus
+          </h3>
+          <button
+            id="rm-discover-btn"
+            onclick="rmRefreshDiscovery()"
+            class="px-3 py-1.5 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover disabled:opacity-60"
+            title="Query monitors for their latest relay sets now"
+          >
+            🔄 Refresh discovery
+          </button>
+        </div>
+        <div id="rm-discovery-stats" class="grid grid-cols-3 gap-2">
+          <div class="px-3 py-2 rounded-lg bg-surface-elevated">
+            <div class="text-xs text-text-secondary">Monitors</div>
+            <div class="text-xl font-semibold text-text">—</div>
+          </div>
+        </div>
+        <p id="rm-discover-status" class="mt-1 mb-2 text-xs text-text-secondary"></p>
+
+        <!-- Connection pool overview -->
+        <h3
+          class="pb-1.5 mt-6 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
+        >
+          Connection pool
+        </h3>
+        <div id="rm-overview" class="grid grid-cols-2 gap-2 mb-2 sm:grid-cols-4">
+          <div class="px-3 py-2 rounded-lg bg-surface-elevated">
+            <div class="text-xs text-text-secondary">Known</div>
+            <div class="text-xl font-semibold text-text">—</div>
+          </div>
+        </div>
 
         <!-- ── Known relays (browse + add) — accent card so it stands apart ── -->
         <div class="p-4 mt-6 border rounded-xl border-accent bg-accent-dim">
@@ -260,29 +376,17 @@
           </div>
           <div id="rm-known-list" class="space-y-1.5 overflow-y-auto max-h-96"></div>
         </div>
-
-        <!-- Fixed-relay override -->
-        <div class="p-4 mt-6 border rounded-lg border-warning bg-warning-dim">
-          <label class="flex items-center justify-between gap-3 cursor-pointer">
-            <span class="text-sm font-medium text-warning">⚠ Fixed relays (advanced)</span>
-            <input id="rm-fixed-toggle" type="checkbox" onchange="rmToggleFixed()" />
-          </label>
-          <p class="mt-1 text-xs text-warning">
-            Read from / write to one fixed set only. <span class="font-semibold">Turns off the outbox model</span> — your replies won't reach others' inboxes. Off by default; not recommended.
-          </p>
-          <div id="rm-fixed-inputs" class="hidden mt-3 space-y-2">
-            <textarea id="rm-fixed-read" rows="2" placeholder="Read relays — one per line" class="w-full px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"></textarea>
-            <textarea id="rm-fixed-write" rows="2" placeholder="Write relays — one per line" class="w-full px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"></textarea>
-            <button onclick="rmApplyFixed()" class="px-4 py-2 text-sm rounded-lg text-text bg-surface-elevated hover:bg-surface-hover">Apply fixed relays</button>
-          </div>
-          <p id="rm-fixed-status" class="mt-1 text-xs text-warning"></p>
-        </div>
       </div>
 
-      <!-- Media Servers (#83): where uploads go. The user's Blossom (kind
-           10063) + NIP-96 (kind 10096) lists, plus grain's recommended
-           quick-adds. Lists/rows are rendered by media-servers.js. -->
-      <div id="media-servers-section" class="p-6 mb-8 text-left bg-surface rounded-lg">
+      <!-- ══ Tab: Media ══ Media Servers (#83): where uploads go. The user's
+           Blossom (kind 10063) + NIP-96 (kind 10096) lists, plus grain's
+           recommended quick-adds. Rendered by media-servers.js, which keys off
+           id media-servers-section. -->
+      <div
+        data-tab-panel="media"
+        id="media-servers-section"
+        class="hidden p-6 text-left bg-surface rounded-lg"
+      >
         <h2 class="mb-1 text-xl font-semibold text-text">🗂️ Media servers</h2>
         <p class="mb-4 text-sm text-text-secondary">
           Where grain uploads your pictures and files. Add a server to upload
@@ -417,68 +521,96 @@
         </details>
       </div>
 
-      <!-- Client tag (#99) -->
-      <div class="p-6 mb-8 text-left bg-surface rounded-lg">
-        <h2 class="mb-1 text-xl font-semibold text-text">🏷️ Client tag</h2>
-        <p class="mb-3 text-sm text-text-muted">
-          When on, grain stamps a <code>client:grain</code> tag on events you
-          publish (profile, relay &amp; media lists, notes) so others can see they
-          came from grain. grain always removes other apps' client tags. Turn this
-          off to publish without any client tag.
+      <!-- ══ Tab: Security ══ NIP-42 AUTH: relays that asked grain to
+           authenticate this session. Rendered by relay-manager.js. -->
+      <div
+        data-tab-panel="security"
+        class="hidden p-6 text-left bg-surface rounded-lg"
+      >
+        <h2 class="mb-1 text-xl font-semibold text-text">🔐 Security</h2>
+        <p class="mb-4 text-sm text-text-secondary">
+          Control how grain authenticates you to relays that ask for it.
         </p>
-        <label class="flex items-center gap-3 cursor-pointer">
-          <input
-            id="client-tag-toggle"
-            type="checkbox"
-            onchange="window.grainClientTag && window.grainClientTag.set(this.checked)"
-          />
-          <span class="text-sm text-text">Stamp grain's client tag on my events</span>
-        </label>
+
+        <h3
+          class="pb-1.5 mt-2 mb-2 text-xs font-medium tracking-wide uppercase border-b text-text-secondary border-border"
+        >
+          Relays requesting AUTH · NIP-42
+        </h3>
+        <p class="mb-2 text-xs text-text-muted">
+          Relays that asked grain to authenticate this session. Authenticate with
+          your signer to use them — each stays trusted until you remove it or your
+          session ends. If a relay re-challenges, your signer prompts you again.
+        </p>
+        <div id="rm-auth-list" class="space-y-1.5"></div>
+        <p id="rm-auth-status" class="mt-1 text-xs text-text-secondary"></p>
       </div>
 
-      <!-- Key Information -->
-      <div class="p-6 mb-8 bg-surface rounded-lg">
-        <h2 class="mb-4 text-xl font-semibold text-text">
-          🔑 Key Information
-        </h2>
-        <div class="space-y-4">
-          <div class="p-4 bg-surface-elevated rounded-lg">
-            <p class="mb-1 text-sm text-text-secondary">Public Key (Hex)</p>
-            <p
-              class="font-mono text-sm text-text break-all"
-              id="settings-pubkey"
-            >
-              Loading...
-            </p>
-          </div>
-          <div class="p-4 bg-surface-elevated rounded-lg">
-            <p class="mb-1 text-sm text-text-secondary">Public Key (npub)</p>
-            <p
-              class="font-mono text-sm text-text break-all"
-              id="settings-npub"
-            >
-              Loading...
-            </p>
+      <!-- ══ Tab: Account ══ Your keys, client tag, and debug data. -->
+      <div data-tab-panel="account" class="hidden space-y-6 text-left">
+        <!-- Key Information -->
+        <div class="p-6 bg-surface rounded-lg">
+          <h2 class="mb-4 text-xl font-semibold text-text">
+            🔑 Key information
+          </h2>
+          <div class="space-y-4">
+            <div class="p-4 bg-surface-elevated rounded-lg">
+              <p class="mb-1 text-sm text-text-secondary">Public Key (Hex)</p>
+              <p
+                class="font-mono text-sm break-all text-text"
+                id="settings-pubkey"
+              >
+                Loading...
+              </p>
+            </div>
+            <div class="p-4 bg-surface-elevated rounded-lg">
+              <p class="mb-1 text-sm text-text-secondary">Public Key (npub)</p>
+              <p
+                class="font-mono text-sm break-all text-text"
+                id="settings-npub"
+              >
+                Loading...
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Debug Information -->
-      <details class="mb-8">
-        <summary class="text-text-secondary cursor-pointer hover:text-text">
-          🔍 Debug Information
-        </summary>
-        <div class="p-4 mt-3 bg-surface rounded-lg">
-          <pre
-            id="debug-data"
-            class="overflow-auto text-xs text-text-secondary max-h-64"
-          ></pre>
+        <!-- Client tag (#99) -->
+        <div class="p-6 bg-surface rounded-lg">
+          <h2 class="mb-1 text-xl font-semibold text-text">🏷️ Client tag</h2>
+          <p class="mb-3 text-sm text-text-muted">
+            When on, grain stamps a <code>client:grain</code> tag on events you
+            publish (profile, relay &amp; media lists, notes) so others can see they
+            came from grain. grain always removes other apps' client tags. Turn this
+            off to publish without any client tag.
+          </p>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              id="client-tag-toggle"
+              type="checkbox"
+              onchange="window.grainClientTag && window.grainClientTag.set(this.checked)"
+            />
+            <span class="text-sm text-text">Stamp grain's client tag on my events</span>
+          </label>
         </div>
-      </details>
+
+        <!-- Debug Information -->
+        <details class="p-6 bg-surface rounded-lg">
+          <summary class="cursor-pointer text-text-secondary hover:text-text">
+            🔍 Debug information
+          </summary>
+          <div class="p-4 mt-3 rounded-lg bg-surface-elevated">
+            <pre
+              id="debug-data"
+              class="overflow-auto text-xs text-text-secondary max-h-64"
+            ></pre>
+          </div>
+        </details>
+      </div>
 
       <div id="error-content" class="hidden text-center">
         <div
-          class="px-6 py-4 text-danger bg-danger-dim border border-danger rounded-lg"
+          class="px-6 py-4 border rounded-lg text-danger bg-danger-dim border-danger"
         >
           <h2 class="mb-2 text-xl font-bold">❌ Settings Error</h2>
           <p id="error-message">Failed to load settings data</p>
@@ -502,6 +634,49 @@
   <script src="/static/js/relay-manager.js"></script>
   <script src="/static/js/media-servers.js"></script>
   <script>
+    // Tab switcher for the settings sections. Sets the full className on each
+    // tab button (no partial toggling) and shows the matching [data-tab-panel].
+    (function () {
+      var BASE =
+        "flex-1 min-w-[6rem] px-3 py-2 text-sm font-medium rounded-lg transition-colors ";
+      var ON = "bg-accent text-text-on-accent shadow-sm";
+      var OFF = "text-text-secondary hover:text-text hover:bg-surface-hover";
+      window.switchSettingsTab = function (name) {
+        document.querySelectorAll("[data-settings-tab]").forEach(function (t) {
+          var on = t.getAttribute("data-settings-tab") === name;
+          t.className = BASE + (on ? ON : OFF);
+          t.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        document.querySelectorAll("[data-tab-panel]").forEach(function (p) {
+          p.classList.toggle(
+            "hidden",
+            p.getAttribute("data-tab-panel") !== name
+          );
+        });
+      };
+    })();
+
+    // Sub-tab switcher for the relay types inside My Relays (Mailboxes / Lists /
+    // App). Underline style — a level below the top pill tabs.
+    (function () {
+      var BASE = "px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ";
+      var ON = "border-accent text-accent";
+      var OFF = "border-transparent text-text-secondary hover:text-text";
+      window.switchRelaySubtab = function (name) {
+        document.querySelectorAll("[data-relay-subtab]").forEach(function (t) {
+          var on = t.getAttribute("data-relay-subtab") === name;
+          t.className = BASE + (on ? ON : OFF);
+          t.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        document.querySelectorAll("[data-relay-subtab-panel]").forEach(function (p) {
+          p.classList.toggle(
+            "hidden",
+            p.getAttribute("data-relay-subtab-panel") !== name
+          );
+        });
+      };
+    })();
+
     // Safe initialization that waits for both DOM and script to be ready
     function safeInitializeSettings() {
       // Check if the settings.js file has loaded and the function exists

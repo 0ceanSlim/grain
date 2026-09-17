@@ -972,16 +972,97 @@
       .catch(() => {});
   }
 
+  // Discovery-tab stats strip: NIP-66 monitors known + distinct relays they've
+  // reported. Separate from the pool overview so the Discovery tab can headline
+  // the monitor story ("N monitors → M relays reported → K browsable").
+  function refreshDiscoveryStats() {
+    const box = document.getElementById("rm-discovery-stats");
+    if (!box) return;
+    fetch("/api/v1/client/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (!s || !s.initialized) return;
+        const cells = [
+          ["Monitors", s.pool_monitors || 0, "text-info", "NIP-66 relay monitors grain currently trusts"],
+          ["Relays reported", s.pool_discovered || 0, "text-text", "Distinct relays those monitors have reported"],
+          ["Browsable", s.pool_browsable != null ? s.pool_browsable : 0, "text-success", "Relays available in the browser below"],
+        ];
+        box.innerHTML = cells
+          .map(
+            ([l, v, c, t]) =>
+              `<div class="px-3 py-2 rounded-lg bg-surface-elevated" title="${esc(t)}"><div class="text-xs text-text-secondary">${l}</div>` +
+              `<div class="text-xl font-semibold ${c}">${v}</div></div>`
+          )
+          .join("");
+      })
+      .catch(() => {});
+  }
+
+  // Load (or reload) the known-relays browser set. Shared by init and the
+  // Discovery tab's "Refresh" button.
+  function loadKnown() {
+    renderKnown(); // spinner while (re)loading
+    return fetch("/api/v1/client/known-relays")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        RM.known = Array.isArray(d) ? d : [];
+        RM.knownMap = {};
+        RM.known.forEach(
+          (k) => (RM.knownMap[k.url] = { connected: k.connected, pinned: k.pinned })
+        );
+        RM.knownLoaded = true;
+        populateKnownDatalist(); // autocomplete source for every add-relay input
+        renderKnown();
+        renderAll(); // in-list rows now pick up their status dots
+      })
+      .catch(() => {
+        RM.knownLoaded = true;
+        renderKnown();
+      });
+  }
+
+  // Discovery tab: run a NIP-66 discovery pass on demand, then refresh the
+  // stats + the known list so newly found relays surface without a page reload.
+  window.rmRefreshDiscovery = function () {
+    const btn = document.getElementById("rm-discover-btn");
+    if (btn) {
+      btn.disabled = true;
+      btn.dataset.label = btn.dataset.label || btn.textContent;
+      btn.textContent = "Discovering…";
+    }
+    setStatus("rm-discover-status", "Querying monitors for their relay sets…");
+    fetch("/api/v1/client/discover", { method: "POST" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status))))
+      .then((d) => {
+        setStatus(
+          "rm-discover-status",
+          `${d.monitors} monitor(s) · ${d.discovered} relays reported · ${d.browsable} browsable.`
+        );
+        refreshDiscoveryStats();
+        refreshOverview();
+        return loadKnown();
+      })
+      .catch(() => setStatus("rm-discover-status", "Discovery failed — try again."))
+      .finally(() => {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = btn.dataset.label || "🔄 Refresh discovery";
+        }
+      });
+  };
+
   function init() {
     if (!document.getElementById("relay-manager-section")) return;
     renderApp();
     renderAll(); // spinners while loaded === false
     refreshOverview();
+    refreshDiscoveryStats();
     renderAuth(); // initial spinner
     rmAuthRefresh();
     if (window.__rmOverviewTimer) clearInterval(window.__rmOverviewTimer);
     window.__rmOverviewTimer = setInterval(() => {
       refreshOverview();
+      refreshDiscoveryStats();
       rmAuthRefresh(); // AUTH challenges arrive async during pool activity
     }, 5000);
 
@@ -1026,24 +1107,7 @@
         renderApp();
       });
 
-    renderKnown(); // initial spinner
-    fetch("/api/v1/client/known-relays")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        RM.known = Array.isArray(d) ? d : [];
-        RM.knownMap = {};
-        RM.known.forEach(
-          (k) => (RM.knownMap[k.url] = { connected: k.connected, pinned: k.pinned })
-        );
-        RM.knownLoaded = true;
-        populateKnownDatalist(); // autocomplete source for every add-relay input
-        renderKnown();
-        renderAll(); // in-list rows now pick up their status dots
-      })
-      .catch(() => {
-        RM.knownLoaded = true;
-        renderKnown();
-      });
+    loadKnown();
   }
 
   // Live-sync (#87): when one of our relay lists changes — here or in another
