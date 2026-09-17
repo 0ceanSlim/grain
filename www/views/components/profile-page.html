@@ -113,6 +113,16 @@
           >
             ⚙️ Advanced
           </button>
+          <!-- Owner-only: ban this author (adds to the relay blacklist via
+               NIP-86 banpubkey). Revealed by profile-page.js checkAdmin(). -->
+          <button
+            id="profile-ban-btn"
+            onclick="banAuthor()"
+            class="hidden px-4 py-2 text-sm transition-colors rounded-lg text-text-on-accent bg-danger hover:opacity-90"
+            title="Add this author to the relay blacklist (relay owner only)"
+          >
+            🚫 Ban
+          </button>
         </div>
         <p id="profile-save-status" class="mt-2 text-sm text-text-secondary"></p>
 
@@ -248,4 +258,5 @@
   </div>
 </div>
 <script src="/static/js/nostr-publish.js"></script>
+<script src="/static/js/nip86-submit.js"></script>
 <script src="/static/js/profile-page.js"></script>

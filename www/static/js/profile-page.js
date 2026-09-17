@@ -145,6 +145,7 @@
     // if this is the logged-in user's own profile.
     profileData.content = profileContent;
     checkOwnProfile();
+    checkAdmin();
 
     console.log("Profile component display complete");
   }
@@ -500,6 +501,60 @@
       /* not logged in — leave the Edit buttons hidden */
     }
   }
+
+  // Reveal the owner-only "Ban" button when the logged-in user is this relay's
+  // owner (NIP-11 `pubkey`) and is NOT viewing their own profile. The ban itself
+  // is a NIP-86 banpubkey call that the relay independently authorizes as
+  // owner-only — this check only governs whether the button is shown.
+  async function checkAdmin() {
+    try {
+      const [sessR, infoR] = await Promise.all([
+        fetch("/api/v1/session", { cache: "no-store" }),
+        fetch("/", { headers: { Accept: "application/nostr+json" } }),
+      ]);
+      if (!sessR.ok || !infoR.ok) return;
+      const sess = await sessR.json();
+      const info = await infoR.json();
+      const me = ((sess && sess.publicKey) || "").toLowerCase();
+      const owner = ((info && info.pubkey) || "").toLowerCase();
+      const target = (profileData.pubkey || "").toLowerCase();
+      if (me && owner && me === owner && target && target !== owner) {
+        showElement("profile-ban-btn");
+      }
+    } catch (_) {
+      /* not owner / not logged in — leave the Ban button hidden */
+    }
+  }
+
+  window.banAuthor = async function () {
+    const pk = profileData.pubkey;
+    if (!pk) return;
+    const short = pk.slice(0, 8) + "…" + pk.slice(-4);
+    if (
+      !window.confirm(
+        `Ban ${short}?\n\nThey'll be added to this relay's blacklist and their events rejected. You can undo this from the admin dashboard.`
+      )
+    ) {
+      return;
+    }
+    const btn = document.getElementById("profile-ban-btn");
+    if (btn) btn.disabled = true;
+    try {
+      if (!window.grainNIP86 || typeof window.grainNIP86.submit !== "function") {
+        throw new Error("admin helper not loaded — reload the page");
+      }
+      await window.grainNIP86.submit("banpubkey", [pk, ""]);
+      showToast("Author banned");
+      if (btn) {
+        btn.textContent = "Banned";
+        btn.disabled = true;
+      }
+    } catch (err) {
+      console.error("Ban failed:", err);
+      showToast(err.message || "Ban failed", "error");
+      if (btn) btn.disabled = false;
+    }
+  };
 
   let pfEditing = false;
 
