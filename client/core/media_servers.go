@@ -15,7 +15,7 @@ const (
 type MediaServerInfo struct {
 	URL       string `json:"url"`       // normalised base URL
 	Kind      string `json:"kind"`      // MediaKindBlossom | MediaKindNIP96
-	Name      string `json:"name"`      // display name, e.g. "Happy Tavern"
+	Name      string `json:"name"`      // display name, e.g. "oslim.dev"
 	Cost      string `json:"cost"`      // "free" | "paid"
 	Retention string `json:"retention"` // "permanent" | "ephemeral"
 	Mirror    bool   `json:"mirror"`    // accepts BUD-04 /mirror (Blossom only)
@@ -25,10 +25,10 @@ type MediaServerInfo struct {
 
 // suggestedMediaServers is grain's curated quick-add list for users with no
 // media servers yet. Blossom is preferred; NIP-96 is the legacy fallback.
-// Neutral free options lead; the Happy Tavern offer is included rather than
+// Neutral free options lead; the oslim.dev offer is included rather than
 // pushed (the settings UI keeps it unobtrusive).
 //
-// Mirror support: the Happy Tavern servers are confirmed to accept BUD-04
+// Mirror support: the oslim.dev servers are confirmed to accept BUD-04
 // /mirror. The public Blossom servers are marked best-effort — BUD-04 is widely
 // supported, and a server that turns out not to accept a mirror just surfaces a
 // per-server failure in the upload toast (no data loss), so this stays
@@ -41,15 +41,15 @@ var suggestedMediaServers = []MediaServerInfo{
 		Note: "Free · ~20 MB/file · runs on nostr.build infra",
 	},
 	{
-		URL: "https://0x0.happytavern.co", Kind: MediaKindBlossom, Name: "Happy Tavern (free)",
+		URL: "https://0x0.oslim.dev", Kind: MediaKindBlossom, Name: "oslim.dev (free)",
 		Cost: "free", Retention: "ephemeral", Mirror: true,
 		Note: "Free · auto-pruned by size/age — pair as a fast primary with a permanent mirror",
 	},
 	{
-		URL: "https://blossom.happytavern.co", Kind: MediaKindBlossom, Name: "Happy Tavern (permanent)",
+		URL: "https://blossom.oslim.dev", Kind: MediaKindBlossom, Name: "oslim.dev (permanent)",
 		Cost: "paid", Retention: "permanent", Mirror: true,
-		Note: "Tavern membership · 10k sats one-time · 100 MB/file · 8 GB · kept forever",
-		CTA:  "https://happytavern.co/nostr-verified",
+		Note: "oslim.dev membership · 10k sats one-time · 100 MB/file · 8 GB · kept forever",
+		CTA:  "https://oslim.dev/nostr-verified",
 	},
 	{
 		URL: "https://blossom.primal.net", Kind: MediaKindBlossom, Name: "Primal",

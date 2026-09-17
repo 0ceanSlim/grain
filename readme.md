@@ -116,13 +116,13 @@ Full documentation lives in **[`docs/`](docs/readme.md)** — start at the **[do
 [![Overall Uptime](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F0ceanSlim%2Fupptime%2FHEAD%2Fapi%2Fwheat%2Fuptime.json)](https://0ceanSlim.github.io/upptime/history/wheat)
 [![Response Time](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2F0ceanSlim%2Fupptime%2FHEAD%2Fapi%2Fwheat%2Fresponse-time.json)](https://0ceanSlim.github.io/upptime/history/wheat)
 
-**Development Relay**: `wss://wheat.happytavern.co`
+**Development Relay**: `wss://wheat.oslim.dev`
 
 [📊 **View Detailed Status & Historical Data**](https://0ceanSlim.github.io/upptime/history/wheat)
 
-My development relay **wheat.happytavern.co** serves as the testing and demo environment for Grain. This relay helps me validate new features, test performance optimizations, and provide a platform for developers to experiment with grain. This relay routinely runs unreleased versions of grain and may contain bugs.
+My development relay **wheat.oslim.dev** serves as the testing and demo environment for Grain. This relay helps me validate new features, test performance optimizations, and provide a platform for developers to experiment with grain. This relay routinely runs unreleased versions of grain and may contain bugs.
 
-Wheat is a public nostr relay that anyone can write to and read from. Wheat will delete events from non whitelisted users periodically. You can add your npub to the whitelist by paying for a [Happy Tavern NIP05](https://happytavern.co/nostr-verified).
+Wheat is a public nostr relay that anyone can write to and read from. Wheat will delete events from non whitelisted users periodically. You can add your npub to the whitelist by paying for a [oslim.dev NIP05](https://oslim.dev/nostr-verified).
 
 *Status monitoring powered by [Upptime](https://github.com/upptime/upptime)*
 
@@ -222,7 +222,7 @@ I welcome contributions, bug reports, and feature requests via GitHub.
 
 - **🔧 Development Guide** - _[Development Documentation](docs/development/readme.md)_
 - **🧪 Testing Guide** - _[Testing Documentation](tests/readme.md)_
-- **📚 API Documentation** - Every running relay generates its own docs from the OpenAPI spec in the repo and serves Swagger UI at `/api/docs` (raw spec at `/api/docs/openapi.json`). Live example on the wheat dev relay: **[wheat.happytavern.co/api/docs](https://wheat.happytavern.co/api/docs)**. See _[docs/api.md](docs/api.md)_ for regeneration instructions.
+- **📚 API Documentation** - Every running relay generates its own docs from the OpenAPI spec in the repo and serves Swagger UI at `/api/docs` (raw spec at `/api/docs/openapi.json`). Live example on the wheat dev relay: **[wheat.oslim.dev/api/docs](https://wheat.oslim.dev/api/docs)**. See _[docs/api.md](docs/api.md)_ for regeneration instructions.
 
 These guides cover setting up your development environment, code standards, testing procedures, client library usage, and contribution workflows.
 
