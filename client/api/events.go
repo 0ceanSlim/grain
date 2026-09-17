@@ -320,6 +320,17 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 	eventMap := make(map[string]*nostr.Event)
 	timeout := time.After(8 * time.Second)
 
+	// The specific event IDs this query asked for (union across filters). An
+	// ids-based lookup — the event page's hot path — is satisfied the moment
+	// every requested id is in hand, so we return immediately instead of waiting
+	// out EOSE from every relay or the full 8s timeout.
+	wantIDs := make(map[string]struct{})
+	for _, f := range filters {
+		for _, id := range f.IDs {
+			wantIDs[id] = struct{}{}
+		}
+	}
+
 	// Track EOSE per relay so the query finishes the moment every relay has
 	// sent all its stored events, instead of always waiting out the 8s timeout.
 	// (sub.Done is only closed by sub.Close(); EOSE arrives on sub.EOSE — the
@@ -356,6 +367,23 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 				if len(eventMap) >= requestedLimit {
 					log.ClientAPI().Debug("Reached requested limit", "unique_count", len(eventMap))
 					goto sendResponse
+				}
+
+				// Return the moment every requested id is in hand — no waiting
+				// on slow/absent EOSE or the timeout. This is what makes the
+				// single-event page load feel instant instead of ~seconds.
+				if len(wantIDs) > 0 {
+					allFound := true
+					for id := range wantIDs {
+						if _, ok := eventMap[id]; !ok {
+							allFound = false
+							break
+						}
+					}
+					if allFound {
+						log.ClientAPI().Debug("All requested event IDs collected", "count", len(eventMap))
+						goto sendResponse
+					}
 				}
 			} else {
 				log.ClientAPI().Debug("Skipped duplicate event",
