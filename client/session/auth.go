@@ -184,10 +184,12 @@ func ValidateSessionRequest(req SessionInitRequest) error {
 	// Validate signing method for write mode
 	if req.RequestedMode == WriteMode {
 		validMethods := map[SigningMethod]bool{
-			BrowserExtension: true,
-			AmberSigning:     true,
-			BunkerSigning:    true,
-			EncryptedKey:     true,
+			BrowserExtension:   true,
+			AmberSigning:       true,
+			BunkerSigning:      true,
+			EncryptedKey:       true,
+			GoogleSigning:      true,
+			PomegranateSigning: true,
 		}
 
 		if !validMethods[req.SigningMethod] {

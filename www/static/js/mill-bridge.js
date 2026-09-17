@@ -34,29 +34,39 @@
     privatekey: "encrypted_key",
     newkey: "encrypted_key",
     readonly: "none",
+    // mill 1.7 Google logins. Stored under their own enum values so mill's
+    // restore aliases (google→privatekey, pomegranate→nip46) rebuild the right
+    // signer after a reload. See client/session/types.go:SigningMethod.
+    google: "google",
+    pomegranate: "pomegranate",
   };
 
   // The login-button template invokes `showAuthModal()` inline on
   // click. Keep that surface so we don't have to edit templates;
   // route it through mill.
-  // The app name shown to the user's remote signer / bunker when authorizing
-  // comes from this relay's NIP-11 `name` field, so each deployment identifies
-  // itself (e.g. "🌾 GRAIN Relay") rather than a generic label. Cached after
-  // the first fetch; pre-warmed on load so it's ready by the time the operator
-  // clicks login.
-  let relayNameCache = null;
-  async function getRelayName() {
-    if (relayNameCache !== null) return relayNameCache;
+  // The relay's NIP-11 identity (name + icon) brands the signer's custom header
+  // and the appName shown to a remote signer / bunker when authorizing, so each
+  // deployment identifies itself (e.g. "🌾 GRAIN Relay") rather than a generic
+  // label. Cached after the first fetch; pre-warmed on load so it's ready by the
+  // time the operator clicks login.
+  let relayBrandCache = null;
+  async function getRelayBrand() {
+    if (relayBrandCache !== null) return relayBrandCache;
     try {
       const r = await fetch("/", { headers: { Accept: "application/nostr+json" } });
       const info = r.ok ? await r.json() : null;
-      relayNameCache = (info && info.name) || "";
+      relayBrandCache = {
+        name: (info && info.name) || "",
+        icon: (info && info.icon) || "",
+        terms: (info && info.terms_of_service) || "",
+        privacy: (info && info.privacy_policy) || "",
+      };
     } catch (_) {
-      relayNameCache = "";
+      relayBrandCache = { name: "", icon: "", terms: "", privacy: "" };
     }
-    return relayNameCache;
+    return relayBrandCache;
   }
-  getRelayName(); // pre-warm
+  getRelayBrand(); // pre-warm
 
   async function showAuthModal() {
     if (!window.MILL) {
@@ -65,26 +75,86 @@
       );
       return;
     }
-    const appName = (await getRelayName()) || document.title || "grain";
-    const opts = {
-      // Initial paint uses mill's grain theme; the CSS bridge takes
-      // over once the element is in the DOM and renders.
+    const brand = await getRelayBrand();
+    const appName = brand.name || document.title || "grain";
+
+    // Terms / Privacy in the signer footer — only when THIS relay advertises
+    // them in its NIP-11 (terms_of_service / privacy_policy). If neither is set,
+    // we pass no footer and mill keeps its default "Signer by MILL" attribution.
+    const footerLinks = [];
+    if (brand.terms) footerLinks.push({ label: "Terms", href: brand.terms });
+    if (brand.privacy) footerLinks.push({ label: "Privacy", href: brand.privacy });
+
+    // mill 1.8 does its own platform detection (detectPlatform) and merges the
+    // matching `platforms` block over the base opts, so grain no longer sniffs
+    // the UA itself — it just declares desktop (base) + android/ios overrides.
+    window.MILL.open({
+      // Initial paint uses mill's grain theme; the CSS bridge takes over once
+      // the element is in the DOM and renders.
       theme: "grain",
+      // Grid picker (mill 1.8): the main methods render as tiles, not a list.
+      layout: "grid",
       // Name the remote signer / bunker shows when authorizing (mill >= 1.2.0).
       appName,
-      amberCallback:
-        window.location.origin + "/api/v1/auth/amber-callback",
+      amberCallback: window.location.origin + "/api/v1/auth/amber-callback",
       onConnected: handleConnected,
-    };
-    // NIP-55 (Amber) is an Android intent flow — the right same-device path
-    // on mobile, where NIP-46 over relays stalls (the backgrounded signer
-    // never foregrounds to approve). mill hides nip55 by default; surface it
-    // explicitly on Android, listed first. Passing `methods` overrides mill's
-    // default list, so we restate the full set rather than just adding one.
-    if (/android/i.test(navigator.userAgent)) {
-      opts.methods = ["nip55", "nip46", "privatekey", "newkey", "readonly"];
-    }
-    window.MILL.open(opts);
+
+      // Custom, relay-branded header (mill 1.8 per-field brand header). Title
+      // comes from THIS relay's NIP-11 name, and the logo appears ONLY when the
+      // relay advertises an image `icon` — so an operator brands the signer by
+      // editing their relay's name/icon in admin, not by forking. No emoji logo
+      // or eyebrow fallback (both `false` = hidden), so an unbranded relay shows
+      // a clean name + message with no mill/grain defaults leaking in.
+      header: {
+        logo: brand.icon || false,
+        logoHeight: brand.icon ? 40 : undefined,
+        eyebrow: false,
+        title: appName,
+        message: "Choose how to connect your Nostr identity.",
+        align: "center",
+      },
+
+      // "Google — Secure login" (pomegranate/FROST) via the default njump
+      // ecosystem operators (auth.njump.me + four operators, 3-of-4). We never
+      // set the <nostr-signer> `oauth-shim` attribute, so mill's other Google
+      // path (Drive+PIN, method id `google`) stays hidden — that's the PIN
+      // login we deliberately don't expose.
+      pomegranate: true,
+
+      // "New Identity" pinned to the top as a separated callout; with
+      // pomegranate on it opens the "Continue with Google / generate keys"
+      // chooser.
+      callout: "newkey",
+
+      // Drop mill's default footer tip ("NIP-07 browser extension is
+      // recommended") — off-message when grain leads with Google. Operators can
+      // set their own via config (see the signer-branding work).
+      tip: false,
+
+      // Relay's Terms / Privacy links, surfaced only when its NIP-11 advertises
+      // them. Omitted entirely otherwise (keeps mill's default footer).
+      footer: footerLinks.length ? { links: footerLinks } : undefined,
+
+      // Desktop is the base layout: Google + browser extension as the two main
+      // tiles, everything else tucked under a collapsed "More options" section
+      // (mill 1.8). The per-platform blocks rearrange the mains; `google`
+      // (Drive+PIN) is never listed, so the PIN login stays out of both.
+      methods: ["pomegranate", "nip07"],
+      moreMethods: ["nip46", "privatekey", "readonly"],
+      platforms: {
+        // Android: Google + Amber (NIP-55 intent — the right same-device path,
+        // where NIP-46 over relays stalls on the backgrounded signer).
+        android: {
+          methods: ["pomegranate", "nip55"],
+          moreMethods: ["nip46", "privatekey", "readonly"],
+        },
+        // iOS: Google + Private key (no NIP-07 extensions in iOS browsers).
+        ios: {
+          methods: ["pomegranate", "privatekey"],
+          moreMethods: ["nip46", "readonly"],
+        },
+      },
+    });
   }
 
   function hideAuthModal() {

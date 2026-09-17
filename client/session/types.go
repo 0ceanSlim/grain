@@ -26,6 +26,12 @@ const (
 	BunkerSigning SigningMethod = "bunker"
 	// EncryptedKey uses an encrypted private key stored in session
 	EncryptedKey SigningMethod = "encrypted_key"
+	// GoogleSigning uses mill's Google "Cloud login" (Drive + PIN); mill rebuilds
+	// a private-key signer from the cloud-recovered key on restore.
+	GoogleSigning SigningMethod = "google"
+	// PomegranateSigning uses mill's Google "Secure login" (pomegranate/FROST),
+	// which connects a NIP-46 bunker; mill restores it from stored bunker state.
+	PomegranateSigning SigningMethod = "pomegranate"
 	// NoSigning for read-only mode
 	NoSigning SigningMethod = "none"
 )
