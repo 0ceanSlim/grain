@@ -121,9 +121,11 @@
       // login we deliberately don't expose.
       pomegranate: true,
 
-      // "New Identity" pinned to the top as a separated callout; with
-      // pomegranate on it opens the "Continue with Google / generate keys"
-      // chooser.
+      // "I'm new here" pinned to the top as a separated callout. mill pulls the
+      // `newkey` method OUT of the tiles into this card — so `newkey` must be
+      // present in the methods list below (an explicit list that omits it means
+      // the callout can't resolve and silently doesn't render). With pomegranate
+      // on, tapping it opens the "Continue with Google / generate keys" chooser.
       callout: "newkey",
 
       // Drop mill's default footer tip ("NIP-07 browser extension is
@@ -135,22 +137,24 @@
       // them. Omitted entirely otherwise (keeps mill's default footer).
       footer: footerLinks.length ? { links: footerLinks } : undefined,
 
-      // Desktop is the base layout: Google + browser extension as the two main
-      // tiles, everything else tucked under a collapsed "More options" section
-      // (mill 1.8). The per-platform blocks rearrange the mains; `google`
-      // (Drive+PIN) is never listed, so the PIN login stays out of both.
-      methods: ["pomegranate", "nip07"],
+      // Base layout: the "I'm new here" callout (newkey, pulled to the top card)
+      // + Google + browser extension as the main tiles, everything else under a
+      // collapsed "More options" section (mill 1.8). `newkey` is listed so the
+      // callout can resolve it; mill separates it out, so it's NOT also a tile.
+      // The per-platform blocks rearrange the mains; `google` (Drive+PIN) is
+      // never listed, so the PIN login stays out of both.
+      methods: ["newkey", "pomegranate", "nip07"],
       moreMethods: ["nip46", "privatekey", "readonly"],
       platforms: {
-        // Android: Google + Amber (NIP-55 intent — the right same-device path,
-        // where NIP-46 over relays stalls on the backgrounded signer).
+        // Android: I'm-new-here + Google + Amber (NIP-55 intent — the right
+        // same-device path, where NIP-46 over relays stalls on a backgrounded signer).
         android: {
-          methods: ["pomegranate", "nip55"],
+          methods: ["newkey", "pomegranate", "nip55"],
           moreMethods: ["nip46", "privatekey", "readonly"],
         },
-        // iOS: Google + Private key (no NIP-07 extensions in iOS browsers).
+        // iOS: I'm-new-here + Google + Private key (no NIP-07 extensions in iOS browsers).
         ios: {
-          methods: ["pomegranate", "privatekey"],
+          methods: ["newkey", "pomegranate", "privatekey"],
           moreMethods: ["nip46", "readonly"],
         },
       },
