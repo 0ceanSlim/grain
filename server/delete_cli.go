@@ -48,7 +48,11 @@ func DeleteEvents(ids []string) error {
 	}
 
 	fmt.Printf("Opening database at %s...\n", dbPath)
-	db, err := nostrdb.Open(dbPath, mapSizeMB, 1)
+	db, err := nostrdb.OpenWithOptions(dbPath, nostrdb.Options{
+		MapSizeMB:     mapSizeMB,
+		IngestThreads: 1,
+		FulltextKinds: cfg.Database.FulltextKinds,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to open nostrdb: %w", err)
 	}

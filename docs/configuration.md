@@ -208,6 +208,7 @@ GRAIN uses an embedded [nostrdb](https://github.com/damus-io/nostrdb) (LMDB-base
 database:
   path: "data"      # Directory for nostrdb data files, relative to the GRAIN data dir
   map_size_mb: 4096 # Maximum database size in MB (LMDB memory map; 4GB default)
+  # fulltext_kinds: [0, 1, 30023] # Kinds indexed for NIP-50 search (this is the default)
 ```
 
 The data directory is platform-native by default:
@@ -219,6 +220,8 @@ The data directory is platform-native by default:
 Override with the `--data-dir <path>` CLI flag or `GRAIN_DATA_DIR` environment variable.
 
 `map_size_mb` sets the LMDB map size ceiling — it is a reservation of address space, not a pre-allocation on disk. Raise it before the database fills up; the process must restart to pick up a new value. Migrating from a v0.4.x MongoDB deployment? Use the `--import` CLI flag to bulk-load legacy exports into nostrdb.
+
+`fulltext_kinds` lists the event kinds whose `content` is tokenized into the NIP-50 search index. The default covers profile metadata (0), text notes (1) and long-form articles (30023); relays hosting apps with their own kinds can add them here (up to 64). The index is built at write time, so a change only affects events stored after the next restart — earlier events of a newly added kind stay unsearchable, and removing a kind leaves its existing rows in place. An explicit empty list (`fulltext_kinds: []`) disables the text index; `search` filters then return nothing.
 
 ### Client Configuration
 

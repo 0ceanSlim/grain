@@ -18,6 +18,10 @@ type LogConfig struct {
 type DatabaseConfig struct {
 	Path      string `yaml:"path" json:"path"`               // Directory for nostrdb data files (default: ./data)
 	MapSizeMB int    `yaml:"map_size_mb" json:"map_size_mb"` // Max database size in MB (default: 4096 = 4GB)
+	// Kinds whose content is tokenized for NIP-50 search. Omitted = 0, 1,
+	// 30023. An explicit empty list disables the text index. Only affects
+	// events stored after the change; restart to apply.
+	FulltextKinds []int `yaml:"fulltext_kinds,omitempty" json:"fulltext_kinds,omitempty"`
 }
 
 // ServerSettings is the HTTP server block (timeouts, connection

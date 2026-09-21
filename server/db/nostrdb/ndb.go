@@ -34,25 +34,73 @@ const (
 	FlagSkipNoteVerify = 1 << 1
 )
 
+// DefaultFulltextKinds is the kind set grain indexes for NIP-50 search
+// when config.yml doesn't say otherwise: profile metadata, text notes
+// and long-form articles.
+var DefaultFulltextKinds = []int{0, 1, 30023}
+
+// MaxFulltextKinds mirrors NDB_MAX_FULLTEXT_KINDS in nostrdb.h.
+const MaxFulltextKinds = 64
+
+// Options carries everything Open needs beyond the directory.
+type Options struct {
+	MapSizeMB     int   // LMDB map ceiling in MB
+	IngestThreads int   // 0 = nostrdb's default (one per core)
+	Flags         int   // ndb_config_set_flags bitmask (FlagSkipNoteVerify, ...)
+	FulltextKinds []int // kinds tokenized for NIP-50 search; nil = DefaultFulltextKinds
+}
+
 // Open initializes a new nostrdb database at the given directory path.
 // mapSizeMB sets the maximum database size in megabytes (LMDB map size).
 // ingestThreads controls how many threads nostrdb uses to process incoming events.
 func Open(dbDir string, mapSizeMB int, ingestThreads int) (*NDB, error) {
-	return OpenWithFlags(dbDir, mapSizeMB, ingestThreads, 0)
+	return OpenWithOptions(dbDir, Options{MapSizeMB: mapSizeMB, IngestThreads: ingestThreads})
 }
 
 // OpenWithFlags is like Open but forwards an ndb_config_set_flags bitmask to
 // nostrdb. Use FlagSkipNoteVerify for trusted-source bulk imports.
 func OpenWithFlags(dbDir string, mapSizeMB int, ingestThreads int, flags int) (*NDB, error) {
+	return OpenWithOptions(dbDir, Options{MapSizeMB: mapSizeMB, IngestThreads: ingestThreads, Flags: flags})
+}
+
+// OpenWithOptions opens (or creates) the database at dbDir.
+//
+// FulltextKinds only governs notes written from now on: nostrdb neither
+// backfills nor prunes the text index when the set changes, so widening it
+// on a populated relay only makes new events of the added kinds searchable.
+func OpenWithOptions(dbDir string, o Options) (*NDB, error) {
 	var cfg C.struct_ndb_config
 	C.ndb_default_config(&cfg)
-	C.ndb_config_set_mapsize(&cfg, C.size_t(mapSizeMB*1024*1024))
+	C.ndb_config_set_mapsize(&cfg, C.size_t(o.MapSizeMB*1024*1024))
 
-	if ingestThreads > 0 {
-		C.ndb_config_set_ingest_threads(&cfg, C.int(ingestThreads))
+	if o.IngestThreads > 0 {
+		C.ndb_config_set_ingest_threads(&cfg, C.int(o.IngestThreads))
 	}
-	if flags != 0 {
-		C.ndb_config_set_flags(&cfg, C.int(flags))
+	if o.Flags != 0 {
+		C.ndb_config_set_flags(&cfg, C.int(o.Flags))
+	}
+
+	kinds := o.FulltextKinds
+	if kinds == nil {
+		kinds = DefaultFulltextKinds
+	}
+	if len(kinds) > MaxFulltextKinds {
+		return nil, fmt.Errorf("fulltext_kinds lists %d kinds, nostrdb supports at most %d", len(kinds), MaxFulltextKinds)
+	}
+	if len(kinds) > 0 {
+		ckinds := make([]C.uint64_t, len(kinds))
+		for i, k := range kinds {
+			if k < 0 {
+				return nil, fmt.Errorf("fulltext_kinds: kind %d is negative", k)
+			}
+			ckinds[i] = C.uint64_t(k)
+		}
+		if C.ndb_config_set_fulltext_kinds(&cfg, &ckinds[0], C.int(len(ckinds))) == 0 {
+			return nil, fmt.Errorf("ndb_config_set_fulltext_kinds rejected %d kinds", len(ckinds))
+		}
+	} else {
+		// an explicit empty list disables the text index entirely
+		C.ndb_config_set_fulltext_kinds(&cfg, nil, 0)
 	}
 
 	cDir := C.CString(dbDir)
@@ -66,8 +114,9 @@ func OpenWithFlags(dbDir string, mapSizeMB int, ingestThreads int, flags int) (*
 
 	log.DB().Info("nostrdb opened",
 		"path", dbDir,
-		"map_size_mb", mapSizeMB,
-		"ingest_threads", ingestThreads)
+		"map_size_mb", o.MapSizeMB,
+		"ingest_threads", o.IngestThreads,
+		"fulltext_kinds", kinds)
 
 	return &NDB{ndb: ndb, expiration: newExpirationTracker()}, nil
 }

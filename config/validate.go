@@ -20,6 +20,14 @@ func ValidateAndApplyDefaults(cfg *cfgType.ServerConfig) (warnings []string, err
 		cfg.Database.MapSizeMB = 4096
 		warnings = append(warnings, "database.map_size_mb was 0, defaulting to 4096 (4 GB)")
 	}
+	// database.fulltext_kinds: nil means "not set" and nostrdb.Open applies
+	// its default; an explicit empty list is a deliberate opt-out, so it is
+	// left alone. Only the values need checking here.
+	for _, k := range cfg.Database.FulltextKinds {
+		if k < 0 || k > 65535 {
+			return warnings, fmt.Errorf("database.fulltext_kinds: %d is not a valid event kind (0-65535)", k)
+		}
+	}
 
 	// Server defaults
 	if cfg.Server.Port == "" {

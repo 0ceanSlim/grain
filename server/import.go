@@ -64,7 +64,14 @@ func ImportEvents(filename string) error {
 
 	fmt.Printf("Importing into %s\n\n", dbPath)
 
-	db, err := nostrdb.OpenWithFlags(dbPath, mapSizeMB, 1, nostrdb.FlagSkipNoteVerify)
+	// same fulltext kind set as the server, so imported events are
+	// searchable exactly as if they had arrived over the wire
+	db, err := nostrdb.OpenWithOptions(dbPath, nostrdb.Options{
+		MapSizeMB:     mapSizeMB,
+		IngestThreads: 1,
+		Flags:         nostrdb.FlagSkipNoteVerify,
+		FulltextKinds: cfg.Database.FulltextKinds,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to open nostrdb: %w", err)
 	}

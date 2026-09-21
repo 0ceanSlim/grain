@@ -25,9 +25,9 @@ const maxTextSearchResults = 128
 // query string is passed as a separate argument to ndb_text_search_with.
 //
 // Result ordering is descending by created_at (newest-first), matching
-// the rest of grain's read paths. nostrdb only indexes content for
-// kinds 1 and 30023 — searches that filter to other kinds will return
-// nothing even if matching content exists in the DB.
+// the rest of grain's read paths. Only kinds in database.fulltext_kinds
+// (default: 0, 1, 30023) carry a text index — searches that filter to
+// other kinds return nothing even if matching content exists in the DB.
 func (txn *Txn) TextSearch(query string, base nostr.Filter, limit int) ([]nostr.Event, error) {
 	if query == "" {
 		return nil, nil

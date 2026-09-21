@@ -40,6 +40,11 @@ database:
   # above expected size so writes never hit the wall — a full map silently
   # drops events. 65536 = 64 GB.
   map_size_mb: 65536
+  # Kinds whose content is tokenized for NIP-50 search. Omit for the
+  # default (0 profiles, 1 text notes, 30023 long-form); list the kinds
+  # your apps search on. Only events stored after the change are indexed,
+  # and a restart is needed to apply it. An empty list disables search.
+  # fulltext_kinds: [0, 1, 30023]
 
 # Client configuration for the built-in Nostr client
 client:

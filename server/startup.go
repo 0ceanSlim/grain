@@ -184,7 +184,11 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 		return
 	}
 
-	db, err := nostrdb.Open(dbPath, mapSizeMB, 4)
+	db, err := nostrdb.OpenWithOptions(dbPath, nostrdb.Options{
+		MapSizeMB:     mapSizeMB,
+		IngestThreads: 4,
+		FulltextKinds: cfg.Database.FulltextKinds,
+	})
 	dbAvailable := err == nil
 	if err != nil {
 		log.Startup().Error("Failed to open nostrdb", "path", dbPath, "error", err)
