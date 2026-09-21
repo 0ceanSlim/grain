@@ -165,6 +165,14 @@ func registerCoreClientEndpoints(mux *http.ServeMux) {
 
 	// Event querying endpoints
 	mux.HandleFunc("/api/v1/events/query", api.QueryEventsHandler)
+	// Outbox-aware single-event resolver (event view). No method in the pattern:
+	// Go 1.22's ServeMux treats "GET /api/v1/events/{id}" as CONFLICTING with the
+	// method-less "/api/v1/events/query" (one wins on method, the other on path —
+	// neither is strictly more specific → panic at registration). Method-less, the
+	// literal "query"/"publish" patterns are strictly more specific and win; "{id}"
+	// catches the rest. The handler enforces GET itself. Escalates local → outbox
+	// → hints → discovered.
+	mux.HandleFunc("/api/v1/events/{id}", api.ResolveEventHandler)
 	mux.HandleFunc("/api/v1/events/publish", api.PublishSignedHandler)
 	mux.HandleFunc("/api/v1/events/publish/stream", api.PublishSignedStreamHandler)
 

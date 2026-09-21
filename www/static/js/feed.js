@@ -81,6 +81,7 @@
 
   function connect() {
     closeWs();
+    clearReconnect();
     const box = document.getElementById("relay-stream-list");
     if (!box) return;
     attachScroll(box);
@@ -125,10 +126,14 @@
       }
     };
     sock.onclose = function () {
-      // Reconnect while the feed is still on screen.
+      // Reconnect while the feed is still on screen. Single-owner timer so a
+      // re-init (htmx swap back to home) can't race a pending reconnect and
+      // tear down the fresh socket.
       if (window.__feedWs === sock) {
         window.__feedWs = null;
-        setTimeout(function () {
+        clearReconnect();
+        window.__feedReconnect = setTimeout(function () {
+          window.__feedReconnect = null;
           if (document.getElementById("relay-stream-list")) connect();
         }, 3000);
       }
@@ -142,6 +147,20 @@
       } catch (e) {}
       window.__feedWs = null;
     }
+  }
+  function clearReconnect() {
+    if (window.__feedReconnect) {
+      clearTimeout(window.__feedReconnect);
+      window.__feedReconnect = null;
+    }
+  }
+  // Stop the live socket + any pending reconnect. Called when the feed leaves
+  // the DOM via an htmx swap, so a detached feed can't keep its WebSocket and
+  // match-everything subscription open — writing rows into a removed node and
+  // firing profile fetches for events no one sees.
+  function teardown() {
+    clearReconnect();
+    closeWs();
   }
 
   function insertEvent(box, ev, isOlder) {
@@ -251,10 +270,28 @@
     }
     const r = e.target.closest("[data-eid]");
     if (r && root.contains(r)) {
-      window.location.href = "/e/" + r.getAttribute("data-eid");
+      // Carry the author pubkey so the event page can route to their outbox —
+      // the note is on this relay, but resolving it elsewhere needs the author.
+      const pkEl = r.querySelector("[data-pubkey]");
+      const pk = pkEl ? pkEl.getAttribute("data-pubkey") : "";
+      const q = pk ? "?author=" + encodeURIComponent(pk) : "";
+      window.location.href = "/e/" + r.getAttribute("data-eid") + q;
     }
   };
   document.addEventListener("click", window.__feedClick);
+
+  // Tear down when the feed is swapped out of the DOM by htmx navigation.
+  // Without this the WebSocket + subscription leak on every navigate-away
+  // (grain-stream.js already handles its EventSource this way). Re-registered
+  // per script run and window-guarded, like the click handler above.
+  if (window.__feedCleanup)
+    document.removeEventListener("htmx:beforeSwap", window.__feedCleanup);
+  window.__feedCleanup = function (e) {
+    const box = document.getElementById("relay-stream-list");
+    const tgt = e && e.detail && e.detail.target;
+    if (box && tgt && (tgt === box || tgt.contains(box))) teardown();
+  };
+  document.addEventListener("htmx:beforeSwap", window.__feedCleanup);
 
   init();
 })();

@@ -7,6 +7,8 @@
     eventId: "",
     event: null,
     jsonVisible: false,
+    author: "", // pubkey hint (from the feed / an nevent) — enables outbox routing
+    relays: "", // comma-separated relay hints to try
   };
 
   // Initialize event page when component loads
@@ -21,6 +23,13 @@
     }
 
     eventData.eventId = eventId;
+
+    // Optional resolution hints carried from the feed (or a decoded nevent):
+    // the author pubkey enables outbox routing, plus any explicit relay hints.
+    const params = new URLSearchParams(window.location.search);
+    eventData.author = params.get("author") || "";
+    eventData.relays = params.get("relays") || "";
+
     setElementText("event-id", eventId);
 
     // Start the event loading process
@@ -50,8 +59,16 @@
 
   async function fetchEvent(eventId) {
     try {
+      // Outbox-aware resolver: local relay → author outbox → relay hints →
+      // discovered set. Pass the author (and any relay hints) so it can route
+      // instead of guessing against the index pool.
+      const qs = new URLSearchParams();
+      if (eventData.author) qs.set("author", eventData.author);
+      if (eventData.relays) qs.set("relays", eventData.relays);
+      const suffix = qs.toString() ? "?" + qs.toString() : "";
+
       const response = await fetch(
-        `/api/v1/events/query?ids=${encodeURIComponent(eventId)}`
+        `/api/v1/events/${encodeURIComponent(eventId)}${suffix}`
       );
 
       if (!response.ok) {
@@ -62,11 +79,10 @@
       }
 
       const result = await response.json();
-      console.log("Event query result:", result);
+      console.log("Event resolve result:", result);
 
-      // Extract the first event from the events array
-      if (result.events && result.events.length > 0) {
-        return result.events[0];
+      if (result && result.event) {
+        return result.event;
       } else {
         throw new Error("Event not found");
       }
@@ -219,6 +235,22 @@
   };
 
   window.retryLoadEvent = function () {
+    hideElement("error");
+    showElement("loading");
+    hideElement("event-content");
+    loadEvent();
+  };
+
+  // Advanced retry: resolve against user-specified relays (error-state input).
+  window.retryWithRelays = function () {
+    const ta = document.getElementById("event-relay-hints");
+    const relays = (ta ? ta.value : "")
+      .split(/[\s,]+/)
+      .map(function (s) {
+        return s.trim();
+      })
+      .filter(Boolean);
+    if (relays.length) eventData.relays = relays.join(",");
     hideElement("error");
     showElement("loading");
     hideElement("event-content");

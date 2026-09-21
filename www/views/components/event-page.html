@@ -21,6 +21,30 @@
       >
         Retry
       </button>
+
+      <!-- Advanced: when automatic resolution (local → author outbox →
+           discovered) misses, let the user point at specific relays. -->
+      <details class="mt-4 text-left">
+        <summary class="text-sm cursor-pointer text-text-secondary hover:text-text">
+          Advanced: search specific relays
+        </summary>
+        <p class="mt-2 mb-2 text-xs text-text-muted">
+          One or more relay URLs (comma- or space-separated). grain will query
+          these directly for this event.
+        </p>
+        <textarea
+          id="event-relay-hints"
+          rows="2"
+          placeholder="wss://relay.example.com, wss://…"
+          class="w-full px-3 py-2 text-sm border rounded-lg bg-surface-elevated text-text border-border"
+        ></textarea>
+        <button
+          onclick="retryWithRelays()"
+          class="px-4 py-2 mt-2 text-sm rounded-lg text-text-on-accent bg-accent hover:opacity-80"
+        >
+          Search these relays
+        </button>
+      </details>
     </div>
   </div>
 
