@@ -55,7 +55,7 @@ RUN apk add --no-cache curl tar libstdc++ libgcc \
 # build-arg so a surprise major upstream can't change grain's login
 # UI without a deliberate bump. Loaded from layout.html with a plain
 # <script> tag — no module bundler needed.
-ARG MILL_VERSION=1.8.1
+ARG MILL_VERSION=1.8.2
 RUN mkdir -p www/static/mill \
     && curl -fsSL -o www/static/mill/mill.umd.min.js \
         "https://cdn.jsdelivr.net/npm/nostr-mill@${MILL_VERSION}/dist/mill.umd.min.js"
