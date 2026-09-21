@@ -49,10 +49,11 @@ func TestTagValuesRoundTrip(t *testing.T) {
 		},
 		{
 			// Multi-letter tag name (>2 chars) AND long value — both
-			// stored as offsets, both lost in the regression.
+			// stored as offsets, both lost in the regression. Kind
+			// 30023 is addressable, so it needs a d tag to be stored.
 			name: "long_name_and_value",
 			kind: 30023,
-			tags: [][]string{{"title", "A Reasonably Long Article Title"}, {"published_at", "1700000000"}},
+			tags: [][]string{{"d", "article"}, {"title", "A Reasonably Long Article Title"}, {"published_at", "1700000000"}},
 		},
 		{
 			// Single-letter tag with a long value.
