@@ -76,9 +76,9 @@
               <button type="button" data-donut-metric="size" onclick="setDonutMetric('size')" class="px-2 py-0.5 rounded text-text-secondary hover:text-text">Size</button>
             </div>
           </div>
-          <div class="flex items-center gap-4">
+          <div class="flex flex-col items-center gap-3 sm:flex-row sm:gap-4">
             <svg id="kind-donut" viewBox="0 0 42 42" class="w-24 h-24 shrink-0" role="img" aria-label="Event kind distribution"></svg>
-            <div id="kind-legend" class="flex-1 min-w-0 flex flex-col items-end gap-1 text-xs"><span class="text-text-muted">—</span></div>
+            <div id="kind-legend" class="w-full sm:w-auto sm:flex-1 min-w-0 flex flex-col items-end gap-1 text-xs"><span class="text-text-muted">—</span></div>
           </div>
         </div>
 
@@ -502,16 +502,20 @@
         legend.innerHTML = '<span class="text-text-muted">No events yet</span>';
         return;
       }
-      // Rank + size by the selected metric; top 5 + one folded "other kinds"
-      // slice (a real relay has hundreds of kinds — the tail isn't worth a hue).
-      var sorted = lastKinds.slice().sort(function (a, b) { return valOf(b) - valOf(a); });
+      // One catch-all only. nostrdb already emits an "other" bucket (every
+      // non-common kind); pull it out so it never competes with our own fold,
+      // rank the named kinds, keep the top 5, and fold the ranked tail *and*
+      // nostrdb's "other" into a single "other" slice ("top kinds + the rest").
+      var named = [], dbOther = null;
+      lastKinds.forEach(function (k) {
+        if (k.name === "other") dbOther = k; else named.push(k);
+      });
+      var sorted = named.slice().sort(function (a, b) { return valOf(b) - valOf(a); });
       var top = sorted.slice(0, 5);
-      var restArr = sorted.slice(5);
-      if (restArr.length) {
-        var rc = restArr.reduce(function (a, k) { return a + k.count; }, 0);
-        var rb = restArr.reduce(function (a, k) { return a + (k.bytes || 0); }, 0);
-        if (rc > 0 || rb > 0) top.push({ kind: -1, name: "other kinds", count: rc, bytes: rb });
-      }
+      var oc = 0, ob = 0;
+      sorted.slice(5).forEach(function (k) { oc += k.count; ob += (k.bytes || 0); });
+      if (dbOther) { oc += dbOther.count; ob += (dbOther.bytes || 0); }
+      if (oc > 0 || ob > 0) top.push({ kind: -1, name: "other", count: oc, bytes: ob });
       var C = 100, acc = 0, slices = "", leg = "";
       top.forEach(function (k, i) {
         var len = (valOf(k) / total) * C;
