@@ -28,6 +28,8 @@ type ServerStats struct {
 	Version           string `json:"version"`
 	BuildTime         string `json:"build_time"`
 	GitCommit         string `json:"git_commit"`
+	MemHeapBytes      int64  `json:"mem_heap_bytes"` // Go heap in use (runtime Alloc)
+	MemLimitMB        int    `json:"mem_limit_mb"`   // configured heap ceiling (0 = unset)
 }
 
 // statsHook is installed at startup by SetServerStatsHook. Default

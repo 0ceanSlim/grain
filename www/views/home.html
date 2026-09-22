@@ -23,18 +23,95 @@
     </div>
   </div>
 
-  <!-- Live Relay Stream: events hitting THIS relay, streamed live via a direct
-       WebSocket to grain's own relay. Rendered by feed.js. -->
-  <div class="mb-8 overflow-hidden bg-surface border border-border rounded-lg">
-    <div class="px-4 py-3 border-b border-border bg-surface-elevated">
-      <h2 class="text-lg font-semibold text-text">📡 Live Relay Stream</h2>
-      <p class="text-xs text-text-secondary">
-        Events hitting this relay, newest first — click an event to open it.
-      </p>
+  <!-- Top area: the live feed beside the relay vitals panel. Two columns on
+       desktop; stacks (feed, then vitals) on mobile. -->
+  <div class="grid grid-cols-1 gap-6 mb-8 lg:grid-cols-3">
+    <!-- Live Relay Stream: events hitting THIS relay, streamed live via a direct
+         WebSocket to grain's own relay. Rendered by feed.js. -->
+    <div class="overflow-hidden border rounded-lg lg:col-span-2 bg-surface border-border">
+      <div class="px-4 py-3 border-b border-border bg-surface-elevated">
+        <h2 class="text-lg font-semibold text-text">📡 Live Relay Stream</h2>
+        <p class="text-xs text-text-secondary">
+          Events hitting this relay, newest first — click an event to open it.
+        </p>
+      </div>
+      <div id="relay-stream-list" class="overflow-y-auto max-h-96"></div>
     </div>
-    <div id="relay-stream-list" class="overflow-y-auto max-h-96"></div>
+
+    <!-- Relay vitals — fed by /api/v1/relay/stats + /api/v1/client/status + NIP-11
+         (see the inline script below). Read-only "how's the relay doing" glance. -->
+    <div class="overflow-hidden border rounded-lg bg-surface border-border">
+      <div class="px-4 py-3 border-b border-border bg-surface-elevated">
+        <h2 class="text-lg font-semibold text-text">🛰️ Vitals</h2>
+      </div>
+      <div class="p-4">
+        <!-- This relay's own counters (from /api/v1/relay/stats). Pool/monitor
+             counts live on the Discovery settings tab — those are the network,
+             not this relay. -->
+        <div class="grid grid-cols-3 gap-3 text-center">
+          <div><div class="text-xs text-text-secondary">Events</div><div class="text-xl font-semibold text-text" data-vital="events">—</div></div>
+          <div><div class="text-xs text-text-secondary">Connections</div><div class="text-xl font-semibold text-success" data-vital="connections">—</div></div>
+          <div><div class="text-xs text-text-secondary">Uptime</div><div class="text-xl font-semibold text-text" data-vital="uptime">—</div></div>
+        </div>
+
+        <!-- Storage: used against the configured map ceiling (the x / x limit). -->
+        <div class="mt-4">
+          <div class="flex items-baseline justify-between text-xs">
+            <span class="text-text-secondary">Storage</span>
+            <span class="text-text"><span class="font-semibold" data-vital="storage-used">—</span> <span class="text-text-muted">/ <span data-vital="storage-total">—</span></span></span>
+          </div>
+          <div class="h-2 mt-1 overflow-hidden rounded-full bg-surface-inset">
+            <div class="h-full transition-all rounded-full bg-accent" data-vital="storage-bar" style="width:0%"></div>
+          </div>
+          <div class="mt-0.5 text-[11px] text-right text-text-muted" data-vital="storage-pct"></div>
+        </div>
+
+        <!-- Event-kind distribution (this relay's stored events). Toggle ranks
+             and sizes the donut by event count or by storage. -->
+        <div class="pt-3 mt-4 border-t border-border">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-text-secondary">Top kinds</span>
+            <div class="flex p-0.5 text-xs rounded-md bg-surface-inset">
+              <button type="button" data-donut-metric="count" onclick="setDonutMetric('count')" class="px-2 py-0.5 rounded text-text-on-accent bg-accent">Count</button>
+              <button type="button" data-donut-metric="size" onclick="setDonutMetric('size')" class="px-2 py-0.5 rounded text-text-secondary hover:text-text">Size</button>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <svg id="kind-donut" viewBox="0 0 42 42" class="w-24 h-24 shrink-0" role="img" aria-label="Event kind distribution"></svg>
+            <div id="kind-legend" class="flex-1 min-w-0 flex flex-col items-end gap-1 text-xs"><span class="text-text-muted">—</span></div>
+          </div>
+        </div>
+
+        <!-- Memory (heap vs configured ceiling) + writer health. -->
+        <div class="pt-3 mt-4 border-t border-border">
+          <div class="flex items-baseline justify-between text-xs">
+            <span class="text-text-secondary">Memory (heap)</span>
+            <span class="text-text"><span class="font-semibold" data-vital="mem-used">—</span> <span class="text-text-muted">/ <span data-vital="mem-limit">—</span></span></span>
+          </div>
+          <div class="h-2 mt-1 overflow-hidden rounded-full bg-surface-inset">
+            <div class="h-full transition-all rounded-full bg-accent-2" data-vital="mem-bar" style="width:0%"></div>
+          </div>
+          <div class="flex items-center justify-between mt-3 text-xs">
+            <span class="text-text-secondary">Write health</span>
+            <span data-vital="write-health" class="font-medium text-success">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <!-- Config sections, tabbed to tame the long scroll. Each panel wraps the
+       ORIGINAL section markup unchanged (same element ids), so dashboard.js is
+       untouched. switchDashTab (inline script below) toggles the panels. -->
+  <nav role="tablist" aria-label="Relay configuration" class="flex flex-wrap gap-1 p-1 mb-6 rounded-xl bg-surface">
+    <button type="button" role="tab" data-dash-tab="overview" aria-selected="true" onclick="switchDashTab('overview')" class="flex-1 min-w-[6rem] px-3 py-2 text-sm font-medium rounded-lg transition-colors bg-accent text-text-on-accent shadow-sm">Overview</button>
+    <button type="button" role="tab" data-dash-tab="access" aria-selected="false" onclick="switchDashTab('access')" class="flex-1 min-w-[6rem] px-3 py-2 text-sm font-medium rounded-lg transition-colors text-text-secondary hover:text-text hover:bg-surface-hover">Access lists</button>
+    <button type="button" role="tab" data-dash-tab="policy" aria-selected="false" onclick="switchDashTab('policy')" class="flex-1 min-w-[6rem] px-3 py-2 text-sm font-medium rounded-lg transition-colors text-text-secondary hover:text-text hover:bg-surface-hover">Policy &amp; Limits</button>
+    <button type="button" role="tab" data-dash-tab="retention" aria-selected="false" onclick="switchDashTab('retention')" class="flex-1 min-w-[6rem] px-3 py-2 text-sm font-medium rounded-lg transition-colors text-text-secondary hover:text-text hover:bg-surface-hover">Retention</button>
+  </nav>
+
+  <!-- Tab: Overview -->
+  <div data-dash-tab-panel="overview">
   <!-- 1. Relay Overview Section - MOVED ABOVE WHITELIST/BLACKLIST -->
   <div
     class="mb-8 overflow-hidden bg-surface border border-border rounded-lg"
@@ -48,6 +125,11 @@
     </div>
   </div>
 
+  </div>
+  <!-- /Overview tab -->
+
+  <!-- Tab: Access lists -->
+  <div data-dash-tab-panel="access" class="hidden">
   <!-- Whitelist and Blacklist Containers with Fixed Layout -->
   <div class="mb-8 grid-container">
     <!-- Whitelist Container (Larger - 2/3 width) -->
@@ -109,6 +191,11 @@
     </div>
   </div>
 
+  </div>
+  <!-- /Access tab -->
+
+  <!-- Tab: Policy & Limits -->
+  <div data-dash-tab-panel="policy" class="hidden">
   <!-- 2. Policy & Limits Section - Redesigned with Detailed Breakdown -->
   <div
     class="mb-8 overflow-hidden bg-surface border border-border rounded-lg"
@@ -217,6 +304,11 @@
     </div>
   </div>
 
+  </div>
+  <!-- /Policy tab -->
+
+  <!-- Tab: Retention -->
+  <div data-dash-tab-panel="retention" class="hidden">
   <!-- 3. Event Purge Management Section -->
   <div
     class="mb-8 overflow-hidden bg-surface border border-border rounded-lg"
@@ -235,6 +327,8 @@
       </div>
     </div>
   </div>
+  </div>
+  <!-- /Retention tab -->
 
 </div>
 
@@ -250,6 +344,16 @@
     width: 100%;
     max-width: none;
     min-height: 100vh;
+    /* Kind-donut categorical hues — the validated dataviz set (dark steps).
+       Light themes get the light steps below. Identity is also carried by the
+       legend labels, so color is never the sole channel. */
+    --dash-1: #3987e5; --dash-2: #d95926; --dash-3: #199e70; --dash-4: #c98500;
+    --dash-5: #d55181; --dash-6: #008300; --dash-7: #9085e9; --dash-8: #e66767;
+  }
+  :root[data-theme="light"] #dashboard-main,
+  :root[data-theme="candy"] #dashboard-main {
+    --dash-1: #2a78d6; --dash-2: #eb6834; --dash-3: #1baf7a; --dash-4: #eda100;
+    --dash-5: #e87ba4; --dash-6: #008300; --dash-7: #4a3aa7; --dash-8: #e34948;
   }
 
   .grid-container {
@@ -311,4 +415,155 @@
     // Give the script tag time to load
     setTimeout(safeInitializeDashboard, 10);
   }
+</script>
+<script>
+  // Config-section tab switcher. Full className swap (no partial toggles); the
+  // panels wrap the original sections, so dashboard.js keeps driving them.
+  (function () {
+    var BASE = "flex-1 min-w-[6rem] px-3 py-2 text-sm font-medium rounded-lg transition-colors ";
+    var ON = "bg-accent text-text-on-accent shadow-sm";
+    var OFF = "text-text-secondary hover:text-text hover:bg-surface-hover";
+    window.switchDashTab = function (name) {
+      document.querySelectorAll("[data-dash-tab]").forEach(function (t) {
+        var on = t.getAttribute("data-dash-tab") === name;
+        t.className = BASE + (on ? ON : OFF);
+        t.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      document.querySelectorAll("[data-dash-tab-panel]").forEach(function (p) {
+        p.classList.toggle("hidden", p.getAttribute("data-dash-tab-panel") !== name);
+      });
+    };
+  })();
+
+  // Relay vitals panel (beside the feed) — THIS relay's own counters from
+  // /api/v1/relay/stats: events, connections, uptime, storage vs its map
+  // ceiling, and the stored-event kind distribution as a donut. (Pool/monitor
+  // counts are the network, not this relay — those live on the Discovery tab.)
+  (function () {
+    function setVital(n, v) {
+      document.querySelectorAll('[data-vital="' + n + '"]').forEach(function (el) { el.textContent = v; });
+    }
+    function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+    function fmtUptime(s) {
+      s = Number(s) || 0;
+      var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+      if (d > 0) return d + "d " + h + "h";
+      if (h > 0) return h + "h " + m + "m";
+      return m + "m";
+    }
+    function fmtBytes(b) {
+      b = Number(b) || 0;
+      if (b >= 1099511627776) return (b / 1099511627776).toFixed(1) + " TB";
+      if (b >= 1073741824) return (b / 1073741824).toFixed(1) + " GB";
+      if (b >= 1048576) return (b / 1048576).toFixed(1) + " MB";
+      if (b >= 1024) return (b / 1024).toFixed(0) + " KB";
+      return b + " B";
+    }
+    // Donut: one <circle> per slice on a C≈100 ring (r=15.9155), rotated so 0
+    // starts at top. Top 7 kinds + "other"; colored from the validated dataviz
+    // categorical set (var --dash-N); legend carries identity, not color alone.
+    var donutMetric = "count", lastKinds = [];
+    function kindLabel(k) { return (k.kind != null && k.kind >= 0) ? (k.kind + " · " + k.name) : k.name; }
+
+    // Instant, styled hover tooltip. Appended to <body> so the vitals card's
+    // overflow-hidden can't clip it; positioned at the cursor, no native delay.
+    var tip = document.getElementById("kind-tip-el");
+    if (!tip) {
+      tip = document.createElement("div");
+      tip.id = "kind-tip-el";
+      tip.style.cssText = "position:fixed;z-index:60;display:none;pointer-events:none;padding:6px 9px;border-radius:8px;font-size:12px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.45);background:var(--color-surface-overlay);border:1px solid var(--color-border);color:var(--color-text)";
+      document.body.appendChild(tip);
+    }
+    function showTip(e, c) {
+      var cnt = Number(c.getAttribute("data-count")), by = Number(c.getAttribute("data-bytes"));
+      tip.innerHTML = '<div style="font-weight:600">' + esc(c.getAttribute("data-label")) + "</div>" +
+        '<div style="color:var(--color-text-secondary)">' + cnt.toLocaleString() + " events · " + fmtBytes(by) + "</div>";
+      tip.style.left = Math.min(e.clientX + 14, window.innerWidth - 200) + "px";
+      tip.style.top = (e.clientY + 14) + "px";
+      tip.style.display = "block";
+    }
+    function updateMetricButtons() {
+      document.querySelectorAll("[data-donut-metric]").forEach(function (b) {
+        var on = b.getAttribute("data-donut-metric") === donutMetric;
+        b.className = "px-2 py-0.5 rounded " + (on ? "text-text-on-accent bg-accent" : "text-text-secondary hover:text-text");
+      });
+    }
+    window.setDonutMetric = function (m) { donutMetric = m; updateMetricButtons(); renderDonut(lastKinds); };
+
+    function renderDonut(kinds) {
+      lastKinds = kinds || [];
+      var svg = document.getElementById("kind-donut");
+      var legend = document.getElementById("kind-legend");
+      if (!svg || !legend) return;
+      var valOf = function (k) { return donutMetric === "size" ? (k.bytes || 0) : (k.count || 0); };
+      var total = lastKinds.reduce(function (a, k) { return a + valOf(k); }, 0);
+      if (!total) {
+        svg.innerHTML = '<circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--color-surface-inset)" stroke-width="6"></circle>';
+        legend.innerHTML = '<span class="text-text-muted">No events yet</span>';
+        return;
+      }
+      // Rank + size by the selected metric; top 5 + one folded "other kinds"
+      // slice (a real relay has hundreds of kinds — the tail isn't worth a hue).
+      var sorted = lastKinds.slice().sort(function (a, b) { return valOf(b) - valOf(a); });
+      var top = sorted.slice(0, 5);
+      var restArr = sorted.slice(5);
+      if (restArr.length) {
+        var rc = restArr.reduce(function (a, k) { return a + k.count; }, 0);
+        var rb = restArr.reduce(function (a, k) { return a + (k.bytes || 0); }, 0);
+        if (rc > 0 || rb > 0) top.push({ kind: -1, name: "other kinds", count: rc, bytes: rb });
+      }
+      var C = 100, acc = 0, slices = "", leg = "";
+      top.forEach(function (k, i) {
+        var len = (valOf(k) / total) * C;
+        var color = "var(--dash-" + ((i % 8) + 1) + ")";
+        var label = kindLabel(k);
+        slices += '<circle cx="21" cy="21" r="15.9155" fill="none" stroke="' + color + '" stroke-width="6" style="cursor:pointer" stroke-dasharray="' + len.toFixed(3) + ' ' + (C - len).toFixed(3) + '" stroke-dashoffset="' + (-acc).toFixed(3) + '" data-label="' + esc(label) + '" data-count="' + k.count + '" data-bytes="' + (k.bytes || 0) + '"></circle>';
+        acc += len;
+        leg += '<div class="flex items-center gap-1.5 whitespace-nowrap">' +
+          '<span class="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style="background:' + color + '"></span>' +
+          '<span class="w-24 truncate text-text-secondary">' + esc(label) + "</span>" +
+          '<span class="w-10 text-right font-medium text-text tabular-nums shrink-0">' + Number(k.count).toLocaleString() + "</span>" +
+          '<span class="w-12 text-right text-text-muted tabular-nums shrink-0">' + fmtBytes(k.bytes || 0) + "</span>" +
+          "</div>";
+      });
+      svg.innerHTML = '<g transform="rotate(-90 21 21)">' + slices + "</g>";
+      legend.innerHTML = leg;
+      svg.onmousemove = function (e) {
+        var c = e.target && e.target.closest ? e.target.closest("circle[data-label]") : null;
+        if (c) showTip(e, c); else tip.style.display = "none";
+      };
+      svg.onmouseleave = function () { tip.style.display = "none"; };
+    }
+    fetch("/api/v1/relay/stats").then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
+      if (!s) return;
+      if (s.events) {
+        setVital("events", Number(s.events.total || 0).toLocaleString());
+        renderDonut(s.events.by_kind || []);
+      }
+      if (s.storage) {
+        setVital("storage-used", fmtBytes(s.storage.used_bytes));
+        setVital("storage-total", fmtBytes(s.storage.total_bytes));
+        var pct = s.storage.pct != null ? s.storage.pct : 0;
+        setVital("storage-pct", pct.toFixed(2) + "% used");
+        var bar = document.querySelector('[data-vital="storage-bar"]');
+        if (bar) bar.style.width = Math.max(0.5, Math.min(100, pct)) + "%";
+      }
+      if (s.server) {
+        setVital("connections", s.server.active_connections != null ? s.server.active_connections : "—");
+        setVital("uptime", fmtUptime(s.server.uptime_seconds));
+        var heap = s.server.mem_heap_bytes || 0;
+        var limB = (s.server.mem_limit_mb || 0) * 1048576;
+        setVital("mem-used", fmtBytes(heap));
+        setVital("mem-limit", limB > 0 ? fmtBytes(limB) : "no cap");
+        var mbar = document.querySelector('[data-vital="mem-bar"]');
+        if (mbar) mbar.style.width = (limB > 0 ? Math.max(0.5, Math.min(100, (heap / limB) * 100)) : 0) + "%";
+      }
+      var we = document.querySelector('[data-vital="write-health"]');
+      if (we) {
+        var errs = s.write_errors || 0;
+        we.textContent = errs > 0 ? "⚠ " + Number(errs).toLocaleString() + " errors" : "✓ healthy";
+        we.className = "font-medium " + (errs > 0 ? "text-danger" : "text-success");
+      }
+    }).catch(function () {});
+  })();
 </script>

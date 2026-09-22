@@ -255,3 +255,74 @@ func (db *NDB) Stat() (*C.struct_ndb_stat, error) {
 
 	return &stat, nil
 }
+
+// NoteCount returns the number of stored note (event) records — the relay's
+// total event count for the dashboard vitals. Cheap: reads ndb_stat's per-DB
+// counters, no scan.
+func (db *NDB) NoteCount() (uint64, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.ndb == nil {
+		return 0, fmt.Errorf("nostrdb is closed")
+	}
+
+	var stat C.struct_ndb_stat
+	if C.ndb_stat(db.ndb, &stat) == 0 {
+		return 0, fmt.Errorf("ndb_stat failed")
+	}
+	return uint64(stat.dbs[C.NDB_DB_NOTE].count), nil
+}
+
+// KindStat is one bucket of the stored-event kind distribution: how many events
+// of that kind and how much storage (keys + values) they occupy.
+type KindStat struct {
+	Kind  int    `json:"kind"` // representative kind number; -1 for category/other
+	Name  string `json:"name"`
+	Count uint64 `json:"count"`
+	Bytes uint64 `json:"bytes"` // key_size + value_size for this bucket
+}
+
+// ckindToKind maps a common-kind bucket index to a representative kind number.
+// Order MUST match enum ndb_common_kind in nostrdb.h. Buckets that are a
+// category rather than a single kind (LIST) use -1.
+var ckindToKind = []int{0, 1, 3, 4, 5, 6, 7, 9735, 9734, 23194, 23195, 27235, -1, 30023, 30315}
+
+// KindDistribution returns this relay's stored-event counts grouped by nostrdb's
+// common-kind buckets (Profile, Text, Contacts, Repost, Reaction, Zap, Longform,
+// …) plus an "other" bucket for everything else. Zero-count buckets are omitted.
+// Cheap: a single ndb_stat, no scan.
+func (db *NDB) KindDistribution() ([]KindStat, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	if db.ndb == nil {
+		return nil, fmt.Errorf("nostrdb is closed")
+	}
+
+	var stat C.struct_ndb_stat
+	if C.ndb_stat(db.ndb, &stat) == 0 {
+		return nil, fmt.Errorf("ndb_stat failed")
+	}
+
+	n := int(C.NDB_CKIND_COUNT)
+	out := make([]KindStat, 0, n+1)
+	for i := 0; i < n; i++ {
+		c := uint64(stat.common_kinds[i].count)
+		if c == 0 {
+			continue
+		}
+		name := C.GoString(C.ndb_kind_name(C.enum_ndb_common_kind(i)))
+		kind := -1
+		if i < len(ckindToKind) {
+			kind = ckindToKind[i]
+		}
+		bytes := uint64(stat.common_kinds[i].key_size) + uint64(stat.common_kinds[i].value_size)
+		out = append(out, KindStat{Kind: kind, Name: name, Count: c, Bytes: bytes})
+	}
+	if oc := uint64(stat.other_kinds.count); oc > 0 {
+		ob := uint64(stat.other_kinds.key_size) + uint64(stat.other_kinds.value_size)
+		out = append(out, KindStat{Kind: -1, Name: "other", Count: oc, Bytes: ob})
+	}
+	return out, nil
+}

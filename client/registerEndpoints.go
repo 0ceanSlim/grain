@@ -24,6 +24,9 @@ func RegisterEndpoints(mux *http.ServeMux) {
 	// Amber NIP-55 callback endpoint
 	mux.HandleFunc("/api/v1/auth/amber-callback", api.HandleAmberCallback) // Amber signer callback (NIP-55)
 
+	// relay vitals for the dashboard (storage, events, connections, uptime)
+	mux.HandleFunc("/api/v1/relay/stats", relay.GetRelayStats)
+
 	// relay api endpoints - key management (cached)
 	mux.HandleFunc("/api/v1/relay/keys/whitelist", relay.GetAllWhitelistedPubkeys)
 	mux.HandleFunc("/api/v1/relay/keys/blacklist", relay.GetAllBlacklistedPubkeys)

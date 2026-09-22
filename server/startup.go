@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -88,6 +89,12 @@ func Run() error {
 	// would cycle. Atomic loads keep the call cheap.
 	startTime := time.Now()
 	relay.SetServerStatsHook(func() relay.ServerStats {
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		limitMB := 0
+		if c := config.GetConfig(); c != nil {
+			limitMB = c.ResourceLimits.HeapSizeMB
+		}
 		return relay.ServerStats{
 			ActiveConnections: currentConnections.Load(),
 			TotalMessagesSent: totalMessagesSent,
@@ -95,6 +102,8 @@ func Run() error {
 			Version:           Version,
 			BuildTime:         BuildTime,
 			GitCommit:         GitCommit,
+			MemHeapBytes:      int64(m.Alloc),
+			MemLimitMB:        limitMB,
 		}
 	})
 
