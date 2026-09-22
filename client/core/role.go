@@ -3,7 +3,7 @@ package core
 import "strings"
 
 // Role identifies the function a relay serves for a user under the outbox model.
-// Roles fall into three classes (see docs/design/outbox-relay-pool.md §3):
+// Roles fall into three classes (see "The role model" in docs/client-library-guide.md):
 //
 //   - Per-target, event-derived: [RoleOutbox], [RoleInbox], [RoleDMInbox] —
 //     resolved from the *target* user's published NIP-65 / NIP-17 lists.

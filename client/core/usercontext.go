@@ -19,7 +19,7 @@ import (
 //
 // Pre-1.0 note: the network methods don't take a context.Context yet (it lands
 // in a follow-up slice), and PublishDM is deferred until NIP-44 encryption is
-// available. See docs/design/outbox-relay-pool.md §11.
+// available. See docs/client-library-guide.md.
 type UserContext struct {
 	client *Client
 	pubkey string
