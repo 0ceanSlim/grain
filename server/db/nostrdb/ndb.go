@@ -14,6 +14,7 @@ import "C"
 import (
 	"fmt"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/0ceanslim/grain/server/utils/log"
@@ -106,6 +107,13 @@ func OpenWithOptions(dbDir string, o Options) (*NDB, error) {
 	cDir := C.CString(dbDir)
 	defer C.free(unsafe.Pointer(cDir))
 
+	// Pending schema migrations don't run inside ndb_init: it queues them as
+	// the writer thread's first job, so they finish shortly after this returns
+	// (progress and counts go to stderr — "nostrdb: migrating vN -> vM"), ahead
+	// of any write.
+	log.DB().Info("Opening nostrdb", "path", dbDir)
+	started := time.Now()
+
 	var ndb *C.struct_ndb
 	rc := C.ndb_init(&ndb, cDir, &cfg)
 	if rc == 0 {
@@ -114,6 +122,7 @@ func OpenWithOptions(dbDir string, o Options) (*NDB, error) {
 
 	log.DB().Info("nostrdb opened",
 		"path", dbDir,
+		"open_ms", time.Since(started).Milliseconds(),
 		"map_size_mb", o.MapSizeMB,
 		"ingest_threads", o.IngestThreads,
 		"fulltext_kinds", kinds)

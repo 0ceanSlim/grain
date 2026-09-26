@@ -39,6 +39,7 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("failed to load initial config: %w", err)
 	}
+	resolveLogFile(cfg)
 	log.InitializeLoggers(cfg)
 
 	// Overlay the NIP-11 limitation block from live config at serve time so
@@ -251,6 +252,17 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 	}
 }
 
+// resolveLogFile anchors a relative logging.file at the data directory. It
+// must run before every InitializeLoggers call: the first one in Run used to
+// get the raw "debug.log", so everything up to initializeSubsystems — startup
+// lines, the nostrdb open and its migrations — went to the process's working
+// directory instead of --data-dir.
+func resolveLogFile(cfg *cfgType.ServerConfig) {
+	if !filepath.IsAbs(cfg.Logging.File) {
+		cfg.Logging.File = filepath.Join(config.GetDataDir(), cfg.Logging.File)
+	}
+}
+
 // loadAllConfigs loads all configuration files with error handling
 func loadAllConfigs() (*cfgType.ServerConfig, error) {
 	cfg, err := config.LoadConfig(config.ConfigPath("config.yml"))
@@ -274,12 +286,8 @@ func loadAllConfigs() (*cfgType.ServerConfig, error) {
 func initializeSubsystems(ctx context.Context, cfg *cfgType.ServerConfig) error {
 	log.Startup().Debug("Initializing server subsystems")
 
-	// Resolve log file path relative to data directory
-	if !filepath.IsAbs(cfg.Logging.File) {
-		cfg.Logging.File = filepath.Join(config.GetDataDir(), cfg.Logging.File)
-	}
-
 	// Re-initialize logger with current configuration
+	resolveLogFile(cfg)
 	log.InitializeLoggers(cfg)
 
 	// Set resource limits

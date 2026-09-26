@@ -45,7 +45,8 @@ func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys 
 		return 0
 	}
 
-	cutoff := time.Now().Unix() - int64(cfg.KeepIntervalHours*3600)
+	started := time.Now()
+	cutoff := started.Unix() - int64(cfg.KeepIntervalHours*3600)
 	log.DBPurge().Info("Starting event purge",
 		"keep_hours", cfg.KeepIntervalHours,
 		"cutoff_time", time.Unix(cutoff, 0).Format(time.RFC3339))
@@ -96,7 +97,8 @@ func (db *NDB) PurgeOldEvents(cfg *cfgType.EventPurgeConfig, whitelistedPubkeys 
 		"kinds_considered", len(kinds),
 		"kinds_skipped_keeplist", keptKinds,
 		"kinds_skipped_category", catKinds,
-		"budget_hit", deleted >= purgeRunBudget)
+		"budget_hit", deleted >= purgeRunBudget,
+		"duration_ms", time.Since(started).Milliseconds())
 
 	return deleted
 }

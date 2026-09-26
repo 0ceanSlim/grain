@@ -157,6 +157,7 @@ func (db *NDB) BootstrapExpirations() error {
 	logger.Info("Bootstrapping NIP-40 expiration heap")
 
 	const pageSize = 5000
+	started := time.Now()
 	now := time.Now().Unix()
 
 	var (
@@ -225,7 +226,8 @@ func (db *NDB) BootstrapExpirations() error {
 		"pages", pages,
 		"events_scanned", scanned,
 		"tracked", tracked,
-		"already_expired_deleted", expiredDel)
+		"already_expired_deleted", expiredDel,
+		"duration_ms", time.Since(started).Milliseconds())
 	return nil
 }
 
