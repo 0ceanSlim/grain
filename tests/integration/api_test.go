@@ -88,6 +88,30 @@ func TestWebPageEndpoint(t *testing.T) {
 	t.Log("Web page endpoint serving HTML correctly")
 }
 
+// Only routing.js's routes get a 200 app shell; anything else is a 404
+// (it still carries the shell so a person lands on home).
+func TestUnknownRouteIs404(t *testing.T) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	for path, want := range map[string]int{
+		"/":                   http.StatusOK,
+		"/settings":           http.StatusOK,
+		"/p/npub1example":     http.StatusOK,
+		"/e/abcdef":           http.StatusOK,
+		"/nonexistent-page":   http.StatusNotFound,
+		"/p/":                 http.StatusNotFound,
+		"/wp-admin/setup.php": http.StatusNotFound,
+	} {
+		resp, err := client.Get(tests.TestHTTPURL + path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Errorf("GET %s = %d, want %d", path, resp.StatusCode, want)
+		}
+	}
+}
+
 // /api/v1/relay/stats serves the event breakdown from a cached snapshot:
 // "list" is kind 30000 (it used to share -1 with "other"), and a burst of
 // requests stays fast instead of each walking the whole database.

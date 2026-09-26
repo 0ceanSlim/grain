@@ -37,7 +37,8 @@ function handleRouteLoad() {
     return;
   }
 
-  // Map URL paths to view files
+  // Map URL paths to view files. A new route here must also be added to
+  // isSPARoute in server/startup.go, or direct loads of it return 404.
   switch (currentPath) {
     case "/":
       targetView = "/views/home.html";

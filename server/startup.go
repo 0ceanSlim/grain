@@ -504,7 +504,7 @@ func initRoot(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/login") || strings.HasPrefix(r.URL.Path, "/logout"):
 		// Let API and auth endpoints fall through to be handled by registered endpoints
 		http.NotFound(w, r)
-	case strings.HasPrefix(r.URL.Path, "/views/") || strings.HasPrefix(r.URL.Path, "/static/") || strings.HasPrefix(r.URL.Path, "/style/"):
+	case r.URL.Path == "/favicon.ico" || strings.HasPrefix(r.URL.Path, "/views/") || strings.HasPrefix(r.URL.Path, "/static/") || strings.HasPrefix(r.URL.Path, "/style/"):
 		// Serve actual static files from embedded FS (CSS, JS, view templates, etc.).
 		// no-cache so a rebuilt binary's updated assets are picked up on the next
 		// load without a manual hard-refresh: the bytes are embedded in the binary,
@@ -514,13 +514,34 @@ func initRoot(w http.ResponseWriter, r *http.Request) {
 		fileServer := http.FileServer(http.FS(subFS))
 		http.StripPrefix("/", fileServer).ServeHTTP(w, r)
 	default:
-		// All other routes: serve main app template for frontend routing
+		// Client-side routes get the app shell; routing.js takes it from
+		// there. Anything else is a real 404 for monitors and crawlers, but
+		// still renders the shell so a mistyped URL lands a person on home
+		// (routing.js rewrites unknown paths to "/") rather than a bare page.
+		if !isSPARoute(r.URL.Path) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusNotFound)
+		}
 		data := client.PageData{
 			Title: "🌾 grain",
 		}
 		client.RenderTemplate(w, data, "app.html")
 	}
 
+}
+
+// isSPARoute reports whether path is one routing.js serves. Keep in sync with
+// handleRouteLoad in www/static/js/routing.js ("/" is handled by initRoot).
+func isSPARoute(path string) bool {
+	switch {
+	case path == "/settings":
+		return true
+	case strings.HasPrefix(path, "/p/") && len(path) > len("/p/"):
+		return true
+	case strings.HasPrefix(path, "/e/") && len(path) > len("/e/"):
+		return true
+	}
+	return false
 }
 
 // resolveOwnerEnv reads GRAIN_OWNER_PUBKEY and returns the
