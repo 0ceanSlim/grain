@@ -5,7 +5,6 @@ import (
 	"github.com/0ceanslim/grain/server/db/nostrdb"
 	"github.com/0ceanslim/grain/server/handlers/response"
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -14,10 +13,9 @@ import (
 // response is `["COUNT", <sub_id>, {"count": N}]` (with an optional
 // `approximate: true` field).
 //
-// Filter parsing intentionally duplicates the REQ-side logic rather
-// than sharing it: REQ also creates a long-lived subscription; COUNT
-// is a one-shot read. The shared bits are small enough that a helper
-// would obscure more than it saves.
+// Filters go through the same strict parseFilters as REQ: the old
+// duplicated lenient parsing is how a malformed field silently widened
+// both into an unconstrained query.
 func HandleCount(client nostr.ClientInterface, message []interface{}) {
 	if len(message) < 3 {
 		log.Req().Error("Invalid COUNT message format")
@@ -51,50 +49,34 @@ func HandleCount(client nostr.ClientInterface, message []interface{}) {
 		return
 	}
 
-	filters := make([]nostr.Filter, len(message)-2)
-	for i, filter := range message[2:] {
-		filterData, ok := filter.(map[string]interface{})
-		if !ok {
-			log.Req().Error("Invalid COUNT filter format", "sub_id", subID, "filter_index", i)
-			response.SendClosed(client, subID, "invalid: invalid filter format")
-			return
-		}
+	filters, err := parseFilters(message[2:])
+	if err != nil {
+		log.Req().Info("Rejected malformed COUNT filter", "sub_id", subID, "error", err)
+		response.SendClosed(client, subID, "invalid: "+err.Error())
+		return
+	}
 
-		var f nostr.Filter
-		f.IDs = utils.ToStringArray(filterData["ids"])
-		f.Authors = utils.ToStringArray(filterData["authors"])
-		f.Kinds = utils.ToIntArray(filterData["kinds"])
-		f.Since = utils.ToTime(filterData["since"])
-		f.Until = utils.ToTime(filterData["until"])
-
-		f.Tags = make(map[string][]string)
-		for k, v := range filterData {
-			if len(k) >= 2 && k[0] == '#' {
-				tagName := k[1:]
-				if vals := utils.ToStringArray(v); len(vals) > 0 {
-					f.Tags[tagName] = vals
-				}
-			}
-		}
+	for i := range filters {
 		// Filter `limit` is intentionally ignored for COUNT — NIP-45
 		// asks for total matches, not a paginated subset.
+		filters[i].Limit = nil
 
 		// NIP-17 DM privacy (#73): COUNT on protected kinds leaks message-
 		// volume metadata. If a filter explicitly counts gift wraps, require
 		// AUTH and constrain the count to the AUTHed pubkey's own p-tag, so a
 		// caller can only count their own inbox — never someone else's.
-		if FilterRequestsProtectedKind(f) {
+		if FilterRequestsProtectedKind(filters[i]) {
 			authed := GetAuthedPubkey(client)
 			if authed == "" {
 				log.Req().Info("COUNT for protected kind requires auth", "sub_id", subID)
 				response.SendClosed(client, subID, "auth-required: authentication is required to count these events")
 				return
 			}
-			f.Tags["p"] = []string{authed}
+			filters[i].Tags["p"] = []string{authed}
 		}
-
-		filters[i] = f
 	}
+
+	sendPrefixMatchNotice(client, filters)
 
 	db := nostrdb.GetDB()
 	if db == nil {

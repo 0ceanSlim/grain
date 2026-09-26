@@ -14,7 +14,13 @@ type ClientInterface interface {
 	SetSubscription(subID string, filters []Filter)
 	DeleteSubscription(subID string)
 	SubscriptionCount() int
+	// OldestSubscription returns the sub whose latest REQ is oldest, for
+	// eviction at the per-client cap.
+	OldestSubscription() (string, bool)
 	ForEachSubscription(fn func(subID string, filters []Filter))
+	// NoticeOnce reports whether the NOTICE keyed by key is new on this
+	// connection, marking it sent.
+	NoticeOnce(key string) bool
 	CloseClient()
 	IsConnected() bool
 	// AllowReq checks the client's per-connection REQ rate limiter.

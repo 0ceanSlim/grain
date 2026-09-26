@@ -32,21 +32,21 @@ var backupRelaySem = make(chan struct{}, 32)
 func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	if len(message) != 2 {
 		log.Event().Error("Invalid EVENT message format")
-		response.SendNotice(client, "", "Invalid EVENT message format")
+		response.SendNotice(client, "Invalid EVENT message format")
 		return
 	}
 
 	eventData, ok := message[1].(map[string]interface{})
 	if !ok {
 		log.Event().Error("Invalid event data format")
-		response.SendNotice(client, "", "Invalid event data format")
+		response.SendNotice(client, "Invalid event data format")
 		return
 	}
 
 	eventBytes, err := json.Marshal(eventData)
 	if err != nil {
 		log.Event().Error("Error marshaling event data", "error", err)
-		response.SendNotice(client, "", "Error marshaling event data")
+		response.SendNotice(client, "Error marshaling event data")
 		return
 	}
 
@@ -54,7 +54,7 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	err = json.Unmarshal(eventBytes, &evt)
 	if err != nil {
 		log.Event().Error("Error unmarshaling event data", "error", err)
-		response.SendNotice(client, "", "Error unmarshaling event data")
+		response.SendNotice(client, "Error unmarshaling event data")
 		return
 	}
 
@@ -164,7 +164,7 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	if isDuplicate {
 		log.Event().Info("Duplicate event detected", "event_id", evt.ID)
 		response.SendOK(client, evt.ID, false, "duplicate: already have this event")
-		response.SendNotice(client, evt.PubKey, fmt.Sprintf("event %s was rejected because the relay already stores it", evt.ID))
+		response.SendNotice(client, fmt.Sprintf("event %s was rejected because the relay already stores it", evt.ID))
 		return
 	}
 
@@ -177,7 +177,7 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 			log.Event().Error("Rejecting event: database near capacity",
 				"event_id", evt.ID, "used_pct", int(frac*100))
 			response.SendOK(client, evt.ID, false, "error: relay storage unavailable")
-			response.SendNotice(client, evt.PubKey, fmt.Sprintf("event %s rejected: relay storage is full", evt.ID))
+			response.SendNotice(client, fmt.Sprintf("event %s rejected: relay storage is full", evt.ID))
 			return
 		}
 	}
@@ -203,7 +203,7 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 				"kind", evt.Kind,
 				"reason", msg)
 			response.SendOK(client, evt.ID, false, msg)
-			response.SendNotice(client, evt.PubKey, fmt.Sprintf("event %s was rejected: %s", evt.ID, msg))
+			response.SendNotice(client, fmt.Sprintf("event %s was rejected: %s", evt.ID, msg))
 			return
 		}
 		log.Event().Error("Failed to store event",

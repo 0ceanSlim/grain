@@ -25,6 +25,8 @@ import (
 type Client struct {
 	ws            *websocket.Conn
 	subscriptions map[string][]nostr.Filter
+	subSeq        map[string]uint64 // subID → sequence of its latest REQ; lowest = oldest
+	subCounter    uint64
 	rateLimiter   *config.RateLimiter
 	messageBuffer strings.Builder
 
@@ -50,6 +52,10 @@ type Client struct {
 
 	// Subscription mutex to protect concurrent subscription access
 	subMu sync.RWMutex
+
+	// One-shot NOTICE keys already sent on this connection (see NoticeOnce).
+	noticesSent map[string]bool
+	noticeMu    sync.Mutex
 
 	// Debugging Information
 	id          string
@@ -168,6 +174,7 @@ func ClientHandler(ws *websocket.Conn) {
 	client := &Client{
 		ws:            ws,
 		subscriptions: make(map[string][]nostr.Filter),
+		subSeq:        make(map[string]uint64),
 		rateLimiter:   config.NewClientRateLimiter(),
 		messageBuffer: strings.Builder{},
 		outgoing:      make(chan []byte, clientOutgoingBuffer),
@@ -520,12 +527,48 @@ func (c *Client) SetSubscription(subID string, filters []nostr.Filter) {
 	c.subMu.Lock()
 	defer c.subMu.Unlock()
 	c.subscriptions[subID] = filters
+	// Re-issuing a REQ counts as use, so a replaced sub moves to the back
+	// of the eviction queue.
+	c.subCounter++
+	c.subSeq[subID] = c.subCounter
 }
 
 func (c *Client) DeleteSubscription(subID string) {
 	c.subMu.Lock()
 	defer c.subMu.Unlock()
 	delete(c.subscriptions, subID)
+	delete(c.subSeq, subID)
+}
+
+// OldestSubscription returns the subscription whose latest REQ is oldest —
+// the one to evict when the per-client cap is reached.
+func (c *Client) OldestSubscription() (string, bool) {
+	c.subMu.RLock()
+	defer c.subMu.RUnlock()
+	oldest, found := "", false
+	var oldestSeq uint64
+	for id, seq := range c.subSeq {
+		if !found || seq < oldestSeq {
+			oldest, oldestSeq, found = id, seq, true
+		}
+	}
+	return oldest, found
+}
+
+// NoticeOnce reports whether the NOTICE identified by key has not been sent
+// on this connection yet, and marks it sent. For advisory notices that would
+// be noise if repeated on every REQ.
+func (c *Client) NoticeOnce(key string) bool {
+	c.noticeMu.Lock()
+	defer c.noticeMu.Unlock()
+	if c.noticesSent[key] {
+		return false
+	}
+	if c.noticesSent == nil {
+		c.noticesSent = make(map[string]bool)
+	}
+	c.noticesSent[key] = true
+	return true
 }
 
 func (c *Client) SubscriptionCount() int {
@@ -594,6 +637,7 @@ func (c *Client) CloseClient() {
 	for subID := range c.subscriptions {
 		delete(c.subscriptions, subID)
 	}
+	clear(c.subSeq)
 	c.subMu.Unlock()
 
 	// Close WebSocket connection

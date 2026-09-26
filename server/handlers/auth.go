@@ -40,21 +40,21 @@ var authSessions = make(map[nostr.ClientInterface]string)
 func HandleAuth(client nostr.ClientInterface, message []interface{}) {
 	if len(message) != 2 {
 		log.Auth().Debug("Invalid AUTH message format")
-		response.SendNotice(client, "", "Invalid AUTH message format")
+		response.SendNotice(client, "Invalid AUTH message format")
 		return
 	}
 
 	authData, ok := message[1].(map[string]interface{})
 	if !ok {
 		log.Auth().Debug("Invalid auth data format")
-		response.SendNotice(client, "", "Invalid auth data format")
+		response.SendNotice(client, "Invalid auth data format")
 		return
 	}
 
 	authBytes, err := json.Marshal(authData)
 	if err != nil {
 		log.Auth().Error("Error marshaling auth data", "error", err)
-		response.SendNotice(client, "", "Error marshaling auth data")
+		response.SendNotice(client, "Error marshaling auth data")
 		return
 	}
 
@@ -62,7 +62,7 @@ func HandleAuth(client nostr.ClientInterface, message []interface{}) {
 	err = json.Unmarshal(authBytes, &authEvent)
 	if err != nil {
 		log.Auth().Error("Error unmarshaling auth data", "error", err)
-		response.SendNotice(client, "", "Error unmarshaling auth data")
+		response.SendNotice(client, "Error unmarshaling auth data")
 		return
 	}
 

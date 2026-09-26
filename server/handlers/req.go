@@ -4,13 +4,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/db/nostrdb"
 	"github.com/0ceanslim/grain/server/handlers/response"
 	nostr "github.com/0ceanslim/grain/server/types"
-	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 	"github.com/0ceanslim/grain/server/validation"
 )
@@ -52,42 +52,14 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		return
 	}
 
-	// Parse and validate filters
-	filters := make([]nostr.Filter, len(message)-2)
-	for i, filter := range message[2:] {
-		filterData, ok := filter.(map[string]interface{})
-		if !ok {
-			log.Req().Error("Invalid filter format",
-				"sub_id", subID,
-				"filter_index", i)
-			response.SendClosed(client, subID, "invalid: invalid filter format")
-			return
-		}
-
-		var f nostr.Filter
-		f.IDs = utils.ToStringArray(filterData["ids"])
-		f.Authors = utils.ToStringArray(filterData["authors"])
-		f.Kinds = utils.ToIntArray(filterData["kinds"])
-		f.Since = utils.ToTime(filterData["since"])
-		f.Until = utils.ToTime(filterData["until"])
-		f.Limit = utils.ToInt(filterData["limit"])
-		// NIP-50: optional fulltext search query.
-		if s, ok := filterData["search"].(string); ok {
-			f.Search = s
-		}
-
-		// NIP-01: tag filters are top-level keys like "#e", "#p", "#a".
-		f.Tags = make(map[string][]string)
-		for k, v := range filterData {
-			if len(k) >= 2 && k[0] == '#' {
-				tagName := k[1:]
-				if vals := utils.ToStringArray(v); len(vals) > 0 {
-					f.Tags[tagName] = vals
-				}
-			}
-		}
-
-		filters[i] = f
+	// Parse and validate filters. Strict: a malformed field rejects the whole
+	// REQ rather than being dropped, since a dropped constraint widens the
+	// query (see nostr.ParseFilter).
+	filters, err := parseFilters(message[2:])
+	if err != nil {
+		log.Req().Info("Rejected malformed REQ filter", "sub_id", subID, "error", err)
+		response.SendClosed(client, subID, "invalid: "+err.Error())
+		return
 	}
 
 	// NIP-17 DM privacy (#73): if a filter explicitly asks for a protected
@@ -126,17 +98,23 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		}
 	}
 
-	// Remove oldest subscription if needed
-	subCount := client.SubscriptionCount()
-	if subCount >= config.GetConfig().Server.MaxSubscriptionsPerClient {
-		for id := range subscriptions {
-			if id != subID {
-				client.DeleteSubscription(id)
-				log.Req().Info("Dropped oldest subscription",
-					"old_sub_id", id,
-					"current_count", subCount-1)
+	// At the per-client cap, a NEW sub evicts the oldest one (a replacing
+	// REQ doesn't grow the count). NIP-01: a relay ending a subscription
+	// must say so with CLOSED, or the client keeps waiting on a dead sub.
+	if _, replacing := subscriptions[subID]; !replacing {
+		maxSubs := cfg.Server.MaxSubscriptionsPerClient
+		for maxSubs > 0 && client.SubscriptionCount() >= maxSubs {
+			oldest, ok := client.OldestSubscription()
+			if !ok {
 				break
 			}
+			client.DeleteSubscription(oldest)
+			response.SendClosed(client, oldest,
+				fmt.Sprintf("error: too many subscriptions (max %d), closed the oldest", maxSubs))
+			log.Req().Info("Dropped oldest subscription",
+				"old_sub_id", oldest,
+				"new_sub_id", subID,
+				"max", maxSubs)
 		}
 	}
 
@@ -146,6 +124,9 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		"sub_id", subID,
 		"filter_count", len(filters),
 		"total_subscriptions", client.SubscriptionCount())
+
+	// Advisory only (sent after every rejection path): the query still runs.
+	sendPrefixMatchNotice(client, filters)
 
 	// Query database for historical events
 	db := nostrdb.GetDB()
@@ -258,6 +239,46 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 	// 2. Client disconnects
 	// 3. New REQ with same subID (replaces this one)
 	// 4. Subscription limit reached (oldest removed)
+}
+
+// parseFilters strictly parses the filter objects of a REQ or COUNT. Filters
+// that are well-formed but can never match (an empty ids/authors/kinds/#tag
+// list) are dropped, so the result can be empty: the REQ then just gets EOSE.
+func parseFilters(raw []interface{}) ([]nostr.Filter, error) {
+	filters := make([]nostr.Filter, 0, len(raw))
+	for i, r := range raw {
+		obj, ok := r.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("filter %d is not an object", i)
+		}
+		f, matchable, err := nostr.ParseFilter(obj)
+		if err != nil {
+			return nil, fmt.Errorf("filter %d: %w", i, err)
+		}
+		if matchable {
+			filters = append(filters, f)
+		}
+	}
+	return filters, nil
+}
+
+// prefixMatchNotice is sent (once per connection) when a REQ or COUNT uses
+// partial ids/authors. Prefix lookups are nonstandard — NIP-01 now wants full
+// 64-char ids and most relays reject shorter ones — but grain keeps them on
+// purpose (glyphbyte.dev looks events up by their leading bytes), so the
+// query still runs; the NOTICE just says what the client is getting.
+const prefixMatchNotice = "ids/authors shorter than 64 hex chars are matched as prefixes: " +
+	"results can't be verified against a full id and may include more events than you expected"
+
+func sendPrefixMatchNotice(client nostr.ClientInterface, filters []nostr.Filter) {
+	for _, f := range filters {
+		if f.HasPrefixMatch() {
+			if client.NoticeOnce("prefix-match") {
+				response.SendNotice(client, prefixMatchNotice)
+			}
+			return
+		}
+	}
 }
 
 // areFiltersIdentical compares two filter slices to detect duplicates

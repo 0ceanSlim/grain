@@ -21,7 +21,9 @@ func (noopClient) GetSubscriptions() map[string][]nostr.Filter      { return nil
 func (noopClient) SetSubscription(string, []nostr.Filter)           {}
 func (noopClient) DeleteSubscription(string)                        {}
 func (noopClient) SubscriptionCount() int                           { return 0 }
+func (noopClient) OldestSubscription() (string, bool)               { return "", false }
 func (noopClient) ForEachSubscription(func(string, []nostr.Filter)) {}
+func (noopClient) NoticeOnce(string) bool                           { return false }
 func (noopClient) CloseClient()                                     {}
 func (noopClient) IsConnected() bool                                { return true }
 func (noopClient) AllowReq() (bool, string)                         { return true, "" }
