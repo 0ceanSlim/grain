@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -272,6 +273,19 @@ func (c *Client) updateActivity() {
 	c.mu.Unlock()
 }
 
+// marshalWire encodes a relay message without encoding/json's HTML escaping.
+// "\u0026" for & is valid JSON, but clients that ingest relay messages with
+// nostrdb (Damus, Notedeck) can't parse \u escapes and drop the message.
+func marshalWire(msg interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(msg); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(buf.Bytes(), []byte{'\n'}), nil
+}
+
 // Implement `ClientInterface` methods
 
 // SendMessage marshals and enqueues a message for delivery to the client.
@@ -291,7 +305,7 @@ func (c *Client) SendMessage(msg interface{}) {
 		return
 	}
 
-	jsonMsg, err := json.Marshal(msg)
+	jsonMsg, err := marshalWire(msg)
 	if err != nil {
 		log.RelayClient().Error("Failed to marshal message",
 			"client_id", c.id,
@@ -349,7 +363,7 @@ func (c *Client) SendMessageBlocking(msg interface{}) error {
 	default:
 	}
 
-	jsonMsg, err := json.Marshal(msg)
+	jsonMsg, err := marshalWire(msg)
 	if err != nil {
 		log.RelayClient().Error("Failed to marshal message",
 			"client_id", c.id,
@@ -480,7 +494,7 @@ func isConnectionClosed(err error) bool {
 // sendNoticeNoTimeout sends a notice without timeout (for cleanup scenarios)
 func (c *Client) sendNoticeNoTimeout(message string) {
 	notice := []interface{}{"NOTICE", message}
-	jsonMsg, err := json.Marshal(notice)
+	jsonMsg, err := marshalWire(notice)
 	if err != nil {
 		return // Best effort
 	}

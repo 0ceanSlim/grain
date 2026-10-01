@@ -37,26 +37,31 @@ func (db *NDB) StoreEvent(ctx context.Context, evt nostr.Event) error {
 		log.DBStore().Info("Ephemeral event received and ignored",
 			"event_id", evt.ID, "kind", evt.Kind)
 		return nil
+	}
 
+	// Encode and check before the supersede deletes below: if nostrdb then
+	// refused the new version, the author would be left with neither.
+	jsonStr, err := encodeForIngest(evt)
+	if err != nil {
+		return err
+	}
+
+	switch {
 	case isReplaceable(evt.Kind):
-		return db.storeReplaceable(ctx, evt)
+		return db.storeReplaceable(ctx, evt, jsonStr)
 
 	case isAddressable(evt.Kind):
-		return db.storeAddressable(ctx, evt)
+		return db.storeAddressable(ctx, evt, jsonStr)
 
 	default:
 		// Regular events and unknown kinds: just ingest
-		return db.ingestEvent(evt)
+		return db.ingestEvent(evt, jsonStr)
 	}
 }
 
-// ingestEvent feeds a raw event JSON into nostrdb for storage.
-func (db *NDB) ingestEvent(evt nostr.Event) error {
-	jsonStr, err := eventToJSON(evt)
-	if err != nil {
-		return fmt.Errorf("failed to serialize event: %w", err)
-	}
-
+// ingestEvent feeds an event into nostrdb for storage. jsonStr must come
+// from encodeForIngest.
+func (db *NDB) ingestEvent(evt nostr.Event, jsonStr string) error {
 	// Wrap in ["EVENT", <event>] format that ndb_process_event expects
 	wrapped := `["EVENT","` + evt.ID[:8] + `",` + jsonStr + `]`
 	if err := db.ProcessEvent(wrapped); err != nil {
@@ -74,7 +79,7 @@ func (db *NDB) ingestEvent(evt nostr.Event) error {
 
 // storeReplaceable handles NIP-01 replaceable events (kinds 0, 3, 10000-19999).
 // Only the most recent event per (pubkey, kind) is kept.
-func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event) error {
+func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event, jsonStr string) error {
 	txn, err := db.BeginQuery()
 	if err != nil {
 		return fmt.Errorf("failed to begin query for replaceable check: %w", err)
@@ -113,12 +118,12 @@ func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event) error {
 		}
 	}
 
-	return db.ingestEvent(evt)
+	return db.ingestEvent(evt, jsonStr)
 }
 
 // storeAddressable handles NIP-01 parameterized replaceable events (kinds 30000-39999).
 // Only the most recent event per (pubkey, kind, d-tag) is kept.
-func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event) error {
+func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event, jsonStr string) error {
 	// Extract d-tag
 	var dTag string
 	for _, tag := range evt.Tags {
@@ -170,7 +175,7 @@ func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event) error {
 		}
 	}
 
-	return db.ingestEvent(evt)
+	return db.ingestEvent(evt, jsonStr)
 }
 
 // deleteByHexID is a small helper used by the supersede paths: decode the

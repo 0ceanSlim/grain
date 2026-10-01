@@ -123,10 +123,7 @@ func (kp *TestKeypair) SignEventAt(kind int, content string, tags [][]string, cr
 		Tags:      tags,
 		Content:   content,
 	}
-	serialized, _ := json.Marshal([]interface{}{
-		0, evt.PubKey, evt.CreatedAt, evt.Kind, evt.Tags, evt.Content,
-	})
-	h := sha256.Sum256(serialized)
+	h := sha256.Sum256(evt.Commitment())
 	evt.ID = hex.EncodeToString(h[:])
 	sig, err := schnorr.Sign(kp.PrivKey, h[:])
 	if err != nil {
@@ -151,13 +148,10 @@ func (kp *TestKeypair) SignEvent(kind int, content string, tags [][]string) nost
 		Content:   content,
 	}
 
-	// Serialize per NIP-01: [0, pubkey, created_at, kind, tags, content]
-	serialized, _ := json.Marshal([]interface{}{
-		0, evt.PubKey, evt.CreatedAt, evt.Kind, evt.Tags, evt.Content,
-	})
-
-	// Compute ID
-	hash := sha256.Sum256(serialized)
+	// Serialize per NIP-01: [0, pubkey, created_at, kind, tags, content].
+	// Not json.Marshal: it \u-escapes &, < and >, which would make every
+	// test event carrying one unsignable.
+	hash := sha256.Sum256(evt.Commitment())
 	evt.ID = hex.EncodeToString(hash[:])
 
 	// Sign with schnorr

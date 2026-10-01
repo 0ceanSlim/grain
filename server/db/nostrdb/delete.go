@@ -30,6 +30,13 @@ func (db *NDB) ProcessDeletion(ctx context.Context, evt nostr.Event) error {
 		"pubkey", evt.PubKey,
 		"tag_count", len(evt.Tags))
 
+	// Check the kind-5 itself before deleting anything it targets, so a
+	// deletion nostrdb would refuse to record doesn't delete either.
+	jsonStr, err := encodeForIngest(evt)
+	if err != nil {
+		return err
+	}
+
 	for _, tag := range evt.Tags {
 		if len(tag) < 2 {
 			continue
@@ -60,7 +67,7 @@ func (db *NDB) ProcessDeletion(ctx context.Context, evt nostr.Event) error {
 
 	// Store the deletion event itself — per NIP-09 the kind-5 record stays
 	// visible so clients can see the deletion marker.
-	if err := db.ingestEvent(evt); err != nil {
+	if err := db.ingestEvent(evt, jsonStr); err != nil {
 		return fmt.Errorf("failed to store deletion event: %w", err)
 	}
 

@@ -12,7 +12,6 @@ import (
 
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 )
 
 // signEvent is a tiny local helper that mirrors tests/helpers.go so this
@@ -29,8 +28,7 @@ func signEvent(t *testing.T, priv *btcec.PrivateKey, pub string, kind int, conte
 		Tags:      tags,
 		Content:   content,
 	}
-	raw, _ := json.Marshal([]interface{}{0, evt.PubKey, evt.CreatedAt, evt.Kind, evt.Tags, evt.Content})
-	h := sha256.Sum256(raw)
+	h := sha256.Sum256(evt.Commitment())
 	evt.ID = hex.EncodeToString(h[:])
 	sig, err := schnorr.Sign(priv, h[:])
 	if err != nil {
