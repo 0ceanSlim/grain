@@ -22,6 +22,20 @@ func TestInvalidMessage(t *testing.T) {
 	t.Log("Relay handled invalid message gracefully")
 }
 
+// NIP-77 isn't supported, so NEG-OPEN gets an immediate NEG-ERR and the
+// client can fall back to REQ instead of timing out.
+func TestNegOpen_Refused(t *testing.T) {
+	client := tests.NewTestClient(t)
+	defer client.Close()
+
+	subID := tests.RandomSubID()
+	client.SendMessage([]interface{}{"NEG-OPEN", subID, map[string]interface{}{"kinds": []int{1}}, "6100"})
+	msg := client.ReadMessage(5 * time.Second)
+	if len(msg) != 3 || msg[0] != "NEG-ERR" || msg[1] != subID {
+		t.Fatalf("got %v, want [NEG-ERR %s <reason>]", msg, subID)
+	}
+}
+
 func TestMultipleClients(t *testing.T) {
 	clients := make([]*tests.TestClient, 3)
 	for i := 0; i < 3; i++ {

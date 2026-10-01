@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -98,7 +99,7 @@ func Run() error {
 		}
 		return relay.ServerStats{
 			ActiveConnections: currentConnections.Load(),
-			TotalMessagesSent: totalMessagesSent,
+			TotalMessagesSent: atomic.LoadInt64(&totalMessagesSent),
 			UptimeSeconds:     int64(time.Since(startTime).Seconds()),
 			Version:           Version,
 			BuildTime:         BuildTime,
@@ -131,6 +132,7 @@ func Run() error {
 
 			// Reset configurations to allow fresh loading
 			resetConfigurations()
+			restartedForConfig.Store(true)
 			continue
 		case <-signalChan:
 			log.Startup().Info("Shutting down server gracefully")
@@ -364,6 +366,10 @@ func initializeSubsystems(ctx context.Context, cfg *cfgType.ServerConfig) error 
 	return nil
 }
 
+// restartedForConfig is set by the lifecycle loop before it starts an
+// instance to replace one torn down by a config change.
+var restartedForConfig atomic.Bool
+
 // setupHTTPServer creates and starts the HTTP server
 func setupHTTPServer(cfg *cfgType.ServerConfig) *http.Server {
 	mux := initClient()
@@ -377,7 +383,11 @@ func setupHTTPServer(cfg *cfgType.ServerConfig) *http.Server {
 	}
 
 	go func() {
-		fmt.Printf("Server is running on http://localhost%s\n", cfg.Server.Port)
+		if restartedForConfig.Load() {
+			fmt.Printf("Server restarted after a config change, running on http://localhost%s\n", cfg.Server.Port)
+		} else {
+			fmt.Printf("Server is running on http://localhost%s\n", cfg.Server.Port)
+		}
 		log.Startup().Info("HTTP server started",
 			"address", cfg.Server.Port,
 			"read_timeout", cfg.Server.ReadTimeout,

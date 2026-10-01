@@ -124,15 +124,17 @@ func PrintStats(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
+	// totalMessagesSent is the running total the stats API serves, so log
+	// the change per interval rather than resetting it.
+	last := atomic.LoadInt64(&totalMessagesSent)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			sent := atomic.LoadInt64(&totalMessagesSent)
-
-			// Reset counters
-			atomic.StoreInt64(&totalMessagesSent, 0)
+			total := atomic.LoadInt64(&totalMessagesSent)
+			sent := total - last
+			last = total
 
 			// Get memory statistics from connection manager
 			memStats := connManager.GetMemoryStats()
@@ -849,6 +851,19 @@ func clientReader(client *Client) {
 			// NIP). Reply with PONG so the WARN log doesn't fire and
 			// the client knows the relay is alive.
 			client.SendMessage([]interface{}{"PONG"})
+		case "NEG-OPEN":
+			// NIP-77 negentropy isn't implemented (#47). Refuse it so the
+			// client falls back to REQ now instead of waiting out a timeout.
+			if len(message) >= 2 {
+				if subID, ok := message[1].(string); ok {
+					client.SendMessage([]interface{}{"NEG-ERR", subID, "error: NIP-77 negentropy is not supported by this relay"})
+				}
+			}
+		case "NEG-MSG", "NEG-CLOSE":
+			// No negentropy session can exist, since NEG-OPEN is refused.
+			log.RelayClient().Debug("Ignoring negentropy message",
+				"type", messageType,
+				"client_id", client.id)
 		default:
 			log.RelayClient().Warn("Unknown message type",
 				"type", messageType,
