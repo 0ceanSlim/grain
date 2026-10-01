@@ -102,9 +102,34 @@ func TestNIP86_GrainUpdateEventPurge(t *testing.T) {
 		"purge_by_kind_enabled":  false,
 		"kinds_to_purge":         []any{},
 		"exclude_whitelisted":    true,
+		"retention_clock":        "created_at",
+		"late_arrival_minutes":   30.0,
 	}
 	_, env := callNIP86(t, owner, "grain_updateeventpurge", []any{payload})
 	assertStaged(t, env)
+
+	// The dashboard's Retention view reads these back from the REST endpoint.
+	resp, err := http.Get(nip86URL + "api/v1/relay/config/event_purge")
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	defer resp.Body.Close()
+	var got struct {
+		RetentionClock     string `json:"retention_clock"`
+		LateArrivalMinutes int    `json:"late_arrival_minutes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("decode read back: %v", err)
+	}
+	if got.RetentionClock != "created_at" || got.LateArrivalMinutes != 30 {
+		t.Fatalf("read back %+v, want created_at / 30", got)
+	}
+
+	// A value the purger can't act on is refused rather than saved.
+	payload["retention_clock"] = "recieved"
+	if _, env := callNIP86(t, owner, "grain_updateeventpurge", []any{payload}); env == nil || env.Error == "" {
+		t.Fatal("invalid retention_clock was accepted")
+	}
 }
 
 func TestNIP86_GrainUpdateBackupRelay(t *testing.T) {
