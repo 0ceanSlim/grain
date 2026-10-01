@@ -6,6 +6,37 @@ import (
 	cfgType "github.com/0ceanslim/grain/config/types"
 )
 
+func TestValidate_EventPurgeClock(t *testing.T) {
+	cfg := &cfgType.ServerConfig{}
+	if _, err := ValidateAndApplyDefaults(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EventPurge.RetentionClock != cfgType.RetentionClockReceived {
+		t.Errorf("retention_clock defaulted to %q, want %q", cfg.EventPurge.RetentionClock, cfgType.RetentionClockReceived)
+	}
+	if cfg.EventPurge.LateArrivalMinutes != cfgType.DefaultLateArrivalMinutes {
+		t.Errorf("late_arrival_minutes defaulted to %d", cfg.EventPurge.LateArrivalMinutes)
+	}
+
+	for _, tc := range []struct {
+		clock   string
+		late    int
+		wantErr bool
+	}{
+		{cfgType.RetentionClockReceived, 30, false},
+		{cfgType.RetentionClockCreatedAt, 0, false},
+		{"recieved", 0, true},
+		{cfgType.RetentionClockReceived, -1, true},
+	} {
+		cfg := &cfgType.ServerConfig{}
+		cfg.EventPurge.RetentionClock = tc.clock
+		cfg.EventPurge.LateArrivalMinutes = tc.late
+		if _, err := ValidateAndApplyDefaults(cfg); (err != nil) != tc.wantErr {
+			t.Errorf("clock %q late %d: err = %v, wantErr %v", tc.clock, tc.late, err, tc.wantErr)
+		}
+	}
+}
+
 // database.fulltext_kinds: nil is "not set" (nostrdb applies its default),
 // an explicit empty list is a deliberate opt-out, and out-of-range kinds
 // are a hard error rather than a warning.

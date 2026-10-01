@@ -1335,6 +1335,21 @@ const dashboardManager = {
                 data.purge_interval_minutes
               )}</span>
             </div>
+            <div class="flex justify-between items-center">
+              <div>
+                <span class="text-text-secondary text-sm">Age Counted From</span>
+                <div class="text-xs text-text-secondary">${
+                  data.retention_clock === "created_at"
+                    ? "Each event's own timestamp"
+                    : `Arrival, for events received over ${
+                        data.late_arrival_minutes || 10
+                      } min late`
+                }</div>
+              </div>
+              <span class="text-text font-medium text-lg">${
+                data.retention_clock === "created_at" ? "Created at" : "Received"
+              }</span>
+            </div>
           </div>
         </div>
       </div>

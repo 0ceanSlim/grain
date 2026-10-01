@@ -14,9 +14,11 @@ import "C"
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"github.com/0ceanslim/grain/server/db/arrivals"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -25,6 +27,11 @@ type NDB struct {
 	ndb        *C.struct_ndb
 	mu         sync.RWMutex // protects close
 	expiration *ExpirationTracker
+
+	// Late-arrival ledger for the received retention clock; nil until
+	// TrackArrivals. lateArrivalSecs is its recording threshold.
+	arrivals        atomic.Pointer[arrivals.Ledger]
+	lateArrivalSecs atomic.Int64
 }
 
 // NDB open flags. These map 1:1 onto nostrdb.h NDB_FLAG_* bits.
@@ -140,6 +147,7 @@ func (db *NDB) Close() {
 		db.ndb = nil
 		log.DB().Info("nostrdb closed")
 	}
+	db.flushArrivals()
 }
 
 // ProcessEvent ingests a raw JSON Nostr event string into the database.

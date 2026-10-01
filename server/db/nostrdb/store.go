@@ -71,6 +71,7 @@ func (db *NDB) ingestEvent(evt nostr.Event, jsonStr string) error {
 	// NIP-40: register a future expiration with the in-memory tracker.
 	// No-op if the event has no expiration tag or the tracker isn't set.
 	db.trackIfExpiring(evt)
+	db.noteArrival(evt)
 
 	log.DBStore().Info("Event stored",
 		"event_id", evt.ID, "kind", evt.Kind, "pubkey", evt.PubKey)

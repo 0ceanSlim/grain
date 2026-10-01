@@ -140,6 +140,9 @@ func UpdateRateLimitConfig(rl cfgType.RateLimitConfig) error {
 // UpdateEventPurgeConfig stages a new event-purge configuration.
 // Purge timers stay on the old schedule until reload.
 func UpdateEventPurgeConfig(ep cfgType.EventPurgeConfig) error {
+	if err := ValidateEventPurge(ep); err != nil {
+		return err
+	}
 	ConfigMu.Lock()
 	defer ConfigMu.Unlock()
 	c := GetConfig()

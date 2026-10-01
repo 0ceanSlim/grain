@@ -38,7 +38,7 @@ backup_relay:
 event_purge:
   enabled: true
   disable_at_startup: false
-  keep_interval_hours: 0         # drop anything older than 0 hours = immediate
+  keep_interval_hours: 1         # the test backdates events past this
   purge_interval_minutes: 1      # purge once per minute
   purge_by_category:
     regular: true
@@ -51,6 +51,11 @@ event_purge:
   purge_by_kind_enabled: false
   kinds_to_purge: []
   exclude_whitelisted: true
+  # The test backdates a kind-1 by 2h (under the 10h threshold: aged from
+  # created_at, purged) and another by 20h (a late arrival: aged from
+  # receipt, kept for the 1h window).
+  retention_clock: received
+  late_arrival_minutes: 600
 
 event_time_constraints:
   min_created_at: 1577836800

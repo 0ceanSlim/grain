@@ -20,6 +20,8 @@ type EventPurgeConfigResponse struct {
 	KindsToPurge         []int           `json:"kinds_to_purge"`
 	KeepKinds            []int           `json:"keep_kinds"`
 	ExcludeWhitelisted   bool            `json:"exclude_whitelisted"`
+	RetentionClock       string          `json:"retention_clock"`
+	LateArrivalMinutes   int             `json:"late_arrival_minutes"`
 }
 
 // GetEventPurgeConfig handles the request to return event purging configuration
@@ -56,6 +58,8 @@ func GetEventPurgeConfig(w http.ResponseWriter, r *http.Request) {
 		KindsToPurge:         cfg.EventPurge.KindsToPurge,
 		KeepKinds:            cfg.EventPurge.KeepKinds,
 		ExcludeWhitelisted:   cfg.EventPurge.ExcludeWhitelisted,
+		RetentionClock:       cfg.EventPurge.RetentionClock,
+		LateArrivalMinutes:   cfg.EventPurge.LateArrivalMinutes,
 	}
 
 	// Set response headers

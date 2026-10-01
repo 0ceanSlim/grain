@@ -74,6 +74,41 @@
     <span class="text-xs text-text-secondary">How often the background purger wakes up.</span>
   </label>
 
+  <!-- Retention clock: what the keep interval counts from. "received"
+       gives an event that arrives already old the full window instead of
+       losing it at the next purge. -->
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Count age from</span>
+    <select
+      name="retention_clock"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text"
+    >
+      <option value="received" {{if ne .RetentionClock "created_at"}}selected{{end}}>when received</option>
+      <option value="created_at" {{if eq .RetentionClock "created_at"}}selected{{end}}>event's created_at</option>
+    </select>
+    <span class="text-xs text-text-secondary">
+      "When received" keeps an event that arrives already old for the full
+      keep interval. "created_at" purges it at the next run.
+    </span>
+  </label>
+
+  <label class="flex flex-col gap-1 text-sm">
+    <span class="font-medium text-text-secondary">Late arrival (minutes)</span>
+    <input
+      type="number"
+      name="late_arrival_minutes"
+      data-shape="number"
+      min="1"
+      value="{{.LateArrivalMinutes}}"
+      class="px-3 py-2 rounded bg-surface-elevated border border-border text-text"
+    />
+    <span class="text-xs text-text-secondary">
+      With "when received", events arriving more than this long after their
+      created_at are aged from arrival. Sooner ones are aged from created_at,
+      so they can be purged at most this early.
+    </span>
+  </label>
+
   <!-- Categories: the keys are the v0.4-compatible category names
        from purgeCategoryForKind. Each checkbox value is the
        category key; checked = "purge this category". data-shape

@@ -204,6 +204,15 @@ func runServerInstance(shutdownChan <-chan struct{}, restartChan <-chan struct{}
 		log.Startup().Error("Failed to open nostrdb", "path", dbPath, "error", err)
 	} else {
 		nostrdb.SetGlobalDB(db)
+		// The ledger lives with the DB it describes. It records under either
+		// retention clock so switching clocks leaves no gap.
+		if cfg.EventPurge.Enabled {
+			ledgerPath := filepath.Join(dbPath, "arrivals.log")
+			if err := db.TrackArrivals(ctx, ledgerPath, cfg.EventPurge.LateArrival()); err != nil {
+				log.Startup().Warn("Late-arrival ledger unavailable; purge will age every event from created_at",
+					"path", ledgerPath, "error", err)
+			}
+		}
 	}
 	defer func() {
 		if db != nil {

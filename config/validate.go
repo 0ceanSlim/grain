@@ -91,6 +91,18 @@ func ValidateAndApplyDefaults(cfg *cfgType.ServerConfig) (warnings []string, err
 		warnings = append(warnings, "logging.check_interval_min was 0, defaulting to 5")
 	}
 
+	// Event purge clock. Both keys are new in 0.8, so leaving them out of an
+	// older config is normal and defaults quietly.
+	if cfg.EventPurge.RetentionClock == "" {
+		cfg.EventPurge.RetentionClock = cfgType.RetentionClockReceived
+	}
+	if cfg.EventPurge.LateArrivalMinutes == 0 {
+		cfg.EventPurge.LateArrivalMinutes = cfgType.DefaultLateArrivalMinutes
+	}
+	if err := ValidateEventPurge(cfg.EventPurge); err != nil {
+		return warnings, err
+	}
+
 	// Rate limit defaults
 	if cfg.RateLimit.MaxEventSize == 0 {
 		cfg.RateLimit.MaxEventSize = 524288
@@ -106,4 +118,21 @@ func ValidateAndApplyDefaults(cfg *cfgType.ServerConfig) (warnings []string, err
 	}
 
 	return warnings, err
+}
+
+// ValidateEventPurge rejects event_purge values the purger can't act on. It
+// runs at load and on admin writes, so a bad value from the dashboard or API
+// is refused instead of being saved and failing the next start.
+func ValidateEventPurge(ep cfgType.EventPurgeConfig) error {
+	switch ep.RetentionClock {
+	case "", cfgType.RetentionClockReceived, cfgType.RetentionClockCreatedAt:
+	default:
+		return fmt.Errorf("event_purge.retention_clock %q is invalid: use %q or %q",
+			ep.RetentionClock, cfgType.RetentionClockReceived, cfgType.RetentionClockCreatedAt)
+	}
+	if ep.LateArrivalMinutes < 0 {
+		return fmt.Errorf("event_purge.late_arrival_minutes %d is invalid: must be >= 0 (0 = default %d)",
+			ep.LateArrivalMinutes, cfgType.DefaultLateArrivalMinutes)
+	}
+	return nil
 }

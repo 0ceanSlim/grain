@@ -486,7 +486,27 @@ event_purge:
   purge_by_kind_enabled: false # Enable kind-specific purging
   kinds_to_purge: [1, 2, 1000] # Specific kinds to purge
   exclude_whitelisted: true # Never purge whitelisted users
+  retention_clock: received # Count age from receipt ("received") or created_at
+  late_arrival_minutes: 10 # How late an event must arrive to be aged from receipt
 ```
+
+#### Retention Clock
+
+`keep_interval_hours` counts from when the relay **received** an event by
+default. Clients often publish events days after writing them (republished
+profiles, contact lists, relay lists, backfills); counted from `created_at`,
+such an event would already be past the window and gone at the next purge.
+
+Grain records the arrival time of any event received more than
+`late_arrival_minutes` after its `created_at`, in `arrivals.log` next to the
+database, and ages it from then. Events that arrive sooner are aged from
+`created_at`, so they can be purged at most that many minutes early. The
+first arrival counts; receiving a stored event again doesn't restart its
+clock. Recording starts when purging is enabled, so events stored before
+then are aged from `created_at`.
+
+Set `retention_clock: created_at` to age every event from its own
+timestamp, the behavior before 0.8.
 
 #### Purge Categories
 

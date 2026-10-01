@@ -130,6 +130,8 @@ event_purge:
     - 1000
   keep_kinds: [] # Kinds that are NEVER purged, overriding the category filter and kinds_to_purge (e.g. [0, 3, 10002] to always retain profiles + relay lists)
   exclude_whitelisted: true # Exclude events from whitelisted pubkeys during purging
+  retention_clock: received # What an event's age counts from: "received" (when this relay got it, so an event that arrives already old still gets the full keep interval) or "created_at" (its own timestamp: an old event goes at the next purge)
+  late_arrival_minutes: 10 # Under "received": events arriving more than this long after their created_at have their arrival recorded; anything sooner is aged from created_at, so it can be purged at most this early
 
 event_time_constraints:
   min_created_at: 1577836800 # January 1, 2020, as Unix timestamp
