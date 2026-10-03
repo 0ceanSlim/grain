@@ -2,6 +2,7 @@ package nostrdb
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -147,4 +148,48 @@ func TestDeleteNoteByID_ReingestAfterDelete(t *testing.T) {
 		t.Fatalf("re-store: %v", err)
 	}
 	waitForIngest(t, db, evt.ID, true)
+}
+
+// A deletion request with a malformed target is refused with "invalid:" and
+// deletes nothing, even beside a valid target. Another author's event is
+// ignored without an error.
+func TestProcessDeletion_Targets(t *testing.T) {
+	db := openTempDB(t)
+	ctx := context.Background()
+	priv, pub := newTestKey(t)
+	otherPriv, otherPub := newTestKey(t)
+	now := time.Now().Unix()
+
+	mine := signEvent(t, priv, pub, 1, "mine", nil, now-10)
+	theirs := signEvent(t, otherPriv, otherPub, 1, "theirs", nil, now-10)
+	for _, evt := range []nostr.Event{mine, theirs} {
+		if err := db.StoreEvent(ctx, evt); err != nil {
+			t.Fatal(err)
+		}
+		waitForIngest(t, db, evt.ID, true)
+	}
+
+	for _, tags := range [][][]string{
+		{{"e", ""}, {"e", mine.ID}},
+		{{"e", mine.ID}, {"e", "nothex"}},
+		{{"e"}},
+		{{"a", "30023:" + pub}},
+		{{"a", "x:" + pub + ":d"}},
+		{{"a", "30023:nothex:d"}},
+	} {
+		del := signEvent(t, priv, pub, 5, "", tags, now)
+		err := db.ProcessDeletion(ctx, del)
+		if err == nil || !strings.HasPrefix(err.Error(), "invalid: ") {
+			t.Errorf("tags %v: err = %v, want an invalid: refusal", tags, err)
+		}
+	}
+	time.Sleep(200 * time.Millisecond)
+	waitForIngest(t, db, mine.ID, true)
+
+	del := signEvent(t, priv, pub, 5, "", [][]string{{"e", theirs.ID}, {"a", "30023:" + otherPub + ":d"}}, now)
+	if err := db.ProcessDeletion(ctx, del); err != nil {
+		t.Fatalf("deletion naming another author's events: %v", err)
+	}
+	waitForIngest(t, db, del.ID, true)
+	waitForIngest(t, db, theirs.ID, true)
 }

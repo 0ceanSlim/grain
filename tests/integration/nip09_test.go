@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -131,5 +132,20 @@ func TestNIP09_DeleteAddressable(t *testing.T) {
 	})
 	if got := c.ExpectEOSE(sub, 3*time.Second); len(got) != 0 {
 		t.Fatalf("expected addressable event deleted, got %d", len(got))
+	}
+}
+
+// A deletion request whose target can't name an event is refused, not stored
+// as a deletion that deletes nothing.
+func TestNIP09_RefusesMalformedTarget(t *testing.T) {
+	kp := tests.NewTestKeypair()
+	c := tests.NewTestClient(t)
+	defer c.Close()
+
+	del := kp.SignEvent(5, "", [][]string{{"e", ""}})
+	c.SendEvent(del)
+	ok, reason := c.ExpectOK(del.ID, 3*time.Second)
+	if ok || !strings.HasPrefix(reason, "invalid:") {
+		t.Fatalf("got OK=%v %q, want an invalid: refusal", ok, reason)
 	}
 }

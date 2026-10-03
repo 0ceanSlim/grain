@@ -30,6 +30,12 @@ func (db *NDB) ProcessDeletion(ctx context.Context, evt nostr.Event) error {
 		"pubkey", evt.PubKey,
 		"tag_count", len(evt.Tags))
 
+	// A malformed target is refused rather than stored as if it named
+	// something: the client gets "invalid:", the operator no ERROR line.
+	if err := validateDeletionTargets(evt.Tags); err != nil {
+		return err
+	}
+
 	// Check the kind-5 itself before deleting anything it targets, so a
 	// deletion nostrdb would refuse to record doesn't delete either.
 	jsonStr, err := encodeForIngest(evt)
@@ -97,13 +103,14 @@ func (db *NDB) verifyAndDeleteByID(eventID, requesterPubKey string, deleteCreate
 		return nil
 	}
 
-	// NIP-09: deletion only applies to events by the same author.
+	// NIP-09: deletion only applies to events by the same author. Another
+	// author's event is simply not deleted; that's not a failure.
 	if target.PubKey != requesterPubKey {
-		log.DBStore().Warn("Deletion rejected - pubkey mismatch",
+		log.DBStore().Info("Deletion target belongs to another pubkey; ignored",
 			"event_id", eventID,
 			"event_pubkey", target.PubKey,
 			"requester_pubkey", requesterPubKey)
-		return fmt.Errorf("cannot delete event owned by another pubkey")
+		return nil
 	}
 
 	// NIP-09 is past-only: a deletion request cannot remove an event that
@@ -149,13 +156,14 @@ func (db *NDB) verifyAndDeleteByAddr(coord, requesterPubKey string, deleteCreate
 		return fmt.Errorf("invalid kind in a tag %q: %w", coord, err)
 	}
 
-	// NIP-09 same-author rule for addressable deletes.
+	// NIP-09 same-author rule for addressable deletes; another author's
+	// coordinate is ignored, as for e tags.
 	if coordPubkey != requesterPubKey {
-		log.DBStore().Warn("Addressable deletion rejected - pubkey mismatch",
+		log.DBStore().Info("Addressable deletion target belongs to another pubkey; ignored",
 			"coord", coord,
 			"coord_pubkey", coordPubkey,
 			"requester_pubkey", requesterPubKey)
-		return fmt.Errorf("cannot delete addressable event owned by another pubkey")
+		return nil
 	}
 
 	// Query the coordinate. For non-addressable kinds (replaceable 0/3/1xxxx)
@@ -201,5 +209,40 @@ func (db *NDB) verifyAndDeleteByAddr(coord, requesterPubKey string, deleteCreate
 		"coord", coord,
 		"deleted", deleted,
 		"scanned", len(matches))
+	return nil
+}
+
+// validateDeletionTargets refuses a deletion request whose e or a tag can't
+// name an event: an e target must be a 64-character hex id, an a target a
+// kind:pubkey:d-tag coordinate with a numeric kind and a hex pubkey.
+func validateDeletionTargets(tags [][]string) error {
+	for i, tag := range tags {
+		if len(tag) == 0 {
+			continue
+		}
+		switch tag[0] {
+		case "e":
+			if len(tag) < 2 {
+				return fmt.Errorf("invalid: deletion tag %d: e tag has no event id", i)
+			}
+			if _, err := hexToBytes32(tag[1]); err != nil {
+				return fmt.Errorf("invalid: deletion tag %d: e target %q is not a 64-character hex event id", i, tag[1])
+			}
+		case "a":
+			if len(tag) < 2 {
+				return fmt.Errorf("invalid: deletion tag %d: a tag has no coordinate", i)
+			}
+			parts := strings.SplitN(tag[1], ":", 3)
+			if len(parts) != 3 {
+				return fmt.Errorf("invalid: deletion tag %d: a target %q is not kind:pubkey:d-tag", i, tag[1])
+			}
+			if k, err := strconv.Atoi(parts[0]); err != nil || k < 0 || k > 65535 {
+				return fmt.Errorf("invalid: deletion tag %d: a target %q has no valid kind", i, tag[1])
+			}
+			if _, err := hexToBytes32(parts[1]); err != nil {
+				return fmt.Errorf("invalid: deletion tag %d: a target %q has no valid pubkey", i, tag[1])
+			}
+		}
+	}
 	return nil
 }
