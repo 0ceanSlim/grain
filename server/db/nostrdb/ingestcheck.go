@@ -32,7 +32,8 @@ func encodeForIngest(evt nostr.Event) (string, error) {
 			"kind", evt.Kind,
 			"pubkey", evt.PubKey,
 			"size_bytes", len(js),
-			"reason", err)
+			"reason", err,
+			"event", evt.ForLog(16<<10))
 		return "", fmt.Errorf("nostrdb cannot store event: %w", err)
 	}
 	return js, nil

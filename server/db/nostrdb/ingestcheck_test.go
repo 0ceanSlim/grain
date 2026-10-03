@@ -113,3 +113,31 @@ func TestProcessDeletion_UnstorableDeletionDeletesNothing(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	waitForIngest(t, db, target.ID, true)
 }
+
+// nostrdb packed any 64-char hex tag value into a binary id, uppercase too,
+// and wrote it back lowercase: the recomputed id no longer matched, so the
+// guard refused the event. Only lowercase hex is packed now.
+func TestStoreEvent_UppercaseHexTagRoundTrips(t *testing.T) {
+	db := openTempDB(t)
+	ctx := context.Background()
+	priv, pub := newTestKey(t)
+
+	upper := strings.ToUpper(strings.Repeat("ab", 32))
+	tags := [][]string{{"x", upper}, {"e", strings.Repeat("cd", 32)}}
+	evt := signEvent(t, priv, pub, 1, "uppercase hex tag", tags, time.Now().Unix())
+	if err := db.StoreEvent(ctx, evt); err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	waitForIngest(t, db, evt.ID, true)
+
+	txn, err := db.BeginQuery()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := txn.GetNoteByID(evt.ID)
+	txn.EndQuery()
+	if err != nil || got == nil {
+		t.Fatalf("get: %v", err)
+	}
+	assertTagsEqual(t, tags, got.Tags)
+}

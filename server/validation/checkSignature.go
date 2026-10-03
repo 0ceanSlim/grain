@@ -11,6 +11,10 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
 
+// eventLogMax bounds the event JSON logged with an id mismatch: enough for
+// any profile, short of a 512 KB note.
+const eventLogMax = 16 << 10
+
 // CheckSignature verifies the event's signature and ID
 func CheckSignature(evt nostr.Event) bool {
 	// Serialize event correctly
@@ -32,7 +36,8 @@ func CheckSignature(evt nostr.Event) bool {
 			"expected", eventID,
 			"actual", evt.ID,
 			"pubkey", evt.PubKey,
-			"kind", evt.Kind)
+			"kind", evt.Kind,
+			"event", evt.ForLog(eventLogMax))
 		return false
 	}
 

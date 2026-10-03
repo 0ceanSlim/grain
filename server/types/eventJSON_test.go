@@ -30,7 +30,9 @@ func TestAppendNIP01String_Escapes(t *testing.T) {
 		"a & b":        `"a & b"`,
 		"<>":           `"<>"`,
 		"\u2028":       "\"\u2028\"",
-		"\x01":         "\"\x01\"",
+		"\x01":         `"\u0001"`,
+		"\x1f":         `"\u001f"`,
+		"\x7f":         "\"\x7f\"",
 		`"\`:           `"\"\\"`,
 		"\n\r\t\b\f":   `"\n\r\t\b\f"`,
 		`\u0026`:       `"\\u0026"`,
@@ -40,8 +42,8 @@ func TestAppendNIP01String_Escapes(t *testing.T) {
 		"mid\"dle\"\"": `"mid\"dle\"\""`,
 	}
 	for in, want := range cases {
-		if got := string(appendNIP01String(nil, in)); got != want {
-			t.Errorf("appendNIP01String(%q) = %q, want %q", in, got, want)
+		if got := string(appendJSONString(nil, in, true)); got != want {
+			t.Errorf("appendJSONString(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
@@ -50,7 +52,7 @@ func TestAppendNIP01String_Escapes(t *testing.T) {
 // encoding/json with HTML escaping off, which pins the array layout.
 func TestCommitment_MatchesUnescapedEncoder(t *testing.T) {
 	for _, s := range nip01Strings {
-		if strings.ContainsAny(s, "\x01\x1f\u2028\u2029") {
+		if strings.ContainsAny(s, "\u2028\u2029") {
 			continue
 		}
 		evt := Event{
