@@ -20,7 +20,7 @@ import (
 //     deprecated:  true
 //
 // The grain purge scheduler only supports minute-granularity intervals,
-// so this test waits ~70s for the first purge sweep. It is skipped in
+// so this test polls for up to ~150s for a purge sweep. It is skipped in
 // -short mode so the main integration run stays fast.
 //
 // Events are backdated 2h, past the 1h keep window. The kind-1 is under the
@@ -45,6 +45,12 @@ func TestEventPurge_CategoryGate(t *testing.T) {
 			pub.Close()
 			t.Fatalf("kind-%d %q rejected: %q", kind, content, reason)
 		}
+		// OK is sent before the async commit. Without this, a not-yet-
+		// written event would pass the "purged" check below.
+		if !pub.AwaitCommit(evt.ID, 10*time.Second) {
+			pub.Close()
+			t.Fatalf("kind-%d %q not committed in time", kind, content)
+		}
 		return evt.ID
 	}
 	regular := publish(1, "should be purged", now-2*3600)
@@ -52,21 +58,27 @@ func TestEventPurge_CategoryGate(t *testing.T) {
 	late := publish(1, "late arrival, should be kept", now-20*3600)
 	pub.Close()
 
-	// Wait past one purge interval. Relay read_timeout is 60s so we must
-	// close the publish connection across the sleep.
-	t.Log("waiting 70s for purge sweep…")
-	time.Sleep(70 * time.Second)
-
-	client := tests.NewTestClientAt(t, tests.EventPurgeRelayURL)
-	defer client.Close()
-
+	// Each check opens its own connection: the relay's 60s read timeout
+	// closes an idle one.
 	count := func(id string) int {
+		client := tests.NewTestClientAt(t, tests.EventPurgeRelayURL)
+		defer client.Close()
 		sub := tests.RandomSubID()
 		client.Subscribe(sub, map[string]interface{}{"ids": []string{id}})
 		return len(client.ExpectEOSE(sub, 5*time.Second))
 	}
-	if n := count(regular); n != 0 {
-		t.Errorf("expected the backdated kind-1 to be purged, still got %d results", n)
+
+	// Sweeps run once a minute, and one can land just before the publish.
+	// Poll until the backdated kind-1 is gone, allowing two intervals plus
+	// the sweep's own run time, rather than sleeping a fixed span that a
+	// slow sweep can overrun.
+	t.Log("waiting for a purge sweep…")
+	deadline := time.Now().Add(150 * time.Second)
+	for count(regular) != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("expected the backdated kind-1 to be purged within two sweep intervals")
+		}
+		time.Sleep(10 * time.Second)
 	}
 	if n := count(replaceable); n != 1 {
 		t.Errorf("expected kind-0 replaceable to be kept by category gate, got %d results", n)
