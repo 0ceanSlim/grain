@@ -122,3 +122,20 @@ func TestAddressable_GroupsByDTag(t *testing.T) {
 		}
 	}
 }
+
+// NIP-01: a missing d tag is the empty string, so an addressable event
+// without one is stored rather than refused.
+func TestAddressable_MissingDTagAccepted(t *testing.T) {
+	kp := tests.NewTestKeypair()
+	c := tests.NewTestClient(t)
+	defer c.Close()
+
+	evt := kp.SignEvent(30078, "no d tag", nil)
+	c.SendEvent(evt)
+	if ok, reason := c.ExpectOK(evt.ID, 5*time.Second); !ok {
+		t.Fatalf("addressable event without d tag rejected: %q", reason)
+	}
+	if !c.AwaitCommit(evt.ID, 5*time.Second) {
+		t.Fatal("acked OK but never stored")
+	}
+}

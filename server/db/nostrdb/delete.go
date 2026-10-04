@@ -167,18 +167,19 @@ func (db *NDB) verifyAndDeleteByAddr(coord, requesterPubKey string, deleteCreate
 	}
 
 	// Query the coordinate. For non-addressable kinds (replaceable 0/3/1xxxx)
-	// the `d` tag is absent — drop it from the filter in that case.
-	limit := 100
-	filter := nostr.Filter{
-		Authors: []string{coordPubkey},
-		Kinds:   []int{kind},
-		Limit:   &limit,
-	}
+	// the `d` tag is absent — drop it from the filter in that case. An
+	// addressable coordinate with an empty d also covers events with no d tag.
+	var matches []nostr.Event
 	if isAddressable(kind) {
-		filter.Tags = map[string][]string{"d": {dTag}}
+		matches, err = db.addressableVersions(coordPubkey, kind, dTag)
+	} else {
+		limit := 100
+		matches, err = db.Query([]nostr.Filter{{
+			Authors: []string{coordPubkey},
+			Kinds:   []int{kind},
+			Limit:   &limit,
+		}}, limit)
 	}
-
-	matches, err := db.Query([]nostr.Filter{filter}, limit)
 	if err != nil {
 		return fmt.Errorf("coordinate query failed: %w", err)
 	}

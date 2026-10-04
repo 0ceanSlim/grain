@@ -193,3 +193,53 @@ func TestProcessDeletion_Targets(t *testing.T) {
 	waitForIngest(t, db, del.ID, true)
 	waitForIngest(t, db, theirs.ID, true)
 }
+
+// NIP-01 treats a missing or empty d tag as the empty string, so an
+// addressable event without one is stored, and no-d, ["d"] and ["d",""]
+// versions replace one another.
+func TestAddressable_EmptyD(t *testing.T) {
+	db := openTempDB(t)
+	ctx := context.Background()
+	priv, pub := newTestKey(t)
+	now := time.Now().Unix()
+
+	noD := signEvent(t, priv, pub, 30789, "v1", nil, now-30)
+	if err := db.StoreEvent(ctx, noD); err != nil {
+		t.Fatalf("no d tag: %v", err)
+	}
+	waitForIngest(t, db, noD.ID, true)
+
+	bare := signEvent(t, priv, pub, 30789, "v2", [][]string{{"d"}}, now-20)
+	if err := db.StoreEvent(ctx, bare); err != nil {
+		t.Fatalf(`["d"]: %v`, err)
+	}
+	waitForIngest(t, db, bare.ID, true)
+	waitForIngest(t, db, noD.ID, false)
+
+	empty := signEvent(t, priv, pub, 30789, "v3", [][]string{{"d", ""}}, now-10)
+	if err := db.StoreEvent(ctx, empty); err != nil {
+		t.Fatalf(`["d",""]: %v`, err)
+	}
+	waitForIngest(t, db, empty.ID, true)
+	waitForIngest(t, db, bare.ID, false)
+
+	older := signEvent(t, priv, pub, 30789, "older", nil, now-40)
+	if err := db.StoreEvent(ctx, older); err == nil || !strings.HasPrefix(err.Error(), "blocked: ") {
+		t.Fatalf("older version at the empty address: err = %v, want blocked:", err)
+	}
+
+	// A distinct d value is a different address.
+	named := signEvent(t, priv, pub, 30789, "named", [][]string{{"d", "x"}}, now-5)
+	if err := db.StoreEvent(ctx, named); err != nil {
+		t.Fatal(err)
+	}
+	waitForIngest(t, db, named.ID, true)
+
+	// "kind:pubkey:" names the empty address.
+	del := signEvent(t, priv, pub, 5, "", [][]string{{"a", "30789:" + pub + ":"}}, now)
+	if err := db.ProcessDeletion(ctx, del); err != nil {
+		t.Fatal(err)
+	}
+	waitForIngest(t, db, empty.ID, false)
+	waitForIngest(t, db, named.ID, true)
+}

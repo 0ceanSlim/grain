@@ -125,36 +125,10 @@ func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event, jsonStr st
 // storeAddressable handles NIP-01 parameterized replaceable events (kinds 30000-39999).
 // Only the most recent event per (pubkey, kind, d-tag) is kept.
 func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event, jsonStr string) error {
-	// Extract d-tag
-	var dTag string
-	for _, tag := range evt.Tags {
-		if len(tag) >= 2 && tag[0] == "d" {
-			dTag = tag[1]
-			break
-		}
-	}
+	dTag := addressableD(evt.Tags)
 
-	if dTag == "" {
-		return fmt.Errorf("no d tag present in addressable event")
-	}
-
-	txn, err := db.BeginQuery()
-	if err != nil {
-		return fmt.Errorf("failed to begin query for addressable check: %w", err)
-	}
-
-	// Look for existing event with same pubkey, kind, and d-tag
-	limit := 1
-	filters := []nostr.Filter{{
-		Authors: []string{evt.PubKey},
-		Kinds:   []int{evt.Kind},
-		Tags:    map[string][]string{"d": {dTag}},
-		Limit:   &limit,
-	}}
-
-	existing, err := txn.Query(filters, 1)
-	txn.EndQuery()
-
+	// Newest first, so existing[0] is the version to compare against.
+	existing, err := db.addressableVersions(evt.PubKey, evt.Kind, dTag)
 	if err != nil {
 		return fmt.Errorf("failed to query existing addressable event: %w", err)
 	}
@@ -215,4 +189,53 @@ func determineEventCategory(kind int) string {
 	default:
 		return "regular"
 	}
+}
+
+// addressableScanLimit bounds the scan for an empty d value: the newest
+// events of one author and kind. Far more than any author keeps at one kind.
+const addressableScanLimit = 500
+
+// addressableD returns an addressable event's d value: the first d tag's
+// value, or "" when there is none. NIP-01 treats a missing or empty d tag
+// as the empty string, so those are one address.
+func addressableD(tags [][]string) string {
+	for _, tag := range tags {
+		if len(tag) >= 1 && tag[0] == "d" {
+			if len(tag) >= 2 {
+				return tag[1]
+			}
+			return ""
+		}
+	}
+	return ""
+}
+
+// addressableVersions returns the stored events at (pubkey, kind, d),
+// newest first. A #d filter can't match an event with no d tag, so the
+// empty d is found by scanning the author's events of that kind.
+func (db *NDB) addressableVersions(pubkey string, kind int, d string) ([]nostr.Event, error) {
+	filter := nostr.Filter{
+		Authors: []string{pubkey},
+		Kinds:   []int{kind},
+	}
+	limit := addressableScanLimit
+	if d != "" {
+		filter.Tags = map[string][]string{"d": {d}}
+	}
+	filter.Limit = &limit
+
+	events, err := db.Query([]nostr.Filter{filter}, limit)
+	if err != nil {
+		return nil, err
+	}
+	if d != "" {
+		return events, nil
+	}
+	var out []nostr.Event
+	for _, e := range events {
+		if addressableD(e.Tags) == "" {
+			out = append(out, e)
+		}
+	}
+	return out, nil
 }
