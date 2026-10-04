@@ -141,3 +141,48 @@ func TestStoreEvent_UppercaseHexTagRoundTrips(t *testing.T) {
 	}
 	assertTagsEqual(t, tags, got.Tags)
 }
+
+// nostrdb's note parser read every string inside tags as a possible
+// top-level key, so a tag spelled like an event field overwrote that field
+// and the recomputed id no longer matched. Seen live as ["pubkey", <hex>].
+func TestStoreEvent_TagStringsNamedLikeFields(t *testing.T) {
+	db := openTempDB(t)
+	ctx := context.Background()
+	priv, pub := newTestKey(t)
+	hex64 := strings.Repeat("ab", 32)
+	now := time.Now().Unix()
+
+	for i, tags := range [][][]string{
+		{{"pubkey", hex64}},
+		{{"pubkey", "abc"}},
+		{{"id", hex64}},
+		{{"sig", hex64}},
+		{{"content", "replaced?"}},
+		{{"kind", "5"}},
+		{{"created_at", "1"}},
+		{{"tags", "x"}},
+		{{"t", "content"}, {"t", "nostr"}},
+		{{"t", "kind"}, {"t", "nostr"}},
+		{{"t", "pubkey"}, {"p", hex64}},
+	} {
+		evt := signEvent(t, priv, pub, 1, "field-named tags", tags, now-int64(i))
+		if err := db.StoreEvent(ctx, evt); err != nil {
+			t.Errorf("tags %v: %v", tags, err)
+			continue
+		}
+		waitForIngest(t, db, evt.ID, true)
+		txn, err := db.BeginQuery()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := txn.GetNoteByID(evt.ID)
+		txn.EndQuery()
+		if err != nil || got == nil {
+			t.Fatalf("tags %v: get: %v", tags, err)
+		}
+		if got.Content != evt.Content || got.PubKey != evt.PubKey || got.Kind != evt.Kind {
+			t.Errorf("tags %v: fields changed: %+v", tags, got)
+		}
+		assertTagsEqual(t, tags, got.Tags)
+	}
+}

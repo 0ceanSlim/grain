@@ -119,3 +119,20 @@ func TestReplaceableProfile_HTMLCharsReplaceOld(t *testing.T) {
 		t.Fatalf("want only the new profile %s, got %v", newer.ID, events)
 	}
 }
+
+// A tag spelled like an event field ("pubkey") made nostrdb rewrite that
+// field and refuse the event. Seen live on kind 4454.
+func TestEventStrings_FieldNamedTagStored(t *testing.T) {
+	kp := tests.NewTestKeypair()
+	c := tests.NewTestClient(t)
+	defer c.Close()
+
+	evt := kp.SignEvent(4454, "", [][]string{{"pubkey", strings.Repeat("ab", 32)}, {"t", "content"}})
+	c.SendEvent(evt)
+	if ok, reason := c.ExpectOK(evt.ID, 5*time.Second); !ok {
+		t.Fatalf("rejected: %q", reason)
+	}
+	if !c.AwaitCommit(evt.ID, 5*time.Second) {
+		t.Fatal("acked OK but never stored")
+	}
+}
