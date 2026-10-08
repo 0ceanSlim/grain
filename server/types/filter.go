@@ -1,20 +1,85 @@
 package relay
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 )
 
-// Filter represents the criteria used to query events
+// Filter represents the criteria used to query events. Its JSON form is the
+// NIP-01 wire format (see MarshalJSON), not the struct layout: tag filters are
+// flattened to "#<name>" keys and since/until are unix seconds.
 type Filter struct {
-	IDs     []string            `json:"ids,omitempty"`
-	Authors []string            `json:"authors,omitempty"`
-	Kinds   []int               `json:"kinds,omitempty"`
-	Tags    map[string][]string `json:"#,omitempty"` // Fixed: should be "#" for tag filters
-	Since   *time.Time          `json:"since,omitempty"`
-	Until   *time.Time          `json:"until,omitempty"`
-	Limit   *int                `json:"limit,omitempty"`
-	Search  string              `json:"search,omitempty"` // NIP-50: fulltext search query
+	IDs     []string `json:"ids,omitempty"`
+	Authors []string `json:"authors,omitempty"`
+	Kinds   []int    `json:"kinds,omitempty"`
+	// Tags maps a tag name WITHOUT the leading '#' ("d", "p", "e") to the
+	// values to match. A leading '#' is tolerated and stripped wherever the
+	// filter is matched or encoded.
+	Tags   map[string][]string `json:"-"`
+	Since  *time.Time          `json:"since,omitempty"`
+	Until  *time.Time          `json:"until,omitempty"`
+	Limit  *int                `json:"limit,omitempty"`
+	Search string              `json:"search,omitempty"` // NIP-50: fulltext search query
+}
+
+// TagFilterName normalizes a Tags key to the bare tag name: "#d" -> "d".
+// A lone "#" is left alone since it is itself a (strange) tag name.
+func TagFilterName(key string) string {
+	if len(key) >= 2 && key[0] == '#' {
+		return key[1:]
+	}
+	return key
+}
+
+// MarshalJSON encodes the filter in NIP-01 wire format. A nil list is omitted,
+// but an empty non-nil list is kept: per NIP-01 it matches nothing, and
+// dropping it would widen the filter to match everything.
+func (f Filter) MarshalJSON() ([]byte, error) {
+	m := make(map[string]interface{}, 8)
+	if f.IDs != nil {
+		m["ids"] = f.IDs
+	}
+	if f.Authors != nil {
+		m["authors"] = f.Authors
+	}
+	if f.Kinds != nil {
+		m["kinds"] = f.Kinds
+	}
+	for key, values := range f.Tags {
+		if values == nil {
+			continue
+		}
+		m["#"+TagFilterName(key)] = values
+	}
+	if f.Since != nil {
+		m["since"] = f.Since.Unix()
+	}
+	if f.Until != nil {
+		m["until"] = f.Until.Unix()
+	}
+	if f.Limit != nil {
+		m["limit"] = *f.Limit
+	}
+	if f.Search != "" {
+		m["search"] = f.Search
+	}
+	return json.Marshal(m)
+}
+
+// UnmarshalJSON decodes a NIP-01 filter object with the same strict rules the
+// relay applies to incoming REQs (see ParseFilter).
+func (f *Filter) UnmarshalJSON(data []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	parsed, _, err := ParseFilter(raw)
+	if err != nil {
+		return err
+	}
+	*f = parsed
+	return nil
 }
 
 // MatchesEvent returns true if the event satisfies all filter criteria per NIP-01.
@@ -85,10 +150,11 @@ func (f Filter) MatchesEvent(evt Event) bool {
 	}
 
 	// Check tag filters (e.g. Tags["e"] = ["abc..."] means #e tag must contain "abc...")
-	for tagName, filterValues := range f.Tags {
+	for key, filterValues := range f.Tags {
 		if len(filterValues) == 0 {
 			continue
 		}
+		tagName := TagFilterName(key)
 		// Collect all values for this tag from the event
 		eventTagValues := make(map[string]struct{})
 		for _, tag := range evt.Tags {
@@ -125,10 +191,8 @@ func (f Filter) ToSubscriptionFilter() map[string]interface{} {
 	if len(f.Kinds) > 0 {
 		filter["kinds"] = f.Kinds
 	}
-	if len(f.Tags) > 0 {
-		for key, value := range f.Tags {
-			filter["#"+key] = value
-		}
+	for key, value := range f.Tags {
+		filter["#"+TagFilterName(key)] = value
 	}
 	if f.Since != nil {
 		filter["since"] = f.Since.Unix()

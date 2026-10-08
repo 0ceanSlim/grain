@@ -48,18 +48,14 @@ func (fb *FilterBuilder) Limit(limit int) *FilterBuilder {
 	return fb
 }
 
-// Tag adds a tag filter
+// Tag adds a tag filter. name may be given with or without the leading '#'
+// ("d" or "#d"); it is stored bare, the convention Filter.Tags uses.
 func (fb *FilterBuilder) Tag(name string, values ...string) *FilterBuilder {
 	if fb.filter.Tags == nil {
 		fb.filter.Tags = make(map[string][]string)
 	}
 
-	// Ensure tag name has # prefix for consistency
-	tagKey := name
-	if len(tagKey) > 0 && tagKey[0] != '#' {
-		tagKey = "#" + tagKey
-	}
-
+	tagKey := nostr.TagFilterName(name)
 	fb.filter.Tags[tagKey] = append(fb.filter.Tags[tagKey], values...)
 	return fb
 }
