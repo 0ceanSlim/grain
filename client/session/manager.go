@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,44 +40,49 @@ func (sm *SessionManager) GetSessionToken(r *http.Request) string {
 	return cookie.Value
 }
 
-// GetUserSession retrieves a user session by token and updates last active time
+// GetUserSession retrieves a user session by token and updates last active
+// time. It returns a snapshot: the stored session is only ever touched under
+// sessionMutex, so concurrent requests on one session don't race.
 func (sm *SessionManager) GetUserSession(token string) *UserSession {
-	sm.sessionMutex.RLock()
-	defer sm.sessionMutex.RUnlock()
+	sm.sessionMutex.Lock()
+	defer sm.sessionMutex.Unlock()
 
 	session, exists := sm.sessions[token]
 	if !exists {
 		return nil
 	}
 
-	// Update last active time
 	session.LastActive = time.Now()
-	return session
+	snapshot := *session
+	return &snapshot
 }
 
-// CreateSession creates a new lightweight user session (no user data - that goes in cache)
-func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRequest) (*UserSession, error) {
+// CreateSession creates a new lightweight user session (no user data - that
+// goes in cache) and sets its cookie. connectedRelays is recorded on the
+// session as-is. Like GetUserSession, it returns a snapshot.
+func (sm *SessionManager) CreateSession(w http.ResponseWriter, r *http.Request, req SessionInitRequest, connectedRelays []string) (*UserSession, error) {
 	token := GenerateRandomToken(32)
 
 	session := &UserSession{
-		PublicKey:     req.PublicKey,
-		LastActive:    time.Now(),
-		Mode:          req.RequestedMode,
-		SigningMethod: req.SigningMethod,
+		PublicKey:       req.PublicKey,
+		LastActive:      time.Now(),
+		Mode:            req.RequestedMode,
+		SigningMethod:   req.SigningMethod,
+		ConnectedRelays: connectedRelays,
 	}
+	snapshot := *session
 
 	sm.sessionMutex.Lock()
 	sm.sessions[token] = session
 	sm.sessionMutex.Unlock()
 
-	// Set secure cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     sm.cookieName,
 		Value:    token,
 		Path:     "/",
 		MaxAge:   sm.cookieMaxAge,
 		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
+		Secure:   isHTTPS(r),
 		SameSite: http.SameSiteStrictMode,
 	})
 
@@ -86,7 +92,22 @@ func (sm *SessionManager) CreateSession(w http.ResponseWriter, req SessionInitRe
 		"signing_method", req.SigningMethod,
 		"token", token[:8])
 
-	return session, nil
+	return &snapshot, nil
+}
+
+// isHTTPS reports whether the browser reached us over HTTPS, either directly
+// or through a TLS-terminating reverse proxy. The session cookie is marked
+// Secure exactly then, so it is never sent in the clear but plain-http local
+// development still works. Trusting X-Forwarded-Proto is safe here: a client
+// that spoofs it only stops its own cookie from being sent over http.
+func isHTTPS(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if r.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0]), "https")
 }
 
 // ClearSession removes a user session and clears the cookie
@@ -110,7 +131,7 @@ func (sm *SessionManager) ClearSession(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   isHTTPS(r),
 		SameSite: http.SameSiteStrictMode,
 	})
 }

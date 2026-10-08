@@ -103,7 +103,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Create the session and remember how they logged in. Session creation
 	// returns immediately and kicks off user-data discovery in the background
 	// (deduped) — login never blocks on outbox relays.
-	userSession, err := session.CreateUserSession(w, loginReq)
+	userSession, err := session.CreateUserSession(w, r, loginReq)
 	if err != nil {
 		log.ClientAPI().Error("Failed to create session", "error", err)
 

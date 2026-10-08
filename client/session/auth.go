@@ -13,7 +13,7 @@ import (
 )
 
 // CreateUserSession creates a new user session and ensures user data is cached
-func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSession, error) {
+func CreateUserSession(w http.ResponseWriter, r *http.Request, req SessionInitRequest) (*UserSession, error) {
 	if SessionMgr == nil {
 		return nil, &SessionError{Message: "session manager not initialized"}
 	}
@@ -31,17 +31,17 @@ func CreateUserSession(w http.ResponseWriter, req SessionInitRequest) (*UserSess
 	// login returns immediately. Fetching the user's metadata + mailboxes
 	// from outbox relays is network-bound (seconds on cold relays, longer if
 	// the user has no published relay list) — it must NOT block sign-in.
-	session, err := SessionMgr.CreateSession(w, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create session: %w", err)
+	// Snapshot the currently-connected relays for the session record.
+	var connectedRelays []string
+	if coreClient := connection.GetCoreClient(); coreClient != nil {
+		connectedRelays = coreClient.GetConnectedRelays()
+	} else {
+		connectedRelays = connection.GetIndexRelays() // fallback
 	}
 
-	// Snapshot the currently-connected relays for the session record.
-	coreClient := connection.GetCoreClient()
-	if coreClient != nil {
-		session.ConnectedRelays = coreClient.GetConnectedRelays()
-	} else {
-		session.ConnectedRelays = connection.GetIndexRelays() // fallback
+	session, err := SessionMgr.CreateSession(w, r, req, connectedRelays)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
 	// In the background: fetch + cache the user's data (deduped, so a client
