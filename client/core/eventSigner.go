@@ -113,76 +113,65 @@ func (es *EventSigner) GetPrivateKeyHex() string {
 	return hex.EncodeToString(es.privateKey.Serialize())
 }
 
-// VerifyEventSignature verifies an event's signature
-func VerifyEventSignature(event *nostr.Event) bool {
+// VerifyEvent checks that event.ID is the NIP-01 hash of the event's contents
+// and that event.Sig is a valid BIP-340 signature of that id by event.PubKey.
+// It does not log, so it is safe on the inbound path where a remote relay
+// controls the input.
+func VerifyEvent(event *nostr.Event) error {
 	if event == nil {
-		clog().Warn("Cannot verify nil event")
-		return false
+		return fmt.Errorf("nil event")
+	}
+	if len(event.ID) != 64 || len(event.PubKey) != 64 || len(event.Sig) != 128 {
+		return fmt.Errorf("id, pubkey or sig has the wrong length")
 	}
 
-	if event.ID == "" || event.PubKey == "" || event.Sig == "" {
-		clog().Warn("Event missing required fields for verification",
-			"has_id", event.ID != "",
-			"has_pubkey", event.PubKey != "",
-			"has_sig", event.Sig != "")
-		return false
-	}
-
-	// Verify the event ID matches the computed ID
 	computedID, err := ComputeEventID(event)
 	if err != nil {
-		clog().Error("Failed to compute event ID for verification", "error", err)
-		return false
+		return fmt.Errorf("compute id: %w", err)
 	}
-
 	if event.ID != computedID {
-		clog().Warn("Event ID mismatch", "event_id", event.ID, "computed_id", computedID)
-		return false
+		return fmt.Errorf("id does not match contents")
 	}
 
-	// Parse public key
 	pubKeyBytes, err := hex.DecodeString(event.PubKey)
 	if err != nil {
-		clog().Error("Invalid public key hex", "pubkey", event.PubKey, "error", err)
-		return false
+		return fmt.Errorf("pubkey is not hex")
 	}
-
 	publicKey, err := schnorr.ParsePubKey(pubKeyBytes)
 	if err != nil {
-		clog().Error("Failed to parse public key", "error", err)
-		return false
+		return fmt.Errorf("invalid pubkey: %w", err)
 	}
-
-	// Parse signature
 	sigBytes, err := hex.DecodeString(event.Sig)
 	if err != nil {
-		clog().Error("Invalid signature hex", "signature", event.Sig, "error", err)
-		return false
+		return fmt.Errorf("sig is not hex")
 	}
-
 	signature, err := schnorr.ParseSignature(sigBytes)
 	if err != nil {
-		clog().Error("Failed to parse signature", "error", err)
-		return false
+		return fmt.Errorf("invalid sig: %w", err)
 	}
-
-	// Parse event ID as hash
 	hashBytes, err := hex.DecodeString(event.ID)
 	if err != nil {
-		clog().Error("Invalid event ID hex", "event_id", event.ID, "error", err)
+		return fmt.Errorf("id is not hex")
+	}
+	if !signature.Verify(hashBytes, publicKey) {
+		return fmt.Errorf("signature does not verify")
+	}
+	return nil
+}
+
+// VerifyEventSignature verifies an event's id and signature, logging why it
+// failed. Prefer VerifyEvent for input from untrusted sources.
+func VerifyEventSignature(event *nostr.Event) bool {
+	if err := VerifyEvent(event); err != nil {
+		id := ""
+		if event != nil {
+			id = event.ID
+		}
+		clog().Warn("Event verification failed", "event_id", id, "error", err)
 		return false
 	}
-
-	// Verify signature
-	valid := signature.Verify(hashBytes, publicKey)
-
-	if valid {
-		clog().Debug("Event signature verified", "event_id", event.ID)
-	} else {
-		clog().Warn("Event signature verification failed", "event_id", event.ID)
-	}
-
-	return valid
+	clog().Debug("Event signature verified", "event_id", event.ID)
+	return true
 }
 
 // Browser extension integration functions

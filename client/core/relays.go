@@ -147,6 +147,25 @@ func (mr *MessageRouter) RouteMessage(subID string, messageType string, data int
 		return
 	}
 
+	// Relays are untrusted: an EVENT is only delivered if its id and signature
+	// check out. Verify before taking sub.mu so the crypto doesn't hold up
+	// Close.
+	var event *nostr.Event
+	if messageType == "EVENT" {
+		eventData, ok := data.(map[string]interface{})
+		if !ok {
+			return
+		}
+		if event = parseEventFromData(eventData); event == nil {
+			return
+		}
+		if err := VerifyEvent(event); err != nil {
+			clog().Debug("Dropping unverifiable event from relay",
+				"relay", relayURL, "sub_id", subID, "event_id", event.ID, "error", err)
+			return
+		}
+	}
+
 	// Serialize against Subscription.Close(), which sets sub.closed under
 	// sub.mu.Lock() before closing Events/EOSE/Errors. Holding RLock across the
 	// sends below means each send either completes before Close's Lock (which
@@ -163,15 +182,19 @@ func (mr *MessageRouter) RouteMessage(subID string, messageType string, data int
 
 	switch messageType {
 	case "EVENT":
-		if eventData, ok := data.(map[string]interface{}); ok {
-			if event := parseEventFromData(eventData); event != nil {
-				select {
-				case sub.Events <- event:
-					clog().Debug("Event routed to subscription", "sub_id", subID, "event_id", event.ID)
-				default:
-					clog().Warn("Subscription event channel full", "sub_id", subID)
-				}
-			}
+		// Nor is a relay trusted to have applied the filter: a validly signed
+		// event that doesn't match what was asked for (say, a different d tag)
+		// is dropped.
+		if !matchesAnyFilter(sub.Filters, event) {
+			clog().Debug("Dropping event that matches none of the subscription's filters",
+				"relay", relayURL, "sub_id", subID, "event_id", event.ID)
+			return
+		}
+		select {
+		case sub.Events <- event:
+			clog().Debug("Event routed to subscription", "sub_id", subID, "event_id", event.ID)
+		default:
+			clog().Warn("Subscription event channel full", "sub_id", subID)
 		}
 	case "EOSE":
 		// Send relay URL to EOSE channel
@@ -666,6 +689,23 @@ func parseEventFromData(data map[string]interface{}) *nostr.Event {
 	}
 
 	return &event
+}
+
+// matchesAnyFilter reports whether event satisfies at least one filter (a REQ's
+// filters are OR-ed). NIP-50 search is left to the relay: its matching is
+// implementation-defined, so a local substring check would drop legitimate
+// results. No filters means nothing was asked for, so nothing is filtered.
+func matchesAnyFilter(filters []nostr.Filter, event *nostr.Event) bool {
+	if len(filters) == 0 {
+		return true
+	}
+	for _, f := range filters {
+		f.Search = ""
+		if f.MatchesEvent(*event) {
+			return true
+		}
+	}
+	return false
 }
 
 // ping sends a ping to keep the connection alive (if needed)
