@@ -31,6 +31,7 @@ on it, not part of its import contract.
 
 - [Quick start](#quick-start)
 - [Configuration](#configuration)
+- [Many users on one Client](#many-users-on-one-client)
 - [The outbox model & routing](#the-outbox-model--routing)
 - [The role model](#the-role-model)
 - [Streaming fetches](#streaming-fetches)
@@ -109,6 +110,37 @@ Zero values fall back to the built-in defaults, so a partial `Config` is fine.
 
 ---
 
+## Many users on one Client
+
+One `Client` can serve many users at once (a web client with many logins, a
+game server with many players). The `Client` owns what is safe to share — the
+connection pool and the relay-list, NIP-11 and discovery caches. Everything
+that belongs to one user lives on their `UserContext`:
+
+| Per user (`UserContext`) | What it does |
+|---|---|
+| `HoldRelays(urls)`, `AddHeldRelay`, `DropHeldRelay`, `ReleaseRelays` | keep relays connected for this user; other users' holds are untouched |
+| `PinFixedRelays`, `ClearFixedRelays`, `SetAppRelays` | routing preferences for this user only, layered over the Client's app-wide defaults |
+| `AuthChallenge`, `Authenticate`, `SignAndAuthenticate`, `Deauthenticate` | NIP-42 sessions on this user's **own** connections (see [AUTH](#auth-nip-42)) |
+| `Subscribe`, `StreamEvents`, `QueryEvents`, `FetchEvents`, `PublishEvent`, `PublishEventStream` | requests made **as** this user |
+| `Close()` | release all of the above when the user leaves |
+
+```go
+uc := client.NewUserContext(pubkey, core.WithSigner(signer)) // on login
+_ = uc.HoldRelays(myRelays)
+evs := uc.QueryEvents(ctx, filter, relays)
+defer uc.Close()                                             // on logout
+```
+
+Make one `UserContext` per user and reuse it for that user's requests (grain's
+web layer keeps a pubkey → context registry in `client/connection`). The
+`Client`-level request methods (`Client.Subscribe`, `Client.QueryEvents`, …)
+are anonymous. The `Client`-level session helpers (`ReplaceRelayConnections`,
+`SwitchToUserRelays`, `SwitchToIndexRelays`) are a single slot for an app with
+one user; a multi-user app should not use them.
+
+---
+
 ## The outbox model & routing
 
 Routing is automatic: you name the intent, the engine picks the relays.
@@ -128,10 +160,15 @@ relays = client.RoutePublish(event)                  // per-event (recipients ma
 ur := client.ResolveRelays(authorHex)                // *UserRelays: Outbox/Inbox/DMInbox
 ```
 
+The `Client`'s `Route*` methods use the app-wide preferences; `uc.RouteFetch`,
+`uc.RouteMetadata` and `uc.RoutePublish` apply that user's overrides on top.
+
 **Fixed-relay override (opt-out).** For a pinned single-/few-relay client,
-`uc.PinFixedRelays(read, write)` routes everything to a fixed set and **disables
-the outbox model** (replies stop reaching others' inboxes). Off by default and
-discouraged; clear with `uc.ClearFixedRelays()`.
+`uc.PinFixedRelays(read, write)` routes that user's reads and writes to a fixed
+set and **disables the outbox model** for them (their replies stop reaching
+others' inboxes). Other users are unaffected. Off by default and discouraged;
+clear with `uc.ClearFixedRelays()`. `client.SetFixedRelays` sets an app-wide
+default that applies to users who haven't chosen.
 
 ---
 
@@ -300,39 +337,43 @@ on these primitives but not yet wired (see the status note above).
 
 ## AUTH (NIP-42)
 
-The engine tracks per-relay AUTH challenges so a consumer can answer them with
-the session signer. A relay that issues a challenge appears in `AuthRequests()`;
-the consumer builds and signs a kind-22242 event and forwards it with
-`SendAuth`:
+A relay authenticates a **connection**: once a socket answers a challenge, the
+relay serves everything on that socket as the authenticated pubkey. So AUTH is
+per user. `UserContext.AuthChallenge` opens the user's own connection to the
+relay (in a private per-user pool) and returns the challenge issued on it;
+`Authenticate` sends the signed kind-22242 answer on that connection and waits
+for the relay's `OK`. From then on, that user's requests to the relay go over
+their authenticated connection, and nobody else's do.
 
 ```go
-for _, req := range client.AuthRequests() { // []AuthState
-    if req.Authed {
-        continue // already answered this session
-    }
-    // Build + sign a kind-22242 event echoing the relay URL and challenge:
-    ev := &nostr.Event{
-        Kind: 22242,
-        Tags: [][]string{
-            {"relay", req.Relay},
-            {"challenge", req.Challenge},
-        },
-    }
-    if err := uc.Sign(ev); err != nil {
-        continue
-    }
-    if err := client.SendAuth(req.Relay, ev); err != nil { // forwarded on the challenged conn
-        // log + surface
-    }
-}
+// With a signer attached to the context:
+if err := uc.SignAndAuthenticate(ctx, relayURL); err != nil { /* surface */ }
+
+// Or sign elsewhere (e.g. in the browser):
+challenge, err := uc.AuthChallenge(ctx, relayURL)
+ev := &nostr.Event{Kind: 22242, CreatedAt: time.Now().Unix(),
+    Tags: [][]string{{"relay", relayURL}, {"challenge", challenge}}}
+// ... sign ev as this user ...
+err = uc.Authenticate(ctx, relayURL, ev) // must be this user's, for this challenge
 ```
 
-`AuthState` is `{Relay, Challenge, Authed, At}`. Once a relay is answered it
-stays authed for the **session**; a fresh challenge from the relay clears the
-flag so the consumer re-prompts (your signer will pop up automatically). Drop a
-relay with `RemoveAuth(url)`. In grain's reference UI this list **is** the
-"Trusted" list — relays you've chosen to authenticate to — so AUTH-for-`trusted`
-is opt-in per relay rather than a blanket auto-sign.
+`Authenticate` refuses an event signed by someone else, one that fails
+verification, or one answering a different challenge or relay. The `Client`'s
+shared pool never authenticates: `Client.SendAuth` returns `ErrSharedAuth`.
+
+`uc.AuthStates()` lists the relays asking this user for AUTH — those that
+challenged the user's own connections, plus those that challenged the shared
+pool — as `AuthState{Relay, Challenge, Authed, At}`. `Authed` holds only while
+the connection that answered is still up: a reconnect is a new, unauthenticated
+socket, and the user's requests fall back to the shared pool until they answer
+again. `uc.Deauthenticate(url)` closes the user's connection, which is the
+only way to end a NIP-42 session; `uc.Close()` ends all of them.
+
+Relays that only challenge lazily (after a restricted request rather than on
+connect) aren't supported yet: `AuthChallenge` returns an error if no challenge
+arrives in time. In grain's reference UI the list of relays asking for AUTH
+**is** the "Trusted" list, so AUTH is opt-in per relay rather than a blanket
+auto-sign.
 
 ---
 
@@ -478,7 +519,7 @@ groups mirror the sections above:
 | relay-list | the relay-list build/fetch + fixed-relay endpoints |
 | known-relays, discover, relay-ping | the browser, an on-demand NIP-66 discovery pass, and the latency sort |
 | media-servers | resolve + assemble media-server lists |
-| auth | the NIP-42 challenge list + answer/remove |
+| auth | the session user's NIP-42 list, their own challenge, answer/remove |
 | stream, events | the streaming feed + event publish |
 | client-tag | the client-tag default + toggle |
 
@@ -510,15 +551,26 @@ the authoritative HTTP reference; this guide is the library reference beneath it
   `StartDiscoveryRoll(ctx, interval)`, `DiscoveryStats() (monitors, discovered int)`;
   lower-level `DiscoverMonitors(ctx) int`,
   `RefreshDiscoveredRelays(ctx) int`.
-- **AUTH:** `AuthRequests() []AuthState`, `AuthChallenge(url)`,
-  `SendAuth(url, signed)`, `RemoveAuth(url)`.
+- **AUTH:** `AuthRequests() []AuthState` and `AuthChallenge(url)` report what
+  relays sent the shared pool; `RemoveAuth(url)` forgets it. `SendAuth` is
+  deprecated and always returns `ErrSharedAuth` — authenticate per user.
 
 ### `UserContext`
 - `PublicKey()`, `Client()`, `Signer()`, `Relays() *SessionRelays`.
 - `Sign(event)`, `Publish(ctx, event)`, `SignAndPublish(ctx, event)`.
 - `FetchNotes(ctx, author, ...)`, `StreamNotes(ctx, author, ...)`,
   `Reply(ctx, parent, content)`.
-- `PinFixedRelays(read, write)`, `ClearFixedRelays()`, `FixedRelaysEnabled()`.
+- `PinFixedRelays(read, write)`, `ClearFixedRelays()`, `FixedRelaysEnabled()`,
+  `AppRelays(role)`, `SetAppRelays(role, urls)` — this user's preferences.
+- `RouteFetch`, `RouteMetadata`, `RoutePublish` — under this user's preferences.
+- `Subscribe`, `StreamEvents`, `QueryEvents`, `FetchEvents`, `PublishEvent`,
+  `PublishEventWithRetry`, `PublishEventStream` — requests made as this user.
+- `HoldRelays(urls)`, `AddHeldRelay(url)`, `DropHeldRelay(url)`, `HeldRelays()`,
+  `ReleaseRelays()`.
+- `AuthChallenge(ctx, url)`, `Authenticate(ctx, url, signed)`,
+  `SignAndAuthenticate(ctx, url)`, `AuthStates()`, `IsAuthenticated(url)`,
+  `Deauthenticate(url)`.
+- `Close()` — releases holds and ends NIP-42 sessions.
 
 ### `EventSigner` (implements `Signer`)
 - `NewEventSigner(hex)`, `NewEventSignerFromRandom()`; `PublicKey()`,

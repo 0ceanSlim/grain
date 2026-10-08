@@ -255,7 +255,36 @@ func broadcastEventStream(ctx context.Context, event *nostr.Event, relays []stri
 // ranges the channel until it closes. Used by the streaming publish endpoint to
 // drive the live broadcast toast.
 func (c *Client) PublishEventStream(ctx context.Context, event *nostr.Event, relays []string) <-chan BroadcastResult {
-	return broadcastEventStream(ctx, event, relays, c.relayPool)
+	return c.broadcastStream(ctx, nil, event, relays)
+}
+
+// broadcastStream is PublishEventStream on owner's behalf: each relay is sent
+// to over the pool poolFor picks, and the per-pool streams are merged.
+func (c *Client) broadcastStream(ctx context.Context, owner *UserContext, event *nostr.Event, relays []string) <-chan BroadcastResult {
+	pools, groups := c.splitByPool(owner, relays)
+	if len(pools) <= 1 {
+		pool := c.relayPool
+		if len(pools) == 1 {
+			pool = pools[0]
+		}
+		return broadcastEventStream(ctx, event, relays, pool)
+	}
+	out := make(chan BroadcastResult, len(relays))
+	var wg sync.WaitGroup
+	for i := range pools {
+		wg.Add(1)
+		go func(ch <-chan BroadcastResult) {
+			defer wg.Done()
+			for r := range ch {
+				out <- r
+			}
+		}(broadcastEventStream(ctx, event, groups[i], pools[i]))
+	}
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
+	return out
 }
 
 // broadcastToSingleRelay broadcasts to a single relay

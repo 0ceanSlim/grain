@@ -145,34 +145,23 @@ func ExampleEventSigner_NIP44Encrypt() {
 	fmt.Println(plaintext)
 }
 
-// Answering a relay's NIP-42 AUTH challenge: build + sign a kind-22242 event and
-// forward it on the challenged connection.
-func ExampleClient_SendAuth() {
+// Authenticating a user to a relay with NIP-42. AUTH is per user: it happens on
+// the user's own connection, and only that user's requests use it.
+func ExampleUserContext_SignAndAuthenticate() {
 	client := core.NewClient(core.DefaultConfig())
 	signer, err := core.NewEventSigner("64-char-hex-private-key")
 	if err != nil {
 		return
 	}
 	uc := client.NewUserContext(signer.PublicKey(), core.WithSigner(signer))
+	defer uc.Close()
 
-	for _, req := range client.AuthRequests() {
-		if req.Authed {
-			continue // already answered this session
-		}
-		ev := &nostr.Event{
-			Kind: 22242,
-			Tags: [][]string{
-				{"relay", req.Relay},
-				{"challenge", req.Challenge},
-			},
-		}
-		if err := uc.Sign(ev); err != nil {
-			continue
-		}
-		if err := client.SendAuth(req.Relay, ev); err != nil {
-			continue
-		}
+	ctx := context.Background()
+	if err := uc.SignAndAuthenticate(ctx, "wss://relay.example.com"); err != nil {
+		return
 	}
+	// Served as this user by relay.example.com; anyone else's queries aren't.
+	_ = uc.QueryEvents(ctx, nostr.Filter{Kinds: []int{1059}}, []string{"wss://relay.example.com"})
 }
 
 // Browsing known relays: the live set, NIP-11 metadata, and TCP latency.

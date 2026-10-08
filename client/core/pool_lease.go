@@ -77,6 +77,11 @@ func (rp *RelayPool) acquire(url string, openTimeout time.Duration, bypassBackof
 	for {
 		rp.mu.Lock()
 
+		if rp.closed {
+			rp.mu.Unlock()
+			return nil, fmt.Errorf("relay pool is closed")
+		}
+
 		if conn, ok := rp.connections[url]; ok {
 			if conn.Status == StatusConnected {
 				// Fast path: reuse the live connection, take a lease.
@@ -123,6 +128,14 @@ func (rp *RelayPool) acquire(url string, openTimeout time.Duration, bypassBackof
 		rp.mu.Lock()
 		delete(rp.dialing, url)
 		close(ch)
+
+		if err == nil && rp.closed {
+			// Closed while we were dialing: don't add a connection nobody
+			// will ever close.
+			rp.mu.Unlock()
+			_ = conn.Close()
+			return nil, fmt.Errorf("relay pool is closed")
+		}
 
 		if err != nil {
 			rp.recordFailureLocked(url)

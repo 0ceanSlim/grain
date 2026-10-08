@@ -41,6 +41,10 @@ func WithLive() StreamOption { return func(c *streamConfig) { c.live = true } }
 // for an outbox feed. Per-relay failures are logged, not fatal. The caller must
 // drain the channel (or cancel ctx) so the underlying subscription is released.
 func (c *Client) StreamEvents(ctx context.Context, filter nostr.Filter, relays []string, opts ...StreamOption) <-chan *nostr.Event {
+	return c.streamEvents(ctx, nil, filter, relays, opts...)
+}
+
+func (c *Client) streamEvents(ctx context.Context, owner *UserContext, filter nostr.Filter, relays []string, opts ...StreamOption) <-chan *nostr.Event {
 	cfg := streamConfig{timeout: 10 * time.Second}
 	for _, o := range opts {
 		o(&cfg)
@@ -52,7 +56,7 @@ func (c *Client) StreamEvents(ctx context.Context, filter nostr.Filter, relays [
 		if len(relays) == 0 {
 			return
 		}
-		sub, err := c.Subscribe(ctx, []nostr.Filter{filter}, relays)
+		sub, err := c.subscribe(ctx, owner, []nostr.Filter{filter}, relays)
 		if err != nil {
 			clog().Debug("StreamEvents subscribe failed", "error", err)
 			return
@@ -107,8 +111,12 @@ func (c *Client) StreamEvents(ctx context.Context, filter nostr.Filter, relays [
 // arrival order. A blocking convenience for callers that don't need incremental
 // delivery; pass [WithLimit] / [WithTimeout] to bound it.
 func (c *Client) QueryEvents(ctx context.Context, filter nostr.Filter, relays []string, opts ...StreamOption) []*nostr.Event {
+	return c.queryEvents(ctx, nil, filter, relays, opts...)
+}
+
+func (c *Client) queryEvents(ctx context.Context, owner *UserContext, filter nostr.Filter, relays []string, opts ...StreamOption) []*nostr.Event {
 	var out []*nostr.Event
-	for ev := range c.StreamEvents(ctx, filter, relays, opts...) {
+	for ev := range c.streamEvents(ctx, owner, filter, relays, opts...) {
 		out = append(out, ev)
 	}
 	return out

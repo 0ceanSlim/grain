@@ -13,11 +13,15 @@ import (
 // (which keeps only the single newest), this gathers a batch — used for bulk
 // queries like relay-list seeding.
 func (c *Client) FetchEvents(ctx context.Context, filters []nostr.Filter, relays []string, limit int, timeout time.Duration) []*nostr.Event {
+	return c.fetchEvents(ctx, nil, filters, relays, limit, timeout)
+}
+
+func (c *Client) fetchEvents(ctx context.Context, owner *UserContext, filters []nostr.Filter, relays []string, limit int, timeout time.Duration) []*nostr.Event {
 	if len(relays) == 0 {
 		return nil
 	}
 
-	sub, err := c.Subscribe(ctx, filters, relays)
+	sub, err := c.subscribe(ctx, owner, filters, relays)
 	if err != nil {
 		clog().Debug("FetchEvents subscribe failed", "error", err)
 		return nil

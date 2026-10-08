@@ -34,6 +34,7 @@ type RelayPool struct {
 	failCount map[string]int           // url -> consecutive dial failures
 	dialing   map[string]chan struct{} // single-flight: in-progress dials, closed on completion
 	dialSem   chan struct{}            // bounds concurrent dials (held without mu)
+	closed    bool                     // set by Close; a closed pool dials nothing new
 
 	// Test seams; NewRelayPool wires the real implementations.
 	dialFn      func(url string, timeout time.Duration) (*websocket.Conn, error)
@@ -78,7 +79,8 @@ type MessageRouter struct {
 	// NIP-42: per-relay AUTH state observed this session (the latest challenge a
 	// relay sent and whether we've authed to it). Guarded by authMu.
 	authMu     sync.RWMutex
-	authStates map[string]*AuthState // relayURL -> state
+	authStates map[string]*AuthState    // relayURL -> state
+	authWait   map[string]chan struct{} // relayURL -> closed when its next challenge arrives
 }
 
 // NewMessageRouter creates a new message router
@@ -87,6 +89,7 @@ func NewMessageRouter() *MessageRouter {
 		subscriptions: make(map[string]*Subscription),
 		okWaiters:     make(map[string]chan OKResult),
 		authStates:    make(map[string]*AuthState),
+		authWait:      make(map[string]chan struct{}),
 	}
 }
 
@@ -407,6 +410,14 @@ func (rp *RelayPool) GetConnectedRelays() []string {
 	return connected
 }
 
+// Drop closes url's connection and removes it from the pool, whatever its
+// leases. The next Acquire dials a fresh connection.
+func (rp *RelayPool) Drop(url string) {
+	rp.mu.Lock()
+	rp.closeAndRemoveLocked(url)
+	rp.mu.Unlock()
+}
+
 // CloseConnection closes a specific relay connection
 func (rp *RelayPool) CloseConnection(url string) error {
 	rp.mu.Lock()
@@ -436,6 +447,7 @@ func (rp *RelayPool) Close() error {
 	defer rp.mu.Unlock()
 
 	clog().Info("Closing relay pool", "connection_count", len(rp.connections))
+	rp.closed = true
 
 	for url, conn := range rp.connections {
 		if err := conn.close(); err != nil {
@@ -534,6 +546,13 @@ func (rc *RelayConnection) setStatus(s ConnectionStatus) {
 	rc.mu.Lock()
 	rc.Status = s
 	rc.mu.Unlock()
+}
+
+// getStatus reads the connection status under the lock.
+func (rc *RelayConnection) getStatus() ConnectionStatus {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
+	return rc.Status
 }
 
 // signalDone closes the done channel exactly once, regardless of which path
@@ -663,7 +682,7 @@ func (rc *RelayConnection) processMessage(message string) error {
 		if len(messageArray) >= 2 {
 			if challenge, ok := messageArray[1].(string); ok && challenge != "" {
 				clog().Debug("Received AUTH challenge", "relay", rc.URL)
-				rc.messageRouter.RouteAuth(rc.URL, challenge)
+				rc.messageRouter.RouteAuth(rc.URL, challenge, rc)
 			}
 		}
 	default:

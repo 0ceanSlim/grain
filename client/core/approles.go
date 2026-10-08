@@ -1,14 +1,15 @@
 package core
 
-// Locally-configured ("app") relay roles are session preferences a downstream
-// app edits — seeded from the operator's config, overridable per session, and
+// Locally-configured ("app") relay roles are preferences a downstream app
+// edits — seeded from the operator's config, set app-wide on the Client,
+// overridable per user on a [UserContext] (see [UserContext.SetAppRelays]), and
 // NOT published as Nostr lists (unlike the per-target/self-only event-derived
 // roles). Today the routing-affecting ones are RoleIndexer (resolution seeds)
 // and RoleBroadcast (writes mirror there); RoleLocal and RoleTrusted are stored
 // but inert until their wiring lands (Local routing preference; Trusted needs
 // NIP-42 AUTH, see #101).
 
-// AppRelays returns the session relays for a locally-configured role. RoleIndexer
+// AppRelays returns the app-wide relays for a locally-configured role. RoleIndexer
 // falls back to the configured index relays when the user hasn't overridden it;
 // the other roles return nil when unset.
 func (c *Client) AppRelays(role Role) []string {
@@ -24,8 +25,8 @@ func (c *Client) AppRelays(role Role) []string {
 	return nil
 }
 
-// SetAppRelays sets (or clears, when urls is empty) the session override for a
-// locally-configured role. Clearing RoleIndexer restores the configured default.
+// SetAppRelays sets (or clears, when urls is empty) the app-wide override for a
+// locally-configured role. It affects every user without a per-user override. Clearing RoleIndexer restores the configured default.
 func (c *Client) SetAppRelays(role Role, urls []string) {
 	urls = normalizeRelayURLs(urls)
 	c.appRelaysMu.Lock()

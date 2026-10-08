@@ -18,10 +18,12 @@ type Client struct {
 	config        *Config
 	mu            sync.RWMutex
 
-	// sessionRelays are the urls Acquired for the currently logged-in session
-	// (a lease held on each for the session's lifetime). Guarded by mu. They're
-	// released when the session switches relays or ends, so they can be
-	// idle-evicted — the outbox pool stays additive rather than torn down.
+	// sessionRelays are the urls Acquired by the Client-level session methods
+	// (ReplaceRelayConnections and friends), a single slot meant for an app
+	// with one user. Multi-user apps hold relays per user with
+	// [UserContext.HoldRelays] instead. Guarded by mu. They're released when
+	// the slot is switched or cleared, so they can be idle-evicted — the
+	// outbox pool stays additive rather than torn down.
 	sessionRelays []string
 
 	// directory resolves and caches per-target users' event-derived relay roles
@@ -67,6 +69,13 @@ type Client struct {
 	relayInfoMu    sync.Mutex
 	relayInfoCache map[string]relayInfoEntry
 
+	// lanes are the UserContexts that own a private per-user pool (they have
+	// started NIP-42 AUTH), so Close can shut those sockets too. Read-only or
+	// throwaway contexts never get a pool and are never tracked. Guarded by
+	// lanesMu.
+	lanesMu sync.Mutex
+	lanes   map[*UserContext]struct{}
+
 	// relayPingCache short-TTL-caches TCP-connect latency per relay for the
 	// known-relays "fastest first" sort (#98). A cheap reachability probe, not a
 	// pool/WebSocket round-trip.
@@ -97,6 +106,7 @@ func NewClient(config *Config) *Client {
 	c.appRelays = make(map[Role][]string)
 	c.relayInfoCache = make(map[string]relayInfoEntry)
 	c.relayPingCache = make(map[string]relayPingEntry)
+	c.lanes = make(map[*UserContext]struct{})
 	return c
 }
 
@@ -196,8 +206,51 @@ func (c *Client) DisconnectFromRelays(relayURLs []string) error {
 	return nil // Success if at least one disconnected
 }
 
-// Subscribe creates a new subscription with filters and relay hints
+// Subscribe creates a new subscription with filters and relay hints. It runs
+// anonymously over the shared pool; use [UserContext.Subscribe] to subscribe
+// as a user (over their NIP-42-authenticated connections where they have them).
 func (c *Client) Subscribe(ctx context.Context, filters []nostr.Filter, relayHints []string) (*Subscription, error) {
+	return c.subscribe(ctx, nil, filters, relayHints)
+}
+
+// poolFor returns the pool to reach url through on owner's behalf: owner's own
+// connection when owner has NIP-42 authenticated to url on it, else the shared
+// pool. A nil owner always gets the shared pool.
+func (c *Client) poolFor(owner *UserContext, url string) *RelayPool {
+	if owner == nil || owner.client != c {
+		return c.relayPool
+	}
+	norm, ok := normalizeRelayURL(url)
+	if !ok {
+		return c.relayPool
+	}
+	if lane := owner.laneIfAny(); lane != nil && lane.authedConn(norm) != nil {
+		return lane
+	}
+	return c.relayPool
+}
+
+// splitByPool groups relays by the pool owner reaches each one through,
+// preserving order within each group.
+func (c *Client) splitByPool(owner *UserContext, relays []string) ([]*RelayPool, [][]string) {
+	var pools []*RelayPool
+	var groups [][]string
+	idx := make(map[*RelayPool]int)
+	for _, u := range relays {
+		p := c.poolFor(owner, u)
+		i, ok := idx[p]
+		if !ok {
+			i = len(pools)
+			idx[p] = i
+			pools = append(pools, p)
+			groups = append(groups, nil)
+		}
+		groups[i] = append(groups[i], u)
+	}
+	return pools, groups
+}
+
+func (c *Client) subscribe(ctx context.Context, owner *UserContext, filters []nostr.Filter, relayHints []string) (*Subscription, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err // already cancelled / past deadline
 	}
@@ -214,6 +267,7 @@ func (c *Client) Subscribe(ctx context.Context, filters []nostr.Filter, relayHin
 	}
 
 	sub := NewSubscription(subID, filters, targetRelays, c)
+	sub.owner = owner
 
 	c.mu.Lock()
 	c.subscriptions[subID] = sub
@@ -442,7 +496,39 @@ func (c *Client) PublishEvent(ctx context.Context, event *nostr.Event, targetRel
 
 	clog().Info("Publishing event", "event_id", event.ID, "relay_count", len(relays))
 
-	return BroadcastEvent(ctx, event, relays, c.relayPool), nil
+	return c.broadcast(ctx, nil, event, relays, 0), nil
+}
+
+// broadcast sends event to relays on owner's behalf (nil = anonymous), each
+// over the pool poolFor picks, retrying failed sends up to maxRetries times
+// when maxRetries > 0. Results are grouped by pool, in relay order within a
+// group.
+func (c *Client) broadcast(ctx context.Context, owner *UserContext, event *nostr.Event, relays []string, maxRetries int) []BroadcastResult {
+	send := func(p *RelayPool, group []string) []BroadcastResult {
+		if maxRetries > 0 {
+			return BroadcastWithRetry(ctx, event, group, p, maxRetries)
+		}
+		return BroadcastEvent(ctx, event, group, p)
+	}
+	pools, groups := c.splitByPool(owner, relays)
+	if len(pools) == 1 {
+		return send(pools[0], groups[0])
+	}
+	parts := make([][]BroadcastResult, len(pools))
+	var wg sync.WaitGroup
+	for i := range pools {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			parts[i] = send(pools[i], groups[i])
+		}(i)
+	}
+	wg.Wait()
+	var out []BroadcastResult
+	for _, part := range parts {
+		out = append(out, part...)
+	}
+	return out
 }
 
 // PublishEventWithRetry publishes an event with retry logic
@@ -463,7 +549,7 @@ func (c *Client) PublishEventWithRetry(ctx context.Context, event *nostr.Event, 
 
 	clog().Info("Publishing event with retry", "event_id", event.ID, "relay_count", len(relays), "max_retries", maxRetries)
 
-	return BroadcastWithRetry(ctx, event, relays, c.relayPool, maxRetries), nil
+	return c.broadcast(ctx, nil, event, relays, maxRetries), nil
 }
 func (c *Client) Close() error {
 	clog().Info("Shutting down client")
@@ -475,6 +561,17 @@ func (c *Client) Close() error {
 	}
 	c.subscriptions = make(map[string]*Subscription)
 	c.mu.Unlock()
+
+	// End every user's private connections (their NIP-42 sessions).
+	c.lanesMu.Lock()
+	users := make([]*UserContext, 0, len(c.lanes))
+	for uc := range c.lanes {
+		users = append(users, uc)
+	}
+	c.lanesMu.Unlock()
+	for _, uc := range users {
+		_ = uc.Close()
+	}
 
 	// Close relay pool
 	return c.relayPool.Close()

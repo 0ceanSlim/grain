@@ -22,6 +22,13 @@ type Subscription struct {
 	closed     bool            // set under mu in Close before the channels are closed; gates RouteMessage sends
 	eoseRelays map[string]bool // NEW: Track which relays sent EOSE
 	acquired   []string        // relays this sub holds a pool lease on (released on Close)
+
+	// owner is the user this subscription runs as (nil = anonymous). Relays
+	// the owner has NIP-42 authenticated to are reached over the owner's own
+	// connection; everything else over the Client's shared pool. pools pins
+	// each relay's choice for the subscription's lifetime. Guarded by mu.
+	owner *UserContext
+	pools map[string]*RelayPool
 }
 
 // NewSubscription creates a new subscription instance
@@ -37,6 +44,33 @@ func NewSubscription(id string, filters []nostr.Filter, relays []string, client 
 		client:     client,
 		active:     false,
 		eoseRelays: make(map[string]bool), // NEW: Initialize map
+		pools:      make(map[string]*RelayPool),
+	}
+}
+
+// poolFor returns the pool url is reached through, choosing it on first use
+// and keeping that choice so REQ, CLOSE and Release all hit the same pool.
+// Caller holds s.mu.
+func (s *Subscription) poolFor(url string) *RelayPool {
+	if p, ok := s.pools[url]; ok {
+		return p
+	}
+	p := s.client.poolFor(s.owner, url)
+	if p != s.client.relayPool {
+		p.RegisterSubscription(s.ID, s)
+	}
+	s.pools[url] = p
+	return p
+}
+
+// unregisterAll removes the subscription from every pool it registered with.
+// Caller holds s.mu.
+func (s *Subscription) unregisterAll() {
+	s.client.relayPool.UnregisterSubscription(s.ID)
+	for _, p := range s.pools {
+		if p != s.client.relayPool {
+			p.UnregisterSubscription(s.ID)
+		}
 	}
 }
 
@@ -51,8 +85,14 @@ func (s *Subscription) Start() error {
 
 	clog().Debug("Starting subscription", "sub_id", s.ID, "relay_count", len(s.Relays))
 
-	// Register with relay pool for message routing
+	// Register with the shared pool for message routing, and pick each relay's
+	// pool up front (registering with any per-user pool it lands on) so the
+	// concurrent dials below only read s.pools.
 	s.client.relayPool.RegisterSubscription(s.ID, s)
+	pools := make([]*RelayPool, len(s.Relays))
+	for i, relayURL := range s.Relays {
+		pools[i] = s.poolFor(relayURL)
+	}
 
 	// Send REQ message to all relays
 	reqMessage := []interface{}{"REQ", s.ID}
@@ -71,7 +111,7 @@ func (s *Subscription) Start() error {
 		wg.Add(1)
 		go func(i int, url string) {
 			defer wg.Done()
-			if _, err := s.client.relayPool.Acquire(url); err != nil {
+			if _, err := pools[i].Acquire(url); err != nil {
 				clog().Debug("Failed to acquire relay for subscription", "relay", url, "sub_id", s.ID, "error", err)
 				return
 			}
@@ -90,7 +130,7 @@ func (s *Subscription) Start() error {
 		}
 		s.acquired = append(s.acquired, relayURL)
 
-		if err := s.client.relayPool.SendMessage(relayURL, reqMessage); err != nil {
+		if err := pools[i].SendMessage(relayURL, reqMessage); err != nil {
 			// Demoted to Debug: races with upstream disconnect are normal
 			// flakiness, not grain bugs.
 			clog().Debug("Failed to send subscription to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
@@ -99,7 +139,7 @@ func (s *Subscription) Start() error {
 		}
 
 		// Mark relay as having this subscription
-		if conn, err := s.client.relayPool.GetConnection(relayURL); err == nil {
+		if conn, err := pools[i].GetConnection(relayURL); err == nil {
 			conn.mu.Lock()
 			conn.Subscriptions[s.ID] = true
 			conn.mu.Unlock()
@@ -110,9 +150,9 @@ func (s *Subscription) Start() error {
 
 	if sent == 0 && lastErr != nil {
 		// Unregister and release any leases taken before bailing out.
-		s.client.relayPool.UnregisterSubscription(s.ID)
+		s.unregisterAll()
 		for _, relayURL := range s.acquired {
-			s.client.relayPool.Release(relayURL)
+			s.poolFor(relayURL).Release(relayURL)
 		}
 		s.acquired = nil
 		return lastErr
@@ -137,25 +177,26 @@ func (s *Subscription) Close() error {
 
 	clog().Debug("Closing subscription", "sub_id", s.ID)
 
-	// Unregister from relay pool
-	s.client.relayPool.UnregisterSubscription(s.ID)
+	// Unregister from every pool
+	s.unregisterAll()
 
 	// Send CLOSE to, and release the lease on, each relay this subscription
 	// actually acquired (the connected subset — others never got a REQ). This
 	// also lets the connections be idle-evicted once nothing else needs them.
 	closeMessage := []interface{}{"CLOSE", s.ID}
 	for _, relayURL := range s.acquired {
-		if err := s.client.relayPool.SendMessage(relayURL, closeMessage); err != nil {
+		pool := s.poolFor(relayURL)
+		if err := pool.SendMessage(relayURL, closeMessage); err != nil {
 			// Demoted to Debug: closing a sub on an already-disconnected relay
 			// is expected during teardown, not a problem.
 			clog().Debug("Failed to send close to relay", "relay", relayURL, "sub_id", s.ID, "error", err)
 		}
-		if conn, err := s.client.relayPool.GetConnection(relayURL); err == nil {
+		if conn, err := pool.GetConnection(relayURL); err == nil {
 			conn.mu.Lock()
 			delete(conn.Subscriptions, s.ID)
 			conn.mu.Unlock()
 		}
-		s.client.relayPool.Release(relayURL)
+		pool.Release(relayURL)
 	}
 	s.acquired = nil
 
@@ -194,7 +235,8 @@ func (s *Subscription) AddRelay(url string) error {
 	// If subscription is active, send REQ to new relay
 	if s.active {
 		// Connect-on-demand and hold a lease, mirroring Start.
-		if _, err := s.client.relayPool.Acquire(url); err != nil {
+		pool := s.poolFor(url)
+		if _, err := pool.Acquire(url); err != nil {
 			s.Relays = s.Relays[:len(s.Relays)-1]
 			return err
 		}
@@ -205,16 +247,16 @@ func (s *Subscription) AddRelay(url string) error {
 			reqMessage = append(reqMessage, filter)
 		}
 
-		if err := s.client.relayPool.SendMessage(url, reqMessage); err != nil {
+		if err := pool.SendMessage(url, reqMessage); err != nil {
 			// Remove from list and drop the lease if send failed
 			s.Relays = s.Relays[:len(s.Relays)-1]
 			s.acquired = s.acquired[:len(s.acquired)-1]
-			s.client.relayPool.Release(url)
+			pool.Release(url)
 			return err
 		}
 
 		// Mark relay as having this subscription
-		if conn, err := s.client.relayPool.GetConnection(url); err == nil {
+		if conn, err := pool.GetConnection(url); err == nil {
 			conn.mu.Lock()
 			conn.Subscriptions[s.ID] = true
 			conn.mu.Unlock()
@@ -247,12 +289,12 @@ func (s *Subscription) RemoveRelay(url string) error {
 	// If subscription is active, send CLOSE to removed relay
 	if s.active {
 		closeMessage := []interface{}{"CLOSE", s.ID}
-		if err := s.client.relayPool.SendMessage(url, closeMessage); err != nil {
+		if err := s.poolFor(url).SendMessage(url, closeMessage); err != nil {
 			clog().Warn("Failed to send close to removed relay", "relay", url, "sub_id", s.ID, "error", err)
 		}
 
 		// Remove subscription from relay
-		if conn, err := s.client.relayPool.GetConnection(url); err == nil {
+		if conn, err := s.poolFor(url).GetConnection(url); err == nil {
 			conn.mu.Lock()
 			delete(conn.Subscriptions, s.ID)
 			conn.mu.Unlock()
@@ -263,7 +305,7 @@ func (s *Subscription) RemoveRelay(url string) error {
 	for i, u := range s.acquired {
 		if u == url {
 			s.acquired = append(s.acquired[:i], s.acquired[i+1:]...)
-			s.client.relayPool.Release(url)
+			s.poolFor(url).Release(url)
 			break
 		}
 	}
