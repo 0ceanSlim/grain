@@ -138,14 +138,16 @@ func PublishSignedHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	coreClient := connection.GetCoreClient()
-	if coreClient == nil {
+	// Publish as the session user: their routing preferences, and their own
+	// NIP-42 authenticated connections where they have them.
+	uc := connection.UserFor(sess.PublicKey)
+	if uc == nil {
 		writeSignedResponse(w, http.StatusInternalServerError, PublishSignedResponse{Error: "Client not available"})
 		return
 	}
 
-	relays := coreClient.RoutePublish(req.Event)
-	results, err := coreClient.PublishEvent(r.Context(), req.Event, relays)
+	relays := uc.RoutePublish(req.Event)
+	results, err := uc.PublishEvent(r.Context(), req.Event, relays)
 	if err != nil {
 		writeSignedResponse(w, http.StatusInternalServerError, PublishSignedResponse{Error: err.Error(), Relays: relays})
 		return
@@ -154,14 +156,14 @@ func PublishSignedHandler(w http.ResponseWriter, r *http.Request) {
 	// A republished media-server or relay list must show immediately — drop the
 	// cached resolution so the next lookup re-fetches it.
 	if req.Event.Kind == 10063 || req.Event.Kind == 10096 {
-		coreClient.InvalidateMediaServers(req.Event.PubKey)
+		uc.Client().InvalidateMediaServers(req.Event.PubKey)
 	}
 	if req.Event.Kind == 10002 || req.Event.Kind == 10050 {
-		coreClient.InvalidateUserRelays(req.Event.PubKey)
+		uc.Client().InvalidateUserRelays(req.Event.PubKey)
 	}
 	switch req.Event.Kind {
 	case 10002, 10050, 10006, 10007, 10012:
-		coreClient.InvalidateUserRelayLists(req.Event.PubKey)
+		uc.Client().InvalidateUserRelayLists(req.Event.PubKey)
 	}
 
 	log.ClientAPI().Info("Published signed event", "kind", req.Event.Kind, "event_id", req.Event.ID, "relay_count", len(relays))
@@ -233,8 +235,8 @@ func PublishSignedStreamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	coreClient := connection.GetCoreClient()
-	if coreClient == nil {
+	uc := connection.UserFor(sess.PublicKey) // publish as the session user
+	if uc == nil {
 		http.Error(w, "Client not available", http.StatusInternalServerError)
 		return
 	}
@@ -254,7 +256,7 @@ func PublishSignedStreamHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	relays := coreClient.RoutePublish(req.Event)
+	relays := uc.RoutePublish(req.Event)
 
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -264,7 +266,7 @@ func PublishSignedStreamHandler(w http.ResponseWriter, r *http.Request) {
 	_ = enc.Encode(publishStreamMsg{Type: "start", Relays: relays})
 	flusher.Flush()
 
-	for res := range coreClient.PublishEventStream(r.Context(), req.Event, relays) {
+	for res := range uc.PublishEventStream(r.Context(), req.Event, relays) {
 		msg := publishStreamMsg{
 			Type:     "result",
 			RelayURL: res.RelayURL,
@@ -284,14 +286,14 @@ func PublishSignedStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Same cache invalidation as the non-streaming handler.
 	if req.Event.Kind == 10063 || req.Event.Kind == 10096 {
-		coreClient.InvalidateMediaServers(req.Event.PubKey)
+		uc.Client().InvalidateMediaServers(req.Event.PubKey)
 	}
 	if req.Event.Kind == 10002 || req.Event.Kind == 10050 {
-		coreClient.InvalidateUserRelays(req.Event.PubKey)
+		uc.Client().InvalidateUserRelays(req.Event.PubKey)
 	}
 	switch req.Event.Kind {
 	case 10002, 10050, 10006, 10007, 10012:
-		coreClient.InvalidateUserRelayLists(req.Event.PubKey)
+		uc.Client().InvalidateUserRelayLists(req.Event.PubKey)
 	}
 	log.ClientAPI().Info("Streamed signed event publish", "kind", req.Event.Kind, "event_id", req.Event.ID, "relay_count", len(relays))
 }

@@ -93,6 +93,7 @@ func GetCoreClient() *core.Client {
 func CloseCoreClient() error {
 	if coreClient != nil {
 		log.ClientConnection().Info("Closing core client connections")
+		releaseAllUsers()
 		// Actually tear down the relay pool. Its per-connection read/write
 		// goroutines and sockets don't stop just because we drop the
 		// pointer — Close() shuts down all subscriptions and relay

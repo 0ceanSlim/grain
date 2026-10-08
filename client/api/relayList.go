@@ -163,9 +163,8 @@ func FixedRelaysHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	sess := session.SessionMgr.GetCurrentUser(r)
-	if sess == nil {
-		http.Error(w, "Authentication required", http.StatusUnauthorized)
+	uc := sessionUser(w, r)
+	if uc == nil {
 		return
 	}
 
@@ -175,20 +174,15 @@ func FixedRelaysHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	coreClient := connection.GetCoreClient()
-	if coreClient == nil {
-		http.Error(w, "Client not available", http.StatusInternalServerError)
-		return
-	}
-
+	// Per user: one user's fixed-relay mode never reroutes anyone else.
 	if req.Enabled {
-		coreClient.SetFixedRelays(req.Read, req.Write)
+		uc.PinFixedRelays(req.Read, req.Write)
 	} else {
-		coreClient.ClearFixedRelays()
+		uc.ClearFixedRelays()
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(FixedRelaysResponse{Enabled: coreClient.FixedRelaysEnabled()}); err != nil {
+	if err := json.NewEncoder(w).Encode(FixedRelaysResponse{Enabled: uc.FixedRelaysEnabled()}); err != nil {
 		log.ClientAPI().Error("Failed to encode fixed-relays response", "error", err)
 	}
 }

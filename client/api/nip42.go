@@ -4,44 +4,78 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/0ceanslim/grain/client/connection"
-	"github.com/0ceanslim/grain/client/session"
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// AuthRequestsHandler lists the relays that have issued a NIP-42 AUTH challenge
-// this session, each with whether we've already authed. Session-gated.
+// AuthRequestsHandler lists the relays asking the logged-in user for NIP-42
+// AUTH, each with whether this user has authenticated to it. Session-gated;
+// one user's AUTH state is never shown to, or shared with, another.
 //
 // @Summary      List NIP-42 AUTH requests
-// @Description  Relays that have challenged the client for AUTH, with session authed status.
+// @Description  Relays that have challenged for AUTH, with this user's authed status.
 // @Tags         client
 // @Produce      json
 // @Success      200  {array}   core.AuthState
 // @Failure      401  {string}  string  "Authentication required"
 // @Router       /api/v1/client/auth-requests [get]
 func AuthRequestsHandler(w http.ResponseWriter, r *http.Request) {
-	if session.SessionMgr.GetCurrentUser(r) == nil {
-		http.Error(w, "Authentication required", http.StatusUnauthorized)
-		return
-	}
-	cc := connection.GetCoreClient()
-	if cc == nil {
-		http.Error(w, "Client not available", http.StatusInternalServerError)
+	uc := sessionUser(w, r)
+	if uc == nil {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(cc.AuthRequests()); err != nil {
+	if err := json.NewEncoder(w).Encode(uc.AuthStates()); err != nil {
 		log.ClientAPI().Error("Failed to encode auth requests", "error", err)
 	}
 }
 
-// SubmitAuthHandler relays a browser-signed kind-22242 event to a relay,
-// answering its NIP-42 challenge. The browser builds + signs the event (it holds
-// the key); grain only forwards it on the challenged connection. Session-gated.
+// AuthChallengeHandler opens the logged-in user's own connection to a relay
+// and returns the NIP-42 challenge the relay issued on it, for the browser to
+// sign. AUTH is per connection, so each user answers a challenge on a socket
+// only their requests use. Session-gated.
+//
+// @Summary      Get a NIP-42 AUTH challenge for this user
+// @Tags         client
+// @Accept       json
+// @Produce      json
+// @Param        body  body      object{relay=string}  true  "Relay URL"
+// @Success      200   {object}  map[string]any
+// @Failure      400   {string}  string  "Invalid request"
+// @Failure      401   {string}  string  "Authentication required"
+// @Router       /api/v1/client/auth/challenge [post]
+func AuthChallengeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	uc := sessionUser(w, r)
+	if uc == nil {
+		return
+	}
+	var req struct {
+		Relay string `json:"relay"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Relay == "" {
+		http.Error(w, "relay is required", http.StatusBadRequest)
+		return
+	}
+	challenge, err := uc.AuthChallenge(r.Context(), req.Relay)
+	if err != nil {
+		log.ClientAPI().Debug("No AUTH challenge", "relay", req.Relay, "error", err)
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "challenge": challenge})
+}
+
+// SubmitAuthHandler answers a relay's NIP-42 challenge for the logged-in user
+// with a browser-signed kind-22242 event. The event must be signed by the
+// session's pubkey and answer the challenge from AuthChallengeHandler; it is
+// sent on the user's own connection. Session-gated.
 //
 // @Summary      Answer a NIP-42 AUTH challenge
-// @Description  Relay a browser-signed kind-22242 auth event to a relay.
+// @Description  Send a browser-signed kind-22242 auth event on this user's connection.
 // @Tags         client
 // @Accept       json
 // @Produce      json
@@ -51,12 +85,12 @@ func AuthRequestsHandler(w http.ResponseWriter, r *http.Request) {
 // @Failure      401   {string}  string  "Authentication required"
 // @Router       /api/v1/client/auth [post]
 func SubmitAuthHandler(w http.ResponseWriter, r *http.Request) {
-	if session.SessionMgr.GetCurrentUser(r) == nil {
-		http.Error(w, "Authentication required", http.StatusUnauthorized)
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	uc := sessionUser(w, r)
+	if uc == nil {
 		return
 	}
 	var req struct {
@@ -71,28 +105,19 @@ func SubmitAuthHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "relay and event are required", http.StatusBadRequest)
 		return
 	}
-	if req.Event.Kind != 22242 {
-		http.Error(w, "event must be kind 22242 (NIP-42)", http.StatusBadRequest)
-		return
-	}
-	cc := connection.GetCoreClient()
-	if cc == nil {
-		http.Error(w, "Client not available", http.StatusInternalServerError)
-		return
-	}
-	if err := cc.SendAuth(req.Relay, req.Event); err != nil {
-		log.ClientAPI().Warn("Failed to send AUTH", "relay", req.Relay, "error", err)
+	if err := uc.Authenticate(r.Context(), req.Relay, req.Event); err != nil {
+		log.ClientAPI().Warn("NIP-42 AUTH failed", "relay", req.Relay, "pubkey", uc.PublicKey(), "error", err)
 		writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": err.Error()})
 		return
 	}
-	log.ClientAPI().Info("Sent NIP-42 AUTH", "relay", req.Relay)
+	log.ClientAPI().Info("Sent NIP-42 AUTH", "relay", req.Relay, "pubkey", uc.PublicKey())
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
-// RemoveAuthHandler forgets a relay's session AUTH state (revoke trust).
-// Session-gated.
+// RemoveAuthHandler ends the logged-in user's NIP-42 session with a relay by
+// closing their own connection to it. Session-gated.
 //
-// @Summary      Revoke a relay's session AUTH
+// @Summary      Revoke a relay's AUTH for this user
 // @Tags         client
 // @Accept       json
 // @Produce      json
@@ -101,12 +126,12 @@ func SubmitAuthHandler(w http.ResponseWriter, r *http.Request) {
 // @Failure      401   {string}  string  "Authentication required"
 // @Router       /api/v1/client/auth/remove [post]
 func RemoveAuthHandler(w http.ResponseWriter, r *http.Request) {
-	if session.SessionMgr.GetCurrentUser(r) == nil {
-		http.Error(w, "Authentication required", http.StatusUnauthorized)
-		return
-	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	uc := sessionUser(w, r)
+	if uc == nil {
 		return
 	}
 	var req struct {
@@ -116,12 +141,7 @@ func RemoveAuthHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "relay is required", http.StatusBadRequest)
 		return
 	}
-	cc := connection.GetCoreClient()
-	if cc == nil {
-		http.Error(w, "Client not available", http.StatusInternalServerError)
-		return
-	}
-	cc.RemoveAuth(req.Relay)
+	uc.Deauthenticate(req.Relay)
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 

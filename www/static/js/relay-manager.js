@@ -410,8 +410,8 @@
   window.rmAppSave = rmAppSave;
 
   // ── NIP-42 AUTH requests ──────────────────────────────────────────────
-  // Relays that challenged grain for AUTH this session. Authenticate signs a
-  // kind-22242 event with the browser signer; grain relays it on the same
+  // Relays asking this user for AUTH. Authenticate signs a kind-22242 event
+  // with the browser signer; grain relays it on the user's own
   // connection. A relay stays trusted for the session once answered.
 
   function authRow(a) {
@@ -472,9 +472,25 @@
   }
 
   async function rmAuthenticate(relay) {
-    const a = RM.auth.find((x) => x.relay === relay);
-    if (!a || !a.challenge) {
-      rmAuthRefresh();
+    // AUTH is per connection, so grain opens this user's own connection to the
+    // relay and we sign the challenge issued on it (not the shared pool's).
+    setStatus("rm-auth-status", "Connecting to " + shortRelay(relay) + "…");
+    let challenge;
+    try {
+      const cr = await fetch("/api/v1/client/auth/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ relay: relay }),
+      });
+      const cd = cr.ok ? await cr.json() : {};
+      challenge = cd.challenge;
+      if (!challenge) {
+        setStatus("rm-auth-status", "AUTH failed: " + (cd.error || "no challenge from relay"));
+        rmAuthRefresh();
+        return;
+      }
+    } catch (_) {
+      setStatus("rm-auth-status", "AUTH request failed.");
       return;
     }
     if (typeof window.restoreSigner === "function") {
@@ -496,7 +512,7 @@
         content: "",
         tags: [
           ["relay", relay],
-          ["challenge", a.challenge],
+          ["challenge", challenge],
         ],
       });
     } catch (_) {

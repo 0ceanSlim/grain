@@ -118,3 +118,42 @@ func TestSessionCookie_SecureOverHTTPS(t *testing.T) {
 		})
 	}
 }
+
+// A user's per-user client state is released when their LAST session ends
+// (logout or expiry), not when one of several sessions does.
+func TestSessionEnd_ReleasesUserOnLastSession(t *testing.T) {
+	sm := NewSessionManager()
+	var released []string
+	sm.onUserGone = func(pk string) { released = append(released, pk) }
+
+	create := func(pk string) *http.Cookie {
+		rec := httptest.NewRecorder()
+		if _, err := sm.CreateSession(rec, httptest.NewRequest("GET", "/", nil), SessionInitRequest{PublicKey: pk}, nil); err != nil {
+			t.Fatal(err)
+		}
+		return rec.Result().Cookies()[0]
+	}
+	logout := func(c *http.Cookie) {
+		r := httptest.NewRequest("POST", "/", nil)
+		r.AddCookie(c)
+		sm.ClearSession(httptest.NewRecorder(), r)
+	}
+
+	phone, laptop := create("alice"), create("alice")
+	create("bob")
+
+	logout(phone)
+	if len(released) != 0 {
+		t.Fatalf("released %v while alice still has a session", released)
+	}
+	logout(laptop)
+	if len(released) != 1 || released[0] != "alice" {
+		t.Fatalf("released %v, want [alice]", released)
+	}
+
+	// Expiry releases too.
+	sm.CleanupSessions(-time.Second)
+	if len(released) != 2 || released[1] != "bob" {
+		t.Fatalf("released %v after expiry, want bob too", released)
+	}
+}

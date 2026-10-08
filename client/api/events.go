@@ -307,8 +307,14 @@ func QueryEventsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create subscription to fetch events
-	sub, err := coreClient.Subscribe(r.Context(), filters, nil)
+	// Create subscription to fetch events, as the logged-in user if there is
+	// one (so relays they've authenticated to serve them as themselves).
+	var sub *core.Subscription
+	if uc := optionalSessionUser(r); uc != nil {
+		sub, err = uc.Subscribe(r.Context(), filters, nil)
+	} else {
+		sub, err = coreClient.Subscribe(r.Context(), filters, nil)
+	}
 	if err != nil {
 		log.ClientAPI().Error("Failed to create subscription", "error", err)
 		http.Error(w, "Query failed", http.StatusInternalServerError)

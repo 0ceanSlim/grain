@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0ceanslim/grain/client/connection"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -20,6 +21,10 @@ type SessionManager struct {
 	sessionMutex sync.RWMutex
 	cookieName   string
 	cookieMaxAge int
+
+	// onUserGone overrides what happens when a user's last session ends
+	// (default connection.ReleaseUser). A test seam.
+	onUserGone func(pubkey string)
 }
 
 // NewSessionManager creates a new session manager
@@ -114,14 +119,19 @@ func isHTTPS(r *http.Request) bool {
 func (sm *SessionManager) ClearSession(w http.ResponseWriter, r *http.Request) {
 	token := sm.GetSessionToken(r)
 	if token != "" {
+		var ended []string
 		sm.sessionMutex.Lock()
 		if session, exists := sm.sessions[token]; exists {
 			log.ClientSession().Info("Clearing session",
 				"pubkey", session.PublicKey,
 				"mode", session.Mode)
+			delete(sm.sessions, token)
+			if !sm.hasSessionLocked(session.PublicKey) {
+				ended = append(ended, session.PublicKey)
+			}
 		}
-		delete(sm.sessions, token)
 		sm.sessionMutex.Unlock()
+		sm.usersEnded(ended)
 	}
 
 	// Clear cookie
@@ -148,23 +158,56 @@ func (sm *SessionManager) GetCurrentUser(r *http.Request) *UserSession {
 // CleanupSessions removes expired sessions
 func (sm *SessionManager) CleanupSessions(maxAge time.Duration) {
 	sm.sessionMutex.Lock()
-	defer sm.sessionMutex.Unlock()
 
 	now := time.Now()
 	cleanedCount := 0
+	expired := make(map[string]bool)
 
 	for token, session := range sm.sessions {
 		if now.Sub(session.LastActive) > maxAge {
 			delete(sm.sessions, token)
 			cleanedCount++
+			expired[session.PublicKey] = true
 			log.ClientSession().Debug("Cleaned up expired session",
 				"pubkey", session.PublicKey,
 				"mode", session.Mode)
 		}
 	}
+	var ended []string
+	for pubkey := range expired {
+		if !sm.hasSessionLocked(pubkey) {
+			ended = append(ended, pubkey)
+		}
+	}
+	sm.sessionMutex.Unlock()
+	sm.usersEnded(ended)
 
 	if cleanedCount > 0 {
 		log.ClientSession().Info("Session cleanup completed", "cleaned_sessions", cleanedCount)
+	}
+}
+
+// hasSessionLocked reports whether pubkey still has a session. Caller holds
+// sessionMutex.
+func (sm *SessionManager) hasSessionLocked(pubkey string) bool {
+	for _, s := range sm.sessions {
+		if s.PublicKey == pubkey {
+			return true
+		}
+	}
+	return false
+}
+
+// usersEnded releases the per-user client state of users whose last session
+// just ended (their held relays, their NIP-42 authenticated connections).
+// Called without sessionMutex held.
+func (sm *SessionManager) usersEnded(pubkeys []string) {
+	release := sm.onUserGone
+	if release == nil {
+		release = connection.ReleaseUser
+	}
+	for _, pk := range pubkeys {
+		release(pk)
 	}
 }
 

@@ -39,7 +39,11 @@ func StartLiveSync(pubkey string) {
 
 	since := time.Now()
 	relays := cc.OwnListRelays(pubkey)
-	sub, err := cc.Subscribe(context.Background(), []nostr.Filter{{
+	uc := UserFor(pubkey)
+	if uc == nil {
+		return
+	}
+	sub, err := uc.Subscribe(context.Background(), []nostr.Filter{{
 		Authors: []string{pubkey},
 		Kinds:   ownEventKinds,
 		Since:   &since,

@@ -8,6 +8,7 @@ import (
 
 	"github.com/0ceanslim/grain/client/cache"
 	"github.com/0ceanslim/grain/client/connection"
+	"github.com/0ceanslim/grain/client/core"
 	"github.com/0ceanslim/grain/client/session"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -106,7 +107,7 @@ func ClientConnectHandler(w http.ResponseWriter, r *http.Request) {
 		"user", userSession.PublicKey)
 
 	// Try to connect with protocol detection
-	workingURL, err := connectWithProtocolDetection(relayDomain)
+	workingURL, err := connectWithProtocolDetection(connection.UserFor(userSession.PublicKey), relayDomain)
 	if err != nil {
 		log.ClientAPI().Error("Failed to connect to relay",
 			"domain", relayDomain,
@@ -175,46 +176,24 @@ func ClientConnectHandler(w http.ResponseWriter, r *http.Request) {
 		"user", userSession.PublicKey)
 }
 
-// connectWithProtocolDetection tries both ws and wss, returns working URL
-func connectWithProtocolDetection(domain string) (string, error) {
+// connectWithProtocolDetection holds the relay open for this user, trying
+// wss:// then ws://, and returns the URL that connected. Only this user's
+// holds change; other users' connections are untouched.
+func connectWithProtocolDetection(uc *core.UserContext, domain string) (string, error) {
+	if uc == nil {
+		return "", fmt.Errorf("core client not available")
+	}
+
 	// Clean domain (remove any protocol prefix if provided)
 	cleanDomain := strings.TrimPrefix(domain, "wss://")
 	cleanDomain = strings.TrimPrefix(cleanDomain, "ws://")
 	cleanDomain = strings.TrimSuffix(cleanDomain, "/")
 
-	// Get core client
-	coreClient := connection.GetCoreClient()
-	if coreClient == nil {
-		return "", fmt.Errorf("core client not available")
-	}
-
-	// Try wss:// first (more secure)
-	wssURL := "wss://" + cleanDomain + "/"
-	log.ClientAPI().Debug("Trying wss connection", "url", wssURL)
-
-	if err := coreClient.ConnectToRelays([]string{wssURL}); err == nil {
-		// Check if actually connected
-		connectedRelays := coreClient.GetConnectedRelays()
-		for _, relay := range connectedRelays {
-			if relay == wssURL {
-				log.ClientAPI().Info("Successfully connected via wss", "url", wssURL)
-				return wssURL, nil
-			}
-		}
-	}
-
-	// Try ws:// as fallback
-	wsURL := "ws://" + cleanDomain + "/"
-	log.ClientAPI().Debug("Trying ws connection", "url", wsURL)
-
-	if err := coreClient.ConnectToRelays([]string{wsURL}); err == nil {
-		// Check if actually connected
-		connectedRelays := coreClient.GetConnectedRelays()
-		for _, relay := range connectedRelays {
-			if relay == wsURL {
-				log.ClientAPI().Info("Successfully connected via ws", "url", wsURL)
-				return wsURL, nil
-			}
+	for _, url := range []string{"wss://" + cleanDomain + "/", "ws://" + cleanDomain + "/"} {
+		log.ClientAPI().Debug("Trying relay connection", "url", url)
+		if err := uc.AddHeldRelay(url); err == nil {
+			log.ClientAPI().Info("Connected to relay", "url", url)
+			return url, nil
 		}
 	}
 

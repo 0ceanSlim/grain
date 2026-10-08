@@ -60,13 +60,20 @@ func ResolveEventHandler(w http.ResponseWriter, r *http.Request) {
 	limit := 1
 	filter := nostr.Filter{IDs: []string{id}, Limit: &limit}
 
+	// Resolve as the logged-in user if there is one: their routing
+	// preferences, and their NIP-42 authenticated connections.
+	fetchEvents, routeFetch := cc.FetchEvents, cc.RouteFetch
+	if uc := optionalSessionUser(r); uc != nil {
+		fetchEvents, routeFetch = uc.FetchEvents, uc.RouteFetch
+	}
+
 	// Try one relay set; return the id-matching event if any relay in it has it.
 	try := func(relays []string, timeout time.Duration) *nostr.Event {
 		relays = dedupeNonEmpty(relays)
 		if len(relays) == 0 {
 			return nil
 		}
-		for _, ev := range cc.FetchEvents(r.Context(), []nostr.Filter{filter}, relays, 1, timeout) {
+		for _, ev := range fetchEvents(r.Context(), []nostr.Filter{filter}, relays, 1, timeout) {
 			if ev != nil && ev.ID == id {
 				return ev
 			}
@@ -83,7 +90,7 @@ func ResolveEventHandler(w http.ResponseWriter, r *http.Request) {
 	// Tier 2 — the author's outbox relays (resolve their NIP-65 list first).
 	if found == nil && author != "" {
 		cc.WarmRelays(author)
-		found = try(cc.RouteFetch(author), 4*time.Second)
+		found = try(routeFetch(author), 4*time.Second)
 	}
 
 	// Tier 3 — explicit relay hints (advanced input / nevent TLV).

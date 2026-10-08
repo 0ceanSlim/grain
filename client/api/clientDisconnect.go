@@ -2,13 +2,11 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/0ceanslim/grain/client/cache"
 	"github.com/0ceanslim/grain/client/connection"
-	"github.com/0ceanslim/grain/client/core"
 	"github.com/0ceanslim/grain/client/session"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -116,20 +114,13 @@ func ClientDisconnectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Disconnect from core client pool
-	coreClient := connection.GetCoreClient()
-	if coreClient != nil {
-		if err := disconnectRelayFromPool(coreClient, foundRelayURL); err != nil {
-			log.ClientAPI().Warn("Failed to disconnect from relay pool",
-				"relay", foundRelayURL,
-				"error", err,
-				"user", publicKey)
-			// Continue anyway to remove from cache
-		} else {
-			log.ClientAPI().Info("Successfully disconnected from relay pool",
-				"relay", foundRelayURL,
-				"user", publicKey)
-		}
+	// Drop this user's hold on the relay. The connection itself stays up for
+	// any other user still using it, and is idle-evicted once nobody is.
+	if uc := connection.UserFor(publicKey); uc != nil {
+		uc.DropHeldRelay(foundRelayURL)
+		log.ClientAPI().Info("Released user's hold on relay",
+			"relay", foundRelayURL,
+			"user", publicKey)
 	}
 
 	// Remove from user's cached client relays
@@ -176,24 +167,4 @@ func ClientDisconnectHandler(w http.ResponseWriter, r *http.Request) {
 		"relay_url", foundRelayURL,
 		"client_ip", r.RemoteAddr,
 		"user", publicKey)
-}
-
-// disconnectRelayFromPool disconnects a relay from the core client pool
-func disconnectRelayFromPool(coreClient interface{}, relayURL string) error {
-	// Cast the interface to the actual core client type
-	client, ok := coreClient.(*core.Client)
-	if !ok {
-		return fmt.Errorf("invalid core client type")
-	}
-
-	log.ClientAPI().Info("Disconnecting relay from pool", "relay", relayURL)
-
-	// Use the core client's DisconnectFromRelay method
-	if err := client.DisconnectFromRelay(relayURL); err != nil {
-		log.ClientAPI().Error("Failed to disconnect relay from pool", "relay", relayURL, "error", err)
-		return err
-	}
-
-	log.ClientAPI().Info("Successfully disconnected relay from pool", "relay", relayURL)
-	return nil
 }
