@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils/wsframe"
 	"golang.org/x/net/websocket"
 )
 
@@ -503,7 +503,16 @@ func (rc *RelayConnection) readHandler() {
 		clog().Debug("Read handler terminated", "relay", rc.URL)
 	}()
 
-	frames := frameJoiner{max: maxHeldMessage, gap: frameGap}
+	// Some relays split any message over 1 KiB across frames, and
+	// Message.Receive returns one frame per call; see package wsframe.
+	frames := wsframe.Joiner{
+		Max: wsframe.DefaultMax,
+		Gap: wsframe.DefaultGap,
+		OnDrop: func(held int, reason string) {
+			clog().Debug("Dropped a relay message that never finished",
+				"relay", rc.URL, "bytes", held, "reason", reason)
+		},
+	}
 	for {
 		select {
 		case <-rc.done:
@@ -530,7 +539,7 @@ func (rc *RelayConnection) readHandler() {
 				return
 			}
 
-			message, ok := frames.add(frame, time.Now())
+			message, ok := frames.Add(frame, time.Now())
 			if !ok {
 				continue // the rest of the message is in the next frame(s)
 			}
@@ -544,94 +553,6 @@ func (rc *RelayConnection) readHandler() {
 			}
 		}
 	}
-}
-
-// frameJoiner puts back together a relay message that arrives split across
-// websocket frames. websocket.Message.Receive returns one frame per call, and
-// a continuation frame comes back as if it were a message of its own, so a
-// message a relay sends as a text frame plus continuation frames (some relays
-// do this for anything over 1 KiB) arrives here in pieces that don't parse.
-//
-// x/net/websocket doesn't expose the FIN bit, so the end of a message is
-// found from the JSON itself: a frame that opens a JSON array (every relay
-// message is one) and leaves it open is held, and the frames after it are
-// added until the brackets close. Brackets inside strings (and escaped
-// quotes) are skipped, and each byte is scanned once, so joining costs no
-// more than reading. Other frames pass through as before.
-//
-// A broken frame that leaves a bracket or a string open would hold back
-// what follows it, so held text is dropped once it passes maxHeldMessage
-// bytes, or when the next frame comes more than frameGap after the last
-// (the frames of one message arrive back to back).
-type frameJoiner struct {
-	max     int // most bytes held for one message
-	gap     time.Duration
-	pending strings.Builder
-	lastAt  time.Time // when the last held frame arrived
-	depth   int       // open brackets in pending
-	inStr   bool      // pending ends inside a JSON string
-	esc     bool      // pending ends just after a backslash in a string
-}
-
-const (
-	maxHeldMessage = 1 << 20
-	frameGap       = 5 * time.Second
-)
-
-// add takes the next frame, received at now, and returns a whole message
-// once one is complete.
-func (j *frameJoiner) add(frame string, now time.Time) (string, bool) {
-	if j.pending.Len() > 0 {
-		if j.pending.Len()+len(frame) <= j.max && now.Sub(j.lastAt) <= j.gap {
-			j.pending.WriteString(frame)
-			j.lastAt = now
-			if !j.scan(frame) {
-				return "", false
-			}
-			message := j.pending.String()
-			j.reset()
-			return message, true
-		}
-		j.reset() // never finished; drop it and treat frame afresh
-	}
-	t := strings.TrimLeft(frame, " \t\r\n")
-	if t == "" || t[0] != '[' || j.scan(frame) || len(frame) > j.max {
-		j.reset()
-		return frame, true
-	}
-	j.pending.WriteString(frame)
-	j.lastAt = now
-	return "", false
-}
-
-// scan advances the bracket count over s and reports whether every bracket
-// opened so far has closed.
-func (j *frameJoiner) scan(s string) bool {
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case j.esc:
-			j.esc = false
-		case j.inStr:
-			if c == '\\' {
-				j.esc = true
-			} else if c == '"' {
-				j.inStr = false
-			}
-		case c == '"':
-			j.inStr = true
-		case c == '[' || c == '{':
-			j.depth++
-		case c == ']' || c == '}':
-			j.depth--
-		}
-	}
-	return j.depth <= 0
-}
-
-func (j *frameJoiner) reset() {
-	j.pending.Reset()
-	j.depth, j.inStr, j.esc = 0, false, false
 }
 
 // setStatus updates the connection status under the lock. All status writes
