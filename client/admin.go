@@ -37,6 +37,14 @@ var adminTemplateFuncs = template.FuncMap{
 	// assetVersion stamps static asset URLs in the shared layout;
 	// admin renders that layout too, so it must register the func.
 	"assetVersion": func() string { return assetVersion },
+	// relayName / relayIcon / relayLogo back the shared layout's favicon
+	// and header logo; admin parses both, so it must register them too
+	// (ParseFS fails on an unregistered func referenced in a template).
+	"relayName": brandingName,
+	"relayIcon": brandingIcon,
+	"relayLogo": brandingLogo,
+	// relayLogoLight: the header logo under light themes (optional).
+	"relayLogoLight": brandingLogoLight,
 	// toJS marshals any value to JSON and returns it as
 	// template.JS so the renderer doesn't HTML-escape the
 	// resulting literal. Safe for inline <script> use because the
@@ -191,6 +199,8 @@ type OpsSectionData struct {
 	RelayDescription    string
 	RelayIcon           string
 	RelayBanner         string
+	RelayLogo           string // grain-only header logo; not a NIP-11 field
+	RelayLogoLight      string // grain-only header logo for light themes
 	RelayContact        string
 	RelayPrivacyPolicy  string
 	RelayTermsOfService string
@@ -438,6 +448,8 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 					RelayDescription:    m.Description,
 					RelayIcon:           m.Icon,
 					RelayBanner:         m.Banner,
+					RelayLogo:           m.Logo,
+					RelayLogoLight:      m.LogoLight,
 					RelayContact:        m.Contact,
 					RelayPrivacyPolicy:  m.PrivacyPolicy,
 					RelayTermsOfService: m.TermsOfService,
@@ -528,7 +540,7 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 	sections = orderSections(sections, "ops", "relay_info", "server", "rate_limit", "resource_limits", "whitelist", "blacklist")
 
 	data := AdminPageData{
-		Title:      "🌾 grain — admin",
+		Title:      RelayPageTitle() + " - admin",
 		Owner:      owner,
 		Sections:   sections,
 		KindLabels: KindLabels,

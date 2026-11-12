@@ -121,14 +121,14 @@ func RegisterEndpoints(mux *http.ServeMux) {
 // instead, so a request to /api/docs/swagger-ui.css won't accidentally
 // hit this template renderer.
 func apiDocsHandler(w http.ResponseWriter, r *http.Request) {
-	RenderTemplate(w, PageData{Title: "🌾 grain — API docs"}, "api-docs.html")
+	RenderTemplate(w, PageData{Title: RelayPageTitle() + " - API docs"}, "api-docs.html")
 }
 
 // styleTestHandler renders the design-token preview page. Bypasses the
 // HTMX SPA shell so the layout (header + theme swapper + footer)
 // wraps the tester even on direct navigation.
 func styleTestHandler(w http.ResponseWriter, r *http.Request) {
-	RenderTemplate(w, PageData{Title: "🌾 grain — style tester"}, "style-test.html")
+	RenderTemplate(w, PageData{Title: RelayPageTitle() + " - style tester"}, "style-test.html")
 }
 
 // registerCoreClientEndpoints registers endpoints for core Nostr client functions

@@ -19,6 +19,7 @@ import (
 	"github.com/0ceanslim/grain/config"
 	cfgType "github.com/0ceanslim/grain/config/types"
 	relay "github.com/0ceanslim/grain/server/api"
+	"github.com/0ceanslim/grain/server/branding"
 	"github.com/0ceanslim/grain/server/db/nostrdb"
 	"github.com/0ceanslim/grain/server/handlers"
 	"github.com/0ceanslim/grain/server/utils"
@@ -323,6 +324,30 @@ func initializeSubsystems(ctx context.Context, cfg *cfgType.ServerConfig) error 
 		log.Startup().Error("Failed to load relay metadata", "error", err, "file", "relay_metadata.json")
 	}
 
+	// Branding images grain stores (grain_storebrandingimage, the /admin
+	// upload) live on the data volume (<data dir>/branding), served at
+	// /branding/ and kept in the metadata as relay-relative paths. NIP-11
+	// makes such a path absolute per request (auth.relay_url, else the
+	// request's origin), so clients on other origins can load it. Values
+	// set any other way are served exactly as set.
+	branding.SetDir(config.ConfigPath("branding"))
+	relayURL := ""
+	if cfg != nil {
+		relayURL = cfg.Auth.RelayURL
+	}
+	utils.PublicBaseProvider = func(r *http.Request) string { return branding.PublicBase(relayURL, r) }
+
+	// Wire the relay's own web pages (header logo, favicon, browser-tab
+	// title, PWA manifest) to the live relay metadata. Reading through
+	// GetRelayMetadataCopy on each call means a NIP-86 changerelayname /
+	// changerelayicon / grain_changerelaylogo[light] (the /admin relay-information
+	// form) shows up on the next page render without a restart. Nothing set
+	// => grain's own "🌾 grain" logo, title and icons.
+	client.SetRelayBranding(func() client.RelayBranding {
+		m := utils.GetRelayMetadataCopy()
+		return client.RelayBranding{Name: m.Name, Icon: m.Icon, Logo: m.Logo, LogoLight: m.LogoLight}
+	})
+
 	// First-run owner provisioning. GRAIN_OWNER_PUBKEY is the
 	// declarative path — wins over whatever the JSON says and is
 	// re-applied every startup (never written to disk). If the var
@@ -515,11 +540,16 @@ func initRoot(w http.ResponseWriter, r *http.Request) {
 		// Handle NIP-11 relay information requests
 		utils.RelayInfoHandler(w, r)
 	case r.URL.Path == "/":
-		// Serve the main application template
+		// Serve the main application template. Title follows the operator's
+		// configured relay branding (grain's default when none is set).
 		data := client.PageData{
-			Title: "🌾 grain",
+			Title: client.RelayPageTitle(),
 		}
 		client.RenderTemplate(w, data, "app.html")
+	case strings.HasPrefix(r.URL.Path, branding.URLPrefix):
+		// The relay's own copies of its branding images (favicon, logo,
+		// banner); see server/branding.
+		branding.ServeHTTP(w, r)
 	case strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/login") || strings.HasPrefix(r.URL.Path, "/logout"):
 		// Let API and auth endpoints fall through to be handled by registered endpoints
 		http.NotFound(w, r)
@@ -542,7 +572,7 @@ func initRoot(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 		}
 		data := client.PageData{
-			Title: "🌾 grain",
+			Title: client.RelayPageTitle(),
 		}
 		client.RenderTemplate(w, data, "app.html")
 	}

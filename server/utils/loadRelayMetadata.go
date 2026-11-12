@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 
+	"github.com/0ceanslim/grain/server/branding"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -21,6 +23,13 @@ import (
 // and leaving anything not config-derived (e.g. created_at bounds set in
 // relay_metadata.json) untouched.
 var LimitationProvider func(*RelayLimitation)
+
+// PublicBaseProvider, set by server startup, returns the relay's public web
+// origin for a request ("https://relay.example"). The NIP-11 handler uses it
+// to make a relay-relative icon / banner (grain's own stored copies, kept as
+// "/branding/<file>") absolute, since clients load them from another origin.
+// Nil: relative values are served as they are.
+var PublicBaseProvider func(*http.Request) string
 
 type RelayMetadata struct {
 	Name           string          `json:"name"`
@@ -39,6 +48,15 @@ type RelayMetadata struct {
 	LanguageTags   []string        `json:"language_tags"`
 	Tags           []string        `json:"tags"`
 	PostingPolicy  string          `json:"posting_policy"`
+	// Logo is grain's own header image for its web pages (e.g. a wordmark),
+	// set via the grain_changerelaylogo NIP-86 method. Not a NIP-11 field:
+	// it lives in relay_metadata.json beside the identity fields the /admin
+	// form edits, but RelayInfoHandler never emits it.
+	Logo string `json:"logo,omitempty"`
+	// LogoLight is the optional Logo variant for light themes (set via
+	// grain_changerelaylogolight). Same rules: grain web pages only, never
+	// in the NIP-11 document.
+	LogoLight string `json:"logo_light,omitempty"`
 }
 
 // RelayLimitation is the NIP-11 limitation block. As of the config-derived
@@ -59,6 +77,16 @@ type RelayLimitation struct {
 }
 
 var relayMetadata RelayMetadata
+
+// metadataMu guards the in-memory relayMetadata struct. Readers take an
+// RLock; the full-struct reload in LoadRelayMetadata and the in-memory
+// owner override take a write lock. NIP-86 changerelay* writes reload the
+// struct concurrently with page renders (the header/title branding reader)
+// and NIP-11 reads that copy it out, so the shared global needs a guard.
+// Distinct from ownerClaimMu, which serializes the first-run claim's
+// check-then-write: the two are always taken ownerClaimMu -> metadataMu,
+// never the reverse, so they cannot deadlock.
+var metadataMu sync.RWMutex
 
 // Version is set at startup from the main package's build-time ldflags
 // (via server.SetVersionInfo -> utils.SetVersion). When non-empty, it
@@ -89,6 +117,8 @@ func GetRelayOwnerPubkey() string {
 	if owner := envOwner(); owner != "" {
 		return owner
 	}
+	metadataMu.RLock()
+	defer metadataMu.RUnlock()
 	return relayMetadata.Pubkey
 }
 
@@ -98,6 +128,8 @@ func GetRelayOwnerPubkey() string {
 // dashboard's ops section uses this to pre-fill the relay-identity
 // edit form; tests use it to assert post-update state.
 func GetRelayMetadataCopy() RelayMetadata {
+	metadataMu.RLock()
+	defer metadataMu.RUnlock()
 	return relayMetadata
 }
 
@@ -117,8 +149,11 @@ func IsRelayUnowned() bool {
 }
 
 // isRelayUnownedLocked is the same predicate without taking
-// ownerClaimMu. SetRelayOwner already holds the mutex and would
-// deadlock if it re-entered through the exported helper.
+// ownerClaimMu. SetRelayOwner already holds that mutex and would
+// deadlock if it re-entered through the exported helper. It still takes
+// the metadataMu RLock to read the pubkey (a different lock), which is
+// safe: the only caller holding ownerClaimMu takes them in the
+// ownerClaimMu -> metadataMu order the write paths use.
 func isRelayUnownedLocked() bool {
 	p := GetRelayOwnerPubkey()
 	return p == "" || p == allZerosPubkey
@@ -157,6 +192,13 @@ func envOwner() string {
 	return owner
 }
 
+// metadataWriteMu serializes every read-modify-write of relay_metadata.json
+// (the changerelay* field writes, UpdateRelayMetadata, the owner claim, and
+// grain's branding-image stores), so two writers cannot
+// each read the old file and drop the other's change. Lock order:
+// ownerClaimMu -> metadataWriteMu -> metadataMu.
+var metadataWriteMu sync.Mutex
+
 // ErrOwnerAlreadySet is returned by SetRelayOwner when the on-disk
 // metadata already names an owner. Callers (the /setup POST handler)
 // translate this to a 409 so the page can show the "already claimed"
@@ -187,6 +229,8 @@ func SetRelayOwner(pubkey string) error {
 	if !isRelayUnownedLocked() {
 		return ErrOwnerAlreadySet
 	}
+	metadataWriteMu.Lock()
+	defer metadataWriteMu.Unlock()
 
 	raw, err := os.ReadFile(relayMetadataWritePath)
 	if err != nil {
@@ -235,7 +279,9 @@ func OverrideRelayOwnerInMemory(pubkey string) {
 	ownerClaimMu.Lock()
 	defer ownerClaimMu.Unlock()
 	ownerOverride.Store(pubkey)
+	metadataMu.Lock()
 	relayMetadata.Pubkey = pubkey
+	metadataMu.Unlock()
 }
 
 // SetRelayMetadataField writes a single top-level field to
@@ -250,6 +296,8 @@ func OverrideRelayOwnerInMemory(pubkey string) {
 // responsible for validation (empty / URL / etc.) — this helper
 // just persists.
 func SetRelayMetadataField(field, value string) error {
+	metadataWriteMu.Lock()
+	defer metadataWriteMu.Unlock()
 	raw, err := os.ReadFile(relayMetadataWritePath)
 	if err != nil {
 		return fmt.Errorf("read relay metadata: %w", err)
@@ -281,6 +329,8 @@ func SetRelayMetadataField(field, value string) error {
 // language_tags / tags from the admin dashboard. A nil/empty slice clears the
 // field. Same atomic-write + watcher-suppression pipeline; caller validates.
 func SetRelayMetadataArrayField(field string, values []string) error {
+	metadataWriteMu.Lock()
+	defer metadataWriteMu.Unlock()
 	raw, err := os.ReadFile(relayMetadataWritePath)
 	if err != nil {
 		return fmt.Errorf("read relay metadata: %w", err)
@@ -323,11 +373,15 @@ func SetRelayMetadataArrayField(field string, values []string) error {
 // args so the dispatcher can express "don't touch this field" by
 // passing nil.
 //
-// Atomic write + watcher suppression are handled here so callers
-// don't have to remember. The function is safe for concurrent use:
-// it holds the same package-internal mutex used by the
-// suppression machinery on the config side.
+// Atomic write + watcher suppression are handled here so callers don't
+// have to remember. The in-memory reload at the end goes through
+// LoadRelayMetadata, which swaps relayMetadata under metadataMu, so
+// readers never observe a torn struct. The read-modify-write of the
+// on-disk file is serialized with every other metadata write by
+// metadataWriteMu.
 func UpdateRelayMetadata(name, description, icon, banner *string) error {
+	metadataWriteMu.Lock()
+	defer metadataWriteMu.Unlock()
 	raw, err := os.ReadFile(relayMetadataWritePath)
 	if err != nil {
 		return fmt.Errorf("read relay metadata: %w", err)
@@ -442,7 +496,11 @@ func LoadRelayMetadata(filename string) error {
 		return err
 	}
 
-	err = json.Unmarshal(data, &relayMetadata)
+	// Unmarshal into a local first, then swap under the write lock, so a
+	// concurrent reader (NIP-11 serve, admin pre-fill, header branding)
+	// never sees a half-populated struct mid-decode.
+	var parsed RelayMetadata
+	err = json.Unmarshal(data, &parsed)
 	if err != nil {
 		log.Util().Error("Failed to parse relay metadata JSON",
 			"file", filename,
@@ -451,17 +509,20 @@ func LoadRelayMetadata(filename string) error {
 	}
 
 	if owner := envOwner(); owner != "" {
-		relayMetadata.Pubkey = owner
+		parsed.Pubkey = owner
 	}
+	metadataMu.Lock()
+	relayMetadata = parsed
+	metadataMu.Unlock()
 
 	log.Util().Info("Relay metadata loaded successfully",
-		"relay_name", relayMetadata.Name,
-		"version", relayMetadata.Version,
-		"nips_count", len(relayMetadata.SupportedNIPs))
+		"relay_name", parsed.Name,
+		"version", parsed.Version,
+		"nips_count", len(parsed.SupportedNIPs))
 
 	// Log supported NIPs for debugging
-	if len(relayMetadata.SupportedNIPs) > 0 {
-		log.Util().Debug("Supported NIPs", "nips", relayMetadata.SupportedNIPs)
+	if len(parsed.SupportedNIPs) > 0 {
+		log.Util().Debug("Supported NIPs", "nips", parsed.SupportedNIPs)
 	}
 
 	return nil
@@ -498,7 +559,7 @@ func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
 	// Override the version field with the build-time version so the NIP-11
 	// info document always matches the running binary, regardless of what
 	// the on-disk relay_metadata.json says.
-	response := relayMetadata
+	response := GetRelayMetadataCopy()
 	if buildVersion != "" {
 		response.Version = buildVersion
 	}
@@ -507,6 +568,16 @@ func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
 	// the relay actually enforces, not the (often stale/zero) values on disk.
 	if LimitationProvider != nil {
 		LimitationProvider(&response.Limitation)
+	}
+	// logo / logo_light are grain's web-page settings, not NIP-11: keep
+	// them off the wire.
+	response.Logo = ""
+	response.LogoLight = ""
+	// A relay-relative icon / banner is made absolute for clients.
+	if PublicBaseProvider != nil {
+		base := strings.TrimRight(PublicBaseProvider(r), "/")
+		response.Icon = branding.Absolute(response.Icon, base)
+		response.Banner = branding.Absolute(response.Banner, base)
 	}
 
 	err := json.NewEncoder(w).Encode(response)

@@ -6,13 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!-- PWA Meta Tags -->
-    <meta name="application-name" content="Grain" />
+    <meta name="application-name" content="{{if and relayIcon relayName}}{{relayName}}{{else}}Grain{{end}}" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta
       name="apple-mobile-web-app-status-bar-style"
       content="black-translucent"
     />
-    <meta name="apple-mobile-web-app-title" content="Grain" />
+    <meta name="apple-mobile-web-app-title" content="{{if and relayIcon relayName}}{{relayName}}{{else}}Grain{{end}}" />
     <meta
       name="description"
       content="Go Relay Architecture for Implementing Nostr"
@@ -21,8 +21,9 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#141710" />
 
-    <!-- Apple Touch Icons -->
-    <link
+    <!-- Apple Touch Icons: the relay icon when set (same rule as the PWA
+         manifest and the favicon below), otherwise grain's. -->
+    {{if relayIcon}}<link rel="apple-touch-icon" href="{{relayIcon}}" />{{else}}<link
       rel="apple-touch-icon"
       sizes="152x152"
       href="/static/icons/icon-152x152.png"
@@ -31,13 +32,15 @@
       rel="apple-touch-icon"
       sizes="180x180"
       href="/static/icons/icon-180x180.png"
-    />
+    />{{end}}
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Favicon -->
-    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <!-- Favicon: the relay's NIP-11 icon when the operator has set one
+         (relay_metadata.json / the /admin relay-information "Favicon"),
+         otherwise grain's own. -->
+    {{if relayIcon}}<link rel="icon" href="{{relayIcon}}" />{{else}}<link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <link
       rel="icon"
       type="image/png"
@@ -49,7 +52,7 @@
       type="image/png"
       sizes="16x16"
       href="/static/icons/icon-16x16.png"
-    />
+    />{{end}}
 
     <!-- Apply the saved theme BEFORE the body renders so the page
          doesn't flash the wrong palette during paint. theme.js
@@ -87,6 +90,14 @@
          stylesheet because this <style> block is small and only
          drives the loading spinner + PWA banner — keeping it here
          avoids one extra round-trip on first paint. */
+      /* Header logo variants (header.html): with a "Logo for light themes"
+         set, both images render and the theme's scheme (data-color-scheme,
+         set by theme.js before paint and on every theme change) shows one. */
+      html[data-color-scheme="light"] [data-logo-scheme="dark"],
+      html:not([data-color-scheme="light"]) [data-logo-scheme="light"] {
+        display: none;
+      }
+
       .spinner {
         display: none;
         width: 32px;

@@ -446,11 +446,14 @@ const dashboardManager = {
     // Create HTML sections
     let html = '<div class="space-y-6">';
 
-    // Banner if available
+    // Banner if available (NIP-11 banner), above the name and description.
+    // Shown whole at its natural aspect: it scales down to the column width
+    // and is capped in height, never cropped.
     if (banner) {
+      const attr = (v) => this.escapeHtml(String(v)).replace(/"/g, "&quot;");
       html += `
-      <div class="rounded-lg overflow-hidden">
-        <img src="${banner}" alt="Relay Banner" class="w-full h-32 object-cover">
+      <div class="flex justify-center">
+        <img src="${attr(banner)}" alt="${attr(name)} banner" class="block w-auto h-auto max-w-full max-h-64 rounded-lg">
       </div>
     `;
     }

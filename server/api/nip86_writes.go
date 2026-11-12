@@ -227,7 +227,7 @@ func runChangeRelayMetadata(params []any, signer, field string) (any, string) {
 		if value == "" {
 			return nil, "name cannot be empty"
 		}
-	case "icon", "banner":
+	case "icon", "banner", "logo", "logo_light":
 		if value != "" && !isParseableURL(value) {
 			return nil, "invalid " + field + " URL"
 		}

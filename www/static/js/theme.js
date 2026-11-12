@@ -25,15 +25,18 @@
 
   // Keep this list in sync with the data-theme blocks in input.css.
   // `swatch` is a representative surface-base color used in the
-  // dropdown row preview.
+  // dropdown row preview. `scheme` mirrors that block's `color-scheme`
+  // (client/theme_scheme_test.go checks they agree); setTheme publishes it
+  // as <html data-color-scheme>, which picks the header logo variant
+  // (the relay's "Logo for light themes") without waiting for CSS.
   const THEMES = [
-    { id: "dark", label: "Dark", swatch: "#09080f" },
-    { id: "light", label: "Light", swatch: "#f4f1fa" },
-    { id: "midnight", label: "Midnight", swatch: "#0c0a1e" },
-    { id: "matrix", label: "Matrix", swatch: "#000000" },
-    { id: "grain", label: "Grain", swatch: "#0d0f0c" },
-    { id: "solar", label: "Solar", swatch: "#002b36" },
-    { id: "candy", label: "Candy", swatch: "#fff5f9" },
+    { id: "dark", label: "Dark", swatch: "#09080f", scheme: "dark" },
+    { id: "light", label: "Light", swatch: "#f4f1fa", scheme: "light" },
+    { id: "midnight", label: "Midnight", swatch: "#0c0a1e", scheme: "dark" },
+    { id: "matrix", label: "Matrix", swatch: "#000000", scheme: "dark" },
+    { id: "grain", label: "Grain", swatch: "#0d0f0c", scheme: "dark" },
+    { id: "solar", label: "Solar", swatch: "#002b36", scheme: "dark" },
+    { id: "candy", label: "Candy", swatch: "#fff5f9", scheme: "light" },
   ];
 
   function getTheme() {
@@ -49,8 +52,10 @@
   }
 
   function setTheme(id) {
-    if (!THEMES.some((t) => t.id === id)) return;
+    const theme = THEMES.find((t) => t.id === id);
+    if (!theme) return;
     document.documentElement.setAttribute("data-theme", id);
+    document.documentElement.setAttribute("data-color-scheme", theme.scheme);
     try {
       localStorage.setItem(STORAGE_KEY, id);
     } catch (_) {}

@@ -1,4 +1,4 @@
-const CACHE_NAME = "grain-v6"; // Bumped so activate purges poisoned older caches
+const CACHE_NAME = "grain-v7"; // Bumped so activate purges older caches (v7: the manifest is no longer cached; it follows the relay's icon and name)
 const STATIC_CACHE_URLS = [
   "/",
   "/static/js/navigation.js",
@@ -237,8 +237,9 @@ function shouldCache(url) {
     return true;
   }
 
-  // Cache manifest and service worker
-  if (url.pathname === "/manifest.json" || url.pathname === "/sw.js") {
+  // Cache the service worker. Not the manifest: it follows the relay's
+  // icon and name (admin "Favicon"), so it must stay fresh.
+  if (url.pathname === "/sw.js") {
     return true;
   }
 

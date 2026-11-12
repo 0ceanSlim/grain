@@ -389,6 +389,7 @@ func TestNIP86_InvalidInput(t *testing.T) {
 		{"blockip", []any{"not.an.ip.addr"}, "invalid"},
 		{"blockip", []any{}, "invalid ip"},
 		{"changerelayicon", []any{"javascript:alert(1)"}, "invalid icon"},
+		{"grain_changerelaylogo", []any{"javascript:alert(1)"}, "invalid logo"},
 		{"changerelayname", []any{}, "missing value"},
 		{"changerelayname", []any{""}, "name cannot be empty"},
 	}
