@@ -11,22 +11,7 @@ import (
 // reloads relay_metadata.json, whose pubkey is empty) must not drop it, or
 // the owner is locked out of every NIP-86 call after their first save.
 func TestOwnerOverrideSurvivesMetadataWrites(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "relay_metadata.json")
-	if err := os.WriteFile(p, []byte(`{"name":"Test Relay","pubkey":""}`), 0644); err != nil {
-		t.Fatal(err)
-	}
-	prevPath := relayMetadataWritePath
-	prevMeta := GetRelayMetadataCopy()
-	prevOwner := envOwner()
-	t.Cleanup(func() {
-		SetRelayMetadataWritePath(prevPath)
-		relayMetadata = prevMeta
-		ownerOverride.Store(prevOwner)
-	})
-	SetRelayMetadataWritePath(p)
-	if err := LoadRelayMetadata(p); err != nil {
-		t.Fatal(err)
-	}
+	useMetadataFile(t, `{"name":"Test Relay","pubkey":""}`)
 	const owner = "d7befd3f0bca917db20aad40e08a624ce39c74ff95bcf665cd89960c30ad9efb"
 	OverrideRelayOwnerInMemory(owner)
 
@@ -35,6 +20,9 @@ func TestOwnerOverrideSurvivesMetadataWrites(t *testing.T) {
 	}
 	name := "Renamed"
 	if err := UpdateRelayMetadata(&name, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetRelayMetadataArrayField("tags", []string{"test"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := GetRelayOwnerPubkey(); got != owner {
@@ -51,7 +39,46 @@ func TestOwnerOverrideSurvivesMetadataWrites(t *testing.T) {
 	if m := GetRelayMetadataCopy(); m.Pubkey != owner {
 		t.Fatalf("NIP-11 pubkey after metadata writes = %q, want the env override", m.Pubkey)
 	}
-	if m := GetRelayMetadataCopy(); m.Icon != "https://example.com/i.png" || m.Name != "Renamed" {
+	if m := GetRelayMetadataCopy(); m.Icon != "https://example.com/i.png" || m.Name != "Renamed" ||
+		len(m.Tags) != 1 || m.Tags[0] != "test" {
 		t.Fatalf("writes not applied: %+v", m)
+	}
+}
+
+// GRAIN_OWNER_PUBKEY wins over an owner already in relay_metadata.json. A
+// metadata write must not hand ownership back to the on-disk pubkey.
+func TestOwnerOverrideBeatsOnDiskOwnerAfterWrite(t *testing.T) {
+	const onDisk = "2222222222222222222222222222222222222222222222222222222222222222"
+	useMetadataFile(t, `{"name":"Test Relay","pubkey":"`+onDisk+`"}`)
+	const owner = "d7befd3f0bca917db20aad40e08a624ce39c74ff95bcf665cd89960c30ad9efb"
+	OverrideRelayOwnerInMemory(owner)
+
+	if err := SetRelayMetadataField("contact", "admin@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if got := GetRelayOwnerPubkey(); got != owner {
+		t.Fatalf("owner after metadata write = %q, want the env override", got)
+	}
+}
+
+// useMetadataFile points the loader at a temp relay_metadata.json holding
+// contents and restores the package state when the test ends.
+func useMetadataFile(t *testing.T, contents string) {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "relay_metadata.json")
+	if err := os.WriteFile(p, []byte(contents), 0644); err != nil {
+		t.Fatal(err)
+	}
+	prevPath := relayMetadataWritePath
+	prevMeta := GetRelayMetadataCopy()
+	prevOwner := ownerOverride.Load()
+	t.Cleanup(func() {
+		SetRelayMetadataWritePath(prevPath)
+		relayMetadata = prevMeta
+		ownerOverride.Store(prevOwner)
+	})
+	SetRelayMetadataWritePath(p)
+	if err := LoadRelayMetadata(p); err != nil {
+		t.Fatal(err)
 	}
 }
