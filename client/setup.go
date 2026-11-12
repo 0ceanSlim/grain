@@ -48,7 +48,7 @@ func HandleSetup(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSetupGet(w http.ResponseWriter, r *http.Request) {
-	data := SetupPageData{Title: RelayPageTitle() + " - setup"}
+	data := SetupPageData{Title: RelayPageTitle() + " — setup"}
 	if utils.IsRelayUnowned() {
 		renderSetup(w, data, "setup.html")
 		return

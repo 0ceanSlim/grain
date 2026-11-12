@@ -540,7 +540,7 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 	sections = orderSections(sections, "ops", "relay_info", "server", "rate_limit", "resource_limits", "whitelist", "blacklist")
 
 	data := AdminPageData{
-		Title:      RelayPageTitle() + " - admin",
+		Title:      RelayPageTitle() + " — admin",
 		Owner:      owner,
 		Sections:   sections,
 		KindLabels: KindLabels,
