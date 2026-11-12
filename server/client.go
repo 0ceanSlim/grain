@@ -18,6 +18,7 @@ import (
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
+	"github.com/0ceanslim/grain/server/utils/wsframe"
 
 	"golang.org/x/net/websocket"
 )
@@ -29,7 +30,6 @@ type Client struct {
 	subSeq        map[string]uint64 // subID → sequence of its latest REQ; lowest = oldest
 	subCounter    uint64
 	rateLimiter   *config.RateLimiter
-	messageBuffer strings.Builder
 
 	// Outbound message queue. The dedicated writeLoop goroutine drains
 	// this channel and is the ONLY thing that writes to ws. Callers
@@ -179,7 +179,6 @@ func ClientHandler(ws *websocket.Conn) {
 		subscriptions: make(map[string][]nostr.Filter),
 		subSeq:        make(map[string]uint64),
 		rateLimiter:   config.NewClientRateLimiter(),
-		messageBuffer: strings.Builder{},
 		outgoing:      make(chan []byte, clientOutgoingBuffer),
 
 		// Configure timeouts from config
@@ -711,6 +710,28 @@ func clientReader(client *Client) {
 			"remaining_connections", remaining)
 	}()
 
+	// Clients may split a message across frames, and Message.Receive
+	// returns one frame per call; see package wsframe. Each frame is
+	// scanned once, and text that never becomes a message is dropped
+	// instead of holding back the ones after it. A message that grows past
+	// max_event_size closes the connection.
+	tooLarge := false
+	frames := wsframe.Joiner{Gap: wsframe.DefaultGap}
+	frames.OnDrop = func(held int, reason string) {
+		if reason == wsframe.DropTooLarge {
+			tooLarge = true
+			log.RelayClient().Warn("Message buffer exceeds max event size, closing connection",
+				"client_id", client.id,
+				"buffer_size", held,
+				"max_event_size", frames.Max)
+			return
+		}
+		log.RelayClient().Debug("Dropped a client message that never finished",
+			"client_id", client.id,
+			"buffer_size", held,
+			"reason", reason)
+	}
+
 	for {
 		// Check if context is cancelled
 		select {
@@ -763,32 +784,23 @@ func clientReader(client *Client) {
 		// Update activity on successful message receive
 		client.updateActivity()
 
-		client.messageBuffer.WriteString(chunk)
-		fullMessage := client.messageBuffer.String()
-		cfg := config.GetConfig()
+		// Use configurable max event size as message buffer limit
+		maxEventSize := config.GetConfig().RateLimit.MaxEventSize
+		if maxEventSize <= 0 {
+			maxEventSize = 1024 * 1024 // Default to 1MB if not configured
+		}
+		frames.Max = maxEventSize
 
-		if !isValidJSON(fullMessage) {
-			// Use configurable max event size as message buffer limit
-			maxEventSize := cfg.RateLimit.MaxEventSize
-			if maxEventSize <= 0 {
-				maxEventSize = 1024 * 1024 // Default to 1MB if not configured
-			}
-
-			if client.messageBuffer.Len() > maxEventSize {
-				log.RelayClient().Warn("Message buffer exceeds max event size, closing connection",
-					"client_id", client.id,
-					"buffer_size", client.messageBuffer.Len(),
-					"max_event_size", maxEventSize)
-				return
-			}
+		fullMessage, ok := frames.Add(chunk, time.Now())
+		if tooLarge {
+			return
+		}
+		if !ok {
 			log.RelayClient().Debug("Waiting for full JSON message",
 				"client_id", client.id,
-				"buffer_size", len(fullMessage),
 				"max_allowed", maxEventSize)
 			continue
 		}
-
-		client.messageBuffer.Reset()
 
 		var message []interface{}
 		err = json.Unmarshal([]byte(fullMessage), &message)
@@ -899,11 +911,6 @@ func handleReadError(err error, client *Client) {
 			"client_id", clientID,
 			"error_type", fmt.Sprintf("%T", err))
 	}
-}
-
-func isValidJSON(s string) bool {
-	var js interface{}
-	return json.Unmarshal([]byte(s), &js) == nil
 }
 
 // BroadcastEvent sends an event to all connected clients whose active

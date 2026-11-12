@@ -180,16 +180,18 @@ func SetRelayMetadataWritePath(p string) { relayMetadataWritePath = p }
 // under this same lock so the check + write is single-winner.
 var ownerClaimMu sync.Mutex
 
-// ownerOverride holds the GRAIN_OWNER_PUBKEY owner (a string) set by
+// ownerOverride holds the GRAIN_OWNER_PUBKEY owner set by
 // OverrideRelayOwnerInMemory. LoadRelayMetadata re-applies it over the
 // on-disk pubkey, and the owner getters read it first, so a metadata
 // reload never leaves the env-declared owner unset, even briefly.
-var ownerOverride atomic.Value
+var ownerOverride atomic.Pointer[string]
 
 // envOwner returns the GRAIN_OWNER_PUBKEY owner, or "" when none is set.
 func envOwner() string {
-	owner, _ := ownerOverride.Load().(string)
-	return owner
+	if owner := ownerOverride.Load(); owner != nil {
+		return *owner
+	}
+	return ""
 }
 
 // metadataWriteMu serializes every read-modify-write of relay_metadata.json
@@ -278,7 +280,7 @@ func SetRelayOwner(pubkey string) error {
 func OverrideRelayOwnerInMemory(pubkey string) {
 	ownerClaimMu.Lock()
 	defer ownerClaimMu.Unlock()
-	ownerOverride.Store(pubkey)
+	ownerOverride.Store(&pubkey)
 	metadataMu.Lock()
 	relayMetadata.Pubkey = pubkey
 	metadataMu.Unlock()

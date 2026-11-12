@@ -8,6 +8,7 @@ import (
 	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils/wsframe"
 	"golang.org/x/net/websocket"
 )
 
@@ -502,6 +503,16 @@ func (rc *RelayConnection) readHandler() {
 		clog().Debug("Read handler terminated", "relay", rc.URL)
 	}()
 
+	// Some relays split any message over 1 KiB across frames, and
+	// Message.Receive returns one frame per call; see package wsframe.
+	frames := wsframe.Joiner{
+		Max: wsframe.DefaultMax,
+		Gap: wsframe.DefaultGap,
+		OnDrop: func(held int, reason string) {
+			clog().Debug("Dropped a relay message that never finished",
+				"relay", rc.URL, "bytes", held, "reason", reason)
+		},
+	}
 	for {
 		select {
 		case <-rc.done:
@@ -511,8 +522,8 @@ func (rc *RelayConnection) readHandler() {
 			// Set a longer read timeout to avoid frequent timeouts
 			rc.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 
-			var message string
-			if err := websocket.Message.Receive(rc.Conn, &message); err != nil {
+			var frame string
+			if err := websocket.Message.Receive(rc.Conn, &frame); err != nil {
 				// Don't log timeout errors as errors - they're normal for keep-alive
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 					clog().Debug("Read timeout from relay (normal keep-alive)", "relay", rc.URL)
@@ -526,6 +537,11 @@ func (rc *RelayConnection) readHandler() {
 				clog().Debug("Failed to read message from relay", "relay", rc.URL, "error", err)
 				rc.setStatus(StatusError)
 				return
+			}
+
+			message, ok := frames.Add(frame, time.Now())
+			if !ok {
+				continue // the rest of the message is in the next frame(s)
 			}
 
 			// Process the received message. Demoted to Debug: some upstream
