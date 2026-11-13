@@ -2,9 +2,14 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
+	"net/url"
+	"path"
+	"strings"
 
+	"github.com/0ceanslim/grain/server/branding"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -28,8 +33,8 @@ type PWAManifest struct {
 // PWAIcon represents an icon in the manifest
 type PWAIcon struct {
 	Src     string `json:"src"`
-	Sizes   string `json:"sizes"`
-	Type    string `json:"type"`
+	Sizes   string `json:"sizes,omitempty"`
+	Type    string `json:"type,omitempty"`
 	Purpose string `json:"purpose,omitempty"`
 }
 
@@ -68,8 +73,12 @@ func manifestHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	applyRelayBranding(&manifest, currentBranding())
+
 	w.Header().Set("Content-Type", "application/manifest+json")
-	w.Header().Set("Cache-Control", "public, max-age=86400") // Cache for 24 hours
+	// One hour: the manifest follows the relay's icon and name, so a change
+	// made in /admin reaches installs within the hour.
+	w.Header().Set("Cache-Control", "public, max-age=3600")
 
 	if err := json.NewEncoder(w).Encode(manifest); err != nil {
 		log.ClientMain().Error("Failed to encode PWA manifest", "error", err)
@@ -78,6 +87,56 @@ func manifestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.ClientMain().Debug("Served PWA manifest", "client_ip", r.RemoteAddr)
+}
+
+// applyRelayBranding makes an installed app look like the relay when the
+// operator has set a relay icon (NIP-11 icon, the admin "Favicon"): the relay
+// name becomes the app name, and a PNG or WebP icon is offered first, with
+// purpose "any", since an arbitrary image has no maskable safe zone. A copy
+// grain stored is listed at its real size. An outside image's size is
+// unknown, so it is listed without one rather than with a guess. grain's own
+// icons stay listed after it, so the app stays installable whatever the
+// relay's image turns out to be.
+func applyRelayBranding(m *PWAManifest, b RelayBranding) {
+	if b.Icon == "" {
+		return
+	}
+	icon := PWAIcon{Src: b.Icon, Purpose: "any"}
+	if img, ok := branding.Stored(b.Icon); ok {
+		icon.Type = img.Type
+		icon.Sizes = fmt.Sprintf("%dx%d", img.Width, img.Height)
+	} else {
+		icon.Type = iconMIMEType(b.Icon)
+	}
+	if icon.Type == "image/png" || icon.Type == "image/webp" {
+		m.Icons = append([]PWAIcon{icon}, m.Icons...)
+	}
+	if b.Name != "" {
+		m.Name = b.Name
+		m.ShortName = b.Name
+	}
+}
+
+// iconMIMEType guesses an icon's type from its URL path extension; empty
+// (type omitted, the browser sniffs) when it cannot tell.
+func iconMIMEType(src string) string {
+	p := src
+	if u, err := url.Parse(src); err == nil {
+		p = u.Path
+	}
+	switch strings.ToLower(path.Ext(p)) {
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".ico":
+		return "image/x-icon"
+	}
+	return ""
 }
 
 // serviceWorkerHandler serves the service worker JavaScript file from the embedded FS

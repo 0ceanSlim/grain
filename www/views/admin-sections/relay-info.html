@@ -9,7 +9,11 @@
     <legend class="px-2 text-sm font-medium text-text">Relay identity</legend>
     <p class="mt-1 mb-3 text-xs text-text-secondary">
       These fields are written to <span class="font-mono">relay_metadata.json</span>
-      and surfaced over NIP-11.
+      and surfaced over NIP-11 (all but the two Logos, which only these pages use).
+      Images can live on a Blossom server or on this relay. "Upload to relay",
+      and Save on a URL from another host, keep a copy here that grain serves
+      itself (PNG, JPEG, WebP, GIF or ICO, up to 700 KiB). An image it can't
+      keep, such as an SVG, is saved as the URL you gave.
     </p>
 
     <div class="grid gap-3 sm:grid-cols-2">
@@ -26,21 +30,83 @@
       </label>
 
       <label class="flex flex-col gap-1 text-sm">
-        <span class="font-medium text-text-secondary">Icon URL</span>
-        <input type="text" data-ops-icon data-initial="{{.RelayIcon}}" value="{{.RelayIcon}}"
+        <span class="font-medium text-text-secondary">Favicon URL</span>
+        <input type="text" data-ops-icon data-branding-slot="icon" data-initial="{{.RelayIcon}}" value="{{.RelayIcon}}"
           placeholder="https://relay.example.com/icon.png"
           class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
-        <button type="button" data-upload-target="[data-ops-icon]" data-upload-accept="image/*"
-          class="self-start px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload image</button>
+        <span class="text-xs text-text-secondary">
+          Square, 512px or larger. The browser tab and app icon on these pages,
+          and the icon nostr clients show (NIP-11 <span class="font-mono">icon</span>).
+        </span>
+        <img data-branding-preview="icon" src="{{.RelayIcon}}" alt=""
+          class="{{if not .RelayIcon}}hidden {{end}}h-12 w-auto max-w-full self-start object-contain rounded border border-border bg-surface-inset p-1" />
+        <span class="flex flex-wrap items-center gap-2">
+          <button type="button" data-upload-target="[data-ops-icon]" data-upload-accept="image/*"
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to Blossom</button>
+          <button type="button" data-branding-upload="icon"
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to relay</button>
+          <input type="file" hidden data-branding-file="icon" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon" />
+        </span>
+      </label>
+
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Logo URL</span>
+        <input type="text" data-ops-logo data-branding-slot="logo" data-initial="{{.RelayLogo}}" value="{{.RelayLogo}}"
+          placeholder="https://relay.example.com/logo.png"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">
+          Wide, transparent background. Shown alone at the top left of these
+          pages in place of the relay name. Not sent to nostr clients.
+        </span>
+        <img data-branding-preview="logo" src="{{.RelayLogo}}" alt=""
+          class="{{if not .RelayLogo}}hidden {{end}}h-10 w-auto max-w-full self-start object-contain rounded border border-border bg-surface-inset p-1" />
+        <span class="flex flex-wrap items-center gap-2">
+          <button type="button" data-upload-target="[data-ops-logo]" data-upload-accept="image/*"
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to Blossom</button>
+          <button type="button" data-branding-upload="logo"
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to relay</button>
+          <input type="file" hidden data-branding-file="logo" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon" />
+        </span>
+      </label>
+
+      <label class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-text-secondary">Logo for light themes URL</span>
+        <input type="text" data-ops-logo-light data-branding-slot="logo_light" data-initial="{{.RelayLogoLight}}" value="{{.RelayLogoLight}}"
+          placeholder="https://relay.example.com/logo-dark-letters.png"
+          class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
+        <span class="text-xs text-text-secondary">
+          Optional. Used in place of the Logo while a light theme is active;
+          empty uses the Logo everywhere. Needs a Logo.
+        </span>
+        <img data-branding-preview="logo_light" src="{{.RelayLogoLight}}" alt=""
+          class="{{if not .RelayLogoLight}}hidden {{end}}h-10 w-auto max-w-full self-start object-contain rounded border border-border bg-surface-inset p-1" />
+        <span class="flex flex-wrap items-center gap-2">
+          <button type="button" data-upload-target="[data-ops-logo-light]" data-upload-accept="image/*"
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to Blossom</button>
+          <button type="button" data-branding-upload="logo_light"
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to relay</button>
+          <input type="file" hidden data-branding-file="logo_light" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon" />
+        </span>
       </label>
 
       <label class="flex flex-col gap-1 text-sm">
         <span class="font-medium text-text-secondary">Banner URL</span>
-        <input type="text" data-ops-banner data-initial="{{.RelayBanner}}" value="{{.RelayBanner}}"
+        <input type="text" data-ops-banner data-branding-slot="banner" data-initial="{{.RelayBanner}}" value="{{.RelayBanner}}"
           placeholder="https://relay.example.com/banner.jpg"
           class="px-3 py-2 rounded bg-surface border border-border text-text font-mono" />
-        <button type="button" data-upload-target="[data-ops-banner]" data-upload-accept="image/*"
-          class="self-start px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload image</button>
+        <span class="text-xs text-text-secondary">
+          Shown whole above the relay description on the home page (NIP-11
+          <span class="font-mono">banner</span>).
+        </span>
+        <img data-branding-preview="banner" src="{{.RelayBanner}}" alt=""
+          class="{{if not .RelayBanner}}hidden {{end}}max-h-20 w-auto max-w-full self-start object-contain rounded border border-border bg-surface-inset p-1" />
+        <span class="flex flex-wrap items-center gap-2">
+          <button type="button" data-upload-target="[data-ops-banner]" data-upload-accept="image/*"
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to Blossom</button>
+          <button type="button" data-branding-upload="banner"
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to relay</button>
+          <input type="file" hidden data-branding-file="banner" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon" />
+        </span>
       </label>
 
       <label class="flex flex-col gap-1 text-sm sm:col-span-2">
@@ -123,8 +189,15 @@
     const FIELDS = [
       { sel: "[data-ops-name]", method: "changerelayname" },
       { sel: "[data-ops-description]", method: "changerelaydescription" },
-      { sel: "[data-ops-icon]", method: "changerelayicon" },
-      { sel: "[data-ops-banner]", method: "changerelaybanner" },
+      // Image fields: Save on a URL from another host (pasted, or filled in
+      // by "Upload to Blossom") asks grain to keep its own copy via
+      // grain_storebrandingimage. If grain can't keep it (an SVG, a failed
+      // fetch), the URL is saved as given. Anything else, including
+      // clearing, uses the plain field method.
+      { sel: "[data-ops-icon]", method: "changerelayicon", slot: "icon" },
+      { sel: "[data-ops-banner]", method: "changerelaybanner", slot: "banner" },
+      { sel: "[data-ops-logo]", method: "grain_changerelaylogo", slot: "logo" },
+      { sel: "[data-ops-logo-light]", method: "grain_changerelaylogolight", slot: "logo_light" },
       { sel: "[data-ops-contact]", method: "changerelaycontact" },
       { sel: "[data-ops-privacy-policy]", method: "changerelayprivacypolicy" },
       { sel: "[data-ops-terms-of-service]", method: "changerelaytermsofservice" },
@@ -135,6 +208,79 @@
       { sel: "[data-ops-language-tags]", method: "changerelaylanguagetags", array: true },
       { sel: "[data-ops-tags]", method: "changerelaytags", array: true },
     ];
+
+    // Branding images grain stores. MAX_IMAGE matches branding.MaxImageBytes.
+    const MAX_IMAGE = 700 * 1024;
+    // An http(s) URL on another origin: the only kind grain fetches and
+    // keeps its own copy of. A stored copy (/branding/...) is never refetched.
+    function isOutsideURL(value) {
+      try {
+        const u = new URL(value);
+        return (u.protocol === "http:" || u.protocol === "https:") && u.origin !== window.location.origin;
+      } catch (_) {
+        return false;
+      }
+    }
+    function showStored(slot, url) {
+      const input = panel.querySelector('[data-branding-slot="' + slot + '"]');
+      if (input) {
+        input.value = url;
+        input.dataset.initial = url;
+      }
+      const img = panel.querySelector('[data-branding-preview="' + slot + '"]');
+      if (img) {
+        img.src = url;
+        img.classList.toggle("hidden", !url);
+      }
+    }
+    async function storeImage(slot, source) {
+      const res = await window.grainNIP86.submit("grain_storebrandingimage", [slot, source]);
+      showStored(slot, res.url);
+      return res;
+    }
+    // Keep the preview in step with the field (typed, pasted, or filled in
+    // by "Upload to Blossom").
+    panel.querySelectorAll("[data-branding-slot]").forEach((input) => {
+      input.addEventListener("input", () => {
+        const img = panel.querySelector('[data-branding-preview="' + input.dataset.brandingSlot + '"]');
+        if (!img) return;
+        const v = input.value.trim();
+        img.src = v;
+        img.classList.toggle("hidden", !v);
+      });
+    });
+
+    panel.querySelectorAll("[data-branding-upload]").forEach((btn) => {
+      const slot = btn.dataset.brandingUpload;
+      const file = panel.querySelector('[data-branding-file="' + slot + '"]');
+      btn.addEventListener("click", () => file && file.click());
+      if (!file) return;
+      file.addEventListener("change", async () => {
+        const f = file.files && file.files[0];
+        file.value = "";
+        if (!f) return;
+        if (f.size > MAX_IMAGE) {
+          toast(f.name + " is over 700 KiB", "error");
+          return;
+        }
+        btn.disabled = true;
+        try {
+          const dataURL = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result);
+            r.onerror = () => reject(r.error || new Error("could not read file"));
+            r.readAsDataURL(f);
+          });
+          if (window.adminEnsureSigner) await window.adminEnsureSigner();
+          const res = await storeImage(slot, dataURL);
+          toast(slot + " stored" + (res.width ? " (" + res.width + "x" + res.height + ")" : ""));
+        } catch (err) {
+          toast(slot + ": " + (err.message || String(err)), "error");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
 
     panel.querySelector("[data-ops-identity-save]").addEventListener("click", async (ev) => {
       const btn = ev.currentTarget;
@@ -159,12 +305,25 @@
         if (window.adminEnsureSigner) await window.adminEnsureSigner();
         for (const d of dirty) {
           try {
+            const value = d.current.trim();
+            if (d.field.slot && isOutsideURL(value)) {
+              // An image on another host: grain fetches it once and keeps its
+              // own copy. If it can't, the URL is saved as given below.
+              try {
+                await storeImage(d.field.slot, value);
+                changed++;
+                continue;
+              } catch (err) {
+                toast(d.field.slot + ": saved the URL as given (" + (err.message || String(err)) + ")");
+              }
+            }
             const payload = d.field.array
               ? [d.current.split(",").map((s) => s.trim()).filter(Boolean)]
-              : [d.current.trim()];
+              : [value];
             await window.grainNIP86.submit(d.field.method, payload);
             const el = panel.querySelector(d.field.sel);
             if (el) el.dataset.initial = d.current;
+            if (d.field.slot) showStored(d.field.slot, value);
             changed++;
           } catch (err) {
             toast(d.field.method + ": " + (err.message || String(err)), "error");
