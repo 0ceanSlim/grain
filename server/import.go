@@ -76,11 +76,7 @@ func ImportEvents(filename string) error {
 		return fmt.Errorf("failed to open nostrdb: %w", err)
 	}
 	nostrdb.SetGlobalDB(db)
-	defer func() {
-		// Let the writer thread finish committing before exit.
-		time.Sleep(3 * time.Second)
-		db.Close()
-	}()
+	defer db.Close()
 
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, 4*1024), 10*1024*1024) // up to 10MB per line
@@ -93,6 +89,21 @@ func ImportEvents(filename string) error {
 
 	const maxBackoff = 100 * time.Millisecond
 	const maxRetries = 500
+
+	// Writes are queued, not waited on one by one; every importWindow of
+	// them the import waits for the batch to commit, and counts any that
+	// didn't as errors.
+	const importWindow = 4096
+	var inflight []*nostrdb.PendingWrite
+	flush := func() {
+		for _, p := range inflight {
+			if err := p.Wait(); err != nil {
+				imported--
+				errors++
+			}
+		}
+		inflight = inflight[:0]
+	}
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -118,9 +129,12 @@ func ImportEvents(filename string) error {
 		// conflicts) are not retried.
 		stored := false
 		for attempt := 0; attempt < maxRetries; attempt++ {
-			err := db.StoreEvent(ctx, evt)
+			p, err := db.QueueEvent(ctx, evt)
 			if err == nil {
 				stored = true
+				if p != nil {
+					inflight = append(inflight, p)
+				}
 				backoff = time.Millisecond // reset on success
 				break
 			}
@@ -145,6 +159,9 @@ func ImportEvents(filename string) error {
 		if stored {
 			imported++
 		}
+		if len(inflight) >= importWindow {
+			flush()
+		}
 
 		// Update progress bar at most every 100ms to avoid terminal overhead.
 		if time.Since(lastRender) >= 100*time.Millisecond {
@@ -152,6 +169,8 @@ func ImportEvents(filename string) error {
 			lastRender = time.Now()
 		}
 	}
+
+	flush()
 
 	if err := scanner.Err(); err != nil {
 		return fmt.Errorf("error reading file: %w", err)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/0ceanslim/grain/config"
+	cfgType "github.com/0ceanslim/grain/config/types"
 	"github.com/0ceanslim/grain/server/db/nostrdb"
 	"github.com/0ceanslim/grain/server/handlers/response"
 	nostr "github.com/0ceanslim/grain/server/types"
@@ -182,12 +183,14 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 		}
 	}
 
-	// Store event in nostrdb
+	// Queue the event in nostrdb. This runs on the connection's read loop,
+	// so a client's writes reach the database in the order it sent them.
+	var pending *nostrdb.PendingWrite
 	var storeErr error
 	if evt.Kind == 5 {
-		storeErr = db.ProcessDeletion(context.TODO(), evt)
+		pending, storeErr = db.QueueDeletion(context.TODO(), evt)
 	} else {
-		storeErr = db.StoreEvent(context.TODO(), evt)
+		pending, storeErr = db.QueueEvent(context.TODO(), evt)
 	}
 
 	if storeErr != nil {
@@ -211,6 +214,24 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 			"kind", evt.Kind,
 			"error", storeErr)
 		response.SendOK(client, evt.ID, false, fmt.Sprintf("error: %v", storeErr))
+		return
+	}
+
+	// OK only once the write has committed, so a client that reads right
+	// after its OK finds the event. Waiting off the read loop keeps a
+	// client that pipelines its events from stalling on each commit.
+	go finishEvent(client, evt, pending, cfg)
+}
+
+// finishEvent waits for a queued event to commit, then acks it, hands it to
+// live subscribers and forwards it to any backup relays.
+func finishEvent(client nostr.ClientInterface, evt nostr.Event, pending *nostrdb.PendingWrite, cfg *cfgType.ServerConfig) {
+	if err := pending.Wait(); err != nil {
+		log.Event().Error("Event write not confirmed",
+			"event_id", evt.ID,
+			"kind", evt.Kind,
+			"error", err)
+		response.SendOK(client, evt.ID, false, err.Error())
 		return
 	}
 

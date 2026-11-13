@@ -15,16 +15,27 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// ProcessDeletion handles NIP-09 kind 5 deletion events. It walks the event's
+// ProcessDeletion handles a NIP-09 kind 5 deletion and returns once the
+// deletion record has committed. See QueueDeletion.
+func (db *NDB) ProcessDeletion(ctx context.Context, evt nostr.Event) error {
+	p, err := db.QueueDeletion(ctx, evt)
+	if err != nil {
+		return err
+	}
+	return p.Wait()
+}
+
+// QueueDeletion handles NIP-09 kind 5 deletion events. It walks the event's
 // `e` and `a` tags, enforces NIP-09's same-pubkey authorization rule at each
 // tag, physically removes matching events via the nostrdb writer thread
-// (ndb_request_delete_note), then stores the kind-5 record itself so clients
-// can still see the deletion marker per spec.
+// (ndb_request_delete_note), then queues the kind-5 record itself so clients
+// can still see the deletion marker per spec. The returned write resolves
+// once that record has committed, and with it the deletes queued ahead of it.
 //
 // Tag processing is best-effort: a failure on one tag is logged and the next
 // tag is still processed. The kind-5 is always ingested at the end so that a
 // client querying for it still sees it, even if none of its targets existed.
-func (db *NDB) ProcessDeletion(ctx context.Context, evt nostr.Event) error {
+func (db *NDB) QueueDeletion(ctx context.Context, evt nostr.Event) (*PendingWrite, error) {
 	log.DBStore().Info("Processing deletion event",
 		"event_id", evt.ID,
 		"pubkey", evt.PubKey,
@@ -33,15 +44,26 @@ func (db *NDB) ProcessDeletion(ctx context.Context, evt nostr.Event) error {
 	// A malformed target is refused rather than stored as if it named
 	// something: the client gets "invalid:", the operator no ERROR line.
 	if err := validateDeletionTargets(evt.Tags); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Check the kind-5 itself before deleting anything it targets, so a
 	// deletion nostrdb would refuse to record doesn't delete either.
 	jsonStr, err := encodeForIngest(evt)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	// Hold the addresses this request deletes until it commits, so a
+	// version still queued is deleted too, and one queued after this
+	// isn't compared against a version that is about to go.
+	var addrs []string
+	for _, tag := range evt.Tags {
+		if len(tag) >= 2 && tag[0] == "a" {
+			addrs = append(addrs, tag[1])
+		}
+	}
+	release := db.commits.keys.lockAll(addrs)
 
 	for _, tag := range evt.Tags {
 		if len(tag) < 2 {
@@ -73,12 +95,13 @@ func (db *NDB) ProcessDeletion(ctx context.Context, evt nostr.Event) error {
 
 	// Store the deletion event itself — per NIP-09 the kind-5 record stays
 	// visible so clients can see the deletion marker.
-	if err := db.ingestEvent(evt, jsonStr); err != nil {
-		return fmt.Errorf("failed to store deletion event: %w", err)
+	p, err := db.ingestEvent(evt, jsonStr, release)
+	if err != nil {
+		return nil, fmt.Errorf("failed to store deletion event: %w", err)
 	}
 
 	log.DBStore().Info("Deletion event processed", "event_id", evt.ID)
-	return nil
+	return p, nil
 }
 
 // verifyAndDeleteByID enforces NIP-09's same-pubkey rule and physically removes
@@ -87,6 +110,14 @@ func (db *NDB) ProcessDeletion(ctx context.Context, evt nostr.Event) error {
 // refused (NIP-09's past-only semantics — a later event at the same ID would
 // have a different ID, but we apply the same rule defensively).
 func (db *NDB) verifyAndDeleteByID(eventID, requesterPubKey string, deleteCreatedAt int64) error {
+	// A target still queued, typically sent just before this deletion on
+	// the same connection, isn't in the database yet; let it land first.
+	if idBytes, err := hexToBytes32(eventID); err == nil {
+		var id [32]byte
+		copy(id[:], idBytes)
+		db.awaitPending(id)
+	}
+
 	txn, err := db.BeginQuery()
 	if err != nil {
 		return err

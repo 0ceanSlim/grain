@@ -8,16 +8,28 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// StoreEvent processes and stores a Nostr event in the database.
-// nostrdb handles event ingestion internally including parsing and indexing.
-// For replaceable and addressable events, we must handle the replacement
-// semantics ourselves since nostrdb does not enforce NIP-01 replacement rules.
+// StoreEvent stores a Nostr event and returns once it has committed.
+// See QueueEvent.
 func (db *NDB) StoreEvent(ctx context.Context, evt nostr.Event) error {
+	p, err := db.QueueEvent(ctx, evt)
+	if err != nil {
+		return err
+	}
+	return p.Wait()
+}
+
+// QueueEvent hands a Nostr event to nostrdb and returns the pending write;
+// the event isn't stored, or visible to queries, until its Wait returns
+// nil. nostrdb handles parsing and indexing. For replaceable and
+// addressable events we enforce the NIP-01 replacement rules ourselves,
+// since nostrdb does not.
+func (db *NDB) QueueEvent(ctx context.Context, evt nostr.Event) (*PendingWrite, error) {
 	category := determineEventCategory(evt.Kind)
 
 	log.DBStore().Debug("Processing event for storage",
@@ -30,20 +42,20 @@ func (db *NDB) StoreEvent(ctx context.Context, evt nostr.Event) error {
 	case evt.Kind == 2:
 		// Deprecated event kind
 		log.DBStore().Debug("Ignoring deprecated event kind 2", "event_id", evt.ID)
-		return nil
+		return nil, nil
 
 	case evt.Kind >= 20000 && evt.Kind < 30000:
 		// Ephemeral events are not stored
 		log.DBStore().Info("Ephemeral event received and ignored",
 			"event_id", evt.ID, "kind", evt.Kind)
-		return nil
+		return nil, nil
 	}
 
 	// Encode and check before the supersede deletes below: if nostrdb then
 	// refused the new version, the author would be left with neither.
 	jsonStr, err := encodeForIngest(evt)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	switch {
@@ -55,17 +67,34 @@ func (db *NDB) StoreEvent(ctx context.Context, evt nostr.Event) error {
 
 	default:
 		// Regular events and unknown kinds: just ingest
-		return db.ingestEvent(evt, jsonStr)
+		return db.ingestEvent(evt, jsonStr, nil)
 	}
 }
 
-// ingestEvent feeds an event into nostrdb for storage. jsonStr must come
-// from encodeForIngest.
-func (db *NDB) ingestEvent(evt nostr.Event, jsonStr string) error {
+// ingestEvent feeds an event into nostrdb for storage and tracks it until
+// it commits. jsonStr must come from encodeForIngest. release, if not nil,
+// runs once the write resolves, or at once if it can't be queued.
+func (db *NDB) ingestEvent(evt nostr.Event, jsonStr string, release func()) (*PendingWrite, error) {
+	idBytes, err := hexToBytes32(evt.ID)
+	if err != nil {
+		if release != nil {
+			release()
+		}
+		return nil, fmt.Errorf("invalid: event id: %w", err)
+	}
+	var id [32]byte
+	copy(id[:], idBytes)
+
+	// Track before queueing, so a deletion that follows on the same
+	// connection finds this write and waits for it.
+	p := db.track(id, release)
+
 	// Wrap in ["EVENT", <event>] format that ndb_process_event expects
 	wrapped := `["EVENT","` + evt.ID[:8] + `",` + jsonStr + `]`
 	if err := db.ProcessEvent(wrapped); err != nil {
-		return fmt.Errorf("failed to ingest event kind %d: %w", evt.Kind, err)
+		err = fmt.Errorf("failed to ingest event kind %d: %w", evt.Kind, err)
+		db.untrack(p, err)
+		return nil, err
 	}
 
 	// NIP-40: register a future expiration with the in-memory tracker.
@@ -73,17 +102,29 @@ func (db *NDB) ingestEvent(evt nostr.Event, jsonStr string) error {
 	db.trackIfExpiring(evt)
 	db.noteArrival(evt)
 
-	log.DBStore().Info("Event stored",
+	log.DBStore().Info("Event queued",
 		"event_id", evt.ID, "kind", evt.Kind, "pubkey", evt.PubKey)
-	return nil
+	return p, nil
+}
+
+// addrOf is the NIP-01 address of a replaceable (d = "") or addressable
+// event, in the kind:pubkey:d form an a tag uses.
+func addrOf(kind int, pubkey, d string) string {
+	return strconv.Itoa(kind) + ":" + pubkey + ":" + d
 }
 
 // storeReplaceable handles NIP-01 replaceable events (kinds 0, 3, 10000-19999).
 // Only the most recent event per (pubkey, kind) is kept.
-func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event, jsonStr string) error {
+//
+// The address stays locked from this check until the write commits, so a
+// second version sent before the first has landed is compared against it.
+func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event, jsonStr string) (*PendingWrite, error) {
+	release := db.commits.keys.lock(addrOf(evt.Kind, evt.PubKey, ""))
+
 	txn, err := db.BeginQuery()
 	if err != nil {
-		return fmt.Errorf("failed to begin query for replaceable check: %w", err)
+		release()
+		return nil, fmt.Errorf("failed to begin query for replaceable check: %w", err)
 	}
 
 	// Look for existing event with same pubkey and kind
@@ -98,7 +139,8 @@ func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event, jsonStr st
 	txn.EndQuery()
 
 	if err != nil {
-		return fmt.Errorf("failed to query existing replaceable event: %w", err)
+		release()
+		return nil, fmt.Errorf("failed to query existing replaceable event: %w", err)
 	}
 
 	if len(existing) > 0 {
@@ -107,7 +149,8 @@ func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event, jsonStr st
 		if old.CreatedAt > evt.CreatedAt || (old.CreatedAt == evt.CreatedAt && old.ID < evt.ID) {
 			log.DBStore().Info("Rejecting replaceable event - newer version exists",
 				"event_id", evt.ID, "existing_id", old.ID, "kind", evt.Kind)
-			return fmt.Errorf("blocked: a newer replaceable event of kind %d already exists for this pubkey", evt.Kind)
+			release()
+			return nil, fmt.Errorf("blocked: a newer replaceable event of kind %d already exists for this pubkey", evt.Kind)
 		}
 		// New event wins — physically remove the superseded version so
 		// queries with limits, until-cursors, or history walks don't see
@@ -119,18 +162,21 @@ func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event, jsonStr st
 		}
 	}
 
-	return db.ingestEvent(evt, jsonStr)
+	return db.ingestEvent(evt, jsonStr, release)
 }
 
 // storeAddressable handles NIP-01 parameterized replaceable events (kinds 30000-39999).
 // Only the most recent event per (pubkey, kind, d-tag) is kept.
-func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event, jsonStr string) error {
+// The address stays locked until the write commits, as in storeReplaceable.
+func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event, jsonStr string) (*PendingWrite, error) {
 	dTag := addressableD(evt.Tags)
+	release := db.commits.keys.lock(addrOf(evt.Kind, evt.PubKey, dTag))
 
 	// Newest first, so existing[0] is the version to compare against.
 	existing, err := db.addressableVersions(evt.PubKey, evt.Kind, dTag)
 	if err != nil {
-		return fmt.Errorf("failed to query existing addressable event: %w", err)
+		release()
+		return nil, fmt.Errorf("failed to query existing addressable event: %w", err)
 	}
 
 	if len(existing) > 0 {
@@ -139,7 +185,8 @@ func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event, jsonStr st
 			log.DBStore().Info("Rejecting addressable event - newer version exists",
 				"event_id", evt.ID, "existing_id", old.ID,
 				"kind", evt.Kind, "d_tag", dTag)
-			return fmt.Errorf("blocked: a newer addressable event of kind %d with d-tag %q already exists for this pubkey", evt.Kind, dTag)
+			release()
+			return nil, fmt.Errorf("blocked: a newer addressable event of kind %d with d-tag %q already exists for this pubkey", evt.Kind, dTag)
 		}
 		// Physically remove the superseded addressable version — see the
 		// comment in storeReplaceable for the ordering rationale.
@@ -150,7 +197,7 @@ func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event, jsonStr st
 		}
 	}
 
-	return db.ingestEvent(evt, jsonStr)
+	return db.ingestEvent(evt, jsonStr, release)
 }
 
 // deleteByHexID is a small helper used by the supersede paths: decode the

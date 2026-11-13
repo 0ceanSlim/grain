@@ -32,6 +32,9 @@ type NDB struct {
 	// TrackArrivals. lateArrivalSecs is its recording threshold.
 	arrivals        atomic.Pointer[arrivals.Ledger]
 	lateArrivalSecs atomic.Int64
+
+	// Writes queued but not yet committed; see commit.go.
+	commits commitTracker
 }
 
 // NDB open flags. These map 1:1 onto nostrdb.h NDB_FLAG_* bits.
@@ -40,6 +43,15 @@ const (
 	// Safe for imports from a trusted source (e.g. a previous grain/mongo
 	// export) where events were already validated at original ingest time.
 	FlagSkipNoteVerify = 1 << 1
+
+	// relayFlags turn off the parts of nostrdb that serve a client cache
+	// rather than a relay, and are always set. NO_NOTE_BLOCKS (1<<3) and
+	// NO_STATS (1<<4) skip parsing content into blocks and keeping reply,
+	// repost, reaction and zap counters, which grain never reads and which
+	// each commit would otherwise have to write. NO_REPOST_INGEST (1<<5)
+	// stops nostrdb from also storing the note embedded in a kind-6 repost:
+	// a relay must hold only what was published to it.
+	relayFlags = 1<<3 | 1<<4 | 1<<5
 )
 
 // DefaultFulltextKinds is the kind set grain indexes for NIP-50 search
@@ -84,9 +96,7 @@ func OpenWithOptions(dbDir string, o Options) (*NDB, error) {
 	if o.IngestThreads > 0 {
 		C.ndb_config_set_ingest_threads(&cfg, C.int(o.IngestThreads))
 	}
-	if o.Flags != 0 {
-		C.ndb_config_set_flags(&cfg, C.int(o.Flags))
-	}
+	C.ndb_config_set_flags(&cfg, C.int(o.Flags|relayFlags))
 
 	kinds := o.FulltextKinds
 	if kinds == nil {
@@ -134,11 +144,17 @@ func OpenWithOptions(dbDir string, o Options) (*NDB, error) {
 		"ingest_threads", o.IngestThreads,
 		"fulltext_kinds", kinds)
 
-	return &NDB{ndb: ndb, expiration: newExpirationTracker()}, nil
+	db := &NDB{ndb: ndb, expiration: newExpirationTracker()}
+	db.startCommitTracker()
+	return db, nil
 }
 
 // Close shuts down the nostrdb instance and frees resources.
 func (db *NDB) Close() {
+	// The commit watcher is blocked inside nostrdb; it has to be out
+	// before ndb_destroy frees what it waits on.
+	db.stopCommitTracker()
+
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
