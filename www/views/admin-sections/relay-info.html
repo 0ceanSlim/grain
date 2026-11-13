@@ -10,9 +10,10 @@
     <p class="mt-1 mb-3 text-xs text-text-secondary">
       These fields are written to <span class="font-mono">relay_metadata.json</span>
       and surfaced over NIP-11 (all but the two Logos, which only these pages use).
-      grain keeps its own copy of an image you upload, or of one at a URL you
-      paste and Save (fetched once), and serves it itself. PNG, JPEG, WebP,
-      GIF or ICO, up to 700 KiB; SVG is not accepted.
+      Images can live on a Blossom server or on this relay. "Upload to relay",
+      and Save on a URL from another host, keep a copy here that grain serves
+      itself (PNG, JPEG, WebP, GIF or ICO, up to 700 KiB). An image it can't
+      keep, such as an SVG, is saved as the URL you gave.
     </p>
 
     <div class="grid gap-3 sm:grid-cols-2">
@@ -39,9 +40,11 @@
         </span>
         <img data-branding-preview="icon" src="{{.RelayIcon}}" alt=""
           class="{{if not .RelayIcon}}hidden {{end}}h-12 w-auto max-w-full self-start object-contain rounded border border-border bg-surface-inset p-1" />
-        <span class="flex items-center gap-2">
+        <span class="flex flex-wrap items-center gap-2">
+          <button type="button" data-upload-target="[data-ops-icon]" data-upload-accept="image/*"
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to Blossom</button>
           <button type="button" data-branding-upload="icon"
-            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload image</button>
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to relay</button>
           <input type="file" hidden data-branding-file="icon" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon" />
         </span>
       </label>
@@ -57,9 +60,11 @@
         </span>
         <img data-branding-preview="logo" src="{{.RelayLogo}}" alt=""
           class="{{if not .RelayLogo}}hidden {{end}}h-10 w-auto max-w-full self-start object-contain rounded border border-border bg-surface-inset p-1" />
-        <span class="flex items-center gap-2">
+        <span class="flex flex-wrap items-center gap-2">
+          <button type="button" data-upload-target="[data-ops-logo]" data-upload-accept="image/*"
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to Blossom</button>
           <button type="button" data-branding-upload="logo"
-            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload image</button>
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to relay</button>
           <input type="file" hidden data-branding-file="logo" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon" />
         </span>
       </label>
@@ -75,9 +80,11 @@
         </span>
         <img data-branding-preview="logo_light" src="{{.RelayLogoLight}}" alt=""
           class="{{if not .RelayLogoLight}}hidden {{end}}h-10 w-auto max-w-full self-start object-contain rounded border border-border bg-surface-inset p-1" />
-        <span class="flex items-center gap-2">
+        <span class="flex flex-wrap items-center gap-2">
+          <button type="button" data-upload-target="[data-ops-logo-light]" data-upload-accept="image/*"
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to Blossom</button>
           <button type="button" data-branding-upload="logo_light"
-            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload image</button>
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to relay</button>
           <input type="file" hidden data-branding-file="logo_light" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon" />
         </span>
       </label>
@@ -93,9 +100,11 @@
         </span>
         <img data-branding-preview="banner" src="{{.RelayBanner}}" alt=""
           class="{{if not .RelayBanner}}hidden {{end}}max-h-20 w-auto max-w-full self-start object-contain rounded border border-border bg-surface-inset p-1" />
-        <span class="flex items-center gap-2">
+        <span class="flex flex-wrap items-center gap-2">
+          <button type="button" data-upload-target="[data-ops-banner]" data-upload-accept="image/*"
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to Blossom</button>
           <button type="button" data-branding-upload="banner"
-            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload image</button>
+            class="px-3 py-1.5 text-xs rounded bg-surface-elevated text-text border border-border hover:bg-surface-hover">⬆ Upload to relay</button>
           <input type="file" hidden data-branding-file="banner" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon" />
         </span>
       </label>
@@ -180,8 +189,10 @@
     const FIELDS = [
       { sel: "[data-ops-name]", method: "changerelayname" },
       { sel: "[data-ops-description]", method: "changerelaydescription" },
-      // Image fields: a URL on another host is stored by grain (fetched
-      // once) via grain_storebrandingimage; anything else, including
+      // Image fields: Save on a URL from another host (pasted, or filled in
+      // by "Upload to Blossom") asks grain to keep its own copy via
+      // grain_storebrandingimage. If grain can't keep it (an SVG, a failed
+      // fetch), the URL is saved as given. Anything else, including
       // clearing, uses the plain field method.
       { sel: "[data-ops-icon]", method: "changerelayicon", slot: "icon" },
       { sel: "[data-ops-banner]", method: "changerelaybanner", slot: "banner" },
@@ -227,6 +238,17 @@
       showStored(slot, res.url);
       return res;
     }
+    // Keep the preview in step with the field (typed, pasted, or filled in
+    // by "Upload to Blossom").
+    panel.querySelectorAll("[data-branding-slot]").forEach((input) => {
+      input.addEventListener("input", () => {
+        const img = panel.querySelector('[data-branding-preview="' + input.dataset.brandingSlot + '"]');
+        if (!img) return;
+        const v = input.value.trim();
+        img.src = v;
+        img.classList.toggle("hidden", !v);
+      });
+    });
 
     panel.querySelectorAll("[data-branding-upload]").forEach((btn) => {
       const slot = btn.dataset.brandingUpload;
@@ -286,10 +308,14 @@
             const value = d.current.trim();
             if (d.field.slot && isOutsideURL(value)) {
               // An image on another host: grain fetches it once and keeps its
-              // own copy. Anything else goes to the plain method as set.
-              await storeImage(d.field.slot, value);
-              changed++;
-              continue;
+              // own copy. If it can't, the URL is saved as given below.
+              try {
+                await storeImage(d.field.slot, value);
+                changed++;
+                continue;
+              } catch (err) {
+                toast(d.field.slot + ": saved the URL as given (" + (err.message || String(err)) + ")");
+              }
             }
             const payload = d.field.array
               ? [d.current.split(",").map((s) => s.trim()).filter(Boolean)]
