@@ -24,6 +24,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -81,12 +82,12 @@ var contentTypes = func() map[string]string {
 type Image struct {
 	Data          []byte
 	Type          string // e.g. image/png
-	Width, Height int    // 0 when grain cannot read the dimensions (WebP, ICO)
+	Width, Height int    // for an ICO, its largest image
 }
 
 // Check validates raw image bytes: non-empty, at most MaxImageBytes, an
-// allowed type by content (never by a claimed name or header), and, for the
-// types the standard library reads, a well-formed header within MaxSide.
+// allowed type by content (never by a claimed name or header), and a
+// well-formed header within MaxSide.
 func Check(data []byte) (Image, error) {
 	if len(data) == 0 {
 		return Image{}, errors.New("empty image")
@@ -99,16 +100,22 @@ func Check(data []byte) (Image, error) {
 		return Image{}, fmt.Errorf("unsupported image type %q: use PNG, JPEG, WebP, GIF or ICO (SVG is not accepted)", typ)
 	}
 	img := Image{Data: data, Type: typ}
+	var err error
 	switch typ {
-	case "image/png", "image/jpeg", "image/gif":
-		cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
-		if err != nil {
-			return Image{}, fmt.Errorf("unreadable %s: %v", typ, err)
-		}
+	case "image/webp":
+		img.Width, img.Height, err = webpSize(data)
+	case "image/x-icon":
+		img.Width, img.Height, err = icoSize(data)
+	default: // PNG, JPEG, GIF
+		var cfg image.Config
+		cfg, _, err = image.DecodeConfig(bytes.NewReader(data))
 		img.Width, img.Height = cfg.Width, cfg.Height
-		if cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > MaxSide || cfg.Height > MaxSide {
-			return Image{}, fmt.Errorf("image is %dx%d; each side must be 1 to %d px", cfg.Width, cfg.Height, MaxSide)
-		}
+	}
+	if err != nil {
+		return Image{}, fmt.Errorf("unreadable %s: %v", typ, err)
+	}
+	if img.Width <= 0 || img.Height <= 0 || img.Width > MaxSide || img.Height > MaxSide {
+		return Image{}, fmt.Errorf("image is %dx%d; each side must be 1 to %d px", img.Width, img.Height, MaxSide)
 	}
 	return img, nil
 }
@@ -185,11 +192,19 @@ func Store(slot string, img Image) (string, error) {
 	return name, nil
 }
 
-// Prune removes slot's earlier images, keeping keep. Only names grain itself
-// writes for that slot are touched.
-func Prune(slot, keep string) {
-	if dir == "" || !IsSlot(slot) {
+// Prune removes the stored images that none of values points at. values are
+// the branding fields as set (icon, logo, logo_light, banner). A stored image
+// can sit in any field, not only its own slot's, so only one no field uses
+// is removed. Only names grain itself writes are touched.
+func Prune(values ...string) {
+	if dir == "" {
 		return
+	}
+	keep := map[string]bool{}
+	for _, v := range values {
+		if name, ok := storedName(v); ok {
+			keep[name] = true
+		}
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -197,13 +212,41 @@ func Prune(slot, keep string) {
 	}
 	for _, e := range entries {
 		n := e.Name()
-		if n == keep || e.IsDir() || !fileRE.MatchString(n) {
+		if keep[n] || e.IsDir() || !fileRE.MatchString(n) {
 			continue
 		}
-		if strings.HasPrefix(n, slot+"-") {
-			_ = os.Remove(filepath.Join(dir, n))
-		}
+		_ = os.Remove(filepath.Join(dir, n))
 	}
+}
+
+// Stored returns the stored image v points at, checked, or false when v is
+// not one of grain's stored images or it can't be read.
+func Stored(v string) (Image, bool) {
+	name, ok := storedName(v)
+	if !ok || dir == "" {
+		return Image{}, false
+	}
+	data, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		return Image{}, false
+	}
+	img, err := Check(data)
+	return img, err == nil
+}
+
+// storedName is the file name v points at when v is one of grain's stored
+// images: /branding/<file>, as the relay-relative path or written out
+// absolute (as NIP-11 serves it).
+func storedName(v string) (string, bool) {
+	u, err := url.Parse(strings.TrimSpace(v))
+	if err != nil {
+		return "", false
+	}
+	name, ok := strings.CutPrefix(u.Path, URLPrefix)
+	if !ok || !fileRE.MatchString(name) {
+		return "", false
+	}
+	return name, true
 }
 
 // ServeHTTP serves a stored image at /branding/<file>. Unknown names are 404;

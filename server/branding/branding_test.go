@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"image"
 	"image/color"
 	"image/png"
@@ -48,6 +49,64 @@ func TestCheckAcceptsRasterAndRefusesTheRest(t *testing.T) {
 	}
 }
 
+// webp builds a WebP file with one chunk, padded so the header reads.
+func webp(chunk string, payload ...byte) []byte {
+	payload = append(payload, make([]byte, 10)...)
+	b := append([]byte("RIFF"), binary.LittleEndian.AppendUint32(nil, uint32(12+len(payload)))...)
+	b = append(b, "WEBP"+chunk...)
+	b = binary.LittleEndian.AppendUint32(b, uint32(len(payload)))
+	return append(b, payload...)
+}
+
+// ico builds an ICO with one entry: the directory sizes w and h (0 means
+// 256) and the entry's image bytes.
+func ico(w, h byte, img []byte) []byte {
+	b := []byte{0, 0, 1, 0, 1, 0, w, h, 0, 0, 1, 0, 32, 0}
+	b = binary.LittleEndian.AppendUint32(b, uint32(len(img)))
+	b = binary.LittleEndian.AppendUint32(b, 22)
+	return append(b, img...)
+}
+
+// WebP and ICO sizes are read from their headers (the standard library
+// decodes neither) and held to MaxSide like the other types.
+func TestCheckReadsWebPAndICOSizes(t *testing.T) {
+	vp8l := func(w, h uint32) []byte {
+		return append([]byte{0x2f}, binary.LittleEndian.AppendUint32(nil, (w-1)|(h-1)<<14)...)
+	}
+	u24 := func(v uint32) []byte { return []byte{byte(v), byte(v >> 8), byte(v >> 16)} }
+	vp8x := func(w, h uint32) []byte {
+		return append(append([]byte{0, 0, 0, 0}, u24(w-1)...), u24(h-1)...)
+	}
+	for _, c := range []struct {
+		name string
+		data []byte
+		w, h int
+	}{
+		{"webp lossy", webp("VP8 ", 0, 0, 0, 0x9d, 0x01, 0x2a, 0x80, 0x02, 0xe0, 0x01), 640, 480},
+		{"webp lossless", webp("VP8L", vp8l(100, 50)...), 100, 50},
+		{"webp extended", webp("VP8X", vp8x(1200, 630)...), 1200, 630},
+		{"ico bitmap", ico(16, 16, make([]byte, 40)), 16, 16},
+		{"ico 256", ico(0, 0, make([]byte, 40)), 256, 256},
+		{"ico png", ico(0, 0, pngBytes(t, 512, 300)), 512, 300},
+	} {
+		img, err := Check(c.data)
+		if err != nil || img.Width != c.w || img.Height != c.h {
+			t.Errorf("%s: %dx%d %v, want %dx%d", c.name, img.Width, img.Height, err, c.w, c.h)
+		}
+	}
+	for name, data := range map[string][]byte{
+		"webp too wide":       webp("VP8X", vp8x(MaxSide+1, 10)...),
+		"webp bad start code": webp("VP8 ", 0, 0, 0, 1, 2, 3, 0x80, 0x02, 0xe0, 0x01),
+		"ico png too wide":    ico(0, 0, pngBytes(t, MaxSide+1, 1)),
+		"ico entry past end":  ico(16, 16, make([]byte, 40))[:30],
+		"ico no directory":    {0, 0, 1, 0, 1, 0},
+	} {
+		if _, err := Check(data); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
 func TestDecodeDataURL(t *testing.T) {
 	raw := pngBytes(t, 2, 2)
 	got, err := DecodeDataURL("data:image/png;base64," + base64.StdEncoding.EncodeToString(raw))
@@ -61,9 +120,9 @@ func TestDecodeDataURL(t *testing.T) {
 	}
 }
 
-// Save stores a content-addressed copy, points the field at its relative
-// path, drops the slot's older copy only, and the copy is served with headers
-// that keep it inert.
+// Save stores a content-addressed copy and points the field at its relative
+// path; Prune drops only the copies no field points at; the copy is served
+// with headers that keep it inert.
 func TestSaveServeAndPrune(t *testing.T) {
 	SetDir(t.TempDir())
 	t.Cleanup(func() { SetDir("") })
@@ -86,9 +145,22 @@ func TestSaveServeAndPrune(t *testing.T) {
 	if err != nil || u2 == u1 {
 		t.Fatalf("replace: %q %v", u2, err)
 	}
-	names, _ := filepath.Glob(filepath.Join(Dir(), "*"))
-	if len(names) != 2 { // logo (new) + icon; the old logo is pruned
-		t.Fatalf("files after replace: %v", names)
+	files := func() int {
+		names, _ := filepath.Glob(filepath.Join(Dir(), "*"))
+		return len(names)
+	}
+	// The old logo is still in a field elsewhere (banner, written out
+	// absolute as NIP-11 serves it), so it stays.
+	Prune(fields["icon"], fields["logo"], "https://relay.example"+u1)
+	if n := files(); n != 3 {
+		t.Fatalf("files while the old logo is still used: %d, want 3", n)
+	}
+	Prune(fields["icon"], fields["logo"], "https://cdn.example/banner.png")
+	if n := files(); n != 2 { // logo (new) + icon
+		t.Fatalf("files after prune: %d, want 2", n)
+	}
+	if _, ok := Stored(u2); !ok {
+		t.Fatal("the logo in use was pruned")
 	}
 
 	rec := httptest.NewRecorder()

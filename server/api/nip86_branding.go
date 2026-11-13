@@ -4,11 +4,25 @@ import (
 	"context"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/0ceanslim/grain/server/branding"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
+
+// brandingMu serializes every write to a branding image field with the
+// prune after it, so a prune never removes a file a concurrent store has
+// written but not yet pointed its field at.
+var brandingMu sync.Mutex
+
+// pruneBrandingImages removes the stored images no branding field points
+// at any more (replaced, cleared, or switched to an outside URL). Call with
+// brandingMu held.
+func pruneBrandingImages() {
+	m := utils.GetRelayMetadataCopy()
+	branding.Prune(m.Icon, m.Logo, m.LogoLight, m.Banner)
+}
 
 // runStoreBrandingImage is grain_storebrandingimage: params
 // [slot, source], where slot is icon / logo / logo_light / banner and
@@ -61,7 +75,12 @@ func storeBrandingSource(slot, source, signer string) (map[string]any, string) {
 	if err != nil {
 		return nil, err.Error()
 	}
+	brandingMu.Lock()
 	p, err := branding.Save(slot, img, utils.SetRelayMetadataField)
+	if err == nil {
+		pruneBrandingImages()
+	}
+	brandingMu.Unlock()
 	if err != nil {
 		return nil, err.Error()
 	}

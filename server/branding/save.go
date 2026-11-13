@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 )
 
 // PublicBase is the relay's public web origin ("https://relay.example"). It
@@ -52,17 +51,13 @@ func IsLocalPath(v string) bool {
 	return err == nil && u.Scheme == "" && u.Host == ""
 }
 
-// saveMu serializes Save, so two stores to one slot cannot prune each
-// other's file.
-var saveMu sync.Mutex
-
-// Save stores img for slot, points the slot's relay metadata field at the
+// Save stores img for slot and points the slot's relay metadata field at the
 // self-hosted copy (the relay-relative path /branding/<file>) through
-// setField (utils.SetRelayMetadataField), then drops the slot's earlier
-// copies. Returns the stored path.
+// setField (utils.SetRelayMetadataField). Returns the stored path. The
+// caller prunes afterwards (Prune, with every branding field), holding one
+// lock across both so a prune never removes a file another store has
+// written but not yet pointed its field at.
 func Save(slot string, img Image, setField func(field, value string) error) (string, error) {
-	saveMu.Lock()
-	defer saveMu.Unlock()
 	name, err := Store(slot, img)
 	if err != nil {
 		return "", err
@@ -71,6 +66,5 @@ func Save(slot string, img Image, setField func(field, value string) error) (str
 	if err := setField(slot, p); err != nil {
 		return "", err
 	}
-	Prune(slot, name)
 	return p, nil
 }

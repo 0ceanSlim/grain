@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/0ceanslim/grain/config"
+	"github.com/0ceanslim/grain/server/branding"
 	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
@@ -209,7 +210,10 @@ func runUnblockIP(params []any, signer string) (any, string) {
 //
 // Validation rules:
 //   - name              non-empty
-//   - icon / banner     URL-parseable (empty allowed to clear)
+//   - icon / banner / logo / logo_light
+//     an http(s) or data: URL, or a path on this relay such as the
+//     /branding/<file> that grain_storebrandingimage writes (empty
+//     allowed to clear)
 //   - description / contact / privacy_policy / terms_of_service /
 //     posting_policy    free-form string; empty allowed to clear
 //
@@ -222,15 +226,17 @@ func runChangeRelayMetadata(params []any, signer, field string) (any, string) {
 	if !ok {
 		return nil, "missing value"
 	}
+	isImage := false
 	switch field {
 	case "name":
 		if value == "" {
 			return nil, "name cannot be empty"
 		}
 	case "icon", "banner", "logo", "logo_light":
-		if value != "" && !isParseableURL(value) {
+		if value != "" && !isParseableURL(value) && !branding.IsLocalPath(value) {
 			return nil, "invalid " + field + " URL"
 		}
+		isImage = true
 	case "description",
 		"contact",
 		"privacy_policy",
@@ -240,8 +246,16 @@ func runChangeRelayMetadata(params []any, signer, field string) (any, string) {
 	default:
 		return nil, "unknown relay-metadata field: " + field
 	}
+	if isImage {
+		// The field may have pointed at a stored image nothing else uses.
+		brandingMu.Lock()
+		defer brandingMu.Unlock()
+	}
 	if err := utils.SetRelayMetadataField(field, value); err != nil {
 		return nil, err.Error()
+	}
+	if isImage {
+		pruneBrandingImages()
 	}
 	log.RelayAPI().Info("NIP-86 changerelay*", "signer", signer, "field", field, "value", value)
 	return true, ""

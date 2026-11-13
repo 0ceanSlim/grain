@@ -83,7 +83,38 @@ func TestNIP86ChangeRelayLogo(t *testing.T) {
 	if _, errStr := dispatchNIP86(nip86Request{Method: "grain_storebrandingimage", Params: []any{"icon", upload}}, "owner"); errStr != "" {
 		t.Fatal(errStr)
 	}
-	if m := utils.GetRelayMetadataCopy(); !strings.HasPrefix(m.Icon, "/branding/icon-") {
-		t.Fatalf("uploaded icon not stored by grain: %q", m.Icon)
+	stored := utils.GetRelayMetadataCopy().Icon
+	if !strings.HasPrefix(stored, "/branding/icon-") {
+		t.Fatalf("uploaded icon not stored by grain: %q", stored)
+	}
+	// The plain methods take the relay-relative path the store wrote, so a
+	// stored image can be reused in another field from the admin form.
+	if _, errStr := dispatchNIP86(nip86Request{Method: "grain_changerelaylogo", Params: []any{stored}}, "owner"); errStr != "" {
+		t.Fatalf("grain_changerelaylogo(%q): %s", stored, errStr)
+	}
+	if m := utils.GetRelayMetadataCopy(); m.Logo != stored {
+		t.Fatalf("logo = %q, want the stored path %q", m.Logo, stored)
+	}
+	// The stored icon is pruned only once no field points at it: switching
+	// the icon to an outside URL keeps it (the logo still uses it), clearing
+	// the logo too removes it.
+	storedFile := filepath.Join(branding.Dir(), strings.TrimPrefix(stored, branding.URLPrefix))
+	if _, errStr := dispatchNIP86(nip86Request{Method: "changerelayicon", Params: []any{"https://cdn.example/icon.png"}}, "owner"); errStr != "" {
+		t.Fatal(errStr)
+	}
+	if _, err := os.Stat(storedFile); err != nil {
+		t.Fatalf("stored image pruned while the logo still uses it: %v", err)
+	}
+	if _, errStr := dispatchNIP86(nip86Request{Method: "grain_changerelaylogo", Params: []any{""}}, "owner"); errStr != "" {
+		t.Fatal(errStr)
+	}
+	if _, err := os.Stat(storedFile); !os.IsNotExist(err) {
+		t.Fatalf("stored image no field uses was kept: %v", err)
+	}
+	// A path that browsers read as another host is still refused.
+	for _, v := range []string{"//evil.example/x.png", `/\evil.example/x.png`} {
+		if _, errStr := dispatchNIP86(nip86Request{Method: "changerelaybanner", Params: []any{v}}, "owner"); errStr != "invalid banner URL" {
+			t.Fatalf("changerelaybanner(%q): error %q, want invalid banner URL", v, errStr)
+		}
 	}
 }

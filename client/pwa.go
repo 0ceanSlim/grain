@@ -2,12 +2,14 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
 
+	"github.com/0ceanslim/grain/server/branding"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -31,7 +33,7 @@ type PWAManifest struct {
 // PWAIcon represents an icon in the manifest
 type PWAIcon struct {
 	Src     string `json:"src"`
-	Sizes   string `json:"sizes"`
+	Sizes   string `json:"sizes,omitempty"`
 	Type    string `json:"type,omitempty"`
 	Purpose string `json:"purpose,omitempty"`
 }
@@ -89,20 +91,25 @@ func manifestHandler(w http.ResponseWriter, r *http.Request) {
 
 // applyRelayBranding makes an installed app look like the relay when the
 // operator has set a relay icon (NIP-11 icon, the admin "Favicon"): the relay
-// name becomes the app name, and a PNG or WebP icon is offered first at the
-// two sizes install prompts look for (the admin form asks for square, 512px
-// or larger); purpose "any", since an arbitrary image has no maskable safe
-// zone. grain's own icons stay listed after it, so the app stays installable
-// whatever the relay's image turns out to be.
+// name becomes the app name, and a PNG or WebP icon is offered first, with
+// purpose "any", since an arbitrary image has no maskable safe zone. A copy
+// grain stored is listed at its real size. An outside image's size is
+// unknown, so it is listed without one rather than with a guess. grain's own
+// icons stay listed after it, so the app stays installable whatever the
+// relay's image turns out to be.
 func applyRelayBranding(m *PWAManifest, b RelayBranding) {
 	if b.Icon == "" {
 		return
 	}
-	if typ := iconMIMEType(b.Icon); typ == "image/png" || typ == "image/webp" {
-		m.Icons = append([]PWAIcon{
-			{Src: b.Icon, Sizes: "192x192", Type: typ, Purpose: "any"},
-			{Src: b.Icon, Sizes: "512x512", Type: typ, Purpose: "any"},
-		}, m.Icons...)
+	icon := PWAIcon{Src: b.Icon, Purpose: "any"}
+	if img, ok := branding.Stored(b.Icon); ok {
+		icon.Type = img.Type
+		icon.Sizes = fmt.Sprintf("%dx%d", img.Width, img.Height)
+	} else {
+		icon.Type = iconMIMEType(b.Icon)
+	}
+	if icon.Type == "image/png" || icon.Type == "image/webp" {
+		m.Icons = append([]PWAIcon{icon}, m.Icons...)
 	}
 	if b.Name != "" {
 		m.Name = b.Name

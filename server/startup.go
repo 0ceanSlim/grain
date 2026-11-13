@@ -331,11 +331,14 @@ func initializeSubsystems(ctx context.Context, cfg *cfgType.ServerConfig) error 
 	// request's origin), so clients on other origins can load it. Values
 	// set any other way are served exactly as set.
 	branding.SetDir(config.ConfigPath("branding"))
-	relayURL := ""
-	if cfg != nil {
-		relayURL = cfg.Auth.RelayURL
+	// Read per request so a hot-reloaded auth.relay_url applies at once.
+	utils.PublicBaseProvider = func(r *http.Request) string {
+		relayURL := ""
+		if c := config.GetConfig(); c != nil {
+			relayURL = c.Auth.RelayURL
+		}
+		return branding.PublicBase(relayURL, r)
 	}
-	utils.PublicBaseProvider = func(r *http.Request) string { return branding.PublicBase(relayURL, r) }
 
 	// Wire the relay's own web pages (header logo, favicon, browser-tab
 	// title, PWA manifest) to the live relay metadata. Reading through

@@ -1,12 +1,17 @@
 package client
 
 import (
+	"bytes"
 	"html/template"
+	"image"
+	"image/png"
 	"net/http/httptest"
 	"os"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/0ceanslim/grain/server/branding"
 )
 
 var h1RE = regexp.MustCompile(`(?s)<h1\b.*?</h1>`)
@@ -91,17 +96,36 @@ func TestManifestFollowsRelayIcon(t *testing.T) {
 	if m.Name != "Grain - Nostr Relay" || len(m.Icons) != 1 {
 		t.Fatalf("no icon: manifest must stay grain's, got %+v", m)
 	}
+	// An outside icon's size is unknown, so it is listed without one.
 	applyRelayBranding(&m, RelayBranding{Name: "Test Relay", Icon: "https://example.com/i.png?v=2"})
-	if m.Name != "Test Relay" || m.ShortName != "Test Relay" || len(m.Icons) != 3 {
+	if m.Name != "Test Relay" || m.ShortName != "Test Relay" || len(m.Icons) != 2 {
 		t.Fatalf("icon set: manifest should brand, got %+v", m)
 	}
-	for _, ic := range m.Icons[:2] {
-		if ic.Src != "https://example.com/i.png?v=2" || ic.Type != "image/png" || ic.Purpose != "any" {
-			t.Errorf("icon entry %+v", ic)
-		}
+	if ic := m.Icons[0]; ic != (PWAIcon{Src: "https://example.com/i.png?v=2", Type: "image/png", Purpose: "any"}) {
+		t.Errorf("icon entry %+v", ic)
 	}
-	if m.Icons[2] != grainIcon {
+	if m.Icons[1] != grainIcon {
 		t.Errorf("grain's icons must stay listed after the relay's: %+v", m.Icons)
+	}
+	// A copy grain stored is listed at its real size.
+	branding.SetDir(t.TempDir())
+	t.Cleanup(func() { branding.SetDir("") })
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 300, 300))); err != nil {
+		t.Fatal(err)
+	}
+	img, err := branding.Check(buf.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, err := branding.Store("icon", img)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = PWAManifest{Name: "Grain - Nostr Relay", Icons: []PWAIcon{grainIcon}}
+	applyRelayBranding(&m, RelayBranding{Name: "Test Relay", Icon: branding.URLPrefix + name})
+	if ic := m.Icons[0]; ic.Sizes != "300x300" || ic.Type != "image/png" {
+		t.Errorf("stored icon entry %+v, want 300x300 image/png", ic)
 	}
 	// An icon type install prompts may not take (ICO, JPEG, GIF, unknown)
 	// brands the name only; grain's icons stay.
