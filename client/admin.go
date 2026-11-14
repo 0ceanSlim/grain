@@ -509,6 +509,11 @@ func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 					bl.IPTempBanDuration = cfg.Blacklist.IPTempBanDuration
 					bl.IPRateViolationThreshold = cfg.Blacklist.IPRateViolationThreshold
 				}
+				// The page is served to any session holding the owner's
+				// pubkey, which proves nothing (#110). The blocked IPs are
+				// not public anywhere else, so the page loads them through
+				// a signed listblockedips call instead.
+				bl.PermanentBlockedIPs = nil
 				unified, broken := buildUnifiedPubkeys(bl.PermanentBlacklistPubkeys, bl.PermanentBlacklistNpubs)
 				mute, brokenMute := buildUnifiedPubkeys(bl.MuteListAuthors, nil)
 				// Owner's private mutelist sync status (#60), if they've synced.

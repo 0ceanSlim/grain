@@ -15,7 +15,9 @@
          through the bulk save, so multiple operators (or the
          rate-limit promoter) can't clobber each other's edits.
          The IP list section has its own +/− buttons that fire
-         calls directly. -->
+         calls directly. The list itself is never rendered here:
+         the page is served on an unsigned session, so it is read
+         through a signed listblockedips call (#110). -->
 {{with .Config}}
 <form class="flex flex-col gap-5 mt-3" autocomplete="off">
   <!-- ─── Enforce toggle ──────────────────────────────────────── -->
@@ -311,14 +313,9 @@
         class="px-3 py-2 text-sm rounded bg-danger text-danger-fg hover:opacity-90">Block</button>
     </div>
 
-    <div data-bl-ip-rows class="flex flex-col gap-1">
-      {{range .PermanentBlockedIPs}}
-      <div data-bl-ip-row data-ip="{{.}}" class="flex items-center gap-2 py-1 px-2 rounded bg-surface text-sm">
-        <span class="font-mono text-text truncate flex-1">{{.}}</span>
-        <button type="button" data-bl-ip-remove class="ml-auto px-2 text-text-secondary hover:text-danger" title="Unblock">✕</button>
-      </div>
-      {{end}}
-    </div>
+    <button type="button" data-bl-ip-show
+      class="self-start mb-2 px-3 py-1 text-sm rounded bg-surface border border-border text-text hover:opacity-90">Show blocked IPs</button>
+    <div data-bl-ip-rows class="flex flex-col gap-1"></div>
   </fieldset>
 </form>
 
@@ -337,6 +334,7 @@
     const rows = ipEl.querySelector("[data-bl-ip-rows]");
     const input = ipEl.querySelector("[data-bl-ip-input]");
     const addBtn = ipEl.querySelector("[data-bl-ip-add]");
+    const showBtn = ipEl.querySelector("[data-bl-ip-show]");
     const toast = window.adminToast || function () {};
 
     function escHtml(s) {
@@ -353,6 +351,29 @@
         '</div>'
       );
     }
+
+    // The list is only read through a signed call, so showing it
+    // asks the signer once.
+    showBtn.addEventListener("click", async () => {
+      showBtn.disabled = true;
+      try {
+        if (window.adminEnsureSigner) await window.adminEnsureSigner();
+        const list = await window.grainNIP86.submit("listblockedips", []);
+        const shown = new Set(
+          Array.from(rows.querySelectorAll("[data-bl-ip-row]"), (r) => r.dataset.ip)
+        );
+        for (const entry of list || []) {
+          if (entry && entry.ip && !shown.has(entry.ip)) {
+            rows.insertAdjacentHTML("beforeend", rowHTML(entry.ip));
+          }
+        }
+        showBtn.remove();
+        if (!list || list.length === 0) toast("No blocked IPs");
+      } catch (err) {
+        toast(err.message || String(err), "error");
+        showBtn.disabled = false;
+      }
+    });
 
     addBtn.addEventListener("click", async () => {
       const raw = input.value.trim();
