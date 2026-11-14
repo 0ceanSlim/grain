@@ -1,6 +1,6 @@
 # 🌾 GRAIN Roadmap to 1.0
 
-> **The path from today (`v0.8.0-rc`) to a 1.0 release.** This document is the human-readable map; the [GitHub milestones](https://github.com/0ceanSlim/grain/milestones) are the source of truth for individual issues.
+> **The path from today (`v0.8.2`) to a 1.0 release.** This document is the human-readable map; the [GitHub milestones](https://github.com/0ceanSlim/grain/milestones) are the source of truth for individual issues.
 
 ---
 
@@ -8,14 +8,16 @@
 
 [![Latest release](https://img.shields.io/github/v/release/0ceanSlim/grain?label=released&color=blue)](https://github.com/0ceanSlim/grain/releases/latest)
 [![Open issues](https://img.shields.io/github/issues/0ceanSlim/grain?color=green)](https://github.com/0ceanSlim/grain/issues)
-[![1.0 milestones](https://img.shields.io/badge/milestones%20to%201.0-4-orange)](https://github.com/0ceanSlim/grain/milestones)
+[![1.0 milestones](https://img.shields.io/badge/milestones%20to%201.0-5-orange)](https://github.com/0ceanSlim/grain/milestones)
 [![License](https://img.shields.io/github/license/0ceanSlim/grain?color=lightgrey)](license)
 
-**v0.8 is feature-complete and in release candidates.** rc1 (2026-06-18) shipped the importable client library and the web client built on it; rc2 (2026-09-07) fixed the durability and retention bugs a live relay surfaced and added self-discovering NIP-66 relay monitors; rc3 closes out the last two v0.8 issues (#101 docs, #104 discovery) with a Discovery settings tab and the profile-page ban button. The **final v0.8.0** waits on one more change to the `nostr-mill` signer component, so expect at least one more candidate first.
+**v0.8 shipped.** v0.8.0 (2026-10-04) delivered the importable client library and the web client built on it. v0.8.1 (2026-10-08) made the library safe for apps serving more than one user. v0.8.2 follows a benchmark against strfry and wisp: writes are acked only once they commit, the musl startup crash is fixed, and grain now passes every required relay-tester check. Small queries are faster than strfry's.
+
+The benchmark's speed and operations gaps are scheduled as **v0.9.3**: streaming query results, counting inside nostrdb, memory, full-text indexing cost, JSONL export.
 
 Before that: v0.5 closed out the architectural rebirth (MongoDB → embedded `nostrdb`, single-binary, proactive NIP-42 AUTH, client library beta); v0.5.1–v0.5.4 hardened production under real load; v0.6.0 burned down the missing core NIPs (40, 50, 70, 45); v0.7.0 delivered web-based relay administration; v0.7.1 (2026-06-04) was the goroutine/connection memory-leak audit.
 
-> **Pace note.** grain is not full-time work right now. The dates below for v0.9 and v1.0 are placeholders for ordering, not commitments. v0.9 is split into three point releases, with spam defense and Web-of-Trust access control first.
+> **Pace note.** grain is not full-time work right now. The dates below for v0.9 and v1.0 are placeholders for ordering, not commitments. v0.9 is split into four point releases, with spam defense and Web-of-Trust access control first.
 
 ---
 
@@ -43,7 +45,8 @@ gantt
     section v0.8 ▸ Client library
     rc1 library + web client                           :done, v08a, 2026-06-04, 2026-06-18
     rc2 durability + NIP-66 discovery                  :done, v08b, 2026-06-18, 2026-09-07
-    rc3 → final (waiting on nostr-mill)                :active, v08c, 2026-09-07, 30d
+    rc3 → final                                        :done, v08c, 2026-09-07, 2026-10-04
+    v0.8.1 + v0.8.2 patches                            :done, v08p, 2026-10-04, 2026-11-14
 
     section v0.9.0 ▸ Spam defense (placeholder)
     nspam + GeoIP + report-driven bans                 :v090, after v08c, 45d
@@ -54,8 +57,11 @@ gantt
     section v0.9.2 ▸ WoT permission groups (placeholder)
     Groups + tiered rate limits                        :v092, after v091, 60d
 
+    section v0.9.3 ▸ Performance and ops (placeholder)
+    Streaming, COUNT in nostrdb, memory, JSONL export  :v093, after v092, 45d
+
     section v1.0 ▸ Relay-as-actor + sync (placeholder)
-    NIP-29 + NIP-77 + final audit                      :crit, v10, after v092, 90d
+    NIP-29 + NIP-77 + final audit                      :crit, v10, after v093, 90d
 ```
 
 ---
@@ -112,7 +118,7 @@ Shipped 2026-05-26. A full owner-gated **`/admin` dashboard** that tunes every c
 
 ---
 
-### ![v0.8](https://img.shields.io/badge/v0.8-release%20candidate-blue) Client library + web client
+### ![v0.8](https://img.shields.io/badge/v0.8-shipped-success) Client library + web client
 
 **Theme:** grain becomes a full Nostr client, and the library it's built on.
 
@@ -138,7 +144,7 @@ Running rc1 on a live relay produced rc2's second half: the **durability bucket*
 | [#104](https://github.com/0ceanSlim/grain/issues/104) | Self-discovering NIP-66 monitor pool (fix the 7k known-relays growth) | ✅ closed |
 | [#101](https://github.com/0ceanSlim/grain/issues/101) | Client library docs: everything achievable as of 0.8.0 | ✅ closed |
 
-**Remaining for final:** one more `nostr-mill` change, then the final release combining every rc's notes into one body.
+Shipped 2026-10-04. **v0.8.1** (2026-10-08) moved per-user state onto `UserContext` so one client can serve many users. **v0.8.2** is the benchmark patch: OK after commit, the musl thread-stack crash, atomic replaceable writes, deletion tombstones and the NIP-01 filter edge cases.
 
 📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/4)
 
@@ -192,6 +198,25 @@ Composable permission groups built from any combination of explicit whitelist, W
 
 ---
 
+### ![v0.9.3](https://img.shields.io/badge/v0.9.3-planned-lightgrey) Performance and ops
+
+**Theme:** Close the gaps the Nov 2026 benchmark found.
+
+grain already out-ingests wisp and matches strfry on pipelined writes, and beats strfry on small queries. What's left: large results are buffered before the first event goes out, COUNT loads every match into Go, memory sits above wisp's, and full-text indexing makes one-at-a-time writes slower than strfry's. Export and the CI cleanup are the operations half.
+
+| # | Issue | Scope |
+|---|-------|-------|
+| [#115](https://github.com/0ceanSlim/grain/issues/115) | Stream REQ results from nostrdb | Time to first event, memory per REQ |
+| [#116](https://github.com/0ceanSlim/grain/issues/116) | Count inside nostrdb | nostrdb fork change |
+| [#117](https://github.com/0ceanSlim/grain/issues/117) | Memory tuning | Under wisp's footprint |
+| [#118](https://github.com/0ceanSlim/grain/issues/118) | Full-text indexing cost on ingest | nostrdb fork change |
+| [#120](https://github.com/0ceanSlim/grain/issues/120) | JSONL export | Migrations without a wipe |
+| [#119](https://github.com/0ceanSlim/grain/issues/119) | Remove CI's start-up retry | CI cleanup |
+
+📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/13)
+
+---
+
 ### ![v1.0](https://img.shields.io/badge/v1.0-planned-red) Relay-as-actor, sync + polish
 
 **Theme:** The heavy protocol additions, the compliance fixes, then ship.
@@ -207,6 +232,7 @@ NIP-29 and NIP-77 are the two heaviest protocol items in the roadmap and both si
 | [#71](https://github.com/0ceanSlim/grain/issues/71) | NIP-50 configurable indexed kinds | nostrdb fork change |
 | [#12](https://github.com/0ceanSlim/grain/issues/12) | Metrics | Good first issue |
 | [#54](https://github.com/0ceanSlim/grain/issues/54) | NIP-26 Delegated Event Signing | Low priority; likely won't-do |
+| [#121](https://github.com/0ceanSlim/grain/issues/121) | Bundle lotus as grain's Blossom server | 1.0 or after |
 
 📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/6)
 
@@ -234,11 +260,11 @@ These were considered and intentionally deferred:
 
 ## 🔄 How this doc stays current
 
-- Every issue tagged `1.0 Requirement` is also assigned a milestone (`v0.9.0` through `v1.0`).
+- Every issue tagged `1.0 Requirement` is also assigned a milestone (`v0.9.0` through `v1.0`, including `v0.9.3`).
 - This file is updated on milestone close: flip the section header status badge to `shipped`, move the next milestone to `current`, summarise what shipped.
 - For day-to-day status, prefer the [milestones page](https://github.com/0ceanSlim/grain/milestones) — it auto-counts open vs. closed.
 - Disagree with the sequencing? Open an issue or comment on the relevant milestone.
 
 ---
 
-<sub>Last revised 2026-09-17 ahead of v0.8.0-rc3: v0.8 reframed from "relay-as-actor" to the client-library release it became and closed out (#101 / #104); the old v0.9 grab-bag split into v0.9.0 spam defense, v0.9.1 moderation queue and v0.9.2 WoT permission groups (the former v0.9 milestone, renamed); NIP-29, NIP-62, the nostrdb compliance fixes, metrics and NIP-26 moved to v1.0; gantt re-based with placeholder bars. 2026-09-18: added the Beyond-1.0 section pointing at the event-rendering design doc. 2026-09-21: after v0.8.0-rc4, filed the Beyond-1.0 items as issues — rich event rendering (#108, spec moved into the issue) and full-text NIP-50 search across the relay pool (#107); removed the docs/design/ folder (dashboard spec obsolete — shipped; event-rendering spec now lives in #108).</sub>
+<sub>Last revised 2026-09-17 ahead of v0.8.0-rc3: v0.8 reframed from "relay-as-actor" to the client-library release it became and closed out (#101 / #104); the old v0.9 grab-bag split into v0.9.0 spam defense, v0.9.1 moderation queue and v0.9.2 WoT permission groups (the former v0.9 milestone, renamed); NIP-29, NIP-62, the nostrdb compliance fixes, metrics and NIP-26 moved to v1.0; gantt re-based with placeholder bars. 2026-09-18: added the Beyond-1.0 section pointing at the event-rendering design doc. 2026-09-21: after v0.8.0-rc4, filed the Beyond-1.0 items as issues — rich event rendering (#108, spec moved into the issue) and full-text NIP-50 search across the relay pool (#107); removed the docs/design/ folder (dashboard spec obsolete — shipped; event-rendering spec now lives in #108). 2026-11-14: v0.8 marked shipped (0.8.0, 0.8.1, 0.8.2); added v0.9.3 performance and ops from the benchmark against strfry and wisp (#115 to #120); lotus Blossom bundling (#121) in v1.0; per-kind purge (#109) closed since kind 5 deletions are now tombstones.</sub>
