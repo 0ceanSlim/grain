@@ -301,6 +301,9 @@ func areFiltersIdentical(filters1, filters2 []nostr.Filter) bool {
 // expiration bootstrap; same same-second-tie undercount caveat.
 func pagedTextSearch(db *nostrdb.NDB, f nostr.Filter, effectiveLimit int) ([]nostr.Event, error) {
 	const pageSize = 128
+	if f.Limit != nil && *f.Limit == 0 {
+		return nil, nil // NIP-01: live events only
+	}
 	remaining := effectiveLimit
 	if f.Limit != nil && *f.Limit > 0 && *f.Limit < remaining {
 		remaining = *f.Limit
@@ -340,7 +343,7 @@ func pagedTextSearch(db *nostrdb.NDB, f nostr.Filter, effectiveLimit int) ([]nos
 			}
 		}
 		next := time.Unix(oldestTs-1, 0)
-		if f.Since != nil && !next.After(*f.Since) {
+		if f.Since != nil && next.Before(*f.Since) {
 			break
 		}
 		cursor = &next

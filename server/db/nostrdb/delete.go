@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	nostr "github.com/0ceanslim/grain/server/types"
 	"github.com/0ceanslim/grain/server/utils/log"
@@ -102,6 +103,42 @@ func (db *NDB) QueueDeletion(ctx context.Context, evt nostr.Event) (*PendingWrit
 
 	log.DBStore().Info("Deletion event processed", "event_id", evt.ID)
 	return p, nil
+}
+
+// refuseIfDeleted refuses an event its author has already deleted. A
+// deletion request stays stored, so it works as a tombstone: one naming
+// the event's id in an e tag, or, when addr is set, the event's address in
+// an a tag, covers the event if it is no older than the event.
+func (db *NDB) refuseIfDeleted(evt nostr.Event, addr string) error {
+	limit := 1
+	since := time.Unix(evt.CreatedAt, 0)
+	filters := []nostr.Filter{{
+		Authors: []string{evt.PubKey},
+		Kinds:   []int{5},
+		Tags:    map[string][]string{"e": {evt.ID}},
+		Since:   &since,
+		Limit:   &limit,
+	}}
+	if addr != "" {
+		filters = append(filters, nostr.Filter{
+			Authors: []string{evt.PubKey},
+			Kinds:   []int{5},
+			Tags:    map[string][]string{"a": {addr}},
+			Since:   &since,
+			Limit:   &limit,
+		})
+	}
+
+	found, err := db.Query(filters, 1)
+	if err != nil {
+		return fmt.Errorf("failed to check for a deletion request: %w", err)
+	}
+	if len(found) > 0 {
+		log.DBStore().Info("Refusing an event its author deleted",
+			"event_id", evt.ID, "deletion_id", found[0].ID)
+		return fmt.Errorf("blocked: this event was deleted by its author")
+	}
+	return nil
 }
 
 // verifyAndDeleteByID enforces NIP-09's same-pubkey rule and physically removes

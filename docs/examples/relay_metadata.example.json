@@ -9,7 +9,7 @@
   "icon": "",
   "pubkey": "",
   "contact": "",
-  "supported_nips": [1, 7, 9, 11, 19, 40, 42, 45, 50, 55, 65, 70, 86, 98],
+  "supported_nips": [1, 9, 11, 40, 42, 45, 50, 70, 86],
   "software": "https://github.com/0ceanslim/grain",
   "version": "0.0.0-dev",
   "privacy_policy": "",

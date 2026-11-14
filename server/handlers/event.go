@@ -54,7 +54,14 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	var evt nostr.Event
 	err = json.Unmarshal(eventBytes, &evt)
 	if err != nil {
-		log.Event().Error("Error unmarshaling event data", "error", err)
+		// A field that doesn't fit its type, such as a created_at past
+		// int64, still gets an OK when the event names its id, so the
+		// client isn't left waiting.
+		log.Event().Info("Error unmarshaling event data", "error", err)
+		if id, ok := eventData["id"].(string); ok && id != "" {
+			response.SendOK(client, id, false, "invalid: malformed event")
+			return
+		}
 		response.SendNotice(client, "Error unmarshaling event data")
 		return
 	}
@@ -119,6 +126,16 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 		return
 	}
 
+	// nostrdb can't store a tag with no fields: it reads the event back
+	// differently and refuses it as an id mismatch.
+	for _, tag := range evt.Tags {
+		if len(tag) == 0 {
+			log.Event().Info("EVENT rejected: empty tag", "event_id", evt.ID)
+			response.SendOK(client, evt.ID, false, "invalid: empty tags are not allowed")
+			return
+		}
+	}
+
 	eventSize := len(eventBytes)
 
 	// Blacklist/Whitelist check - uses validation methods that respect enabled state
@@ -163,9 +180,9 @@ func HandleEvent(client nostr.ClientInterface, message []interface{}) {
 	}
 
 	if isDuplicate {
+		// NIP-01: a duplicate is already stored, so it's acked true.
 		log.Event().Info("Duplicate event detected", "event_id", evt.ID)
-		response.SendOK(client, evt.ID, false, "duplicate: already have this event")
-		response.SendNotice(client, fmt.Sprintf("event %s was rejected because the relay already stores it", evt.ID))
+		response.SendOK(client, evt.ID, true, "duplicate: already have this event")
 		return
 	}
 

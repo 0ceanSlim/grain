@@ -67,6 +67,9 @@ func (db *NDB) QueueEvent(ctx context.Context, evt nostr.Event) (*PendingWrite, 
 
 	default:
 		// Regular events and unknown kinds: just ingest
+		if err := db.refuseIfDeleted(evt, ""); err != nil {
+			return nil, err
+		}
 		return db.ingestEvent(evt, jsonStr, nil)
 	}
 }
@@ -121,6 +124,11 @@ func addrOf(kind int, pubkey, d string) string {
 func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event, jsonStr string) (*PendingWrite, error) {
 	release := db.commits.keys.lock(addrOf(evt.Kind, evt.PubKey, ""))
 
+	if err := db.refuseIfDeleted(evt, addrOf(evt.Kind, evt.PubKey, "")); err != nil {
+		release()
+		return nil, err
+	}
+
 	txn, err := db.BeginQuery()
 	if err != nil {
 		release()
@@ -171,6 +179,11 @@ func (db *NDB) storeReplaceable(ctx context.Context, evt nostr.Event, jsonStr st
 func (db *NDB) storeAddressable(ctx context.Context, evt nostr.Event, jsonStr string) (*PendingWrite, error) {
 	dTag := addressableD(evt.Tags)
 	release := db.commits.keys.lock(addrOf(evt.Kind, evt.PubKey, dTag))
+
+	if err := db.refuseIfDeleted(evt, addrOf(evt.Kind, evt.PubKey, dTag)); err != nil {
+		release()
+		return nil, err
+	}
 
 	// Newest first, so existing[0] is the version to compare against.
 	existing, err := db.addressableVersions(evt.PubKey, evt.Kind, dTag)

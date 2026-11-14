@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"sync"
 	"unsafe"
 
 	nostr "github.com/0ceanslim/grain/server/types"
@@ -18,6 +19,20 @@ import (
 
 // maxQueryResults is the maximum number of results a single query can return.
 const maxQueryResults = 10000
+
+// nostrdb's filter arena comes in pages; ndb_filter_init uses the most.
+const (
+	filterPageSize = 4096
+	filterMaxPages = 64
+)
+
+// filterScratchSize is the parse scratch a pooled buffer holds.
+const filterScratchSize = 64 * 1024
+
+var filterScratch = sync.Pool{New: func() any {
+	b := make([]byte, filterScratchSize)
+	return &b
+}}
 
 // Query executes NIP-01 filters against the database and returns matching events.
 // This opens and closes a read transaction internally.
@@ -33,6 +48,15 @@ func (db *NDB) Query(filters []nostr.Filter, limit int) ([]nostr.Event, error) {
 
 // Query executes NIP-01 filters within an existing transaction.
 func (txn *Txn) Query(filters []nostr.Filter, limit int) ([]nostr.Event, error) {
+	// NIP-01: a filter with limit 0 asks for no stored events, only live
+	// ones, and nostrdb would read 0 as no limit.
+	wanted := make([]nostr.Filter, 0, len(filters))
+	for _, f := range filters {
+		if f.Limit == nil || *f.Limit != 0 {
+			wanted = append(wanted, f)
+		}
+	}
+	filters = wanted
 	if len(filters) == 0 {
 		return nil, nil
 	}
@@ -197,31 +221,20 @@ func (db *NDB) GetAllAuthors() []string {
 // slice whose addresses are stable for ndb_query. The extra build is cheap —
 // REQs carry a handful of filters.
 func buildNDBFilters(filters []nostr.Filter) ([]C.struct_ndb_filter, error) {
-	good := make([]nostr.Filter, 0, len(filters))
+	ndbFilters := make([]C.struct_ndb_filter, 0, len(filters))
 	for i, filter := range filters {
-		var probe C.struct_ndb_filter
-		if err := buildSingleNDBFilter(&probe, filter); err != nil {
-			// buildSingleNDBFilter already destroyed the failed probe.
+		var nf C.struct_ndb_filter
+		if err := buildSingleNDBFilter(&nf, filter); err != nil {
+			// buildSingleNDBFilter already destroyed the failed filter.
 			log.DBQuery().Warn("Dropping unconvertible filter from REQ",
 				"index", i, "error", err)
 			continue
 		}
-		C.ndb_filter_destroy(&probe)
-		good = append(good, filter)
+		ndbFilters = append(ndbFilters, nf)
 	}
 
-	if len(good) == 0 {
+	if len(ndbFilters) == 0 {
 		return nil, fmt.Errorf("no convertible filters in request")
-	}
-
-	ndbFilters := make([]C.struct_ndb_filter, len(good))
-	for i := range good {
-		if err := buildSingleNDBFilter(&ndbFilters[i], good[i]); err != nil {
-			for j := 0; j < i; j++ {
-				C.ndb_filter_destroy(&ndbFilters[j])
-			}
-			return nil, fmt.Errorf("filter %d: %w", i, err)
-		}
 	}
 	return ndbFilters, nil
 }
@@ -229,18 +242,24 @@ func buildNDBFilters(filters []nostr.Filter) ([]C.struct_ndb_filter, error) {
 // buildSingleNDBFilter converts a single Go Filter to a C ndb_filter.
 // Uses ndb_filter_from_json for simplicity and correctness.
 func buildSingleNDBFilter(nf *C.struct_ndb_filter, filter nostr.Filter) error {
-	// Initialize the filter's internal buffers before parsing
-	if C.ndb_filter_init(nf) == 0 {
-		return fmt.Errorf("ndb_filter_init failed")
-	}
-
 	// Serialize the filter to JSON, then let nostrdb parse it.
 	// This is the most robust approach since nostrdb handles all the
 	// filter field semantics internally.
 	filterJSON, err := filterToJSON(filter)
 	if err != nil {
-		C.ndb_filter_destroy(nf)
 		return fmt.Errorf("failed to serialize filter: %w", err)
+	}
+
+	// ndb_filter_init gives every filter a 256 KiB arena, which glibc
+	// maps and unmaps on each query. Size it from the JSON instead, which
+	// fits ordinary filters; one that doesn't, such as a long list of
+	// small kinds, retries with the full arena.
+	pages := 1 + 2*len(filterJSON)/filterPageSize
+	if pages > filterMaxPages {
+		pages = filterMaxPages
+	}
+	if C.ndb_filter_init_with(nf, C.int(pages)) == 0 {
+		return fmt.Errorf("ndb_filter_init failed")
 	}
 
 	cJSON := C.CString(filterJSON)
@@ -261,14 +280,29 @@ func buildSingleNDBFilter(nf *C.struct_ndb_filter, filter nostr.Filter) error {
 	// (mostly relevant when the filter contains long indexed-tag
 	// arrays). nostrdb itself has higher ceilings, so this scratch
 	// is the only knob we need to widen.
-	bufSize := 1024 * 64
-	if needed := 4 * len(filterJSON); needed > bufSize {
-		bufSize = needed
+	//
+	// nostrdb only parses into the scratch and keeps nothing from it, so
+	// ordinary filters borrow a pooled Go buffer rather than paying for
+	// a malloc and free on every query.
+	var scratch []byte
+	if needed := 4 * len(filterJSON); needed > filterScratchSize {
+		scratch = make([]byte, needed)
+	} else {
+		pooled := filterScratch.Get().(*[]byte)
+		defer filterScratch.Put(pooled)
+		scratch = *pooled
 	}
-	buf := (*C.uchar)(C.malloc(C.size_t(bufSize)))
-	defer C.free(unsafe.Pointer(buf))
+	buf := (*C.uchar)(unsafe.Pointer(&scratch[0]))
+	bufSize := len(scratch)
 
 	rc := C.ndb_filter_from_json(cJSON, C.int(len(filterJSON)), nf, buf, C.int(bufSize))
+	if rc == 0 && pages < filterMaxPages {
+		C.ndb_filter_destroy(nf)
+		if C.ndb_filter_init_with(nf, filterMaxPages) == 0 {
+			return fmt.Errorf("ndb_filter_init failed")
+		}
+		rc = C.ndb_filter_from_json(cJSON, C.int(len(filterJSON)), nf, buf, C.int(bufSize))
+	}
 	if rc == 0 {
 		C.ndb_filter_destroy(nf)
 		return fmt.Errorf("ndb_filter_from_json failed for: %s", filterJSON)

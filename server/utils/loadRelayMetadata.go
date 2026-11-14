@@ -101,6 +101,12 @@ func SetVersion(v string) {
 	buildVersion = v
 }
 
+// SupportedNIPs are the NIPs this relay implements on the relay side. The
+// NIP-11 document always advertises this list, whatever relay_metadata.json
+// says: client-side NIPs (reactions, bech32 ids, signers) need nothing from
+// a relay, and claiming them misleads clients and relay monitors.
+var SupportedNIPs = []int{1, 9, 11, 40, 42, 45, 50, 70, 86}
+
 func LoadRelayMetadataJSON() error {
 	return LoadRelayMetadata("relay_metadata.json")
 }
@@ -565,6 +571,7 @@ func RelayInfoHandler(w http.ResponseWriter, r *http.Request) {
 	if buildVersion != "" {
 		response.Version = buildVersion
 	}
+	response.SupportedNIPs = append([]int(nil), SupportedNIPs...)
 
 	// Overlay the config-derived limitation fields so the doc reflects what
 	// the relay actually enforces, not the (often stale/zero) values on disk.

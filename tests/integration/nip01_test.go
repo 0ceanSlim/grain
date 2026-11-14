@@ -334,7 +334,7 @@ func TestNIP01_FilterLimit(t *testing.T) {
 }
 
 // TestNIP01_DuplicateEvent verifies that sending the same event twice
-// is handled properly. NIP-01 says relays MAY send OK false for duplicates.
+// acks the second send true with a "duplicate:" reason, as NIP-01 shows.
 func TestNIP01_DuplicateEvent(t *testing.T) {
 	kp := tests.NewTestKeypair()
 	client := tests.NewTestClient(t)
@@ -349,19 +349,11 @@ func TestNIP01_DuplicateEvent(t *testing.T) {
 		t.Fatalf("First send should be accepted, got rejected: %s", reason)
 	}
 
-	// Second send — same event. Relay should respond with OK.
-	// NIP-01 allows OK true (idempotent) or OK false with "duplicate:" prefix.
+	// Second send — same event.
 	client.SendEvent(evt)
 	ok2, reason2 := client.ExpectOK(evt.ID, 5*time.Second)
-
-	if ok2 {
-		// Accepted idempotently — that's fine
-		return
-	}
-
-	// Rejected — reason should indicate duplicate, not an error
-	if !tests.ContainsAny(reason2, "duplicate", "blocked", "already") {
-		t.Fatalf("Duplicate rejection should mention duplicate/blocked, got: %q", reason2)
+	if !ok2 || !strings.HasPrefix(reason2, "duplicate:") {
+		t.Fatalf("Duplicate should be acked true with a duplicate: reason, got ok=%v %q", ok2, reason2)
 	}
 }
 
