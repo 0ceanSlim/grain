@@ -186,9 +186,14 @@ func hashAndRestoreBody(r *http.Request) (string, error) {
 // MUST verify against the original (https://relay.example.com/...)
 // rather than the proxied (http://127.0.0.1:8080/...) form, or every
 // real-world client signature would fail.
+//
+// The hints count only when the peer is a trusted proxy
+// (server.trusted_proxies). From anyone else they would let a caller
+// choose the URL, and replay an event signed for another relay.
 func absoluteRequestURL(r *http.Request) string {
+	proxied := utils.FromTrustedProxy(r)
 	scheme := "http"
-	if proto := firstHeaderValue(r.Header.Get("X-Forwarded-Proto")); proto != "" {
+	if proto := firstHeaderValue(r.Header.Get("X-Forwarded-Proto")); proxied && proto != "" {
 		scheme = strings.ToLower(proto)
 	} else if r.TLS != nil {
 		scheme = "https"
@@ -196,7 +201,7 @@ func absoluteRequestURL(r *http.Request) string {
 		scheme = r.URL.Scheme
 	}
 	host := r.Host
-	if h := firstHeaderValue(r.Header.Get("X-Forwarded-Host")); h != "" {
+	if h := firstHeaderValue(r.Header.Get("X-Forwarded-Host")); proxied && h != "" {
 		host = h
 	}
 	path := r.URL.EscapedPath()

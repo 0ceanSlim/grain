@@ -182,10 +182,25 @@ func TestVerifyAPIAuth_BodyTamperedAfterSign(t *testing.T) {
 func TestAbsoluteRequestURL_ProxyHeaders(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/relay/whitelist?x=1", nil)
 	r.Host = "127.0.0.1:8080"
+	r.RemoteAddr = "127.0.0.1:40000"
 	r.Header.Set("X-Forwarded-Proto", "https")
 	r.Header.Set("X-Forwarded-Host", "relay.example.com")
 	got := absoluteRequestURL(r)
 	want := "https://relay.example.com/api/v1/relay/whitelist?x=1"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+// F-201: a public peer can't pick the URL the signature is checked against.
+func TestAbsoluteRequestURL_UntrustedPeerHeadersIgnored(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/foo", nil)
+	r.Host = "relay-a.example"
+	r.RemoteAddr = "203.0.113.9:40000"
+	r.Header.Set("X-Forwarded-Proto", "https")
+	r.Header.Set("X-Forwarded-Host", "relay-b.example")
+	got := absoluteRequestURL(r)
+	want := "http://relay-a.example/foo"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
@@ -204,6 +219,7 @@ func TestAbsoluteRequestURL_NoProxy(t *testing.T) {
 func TestAbsoluteRequestURL_ForwardedHostChain(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/foo", nil)
 	r.Host = "internal"
+	r.RemoteAddr = "10.0.0.5:40000"
 	r.Header.Set("X-Forwarded-Proto", "https, http")
 	r.Header.Set("X-Forwarded-Host", "relay.example.com, mid-proxy")
 	got := absoluteRequestURL(r)

@@ -404,7 +404,7 @@ server:
 
 **Trusted Proxies (`trusted_proxies`)**
 
-- Purpose: Say which peers' `X-Forwarded-For` header grain believes. The IP block list and the per-IP connection limit key on the client address, so a header from anyone else is ignored
+- Purpose: Say which peers' `X-Forwarded-For`, `X-Forwarded-Host` and `X-Forwarded-Proto` headers grain believes. The IP block list and the per-IP connection limit key on the client address, and NIP-98 checks a signed request against the URL the client saw, so these headers from anyone else are ignored
 - Default (unset): loopback and private ranges (`127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`). That covers a reverse proxy on the same host, in Docker, or on a platform's private network (Fly.io)
 - Values: CIDRs or single addresses. An empty list (`[]`) trusts no proxy and always uses the TCP peer
 - Behavior: when the peer is trusted, grain walks `X-Forwarded-For` from the right and uses the first address that isn't a trusted proxy. If your proxy connects from a public address (a CDN, a separate load balancer), add its ranges here, or every client will share the proxy's address

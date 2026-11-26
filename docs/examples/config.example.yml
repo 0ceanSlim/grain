@@ -82,7 +82,7 @@ server:
   implicit_req_limit: 500 # Default limit applied to REQ when no limit is specified
   connection_rate_limit_per_ip: 30 # Per-IP connection attempts per minute. Rejected before WS upgrade with HTTP 429. 0 disables.
   max_filters_per_req: 32 # Filter objects allowed in one REQ or COUNT.
-  # Peers whose X-Forwarded-For is believed. Unset = loopback + private ranges
+  # Peers whose X-Forwarded-For/-Host/-Proto are believed. Unset = loopback + private ranges
   # (a proxy on this host, in Docker, or on a private network). [] = none.
   # trusted_proxies: ["127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"]
 

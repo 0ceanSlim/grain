@@ -79,6 +79,18 @@ func isTrusted(ip netip.Addr, proxies []netip.Prefix) bool {
 	return false
 }
 
+// FromTrustedProxy reports whether the request's TCP peer is a trusted proxy,
+// so its X-Forwarded-* headers describe the client's request. Anyone else can
+// write those headers.
+func FromTrustedProxy(r *http.Request) bool {
+	peer := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(peer); err == nil {
+		peer = host
+	}
+	ip, err := netip.ParseAddr(peer)
+	return err == nil && isTrusted(ip, trustedProxies())
+}
+
 // GetClientIP returns the address the request came from: the TCP peer, or,
 // when the peer is a trusted proxy, the nearest address in X-Forwarded-For
 // that isn't one. The rate limiter and the IP block list key on it, so a
