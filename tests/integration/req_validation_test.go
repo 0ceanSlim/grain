@@ -183,7 +183,8 @@ func TestREQ_TooManyFiltersRejected(t *testing.T) {
 
 	filters := make([]map[string]interface{}, 33)
 	for i := range filters {
-		filters[i] = map[string]interface{}{"kinds": []int{i}}
+		// Unused kinds: the 32-filter REQ below should get a bare EOSE.
+		filters[i] = map[string]interface{}{"kinds": []int{39000 + i}}
 	}
 	for _, verb := range []string{"REQ", "COUNT"} {
 		subID := tests.RandomSubID()
