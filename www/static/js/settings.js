@@ -241,14 +241,14 @@ function updateClientRelaysTable(data) {
       return `
         <tr class="border-b border-border hover:bg-surface-elevated">
           <td class="py-3 px-2">
-            <div class="font-mono text-text text-sm">${displayUrl}</div>
-            <div class="text-xs text-text-secondary">${url}</div>
+            <div class="font-mono text-text text-sm">${escSettings(displayUrl)}</div>
+            <div class="text-xs text-text-secondary">${escSettings(url)}</div>
           </td>
           <td class="py-3 px-2 text-center">
             ${statusIndicator}
           </td>
           <td class="py-3 px-2 text-center">
-            <button onclick="pingSingleRelay('${url}')" 
+            <button data-url="${escSettings(url)}" onclick="pingSingleRelay(this.dataset.url)" 
                     class="text-accent hover:text-accent text-sm" 
                     id="ping-${safeId}">
               Ping
@@ -359,7 +359,7 @@ function addRelayFormEntry(url = "", read = true, write = true) {
       <input 
         type="text" 
         placeholder="wss://relay.example.com" 
-        value="${url}"
+        value="${escSettings(url)}"
         class="flex-1 px-3 py-2 bg-surface border border-border-strong rounded text-text  focus:outline-none focus:border-accent"
       />
       <label class="flex items-center space-x-1">
@@ -792,14 +792,14 @@ function updateMailboxTable(data) {
       return `
         <tr class="border-b border-border hover:bg-surface-elevated">
           <td class="py-3 px-2">
-            <div class="font-mono text-text text-sm">${displayUrl}</div>
-            <div class="text-xs text-text-secondary">${url}</div>
+            <div class="font-mono text-text text-sm">${escSettings(displayUrl)}</div>
+            <div class="text-xs text-text-secondary">${escSettings(url)}</div>
           </td>
           <td class="py-3 px-2 text-center">
             ${statusIndicator}
           </td>
           <td class="py-3 px-2 text-center">
-            <button onclick="pingSingleRelay('${url}')" 
+            <button data-url="${escSettings(url)}" onclick="pingSingleRelay(this.dataset.url)" 
                     class="text-accent hover:text-accent text-sm" 
                     id="mailbox-ping-${btoa(url).replace(/[^a-zA-Z0-9]/g, "")}">
               Ping
@@ -952,3 +952,14 @@ window.importFromMailboxes = importFromMailboxes;
 window.addNewRelayInput = addNewRelayInput;
 window.removeRelayFormEntry = removeRelayFormEntry;
 window.pingSingleRelay = pingSingleRelay;
+
+// escSettings escapes relay URLs (from anyone's NIP-65 list) for markup and
+// quoted attributes.
+function escSettings(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}

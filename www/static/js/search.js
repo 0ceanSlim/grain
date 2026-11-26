@@ -332,13 +332,14 @@ function showSearchError(message) {
     <div class="p-3 text-sm text-danger">
       <div class="flex items-center space-x-2">
         <span>⚠</span>
-        <span>${message}</span>
+        <span class="search-error-message"></span>
       </div>
       <div class="mt-1 text-xs text-text-secondary">
         Click the ? button for help
       </div>
     </div>
   `;
+  searchResults.querySelector(".search-error-message").textContent = message;
 
   searchResults.classList.remove("hidden");
 

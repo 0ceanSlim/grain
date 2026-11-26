@@ -178,7 +178,7 @@
       // Set initial loading state with spinner before the address
       setElementHTML(
         "profile-nip05",
-        `<span class="inline-block w-3 h-3 border border-border-strong rounded-full animate-spin border-t-transparent mr-2"></span>${profileContent.nip05}`
+        `<span class="inline-block w-3 h-3 border border-border-strong rounded-full animate-spin border-t-transparent mr-2"></span>${escHtml(profileContent.nip05)}`
       );
       showElement("profile-nip05-container");
 
@@ -189,7 +189,15 @@
     // Website
     if (profileContent.website) {
       const websiteEl = document.getElementById("profile-website");
-      websiteEl.href = profileContent.website;
+      // Only an http(s) website becomes a link; anything else (javascript:)
+      // shows as text.
+      const href = safeHttpUrl(profileContent.website);
+      if (href) {
+        websiteEl.href = href;
+        websiteEl.rel = "noopener noreferrer";
+      } else {
+        websiteEl.removeAttribute("href");
+      }
       websiteEl.textContent = profileContent.website;
       showElement("profile-website-container");
     }
@@ -259,10 +267,12 @@
       .replace(/^[✅❌⏳]\s*/, "")
       .trim();
 
+    // originalText is the profile's nip05 decoded from the DOM, and message
+    // can quote the fetched nostr.json: both escaped.
     if (isValid) {
-      nip05Element.innerHTML = `<span class="text-success mr-2" title="NIP-05 verified">✅</span>${originalText}`;
+      nip05Element.innerHTML = `<span class="text-success mr-2" title="NIP-05 verified">✅</span>${escHtml(originalText)}`;
     } else {
-      nip05Element.innerHTML = `<span class="text-danger mr-2" title="NIP-05 verification failed: ${message}">❌</span>${originalText}`;
+      nip05Element.innerHTML = `<span class="text-danger mr-2" title="NIP-05 verification failed: ${escHtml(message)}">❌</span>${escHtml(originalText)}`;
     }
   }
 
@@ -332,8 +342,11 @@
       },
     };
 
+    if (!Object.prototype.hasOwnProperty.call(platformConfig, platform)) return;
     const config = platformConfig[platform];
-    if (!config) return;
+    // The identity is the profile's own (a NIP-39 i tag): a handle or a
+    // host/path, nothing else.
+    if (!/^[\w.@\/-]+$/.test(identity)) return;
 
     // Find or create platform element
     let platformElement = socialLinksContainer.querySelector(
@@ -360,7 +373,7 @@
     // Create the link with icon and name
     const profileUrl = config.getUrl(identity);
     platformElement.innerHTML = `
-        <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" 
+        <a href="${escHtml(profileUrl)}" target="_blank" rel="noopener noreferrer"
            class="inline-flex items-center gap-2 text-text-secondary hover:text-text transition-colors"
            title="${config.name} profile">
           <img src="${config.icon}" alt="${config.name}" class="w-4 h-4" />
@@ -400,21 +413,44 @@
     }
   }
 
-  // Function to convert URLs in text to clickable links and preserve line breaks
+  // escHtml escapes text for markup or a quoted attribute.
+  function escHtml(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  // safeHttpUrl returns v if it is an http(s) URL, else null.
+  function safeHttpUrl(v) {
+    try {
+      const u = new URL(String(v));
+      return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Function to convert URLs in text to clickable links and preserve line breaks.
+  // The text is a profile's own: escaped first, so the only markup is ours.
   function linkifyText(text) {
-    // First, convert newlines to <br> tags
-    let htmlText = text.replace(/\n/g, "<br>");
+    let htmlText = escHtml(text);
 
-    // Then convert URLs to clickable links - improved regex to stop at whitespace or line breaks
-    const urlRegex = /(https?:\/\/[^\s<]+)/g;
+    // Escaping left no quotes or angle brackets, so a URL can't leave its
+    // href. It ends at whitespace or an escaped quote or bracket.
+    const urlRegex = /https?:\/\/(?:(?!&(?:quot|#39|lt|gt);)[^\s<])+/g;
 
-    return htmlText.replace(urlRegex, function (url) {
+    htmlText = htmlText.replace(urlRegex, function (url) {
       // Remove trailing punctuation that might not be part of the URL
       const cleanUrl = url.replace(/[.,;:!?]+$/, "");
       const trailingPunc = url.substring(cleanUrl.length);
 
       return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-accent underline">${cleanUrl}</a>${trailingPunc}`;
     });
+
+    return htmlText.replace(/\n/g, "<br>");
   }
 
   // Action functions

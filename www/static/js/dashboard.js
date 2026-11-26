@@ -120,7 +120,7 @@ const dashboardManager = {
     const promise = (async () => {
       try {
         const response = await fetch(
-          `${this.endpoints.userProfile}?pubkey=${pubkey}`
+          `${this.endpoints.userProfile}?pubkey=${encodeURIComponent(pubkey)}`
         );
         if (!response.ok) {
           throw new Error(`Profile fetch failed: ${response.status}`);
@@ -178,8 +178,11 @@ const dashboardManager = {
 
   // Create profile card HTML for horizontal layout with source info
   createHorizontalProfileCard(pubkey, profile, source = "direct") {
-    const name = profile.name || profile.display_name || "?";
-    const picture = profile.picture || null;
+    // Profile fields are anyone's kind:0: escaped, and the picture must be
+    // an http(s) URL. pubkey is hex (checked by the loaders).
+    const name = this.attr(profile.name || profile.display_name || "?");
+    const picture = this.attr(this.safeUrl(profile.picture) || "");
+    source = this.attr(source);
 
     return `
     <div onclick="navigateToProfileFromPubkey('${pubkey}')" class="flex-shrink-0 text-center cursor-pointer hover:bg-surface-hover rounded-lg p-2 transition-colors" data-pubkey="${pubkey}">
@@ -244,6 +247,7 @@ const dashboardManager = {
       return;
     }
 
+    keysWithSources = keysWithSources.filter(({ pubkey }) => this.isHexPubkey(pubkey));
     container.innerHTML = `
       <div class="text-sm text-text-secondary mb-3">${keysWithSources.length} users</div>
       <div class="flex space-x-4 overflow-x-auto pb-2 custom-scroll">
@@ -797,8 +801,8 @@ const dashboardManager = {
 
     try {
       const profile = await this.fetchUserProfile(pubkey);
-      const name = profile.name || profile.display_name || "Unknown";
-      const picture = profile.picture || null;
+      const name = String(profile.name || profile.display_name || "Unknown");
+      const picture = this.safeUrl(profile.picture);
 
       // Convert pubkey to npub
       const npub = await this.convertPubkeyToNpub(pubkey);
@@ -807,10 +811,10 @@ const dashboardManager = {
       <div class="w-12 h-12 rounded-full overflow-hidden bg-surface-overlay flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" onclick="navigateToProfile('${npub}')">
         ${
           picture
-            ? `<img src="${picture}" alt="${name}" class="w-full h-full object-cover">`
-            : `<span class="text-text text-sm font-bold">${name
-                .charAt(0)
-                .toUpperCase()}</span>`
+            ? `<img src="${this.attr(picture)}" alt="${this.attr(name)}" class="w-full h-full object-cover">`
+            : `<span class="text-text text-sm font-bold">${this.attr(
+                name.charAt(0).toUpperCase()
+              )}</span>`
         }
       </div>
       <div class="text-center">
@@ -870,11 +874,35 @@ const dashboardManager = {
     }
   },
 
-  // Helper function to escape HTML
+  // Helper function to escape HTML text (not quotes: use attr in attributes)
   escapeHtml(text) {
     const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
+  },
+
+  // attr escapes a value for text or a quoted attribute.
+  attr(v) {
+    return String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  },
+
+  // safeUrl returns v if it is an http(s) URL, else null.
+  safeUrl(v) {
+    try {
+      const u = new URL(String(v));
+      return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+    } catch (_) {
+      return null;
+    }
+  },
+
+  isHexPubkey(v) {
+    return typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
   },
 
   // 2. Load Policy & Limits - Redesigned layout with working data loading
@@ -1869,8 +1897,8 @@ const dashboardManager = {
   },
 
   _mutelistAuthorCard(authorPubkey, profile) {
-    const name = profile.name || profile.display_name || "?";
-    const picture = profile.picture || null;
+    const name = this.attr(profile.name || profile.display_name || "?");
+    const picture = this.attr(this.safeUrl(profile.picture) || "");
     const fallback = `<div class="w-12 h-12 bg-surface-overlay rounded-full flex items-center justify-center text-text font-medium text-sm">
       <img src="https://robohash.org/${authorPubkey}?set=set6&size=48x48" alt="${name}" class="w-12 h-12 rounded-full object-cover">
     </div>`;
@@ -1895,6 +1923,7 @@ const dashboardManager = {
   async loadMutelistAuthors(authorPubkeys) {
     const container = document.getElementById("mutelist-authors");
     if (!container || !authorPubkeys || authorPubkeys.length === 0) return;
+    authorPubkeys = authorPubkeys.filter((pk) => this.isHexPubkey(pk));
 
     container.innerHTML = authorPubkeys
       .map((pk) => this._placeholderCard(pk, "mutelist-author"))
@@ -1933,6 +1962,7 @@ const dashboardManager = {
     // Render placeholder for every entry with a stable (pubkey, slot) key.
     // The slot suffix prevents collisions with the mutelist-author row when
     // the same pubkey appears in both.
+    keysWithSources = keysWithSources.filter(({ pubkey }) => this.isHexPubkey(pubkey));
     container.innerHTML = `
       <div class="text-sm text-text-secondary mb-3">${keysWithSources.length} users</div>
       <div class="flex space-x-4 overflow-x-auto pb-2 custom-scroll">
@@ -1971,8 +2001,9 @@ const dashboardManager = {
 
   // Enhanced profile card with better source indication
   createEnhancedBlacklistProfileCard(pubkey, profile, source, sourceType) {
-    const name = profile.name || profile.display_name || "?";
-    const picture = profile.picture || null;
+    const name = this.attr(profile.name || profile.display_name || "?");
+    const picture = this.attr(this.safeUrl(profile.picture) || "");
+    source = this.attr(source); // a mute-list author's profile name
 
     // Source styling based on type
     let sourceClass, sourceLabel;

@@ -361,6 +361,8 @@
     if (!target) return;
     pick(
       function (url) {
+        // The URL comes back from the media server: http(s) only.
+        if (!/^https?:\/\//i.test(String(url))) return;
         target.value = url;
         target.dispatchEvent(new Event("input", { bubbles: true }));
         target.dispatchEvent(new Event("change", { bubbles: true }));

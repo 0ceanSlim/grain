@@ -123,16 +123,14 @@
 
     // For now, just show raw JSON for all kinds
     // TODO: Add kind-specific rendering in future iterations
+    // The event is anyone's: its JSON goes in as text, never as markup.
     container.innerHTML = `
         <div class="p-4 bg-surface-inset-strong rounded-lg">
           <h4 class="mb-2 text-sm font-medium text-text-secondary">Raw Event JSON</h4>
-          <pre class="text-sm text-text-secondary whitespace-pre-wrap break-all">${JSON.stringify(
-            event,
-            null,
-            2
-          )}</pre>
+          <pre class="text-sm text-text-secondary whitespace-pre-wrap break-all"></pre>
         </div>
       `;
+    container.querySelector("pre").textContent = JSON.stringify(event, null, 2);
   }
 
   function displayRawEventJson(event) {
@@ -150,19 +148,21 @@
 
     showElement("event-tags-container");
 
-    container.innerHTML = tags
-      .map((tag, index) => {
-        const tagType = tag[0] || "unknown";
-        const tagValues = tag.slice(1).join(", ");
-
-        return `
-          <div class="flex items-start gap-2 p-2 bg-surface-elevated rounded">
-            <span class="px-2 py-1 text-xs font-mono text-text bg-surface-overlay rounded">${tagType}</span>
-            <span class="text-sm text-text-secondary break-all">${tagValues}</span>
-          </div>
-        `;
+    // Tags are anyone's: built as nodes with textContent.
+    container.replaceChildren(
+      ...tags.map((tag) => {
+        const row = document.createElement("div");
+        row.className = "flex items-start gap-2 p-2 bg-surface-elevated rounded";
+        const type = document.createElement("span");
+        type.className = "px-2 py-1 text-xs font-mono text-text bg-surface-overlay rounded";
+        type.textContent = String(tag[0] || "unknown");
+        const values = document.createElement("span");
+        values.className = "text-sm text-text-secondary break-all";
+        values.textContent = tag.slice(1).join(", ");
+        row.append(type, values);
+        return row;
       })
-      .join("");
+    );
   }
 
   function formatDateTime(date) {
