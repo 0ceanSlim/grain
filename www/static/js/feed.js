@@ -33,6 +33,15 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
   }
+  // safeHttpUrl returns v if it is an http(s) URL, else null.
+  function safeHttpUrl(v) {
+    try {
+      const u = new URL(String(v));
+      return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+    } catch (_) {
+      return null;
+    }
+  }
   function cssEsc(s) {
     return String(s).replace(/["\\]/g, "\\$&");
   }
@@ -55,8 +64,9 @@
   }
   function avatar(pubkey) {
     const p = profiles[pubkey];
-    if (p && p.picture) {
-      return `<img src="${esc(p.picture)}" alt="" class="object-cover w-8 h-8 rounded-full shrink-0 bg-surface-elevated" />`;
+    const pic = p && safeHttpUrl(p.picture);
+    if (pic) {
+      return `<img src="${esc(pic)}" alt="" class="object-cover w-8 h-8 rounded-full shrink-0 bg-surface-elevated" />`;
     }
     return `<div class="flex items-center justify-center w-8 h-8 text-xs rounded-full shrink-0 bg-surface-elevated text-text-muted">${esc((pubkey || "").slice(0, 2))}</div>`;
   }

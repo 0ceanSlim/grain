@@ -77,10 +77,11 @@
     // sibling flex items so the pfp doesn't drop onto its own line.
     content.className = "inline-flex items-center gap-2";
 
-    if (profileContent && profileContent.picture) {
+    const picture = profileContent && safeHttpUrl(profileContent.picture);
+    if (picture) {
       content.innerHTML =
         '<img src="' +
-        escapeHtml(profileContent.picture) +
+        escapeHtml(picture) +
         '" alt="" class="w-6 h-6 rounded-full object-cover shrink-0" />' +
         '<span class="hidden sm:inline-block max-w-[12ch] truncate align-middle">' +
         escapeHtml(displayName) +
@@ -91,6 +92,16 @@
         '<span class="hidden sm:inline-block max-w-[12ch] truncate align-middle">' +
         escapeHtml(displayName) +
         "</span>";
+    }
+  }
+
+  // safeHttpUrl returns v if it is an http(s) URL, else null.
+  function safeHttpUrl(v) {
+    try {
+      const u = new URL(String(v));
+      return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -335,10 +346,11 @@
     // Keep the header button in sync — if the dropdown's fetch is the first to
     // see real metadata, update the button too so it doesn't lag behind.
     if (info.content) renderLoggedIn(info.content, info.npub);
-    if (c.picture) {
+    const pic = safeHttpUrl(c.picture);
+    if (pic) {
       pfpWrap.innerHTML =
         '<img src="' +
-        escapeHtml(c.picture) +
+        escapeHtml(pic) +
         '" alt="" class="w-10 h-10 rounded-full object-cover" />';
     } else {
       pfpWrap.innerHTML = '<span class="text-lg">👤</span>';

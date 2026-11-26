@@ -384,13 +384,14 @@
 
   function updateProfileImages(profileContent) {
     // Profile picture
-    if (profileContent.picture) {
+    const picture = safeHttpUrl(profileContent.picture);
+    if (picture) {
       const avatarImg = document.getElementById("profile-avatar-img");
       const avatarPlaceholder = document.getElementById(
         "profile-avatar-placeholder"
       );
 
-      avatarImg.src = profileContent.picture;
+      avatarImg.src = picture;
       avatarImg.onload = function () {
         showElement("profile-avatar-img");
         hideElement("profile-avatar-placeholder");
@@ -401,9 +402,10 @@
     }
 
     // Banner image
-    if (profileContent.banner) {
+    const banner = safeHttpUrl(profileContent.banner);
+    if (banner) {
       const bannerImg = document.getElementById("profile-banner-img");
-      bannerImg.src = profileContent.banner;
+      bannerImg.src = banner;
       bannerImg.onload = function () {
         showElement("profile-banner-img");
       };
