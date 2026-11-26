@@ -8,12 +8,13 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/0ceanslim/grain/server/utils/safehttp"
 )
 
 func pngBytes(t *testing.T, w, h int) []byte {
@@ -226,20 +227,6 @@ func TestPublicBaseAbsoluteAndLocalPath(t *testing.T) {
 	}
 }
 
-func TestPublicOnlyRefusesNonPublicRanges(t *testing.T) {
-	for _, a := range []string{"127.0.0.1", "10.1.2.3", "192.168.1.1", "169.254.169.254", "100.100.100.100", "198.18.0.1",
-		"192.0.0.8", "240.0.0.1", "0.1.2.3", "::1", "fd00::1", "64:ff9b::a00:1", "2002:a00:1::1", "::ffff:127.0.0.1"} {
-		if err := publicOnly("tcp", net.JoinHostPort(a, "443"), nil); err == nil {
-			t.Errorf("%s: allowed", a)
-		}
-	}
-	for _, a := range []string{"93.184.216.34", "2606:4700::6810:84e5"} {
-		if err := publicOnly("tcp", net.JoinHostPort(a, "443"), nil); err != nil {
-			t.Errorf("%s: refused: %v", a, err)
-		}
-	}
-}
-
 // Fetch refuses non-public addresses unless a test allows them, and
 // non-http(s) URLs; with them allowed, an image comes back checked.
 func TestFetch(t *testing.T) {
@@ -260,8 +247,8 @@ func TestFetch(t *testing.T) {
 		t.Fatal("file: URL accepted")
 	}
 
-	allowPrivate = true
-	t.Cleanup(func() { allowPrivate = false })
+	safehttp.AllowPrivate = true
+	t.Cleanup(func() { safehttp.AllowPrivate = false })
 	img, err := Fetch(context.Background(), srv.URL+"/logo.png")
 	if err != nil || img.Type != "image/png" || img.Width != 6 || img.Height != 3 {
 		t.Fatalf("fetch: %+v %v", img, err)

@@ -18,9 +18,17 @@ import (
 // @Tags         relay-keys
 // @Produce      json
 // @Success      200  {object}  WhitelistKeysResponse
+// @Security     NostrAuth
+// @Failure      401  {string}  string  "NIP-98 auth required"
+// @Failure      403  {string}  string  "Signer is not the relay owner"
 // @Failure      500  {string}  string  "Whitelist configuration not available"
 // @Router       /api/v1/relay/keys/whitelist/live [get]
 func GetAllWhitelistedPubkeysLive(w http.ResponseWriter, r *http.Request) {
+	// Owner only: each call fetches from outside (mute-list relays,
+	// every whitelisted domain), so an open endpoint is an amplifier.
+	if _, ok := RequireOwner(w, r); !ok {
+		return
+	}
 	log.RelayAPI().Debug("Live whitelist keys API endpoint accessed",
 		"client_ip", utils.GetClientIP(r),
 		"user_agent", r.UserAgent())

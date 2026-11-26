@@ -16,20 +16,20 @@ import (
 )
 
 // HandleAdminDomainKeys returns the parsed names map for a single
-// domain's .well-known/nostr.json. Owner-gated via the cookie
-// session — same gate /admin uses — so an unauthenticated visitor
-// can't use grain as a SSRF proxy.
+// domain's .well-known/nostr.json. Owner-gated via a verified (signed)
+// cookie session, the same gate /admin uses; the fetch itself reaches
+// public addresses only (utils.FetchDomainNames).
 func HandleAdminDomainKeys(w http.ResponseWriter, r *http.Request) {
 	user := session.SessionMgr.GetCurrentUser(r)
 	owner := utils.GetRelayOwnerPubkey()
-	if user == nil || utils.IsRelayUnowned() || !strings.EqualFold(user.PublicKey, owner) {
+	if user == nil || !user.Verified || utils.IsRelayUnowned() || !strings.EqualFold(user.PublicKey, owner) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
-	domain := strings.TrimSpace(r.URL.Query().Get("domain"))
-	if domain == "" || strings.ContainsAny(domain, "/?#") {
-		http.Error(w, "domain must be set and contain no path / query", http.StatusBadRequest)
+	domain := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("domain")))
+	if !utils.ValidDomain(domain) {
+		http.Error(w, "domain must be a plain host name (no port, path or IP address)", http.StatusBadRequest)
 		return
 	}
 

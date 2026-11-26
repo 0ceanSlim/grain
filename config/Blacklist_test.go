@@ -160,8 +160,8 @@ func TestLatestMuteListEventsPerKindD_IgnoresNil(t *testing.T) {
 func TestExtractMuteListPubkeys_DeduplicatesAcrossEvents(t *testing.T) {
 	// Same pubkey listed in two winning events (e.g. kind:10000 + kind:30000
 	// d:"mute") should only appear once in the result.
-	a := &nostr.Event{Kind: 10000, Tags: [][]string{{"p", "dup"}, {"p", "unique-a"}}}
-	b := &nostr.Event{Kind: 30000, Tags: [][]string{{"d", "mute"}, {"p", "dup"}, {"p", "unique-b"}}}
+	a := &nostr.Event{Kind: 10000, Tags: [][]string{{"p", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}, {"p", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}}
+	b := &nostr.Event{Kind: 30000, Tags: [][]string{{"d", "mute"}, {"p", "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}, {"p", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}
 
 	got := extractMuteListPubkeys([]*nostr.Event{a, b}, "author")
 
@@ -169,10 +169,10 @@ func TestExtractMuteListPubkeys_DeduplicatesAcrossEvents(t *testing.T) {
 	for _, pk := range got {
 		seen[pk]++
 	}
-	if seen["dup"] != 1 {
-		t.Errorf("expected duplicate pubkey to appear once, got %d", seen["dup"])
+	if seen["dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"] != 1 {
+		t.Errorf("expected duplicate pubkey to appear once, got %d", seen["dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"])
 	}
-	if seen["unique-a"] != 1 || seen["unique-b"] != 1 {
+	if seen["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] != 1 || seen["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"] != 1 {
 		t.Errorf("expected both unique pubkeys present, got %v", seen)
 	}
 	if len(got) != 3 {
@@ -182,14 +182,15 @@ func TestExtractMuteListPubkeys_DeduplicatesAcrossEvents(t *testing.T) {
 
 func TestExtractMuteListPubkeys_SkipsNonPTagsAndEmpty(t *testing.T) {
 	ev := &nostr.Event{Kind: 10000, Tags: [][]string{
-		{"p"},             // malformed — no value
-		{"p", ""},         // empty value
-		{"e", "event-id"}, // wrong tag
-		{"p", "valid"},
+		{"p"},                   // malformed — no value
+		{"p", ""},               // empty value
+		{"e", "event-id"},       // wrong tag
+		{"p", "<b>not-hex</b>"}, // not a pubkey: dropped before the dashboard sees it
+		{"p", "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"},
 	}}
 	got := extractMuteListPubkeys([]*nostr.Event{ev}, "author")
-	if len(got) != 1 || got[0] != "valid" {
-		t.Errorf("expected [valid], got %v", got)
+	if len(got) != 1 || got[0] != "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" {
+		t.Errorf("expected only the hex pubkey, got %v", got)
 	}
 }
 
@@ -200,10 +201,10 @@ func TestExtractMuteListPubkeys_HandlesEncryptedContent(t *testing.T) {
 	ev := &nostr.Event{
 		Kind:    10000,
 		Content: "not-really-ciphertext-but-non-empty",
-		Tags:    [][]string{{"p", "public-mute"}},
+		Tags:    [][]string{{"p", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}},
 	}
 	got := extractMuteListPubkeys([]*nostr.Event{ev}, "author")
-	if len(got) != 1 || got[0] != "public-mute" {
+	if len(got) != 1 || got[0] != "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" {
 		t.Errorf("expected public pubkey extracted, got %v", got)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/0ceanslim/grain/client/core/tools"
 	cfgType "github.com/0ceanslim/grain/config/types"
 	nostr "github.com/0ceanslim/grain/server/types"
+	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 
 	"gopkg.in/yaml.v3"
@@ -729,7 +730,7 @@ func extractMuteListPubkeys(events []*nostr.Event, author string) []string {
 				continue
 			}
 			pk := tag[1]
-			if pk == "" || seen[pk] {
+			if !utils.IsHexPubkey(pk) || seen[pk] {
 				continue
 			}
 			seen[pk] = true
