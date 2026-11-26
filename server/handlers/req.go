@@ -168,8 +168,14 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 		}
 		queriedEvents = append(queriedEvents, evts...)
 	}
+	// The limit is for the whole reply, as max_limit advertises: each
+	// search gets what the earlier queries left of it.
 	for _, sf := range searchFilters {
-		evts, err := pagedTextSearch(db, sf, effectiveLimit)
+		remaining := effectiveLimit - len(queriedEvents)
+		if remaining <= 0 {
+			break
+		}
+		evts, err := pagedTextSearch(db, sf, remaining)
 		if err != nil {
 			log.Req().Error("Error executing search",
 				"sub_id", subID,
@@ -245,6 +251,11 @@ func HandleReq(client nostr.ClientInterface, message []interface{}) {
 // that are well-formed but can never match (an empty ids/authors/kinds/#tag
 // list) are dropped, so the result can be empty: the REQ then just gets EOSE.
 func parseFilters(raw []interface{}) ([]nostr.Filter, error) {
+	// One subscription slot holds the whole list, and every live event is
+	// matched against each filter in it, so the list is capped.
+	if c := config.GetConfig(); c != nil && c.Server.MaxFiltersPerReq > 0 && len(raw) > c.Server.MaxFiltersPerReq {
+		return nil, fmt.Errorf("too many filters (%d, max %d)", len(raw), c.Server.MaxFiltersPerReq)
+	}
 	filters := make([]nostr.Filter, 0, len(raw))
 	for i, r := range raw {
 		obj, ok := r.(map[string]interface{})

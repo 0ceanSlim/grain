@@ -120,3 +120,55 @@ func TestNIP45_CountMultiFilterApproximate(t *testing.T) {
 		t.Errorf("expected approximate=true for multi-filter request, got exact")
 	}
 }
+
+// A COUNT that names no kinds still mustn't count someone's gift wraps:
+// {"#p":[x]} would otherwise reveal how many DMs x has. The recipient,
+// AUTHed, counts their own.
+func TestNIP45_CountWithoutKindsHidesGiftWraps(t *testing.T) {
+	recipient := tests.NewTestKeypair()
+	wrapper := tests.NewTestKeypair()
+
+	pub := tests.NewTestClientAt(t, tests.AuthRelayURL)
+	defer pub.Close()
+	wrap := wrapper.SignEvent(1059, "sealed", [][]string{{"p", recipient.PubKey}})
+	pub.SendEvent(wrap)
+	if ok, reason := pub.ExpectOK(wrap.ID, 5*time.Second); !ok {
+		t.Fatalf("publish gift wrap: %s", reason)
+	}
+	// A public event behind it: commits are FIFO, so once it's queryable
+	// the gift wrap is committed too.
+	note := wrapper.SignEvent(1, "after the wrap", [][]string{{"p", recipient.PubKey}})
+	pub.SendEvent(note)
+	if ok, reason := pub.ExpectOK(note.ID, 5*time.Second); !ok {
+		t.Fatalf("publish note: %s", reason)
+	}
+	if !pub.AwaitCommit(note.ID, 10*time.Second) {
+		t.Fatal("events not committed in time")
+	}
+
+	byP := map[string]interface{}{"#p": []string{recipient.PubKey}}
+
+	anon := tests.NewTestClientAt(t, tests.AuthRelayURL)
+	defer anon.Close()
+	subID := tests.RandomSubID()
+	sendCount(anon, subID, byP)
+	if n, _ := expectCount(t, anon, subID, 5*time.Second); n != 1 {
+		t.Fatalf("anonymous COUNT #p: %d, want 1 (the note, not the gift wrap)", n)
+	}
+	subID = tests.RandomSubID()
+	sendCount(anon, subID, map[string]interface{}{"ids": []string{wrap.ID}})
+	if n, _ := expectCount(t, anon, subID, 5*time.Second); n != 0 {
+		t.Fatalf("anonymous COUNT by the gift wrap's id: %d, want 0", n)
+	}
+
+	me := tests.NewTestClientAt(t, tests.AuthRelayURL)
+	defer me.Close()
+	if ok, reason := me.PerformAuth(recipient, tests.AuthRelayURL, 3*time.Second); !ok {
+		t.Fatalf("auth: %s", reason)
+	}
+	subID = tests.RandomSubID()
+	sendCount(me, subID, byP)
+	if n, _ := expectCount(t, me, subID, 5*time.Second); n != 2 {
+		t.Fatalf("recipient COUNT #p: %d, want 2 (the note and their gift wrap)", n)
+	}
+}

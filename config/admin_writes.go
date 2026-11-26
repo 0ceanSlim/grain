@@ -348,6 +348,13 @@ func UpdateServerConfig(srv cfgType.ServerSettings) error {
 	if c == nil {
 		return fmt.Errorf("config not loaded")
 	}
+	// Fields the admin form doesn't carry keep their config.yml values.
+	if srv.TrustedProxies == nil {
+		srv.TrustedProxies = c.Server.TrustedProxies
+	}
+	if srv.MaxFiltersPerReq == 0 {
+		srv.MaxFiltersPerReq = c.Server.MaxFiltersPerReq
+	}
 	c.Server = srv
 	return saveServerConfig(*c)
 }

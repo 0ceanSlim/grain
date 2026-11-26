@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	cfgType "github.com/0ceanslim/grain/config/types"
+	"github.com/0ceanslim/grain/server/utils"
 )
 
 // ValidateAndApplyDefaults checks the config for zero-valued fields and applies
@@ -53,6 +54,10 @@ func ValidateAndApplyDefaults(cfg *cfgType.ServerConfig) (warnings []string, err
 	if cfg.Server.ImplicitReqLimit == 0 {
 		cfg.Server.ImplicitReqLimit = 500
 		warnings = append(warnings, "server.implicit_req_limit was 0, defaulting to 500")
+	}
+	if cfg.Server.MaxFiltersPerReq == 0 {
+		cfg.Server.MaxFiltersPerReq = 32
+		warnings = append(warnings, "server.max_filters_per_req was 0, defaulting to 32")
 	}
 
 	// Client (built-in Nostr client) defaults. An unset client_tag block (empty
@@ -111,6 +116,11 @@ func ValidateAndApplyDefaults(cfg *cfgType.ServerConfig) (warnings []string, err
 	}
 	if err == nil && cfg.RateLimit.MaxContentLength < 0 {
 		err = fmt.Errorf("rate_limit.max_content_length %d is invalid: must be >= 0 (0 = no limit)", cfg.RateLimit.MaxContentLength)
+	}
+	if err == nil {
+		if _, perr := utils.ParseTrustedProxies(cfg.Server.TrustedProxies); perr != nil {
+			err = fmt.Errorf("server.trusted_proxies: %w", perr)
+		}
 	}
 
 	return warnings, err

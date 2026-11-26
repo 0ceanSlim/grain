@@ -156,12 +156,21 @@ func ClientHandler(ws *websocket.Conn) {
 	// production saw 169,272 of these WARNs in 4h, drowning every other
 	// signal. The rejected client still gets a NOTICE; only the
 	// server-side log is aggregated.
+	// The slot is reserved with a compare-and-swap, so concurrent upgrades
+	// can't all pass a check made before any of them counted itself. The
+	// reservation is the connection's one increment; the usual single
+	// decrement on disconnect releases it.
+	reserved := false
 	if maxConn := cfg.Server.MaxConnections; maxConn > 0 {
-		if current := currentConnections.Load(); current >= int64(maxConn) {
-			RecordRejection("max_conn", utils.GetClientIP(ws.Request()))
-			websocket.Message.Send(ws, `["NOTICE","error: server at max capacity, try again later"]`)
-			ws.Close()
-			return
+		for !reserved {
+			current := currentConnections.Load()
+			if current >= int64(maxConn) {
+				RecordRejection("max_conn", utils.GetClientIP(ws.Request()))
+				websocket.Message.Send(ws, `["NOTICE","error: server at max capacity, try again later"]`)
+				ws.Close()
+				return
+			}
+			reserved = currentConnections.CompareAndSwap(current, current+1)
 		}
 	}
 
@@ -199,7 +208,10 @@ func ClientHandler(ws *websocket.Conn) {
 
 	clientsMu.Lock()
 	clients[ws] = client
-	connectionCount := currentConnections.Add(1)
+	connectionCount := currentConnections.Load()
+	if !reserved {
+		connectionCount = currentConnections.Add(1)
+	}
 	clientsMu.Unlock()
 
 	// Register with connection manager

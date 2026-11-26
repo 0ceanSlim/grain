@@ -54,9 +54,9 @@ func CheckIPConnectionRate(ip string, limitPerMinute int) bool {
 		return true
 	}
 	if ip == "" {
-		// Unknown IP — don't bucket against the empty string, just allow.
-		// The max-conn cap and per-client rate limiter still apply.
-		return true
+		// GetClientIP never returns "", but an unknown address still counts:
+		// skipping the bucket would let it connect without limit.
+		ip = "unknown"
 	}
 
 	now := time.Now()

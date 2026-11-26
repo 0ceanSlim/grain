@@ -174,3 +174,31 @@ func TestCLOSE_NoReply(t *testing.T) {
 		t.Fatalf("unexpected reply to CLOSE: %v", msg)
 	}
 }
+
+// One REQ (or COUNT) takes one subscription slot whatever its filter list
+// holds, so the list is capped (server.max_filters_per_req, default 32).
+func TestREQ_TooManyFiltersRejected(t *testing.T) {
+	c := tests.NewTestClient(t)
+	defer c.Close()
+
+	filters := make([]map[string]interface{}, 33)
+	for i := range filters {
+		filters[i] = map[string]interface{}{"kinds": []int{i}}
+	}
+	for _, verb := range []string{"REQ", "COUNT"} {
+		subID := tests.RandomSubID()
+		msg := []interface{}{verb, subID}
+		for _, f := range filters {
+			msg = append(msg, f)
+		}
+		c.SendMessage(msg)
+		if reason := c.ExpectClosed(subID, 5*time.Second); !strings.Contains(reason, "too many filters") {
+			t.Fatalf("%s with 33 filters: CLOSED %q, want too many filters", verb, reason)
+		}
+	}
+
+	// 32 is fine.
+	subID := tests.RandomSubID()
+	c.Subscribe(subID, filters[:32]...)
+	c.ExpectEOSE(subID, 5*time.Second)
+}

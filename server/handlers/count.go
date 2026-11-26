@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"slices"
+
 	"github.com/0ceanslim/grain/config"
 	"github.com/0ceanslim/grain/server/db/nostrdb"
 	"github.com/0ceanslim/grain/server/handlers/response"
@@ -92,6 +94,32 @@ func HandleCount(client nostr.ClientInterface, message []interface{}) {
 		return
 	}
 
+	// A filter that names no kinds also matches gift wraps, so {"#p":[x]}
+	// would count x's DMs. Take out the protected events those filters
+	// match, then add back the ones the AUTHed caller is p-tagged on: the
+	// same set a REQ with these filters would serve.
+	if open := withoutKinds(filters); len(open) > 0 {
+		hidden, approxHidden, err := db.CountFiltered(protectedPart(open, ""))
+		if err != nil {
+			log.Req().Error("COUNT query failed", "sub_id", subID, "error", err)
+			response.SendClosed(client, subID, "error: could not count events")
+			return
+		}
+		visible, approxVisible := 0, false
+		if authed := GetAuthedPubkey(client); authed != "" {
+			if mine := protectedPart(open, authed); len(mine) > 0 {
+				visible, approxVisible, err = db.CountFiltered(mine)
+				if err != nil {
+					log.Req().Error("COUNT query failed", "sub_id", subID, "error", err)
+					response.SendClosed(client, subID, "error: could not count events")
+					return
+				}
+			}
+		}
+		count = max(count-hidden+visible, 0)
+		approximate = approximate || approxHidden || approxVisible
+	}
+
 	response.SendCount(client, subID, count, approximate)
 
 	log.Req().Info("COUNT served",
@@ -99,4 +127,38 @@ func HandleCount(client nostr.ClientInterface, message []interface{}) {
 		"filter_count", len(filters),
 		"count", count,
 		"approximate", approximate)
+}
+
+// withoutKinds returns the filters that name no kinds.
+func withoutKinds(filters []nostr.Filter) []nostr.Filter {
+	var out []nostr.Filter
+	for _, f := range filters {
+		if len(f.Kinds) == 0 {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// protectedPart narrows each filter to the protected kinds. With authed set,
+// it narrows further to events p-tagged authed, dropping a filter whose own
+// #p list can't match authed.
+func protectedPart(filters []nostr.Filter, authed string) []nostr.Filter {
+	out := make([]nostr.Filter, 0, len(filters))
+	for _, f := range filters {
+		f.Kinds = config.DMProtectedKinds()
+		tags := make(map[string][]string, len(f.Tags)+1)
+		for k, v := range f.Tags {
+			tags[nostr.TagFilterName(k)] = v
+		}
+		if authed != "" {
+			if ps, ok := tags["p"]; ok && !slices.Contains(ps, authed) {
+				continue
+			}
+			tags["p"] = []string{authed}
+		}
+		f.Tags = tags
+		out = append(out, f)
+	}
+	return out
 }

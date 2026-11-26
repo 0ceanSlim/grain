@@ -22,3 +22,13 @@ var dmProtectedKinds = map[int]bool{
 func IsDMProtectedKind(kind int) bool {
 	return dmProtectedKinds[kind]
 }
+
+// DMProtectedKinds lists the protected kinds, for building filters that
+// select exactly the events the privacy gate withholds.
+func DMProtectedKinds() []int {
+	out := make([]int, 0, len(dmProtectedKinds))
+	for k := range dmProtectedKinds {
+		out = append(out, k)
+	}
+	return out
+}

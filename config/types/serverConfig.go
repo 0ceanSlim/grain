@@ -36,6 +36,11 @@ type ServerSettings struct {
 	MaxSubscriptionsPerClient int    `yaml:"max_subscriptions_per_client" json:"max_subscriptions_per_client"`
 	ImplicitReqLimit          int    `yaml:"implicit_req_limit" json:"implicit_req_limit"`                     // New field for implicit REQ limit
 	ConnectionRateLimitPerIP  int    `yaml:"connection_rate_limit_per_ip" json:"connection_rate_limit_per_ip"` // Per-IP connection attempts per minute (0 = disabled). See #61.
+	// MaxFiltersPerReq caps the filter objects in one REQ or COUNT.
+	MaxFiltersPerReq int `yaml:"max_filters_per_req" json:"max_filters_per_req"`
+	// TrustedProxies are the peers whose X-Forwarded-For is believed (CIDRs or
+	// addresses). Unset: loopback and private ranges. Empty list: none.
+	TrustedProxies []string `yaml:"trusted_proxies,omitempty" json:"trusted_proxies,omitempty"`
 }
 
 // BackupRelayConfig is the upstream-mirror destination. Same

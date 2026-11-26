@@ -48,6 +48,14 @@ func Run() error {
 	// the info document advertises what the relay actually enforces (rather
 	// than the stale/zero values baked into relay_metadata.json). Only the
 	// config-backed fields are set; anything else on disk is left as-is.
+	// X-Forwarded-For is believed only from these peers (GetClientIP).
+	utils.TrustedProxiesProvider = func() []string {
+		if c := config.GetConfig(); c != nil {
+			return c.Server.TrustedProxies
+		}
+		return nil
+	}
+
 	utils.LimitationProvider = func(lim *utils.RelayLimitation) {
 		c := config.GetConfig()
 		if c == nil {

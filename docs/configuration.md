@@ -355,6 +355,8 @@ server:
   idle_timeout: 1200 # Connection idle timeout (seconds)
   max_subscriptions_per_client: 10 # Maximum concurrent subscriptions
   implicit_req_limit: 500 # Default REQ limit when none specified
+  max_filters_per_req: 32 # Filter objects allowed in one REQ or COUNT
+  # trusted_proxies: ["127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"]
 ```
 
 #### Timeout Configuration
@@ -390,6 +392,22 @@ server:
 - Purpose: Default limit applied when client doesn't specify one
 - Default: 500
 - Impact: Affects initial query response size
+- This is also the most events one REQ returns in total (NIP-11 `max_limit`), search filters included
+
+**Max Filters Per REQ (`max_filters_per_req`)**
+
+- Purpose: Cap the filter objects in one REQ or COUNT. A subscription holds its whole filter list, and every new event is matched against each filter
+- Default: 32
+- Behavior: A REQ or COUNT with more is refused with `CLOSED` (`invalid: too many filters`)
+
+#### Client Addresses Behind a Proxy
+
+**Trusted Proxies (`trusted_proxies`)**
+
+- Purpose: Say which peers' `X-Forwarded-For` header grain believes. The IP block list and the per-IP connection limit key on the client address, so a header from anyone else is ignored
+- Default (unset): loopback and private ranges (`127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`). That covers a reverse proxy on the same host, in Docker, or on a platform's private network (Fly.io)
+- Values: CIDRs or single addresses. An empty list (`[]`) trusts no proxy and always uses the TCP peer
+- Behavior: when the peer is trusted, grain walks `X-Forwarded-For` from the right and uses the first address that isn't a trusted proxy. If your proxy connects from a public address (a CDN, a separate load balancer), add its ranges here, or every client will share the proxy's address
 
 ### Resource Limits
 
