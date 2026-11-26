@@ -16,6 +16,7 @@ import (
 // for that, and #68 for the production bug where confusing the two
 // semantics let the upstream pool sit at 1/5 indefinitely.
 func EnsureRelayConnections() error {
+	coreClient := GetCoreClient()
 	if coreClient == nil {
 		return fmt.Errorf("core client not initialized")
 	}
@@ -32,7 +33,7 @@ func EnsureRelayConnections() error {
 	// No connections, try to reconnect
 	log.ClientConnection().Warn("No relay connections found, attempting to reconnect")
 
-	if err := coreClient.ConnectToRelaysWithRetry(indexRelays, 3); err != nil {
+	if err := coreClient.ConnectToRelaysWithRetry(GetIndexRelays(), 3); err != nil {
 		log.ClientConnection().Error("Failed to reconnect to relays", "error", err)
 		return err
 	}
@@ -56,6 +57,7 @@ func EnsureRelayConnections() error {
 // returned nil, which it does on any-connection-exists, regardless of
 // whether the deficit was actually closed (#68).
 func TopUpRelayConnections() (before, after int, err error) {
+	coreClient := GetCoreClient()
 	if coreClient == nil {
 		return 0, 0, fmt.Errorf("core client not initialized")
 	}
@@ -69,8 +71,9 @@ func TopUpRelayConnections() (before, after int, err error) {
 	}
 
 	// Dial every configured relay that isn't currently connected.
-	missing := make([]string, 0, len(indexRelays))
-	for _, url := range indexRelays {
+	index := GetIndexRelays()
+	missing := make([]string, 0, len(index))
+	for _, url := range index {
 		if _, ok := connected[url]; !ok {
 			missing = append(missing, url)
 		}
@@ -94,6 +97,7 @@ func TopUpRelayConnections() (before, after int, err error) {
 
 // GetCoreClientStatus returns status information about the core client
 func GetCoreClientStatus() map[string]interface{} {
+	coreClient := GetCoreClient()
 	if coreClient == nil {
 		return map[string]interface{}{
 			"initialized": false,
@@ -109,7 +113,7 @@ func GetCoreClientStatus() map[string]interface{} {
 		"initialized":      true,
 		"connected_relays": connectedRelays,
 		"connected_count":  len(connectedRelays),
-		"index_relays":     indexRelays,
+		"index_relays":     GetIndexRelays(),
 		"pool_known":       stats.Known,     // relays the client is aware of (incl. routing directory)
 		"pool_browsable":   stats.Browsable, // relays the known-relays browser shows (config + pool + NIP-66 discovery)
 		"pool_total":       stats.Total,     // relays tracked in the pool
@@ -127,6 +131,7 @@ func GetCoreClientStatus() map[string]interface{} {
 // while the sweeper reclaims the per-user connections the outbox pool dials on
 // demand once they go idle.
 func StartRelayEvictionSweeper(ctx context.Context, interval time.Duration) {
+	coreClient := GetCoreClient()
 	if coreClient == nil {
 		log.ClientConnection().Warn("Core client not initialized; eviction sweeper not started")
 		return
@@ -140,6 +145,7 @@ func StartRelayEvictionSweeper(ctx context.Context, interval time.Duration) {
 // browser a live, self-healing set. Bounded to ctx like the other background
 // services. The initial bootstrap pass is kicked at connect time.
 func StartRelayDiscoveryRoll(ctx context.Context, interval time.Duration) {
+	coreClient := GetCoreClient()
 	if coreClient == nil {
 		log.ClientConnection().Warn("Core client not initialized; discovery roll not started")
 		return
@@ -164,12 +170,13 @@ func StartRelayHealthCheck(ctx context.Context, interval time.Duration) {
 				return
 			case <-ticker.C:
 			}
+			coreClient := GetCoreClient()
 			if coreClient == nil {
 				log.ClientConnection().Debug("Core client not initialized, skipping health check")
 				continue
 			}
 
-			expectedCount := len(indexRelays)
+			expectedCount := len(GetIndexRelays())
 			connectedCount := len(coreClient.GetConnectedRelays())
 
 			log.ClientConnection().Debug("Relay health check",

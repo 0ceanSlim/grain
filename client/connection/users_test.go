@@ -7,8 +7,8 @@ import (
 )
 
 func TestUserFor(t *testing.T) {
-	coreClient = core.NewClient(core.DefaultConfig())
-	defer func() { coreClient = nil }()
+	coreClient.Store(core.NewClient(core.DefaultConfig()))
+	defer func() { coreClient.Store(nil) }()
 
 	a := UserFor("alice")
 	if a == nil || UserFor("alice") != a {
@@ -31,15 +31,15 @@ func TestUserFor(t *testing.T) {
 
 	// A replaced core client (config reload) gets fresh contexts.
 	b := UserFor("bob")
-	coreClient = core.NewClient(core.DefaultConfig())
-	if nb := UserFor("bob"); nb == b || nb.Client() != coreClient {
+	coreClient.Store(core.NewClient(core.DefaultConfig()))
+	if nb := UserFor("bob"); nb == b || nb.Client() != coreClient.Load() {
 		t.Fatal("context from the old core client reused after replacement")
 	}
 	if err := b.HoldRelays(nil); err == nil {
 		t.Fatal("context on the old core client left open")
 	}
 
-	coreClient = nil
+	coreClient.Store(nil)
 	if UserFor("bob") != nil {
 		t.Fatal("no core client should mean no context")
 	}

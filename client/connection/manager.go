@@ -2,6 +2,8 @@ package connection
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 
 	"github.com/0ceanslim/grain/client/core"
 	"github.com/0ceanslim/grain/client/stream"
@@ -9,23 +11,26 @@ import (
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
-// Global core client instance
-var coreClient *core.Client
+// The core client. A config reload closes it and creates another while
+// requests and background loops are reading it, so it is swapped atomically,
+// and readers take one snapshot (GetCoreClient) and use only that.
+var coreClient atomic.Pointer[core.Client]
 
 // Index relays — seed/discovery set used to resolve NIP-65 mailbox lists
 // and profile metadata for arbitrary users. Per-user relay sets (a user's
 // own outbox/inbox/DM relays) live in the per-session cache, separate from
 // this app-level set.
-var indexRelays []string
+var indexRelays atomic.Pointer[[]string]
 
-// Store reference to server config for reinitialization
-var lastServerConfig *cfgType.ServerConfig
+// startMu guards stopStart, which cancels the background start (connect,
+// seed, discovery) of the current core client when it's closed.
+var (
+	startMu   sync.Mutex
+	stopStart context.CancelFunc
+)
 
 // InitializeCoreClient sets up the global core client with server configuration
 func InitializeCoreClient(serverCfg *cfgType.ServerConfig) error {
-	// Store config for potential reinitialization
-	lastServerConfig = serverCfg
-
 	// Create client config from server config (uses defaults if not specified)
 	config := core.ConfigFromServerConfig(serverCfg)
 
@@ -35,14 +40,22 @@ func InitializeCoreClient(serverCfg *cfgType.ServerConfig) error {
 		return err
 	}
 
-	coreClient = core.NewClient(config)
-
-	// Store relays for later use
-	indexRelays = config.IndexRelays
+	cc := core.NewClient(config)
 
 	// Pin index/seed relays so the idle sweeper never evicts them — they must
 	// stay connected to resolve relay lists and metadata for arbitrary users.
-	coreClient.PinRelays(config.IndexRelays...)
+	cc.PinRelays(config.IndexRelays...)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	startMu.Lock()
+	if stopStart != nil {
+		stopStart()
+	}
+	stopStart = cancel
+	startMu.Unlock()
+
+	SetIndexRelays(config.IndexRelays)
+	coreClient.Store(cc)
 
 	// Live-sync (#87): start a user's own-event subscription when their first
 	// page opens the SSE channel, and stop it when the last one disconnects.
@@ -55,12 +68,19 @@ func InitializeCoreClient(serverCfg *cfgType.ServerConfig) error {
 	// fetch, dashboard profile fetch) tolerate the empty pool: they fall
 	// back gracefully or simply return empty results until connections
 	// establish in the background.
+	//
+	// Everything here runs on cc, the client this call made, never on the
+	// package's current one: a config reload can close cc and install
+	// another while the connect is still in flight.
 	go func() {
-		if err := coreClient.ConnectToRelaysWithRetry(config.IndexRelays, config.RetryAttempts); err != nil {
+		if err := cc.ConnectToRelaysWithRetry(config.IndexRelays, config.RetryAttempts); err != nil {
 			log.ClientConnection().Warn("Failed to connect to index relays during initialization - relay will operate in offline mode",
 				"error", err,
 				"relay_count", len(config.IndexRelays))
 			return
+		}
+		if ctx.Err() != nil {
+			return // closed by a reload while connecting
 		}
 		log.ClientConnection().Info("Core client connected to index relays",
 			"relay_count", len(config.IndexRelays))
@@ -73,8 +93,8 @@ func InitializeCoreClient(serverCfg *cfgType.ServerConfig) error {
 		// relay records (kind 30166) that source the known-relays browser. Reach
 		// widens as general relays join the pool; periodic re-discovery +
 		// staleness eviction land in Phase 3.
-		go coreClient.SeedKnownRelays()
-		go coreClient.DiscoverRelays(context.Background())
+		go cc.SeedKnownRelays()
+		go cc.DiscoverRelays(ctx)
 	}()
 
 	log.ClientConnection().Info("Core client initialized successfully",
@@ -84,14 +104,23 @@ func InitializeCoreClient(serverCfg *cfgType.ServerConfig) error {
 	return nil
 }
 
-// GetCoreClient returns the core client instance
+// GetCoreClient returns the core client instance, or nil before
+// initialization and after close. Callers keep the pointer they got for the
+// whole operation rather than asking again.
 func GetCoreClient() *core.Client {
-	return coreClient
+	return coreClient.Load()
 }
 
 // CloseCoreClient closes the core client connections
 func CloseCoreClient() error {
-	if coreClient != nil {
+	startMu.Lock()
+	if stopStart != nil {
+		stopStart()
+		stopStart = nil
+	}
+	startMu.Unlock()
+
+	if cc := coreClient.Swap(nil); cc != nil {
 		log.ClientConnection().Info("Closing core client connections")
 		releaseAllUsers()
 		// Actually tear down the relay pool. Its per-connection read/write
@@ -99,26 +128,28 @@ func CloseCoreClient() error {
 		// pointer — Close() shuts down all subscriptions and relay
 		// connections, so a config-reload restart doesn't leak the old
 		// pool (#93).
-		if err := coreClient.Close(); err != nil {
+		if err := cc.Close(); err != nil {
 			log.ClientConnection().Warn("Error closing core client relay pool", "error", err)
 		}
-		coreClient = nil
 	}
 	return nil
 }
 
 // SetIndexRelays sets the index/seed relays used for discovery
 func SetIndexRelays(relays []string) {
-	indexRelays = relays
+	indexRelays.Store(&relays)
 	log.ClientConnection().Debug("Index relays set", "relay_count", len(relays))
 }
 
 // GetIndexRelays returns the configured index/seed relays
 func GetIndexRelays() []string {
-	return indexRelays
+	if r := indexRelays.Load(); r != nil {
+		return *r
+	}
+	return nil
 }
 
 // IsCoreClientInitialized checks if the core client is properly initialized
 func IsCoreClientInitialized() bool {
-	return coreClient != nil
+	return coreClient.Load() != nil
 }
