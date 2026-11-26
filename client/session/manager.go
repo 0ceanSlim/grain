@@ -25,6 +25,9 @@ type SessionManager struct {
 	// onUserGone overrides what happens when a user's last session ends
 	// (default connection.ReleaseUser). A test seam.
 	onUserGone func(pubkey string)
+
+	// maxSessions overrides MaxSessions. A test seam.
+	maxSessions int
 }
 
 // NewSessionManager creates a new session manager
@@ -73,13 +76,20 @@ func (sm *SessionManager) CreateSession(w http.ResponseWriter, r *http.Request, 
 		LastActive:      time.Now(),
 		Mode:            req.RequestedMode,
 		SigningMethod:   req.SigningMethod,
+		Verified:        req.Verified,
 		ConnectedRelays: connectedRelays,
+		viewID:          GenerateRandomToken(8),
 	}
 	snapshot := *session
 
 	sm.sessionMutex.Lock()
+	var ended []string
+	if len(sm.sessions) >= sm.limit() {
+		ended = sm.evictLocked()
+	}
 	sm.sessions[token] = session
 	sm.sessionMutex.Unlock()
+	sm.usersEnded(ended)
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     sm.cookieName,
@@ -126,8 +136,8 @@ func (sm *SessionManager) ClearSession(w http.ResponseWriter, r *http.Request) {
 				"pubkey", session.PublicKey,
 				"mode", session.Mode)
 			delete(sm.sessions, token)
-			if !sm.hasSessionLocked(session.PublicKey) {
-				ended = append(ended, session.PublicKey)
+			if !sm.hasSessionLocked(session.UserKey()) {
+				ended = append(ended, session.UserKey())
 			}
 		}
 		sm.sessionMutex.Unlock()
@@ -167,16 +177,16 @@ func (sm *SessionManager) CleanupSessions(maxAge time.Duration) {
 		if now.Sub(session.LastActive) > maxAge {
 			delete(sm.sessions, token)
 			cleanedCount++
-			expired[session.PublicKey] = true
+			expired[session.UserKey()] = true
 			log.ClientSession().Debug("Cleaned up expired session",
 				"pubkey", session.PublicKey,
 				"mode", session.Mode)
 		}
 	}
 	var ended []string
-	for pubkey := range expired {
-		if !sm.hasSessionLocked(pubkey) {
-			ended = append(ended, pubkey)
+	for key := range expired {
+		if !sm.hasSessionLocked(key) {
+			ended = append(ended, key)
 		}
 	}
 	sm.sessionMutex.Unlock()
@@ -187,19 +197,55 @@ func (sm *SessionManager) CleanupSessions(maxAge time.Duration) {
 	}
 }
 
-// hasSessionLocked reports whether pubkey still has a session. Caller holds
+// MaxSessions caps the session table. Logging in costs nothing but a key
+// pair, so without a cap repeated logins grow it without bound. At the cap
+// the least recently active session goes, an unverified one first.
+const MaxSessions = 10000
+
+func (sm *SessionManager) limit() int {
+	if sm.maxSessions > 0 {
+		return sm.maxSessions
+	}
+	return MaxSessions
+}
+
+// evictLocked drops the least recently active session, preferring an
+// unverified one, and returns the client state it leaves unused. Caller holds
 // sessionMutex.
-func (sm *SessionManager) hasSessionLocked(pubkey string) bool {
+func (sm *SessionManager) evictLocked() []string {
+	var victim string
+	var oldest *UserSession
+	for token, s := range sm.sessions {
+		if oldest == nil || (!s.Verified && oldest.Verified) ||
+			(s.Verified == oldest.Verified && s.LastActive.Before(oldest.LastActive)) {
+			victim, oldest = token, s
+		}
+	}
+	if oldest == nil {
+		return nil
+	}
+	delete(sm.sessions, victim)
+	log.ClientSession().Info("Session table full, evicted the least recently active session",
+		"pubkey", oldest.PublicKey, "verified", oldest.Verified)
+	if sm.hasSessionLocked(oldest.UserKey()) {
+		return nil
+	}
+	return []string{oldest.UserKey()}
+}
+
+// hasSessionLocked reports whether a session still uses the client state
+// named key (UserKey). Caller holds sessionMutex.
+func (sm *SessionManager) hasSessionLocked(key string) bool {
 	for _, s := range sm.sessions {
-		if s.PublicKey == pubkey {
+		if s.UserKey() == key {
 			return true
 		}
 	}
 	return false
 }
 
-// usersEnded releases the per-user client state of users whose last session
-// just ended (their held relays, their NIP-42 authenticated connections).
+// usersEnded releases the per-user client state (by UserKey) whose last
+// session just ended: its held relays, its NIP-42 authenticated connections.
 // Called without sessionMutex held.
 func (sm *SessionManager) usersEnded(pubkeys []string) {
 	release := sm.onUserGone
@@ -260,4 +306,11 @@ func GenerateRandomToken(length int) string {
 // IsSessionManagerInitialized checks if the session manager is properly initialized
 func IsSessionManagerInitialized() bool {
 	return SessionMgr != nil
+}
+
+// HasUserKey reports whether any session uses the client state named key.
+func (sm *SessionManager) HasUserKey(key string) bool {
+	sm.sessionMutex.RLock()
+	defer sm.sessionMutex.RUnlock()
+	return sm.hasSessionLocked(key)
 }

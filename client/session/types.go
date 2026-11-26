@@ -46,8 +46,27 @@ type UserSession struct {
 	Mode          SessionInteractionMode `json:"mode"`
 	SigningMethod SigningMethod          `json:"signing_method"`
 
+	// Verified is true when the login proved control of PublicKey with a
+	// signature (NIP-98). A read-only "view as" login is not verified: it
+	// never counts as the relay owner, and its client state is its own.
+	Verified bool `json:"verified"`
+
 	// Connection info (app-level relays, not user-specific)
 	ConnectedRelays []string `json:"connected_relays"`
+
+	// viewID names an unverified session's own client state (UserKey).
+	viewID string
+}
+
+// UserKey names the per-user client state this session uses. Verified
+// sessions of one pubkey share it (the same person on several devices);
+// an unverified session gets its own, so typing someone's pubkey never
+// reaches their held relays, routing preferences or NIP-42 sessions.
+func (s *UserSession) UserKey() string {
+	if s.Verified {
+		return s.PublicKey
+	}
+	return "view:" + s.viewID
 }
 
 // IsReadOnly returns true if the session is in read-only mode
@@ -70,6 +89,10 @@ type SessionInitRequest struct {
 	PublicKey     string                 `json:"public_key"`
 	RequestedMode SessionInteractionMode `json:"requested_mode"`
 	SigningMethod SigningMethod          `json:"signing_method,omitempty"`
+
+	// Verified is set by the login handler once it has checked the
+	// request's NIP-98 signature against PublicKey; never from the body.
+	Verified bool `json:"-"`
 }
 
 // Response represents the response after successful login

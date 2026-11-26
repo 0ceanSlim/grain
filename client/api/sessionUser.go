@@ -16,7 +16,7 @@ func sessionUser(w http.ResponseWriter, r *http.Request) *core.UserContext {
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return nil
 	}
-	uc := connection.UserFor(sess.PublicKey)
+	uc := connection.UserForKey(sess.UserKey(), sess.PublicKey)
 	if uc == nil {
 		http.Error(w, "Client not available", http.StatusInternalServerError)
 		return nil
@@ -31,5 +31,5 @@ func optionalSessionUser(r *http.Request) *core.UserContext {
 	if sess == nil {
 		return nil
 	}
-	return connection.UserFor(sess.PublicKey)
+	return connection.UserForKey(sess.UserKey(), sess.PublicKey)
 }

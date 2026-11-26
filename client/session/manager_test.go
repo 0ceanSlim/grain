@@ -128,7 +128,7 @@ func TestSessionEnd_ReleasesUserOnLastSession(t *testing.T) {
 
 	create := func(pk string) *http.Cookie {
 		rec := httptest.NewRecorder()
-		if _, err := sm.CreateSession(rec, httptest.NewRequest("GET", "/", nil), SessionInitRequest{PublicKey: pk}, nil); err != nil {
+		if _, err := sm.CreateSession(rec, httptest.NewRequest("GET", "/", nil), SessionInitRequest{PublicKey: pk, Verified: true}, nil); err != nil {
 			t.Fatal(err)
 		}
 		return rec.Result().Cookies()[0]
@@ -155,5 +155,61 @@ func TestSessionEnd_ReleasesUserOnLastSession(t *testing.T) {
 	sm.CleanupSessions(-time.Second)
 	if len(released) != 2 || released[1] != "bob" {
 		t.Fatalf("released %v after expiry, want bob too", released)
+	}
+}
+
+// An unsigned session never shares client state with the pubkey it names;
+// signed sessions of one pubkey do.
+func TestUserKey_UnverifiedSessionsAreIsolated(t *testing.T) {
+	sm := NewSessionManager()
+	get := func(verified bool) *UserSession {
+		rec := httptest.NewRecorder()
+		s, err := sm.CreateSession(rec, httptest.NewRequest("POST", "/", nil),
+			SessionInitRequest{PublicKey: "alice", RequestedMode: ReadOnlyMode, Verified: verified}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	signed1, signed2 := get(true), get(true)
+	view1, view2 := get(false), get(false)
+	if signed1.UserKey() != "alice" || signed2.UserKey() != "alice" {
+		t.Fatalf("signed sessions use %q and %q, want alice", signed1.UserKey(), signed2.UserKey())
+	}
+	if view1.UserKey() == "alice" || view1.UserKey() == view2.UserKey() {
+		t.Fatalf("unsigned sessions use %q and %q: shared state", view1.UserKey(), view2.UserKey())
+	}
+}
+
+// The session table is capped; at the cap the oldest unsigned session goes
+// before any signed one, and its client state is released.
+func TestCreateSession_CapEvictsUnverifiedFirst(t *testing.T) {
+	sm := NewSessionManager()
+	sm.maxSessions = 3
+	var released []string
+	sm.onUserGone = func(k string) { released = append(released, k) }
+	create := func(pk string, verified bool) *UserSession {
+		s, err := sm.CreateSession(httptest.NewRecorder(), httptest.NewRequest("POST", "/", nil),
+			SessionInitRequest{PublicKey: pk, Verified: verified}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Millisecond) // distinct LastActive
+		return s
+	}
+	create("old-signed", true)
+	view := create("viewer", false)
+	create("signed", true)
+	for i := 0; i < 5; i++ {
+		create("new", true)
+	}
+	if n := sm.GetSessionStats()["total_sessions"].(int); n != 3 {
+		t.Fatalf("%d sessions, want the cap of 3", n)
+	}
+	if len(released) == 0 || released[0] != view.UserKey() {
+		t.Fatalf("released %v, want the unsigned session %q first", released, view.UserKey())
+	}
+	if sm.HasUserKey(view.UserKey()) || sm.HasUserKey("old-signed") {
+		t.Fatal("the oldest sessions survived the cap")
 	}
 }

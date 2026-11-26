@@ -48,13 +48,20 @@ func CreateUserSession(w http.ResponseWriter, r *http.Request, req SessionInitRe
 	// relays open for them. All best-effort — login already succeeded and
 	// the client hydrates the profile from the cache as it lands.
 	go func() {
+		warmups <- struct{}{}
+		defer func() { <-warmups }()
 		data.FetchUserDataDeduped(req.PublicKey)
 		if err := cache.SetUserClientRelaysFromMailboxes(req.PublicKey); err != nil {
 			log.ClientSession().Debug("No mailbox relays to set for user", "pubkey", req.PublicKey, "error", err)
 			return
 		}
-		if err := holdUserRelays(req.PublicKey); err != nil {
+		if err := holdUserRelays(session.UserKey(), req.PublicKey); err != nil {
 			log.ClientSession().Warn("Failed to hold user relays", "pubkey", req.PublicKey, "error", err)
+		}
+		// The session may have ended (logout, eviction) while this ran; its
+		// release then found nothing to close, so close what we just made.
+		if !SessionMgr.HasUserKey(session.UserKey()) {
+			connection.ReleaseUser(session.UserKey())
 		}
 	}()
 
@@ -66,9 +73,14 @@ func CreateUserSession(w http.ResponseWriter, r *http.Request, req SessionInitRe
 	return session, nil
 }
 
+// warmups bounds how many logins fetch user data and hold relays at once, so
+// a burst of logins queues its outbound work instead of all of it dialing out
+// together.
+var warmups = make(chan struct{}, 8)
+
 // holdUserRelays keeps the user's cached client relays connected for them, on
 // their own UserContext: other users' held relays are untouched.
-func holdUserRelays(publicKey string) error {
+func holdUserRelays(key, publicKey string) error {
 	clientRelays, err := cache.GetUserClientRelays(publicKey)
 	if err != nil || len(clientRelays) == 0 {
 		log.ClientSession().Debug("No user client relays to hold", "pubkey", publicKey, "error", err)
@@ -94,7 +106,7 @@ func holdUserRelays(publicKey string) error {
 		return nil
 	}
 
-	uc := connection.UserFor(publicKey)
+	uc := connection.UserForKey(key, publicKey)
 	if uc == nil {
 		return fmt.Errorf("core client not available")
 	}
@@ -112,8 +124,8 @@ func ValidateSessionRequest(req SessionInitRequest) error {
 		return &SessionError{Message: "public key is required"}
 	}
 
-	// Validate public key format (basic check)
-	if len(req.PublicKey) != 64 {
+	// 64 lowercase hex characters, the only form a pubkey takes
+	if !isHexPubkey(req.PublicKey) {
 		return &SessionError{Message: "invalid public key format"}
 	}
 
@@ -144,4 +156,17 @@ func ValidateSessionRequest(req SessionInitRequest) error {
 	}
 
 	return nil
+}
+
+// isHexPubkey reports whether s is 64 lowercase hex characters.
+func isHexPubkey(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
 }

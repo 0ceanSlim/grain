@@ -38,7 +38,7 @@ func ClientDisconnectHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Check if user is logged in
 	userSession := session.SessionMgr.GetCurrentUser(r)
-	if userSession == nil || userSession.PublicKey == "" {
+	if userSession == nil || userSession.PublicKey == "" || !userSession.Verified {
 		log.ClientAPI().Warn("Unauthorized client disconnect attempt",
 			"client_ip", r.RemoteAddr)
 		w.Header().Set("Content-Type", "application/json")
@@ -116,7 +116,7 @@ func ClientDisconnectHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Drop this user's hold on the relay. The connection itself stays up for
 	// any other user still using it, and is idle-evicted once nobody is.
-	if uc := connection.UserFor(publicKey); uc != nil {
+	if uc := connection.UserForKey(userSession.UserKey(), publicKey); uc != nil {
 		uc.DropHeldRelay(foundRelayURL)
 		log.ClientAPI().Info("Released user's hold on relay",
 			"relay", foundRelayURL,

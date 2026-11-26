@@ -423,7 +423,7 @@ type AdminPageData struct {
 func HandleAdmin(w http.ResponseWriter, r *http.Request) {
 	user := session.SessionMgr.GetCurrentUser(r)
 	owner := utils.GetRelayOwnerPubkey()
-	if user == nil || utils.IsRelayUnowned() || !strings.EqualFold(user.PublicKey, owner) {
+	if user == nil || !user.Verified || utils.IsRelayUnowned() || !strings.EqualFold(user.PublicKey, owner) {
 		log.ClientAPI().Info("Admin page access denied",
 			"client_ip", utils.GetClientIP(r),
 			"has_session", user != nil)

@@ -41,7 +41,7 @@ func ClientConnectHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Check if user is logged in
 	userSession := session.SessionMgr.GetCurrentUser(r)
-	if userSession == nil || userSession.PublicKey == "" {
+	if userSession == nil || userSession.PublicKey == "" || !userSession.Verified {
 		log.ClientAPI().Warn("Unauthorized client connect attempt",
 			"client_ip", r.RemoteAddr)
 		w.Header().Set("Content-Type", "application/json")
@@ -107,7 +107,7 @@ func ClientConnectHandler(w http.ResponseWriter, r *http.Request) {
 		"user", userSession.PublicKey)
 
 	// Try to connect with protocol detection
-	workingURL, err := connectWithProtocolDetection(connection.UserFor(userSession.PublicKey), relayDomain)
+	workingURL, err := connectWithProtocolDetection(connection.UserForKey(userSession.UserKey(), userSession.PublicKey), relayDomain)
 	if err != nil {
 		log.ClientAPI().Error("Failed to connect to relay",
 			"domain", relayDomain,

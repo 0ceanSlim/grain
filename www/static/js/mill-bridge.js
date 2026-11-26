@@ -165,6 +165,29 @@
     window.MILL?.close();
   }
 
+  // signLogin returns the NIP-98 Authorization header for a login POST with
+  // this body. The body string must be the one sent: its hash is signed.
+  async function signLogin(body) {
+    if (!window.grainSigner || typeof window.grainSigner.signEvent !== "function") {
+      throw new Error("no signer to sign the login");
+    }
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body));
+    const payload = Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const signed = await window.grainSigner.signEvent({
+      kind: 27235,
+      created_at: Math.floor(Date.now() / 1000),
+      content: "",
+      tags: [
+        ["u", window.location.origin + "/api/v1/auth/login"],
+        ["method", "POST"],
+        ["payload", payload],
+      ],
+    });
+    return "Nostr " + btoa(JSON.stringify(signed));
+  }
+
   async function handleConnected(result) {
     // result: { method, pubkey, signer, perms?, bunkerUrl?, nsec? }
     window.grainSigner = result.signer || null;
@@ -191,14 +214,22 @@
     }
 
     try {
+      const body = JSON.stringify({
+        public_key: result.pubkey,
+        requested_mode: requestedMode,
+        signing_method: signingMethod,
+      });
+      const headers = { "Content-Type": "application/json" };
+      // A write login proves the pubkey: the signer signs a NIP-98 event
+      // over this exact request (URL, method, body hash). Read-only has
+      // no signer and gets a view-only session.
+      if (requestedMode === "write") {
+        headers.Authorization = await signLogin(body);
+      }
       const resp = await fetch("/api/v1/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          public_key: result.pubkey,
-          requested_mode: requestedMode,
-          signing_method: signingMethod,
-        }),
+        headers,
+        body,
       });
 
       if (!resp.ok) {

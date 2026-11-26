@@ -3,9 +3,14 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/0ceanslim/grain/client/cache"
 	"github.com/0ceanslim/grain/client/session"
+	relay "github.com/0ceanslim/grain/server/api"
+	"github.com/0ceanslim/grain/server/utils"
 	"github.com/0ceanslim/grain/server/utils/log"
 )
 
@@ -14,13 +19,15 @@ import (
 // caching the data, and creating session with appropriate signing capabilities
 //
 // @Summary      Log in
-// @Description  Creates a session for the given pubkey. Fetches mailboxes and metadata from outbox relays as a side effect. Set `requestedMode=write` and provide a signing method to enable event publishing.
+// @Description  Creates a session for the given pubkey. Fetches mailboxes and metadata from outbox relays as a side effect. `requested_mode=write` needs a signing method and a NIP-98 `Authorization` header (kind 27235 over this URL, `POST`, and the body's sha256) signed by `public_key`; each signed login is accepted once. Without it the session is read-only and unverified: it can view, but never acts as the relay owner or changes the pubkey's relays.
+// @Security     NostrAuth
 // @Tags         client-auth
 // @Accept       json
 // @Produce      json
 // @Param        body  body      session.SessionInitRequest  true  "Login parameters"
 // @Success      200   {object}  session.Response
 // @Failure      400   {object}  session.Response  "Invalid request"
+// @Failure      401   {string}  string            "Write login missing, invalid, reused, or not signed by public_key"
 // @Failure      405   {string}  string            "Method not allowed"
 // @Failure      500   {object}  session.Response  "Failed to create session"
 // @Router       /api/v1/auth/login [post]
@@ -32,19 +39,37 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.ClientAPI().Debug("API login handler called")
 
-	// Check if user is already logged in
-	if userSession := session.SessionMgr.GetCurrentUser(r); userSession != nil {
-		log.ClientAPI().Info("User already logged in", "pubkey", userSession.PublicKey)
-
-		response := session.Response{
-			Success: true,
-			Message: "Already logged in",
-			Session: userSession,
+	// A write-mode login proves control of its pubkey with a NIP-98 event
+	// (kind 27235 over this URL, POST, and the body's hash). Checked before
+	// the body is decoded: VerifyAPIAuth reads and restores it.
+	var signer string
+	if r.Header.Get("Authorization") != "" {
+		pk, err := relay.VerifyAPIAuth(r)
+		if err != nil {
+			log.ClientAPI().Info("Login signature rejected", "client_ip", utils.GetClientIP(r), "error", err)
+			http.Error(w, "Invalid login signature: "+err.Error(), http.StatusUnauthorized)
+			return
 		}
+		signer = strings.ToLower(pk)
+	}
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-		return
+	// Check if user is already logged in. A signed login for another
+	// identity (or upgrading a read-only view) replaces the old session.
+	if userSession := session.SessionMgr.GetCurrentUser(r); userSession != nil {
+		if signer == "" || (userSession.Verified && userSession.PublicKey == signer) {
+			log.ClientAPI().Info("User already logged in", "pubkey", userSession.PublicKey)
+
+			response := session.Response{
+				Success: true,
+				Message: "Already logged in",
+				Session: userSession,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		session.SessionMgr.ClearSession(w, r)
 	}
 
 	// Parse JSON request body
@@ -62,6 +87,8 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loginReq.PublicKey = strings.ToLower(strings.TrimSpace(loginReq.PublicKey))
+
 	// Set defaults if not specified
 	if loginReq.RequestedMode == "" {
 		loginReq.RequestedMode = session.ReadOnlyMode
@@ -78,6 +105,25 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if loginReq.RequestedMode == session.ReadOnlyMode && loginReq.SigningMethod != session.NoSigning {
 		log.ClientAPI().Debug("Overriding signing method for read-only mode", "pubkey", loginReq.PublicKey)
 		loginReq.SigningMethod = session.NoSigning
+	}
+
+	// Only a signed login may write or share the pubkey's client state. An
+	// unsigned one is a read-only view of a public profile.
+	if loginReq.RequestedMode == session.WriteMode {
+		if signer == "" {
+			w.Header().Set("WWW-Authenticate", "Nostr")
+			http.Error(w, "Write mode requires a NIP-98 signed login", http.StatusUnauthorized)
+			return
+		}
+		if signer != loginReq.PublicKey {
+			http.Error(w, "Login signature is not from public_key", http.StatusUnauthorized)
+			return
+		}
+		if !loginOnce.first(r) {
+			http.Error(w, "Login signature already used", http.StatusUnauthorized)
+			return
+		}
+		loginReq.Verified = true
 	}
 
 	log.ClientAPI().Info("Processing user login",
@@ -138,4 +184,34 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// loginOnce remembers the signed login events seen inside NIP-98's time
+// window, so a captured Authorization header can't mint a second session.
+var loginOnce = &seenLogins{seen: make(map[string]time.Time)}
+
+type seenLogins struct {
+	mu   sync.Mutex
+	seen map[string]time.Time
+}
+
+// first reports whether r's NIP-98 event is new, and records it.
+func (s *seenLogins) first(r *http.Request) bool {
+	evt, err := relay.ExtractNIP98Event(r)
+	if err != nil {
+		return false
+	}
+	now := time.Now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for sig, at := range s.seen {
+		if now.Sub(at) > 2*time.Minute { // twice the NIP-98 window
+			delete(s.seen, sig)
+		}
+	}
+	if _, dup := s.seen[evt.Sig]; dup {
+		return false
+	}
+	s.seen[evt.Sig] = now
+	return true
 }

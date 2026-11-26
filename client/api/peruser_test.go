@@ -45,7 +45,7 @@ func setupPerUser(t *testing.T) (alice, bob testUser) {
 		}
 		rec := httptest.NewRecorder()
 		_, err = session.SessionMgr.CreateSession(rec, httptest.NewRequest("POST", "/", nil),
-			session.SessionInitRequest{PublicKey: signer.PublicKey(), RequestedMode: session.WriteMode}, nil)
+			session.SessionInitRequest{PublicKey: signer.PublicKey(), RequestedMode: session.WriteMode, Verified: true}, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

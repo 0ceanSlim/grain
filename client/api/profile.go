@@ -140,7 +140,7 @@ func PublishSignedHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Publish as the session user: their routing preferences, and their own
 	// NIP-42 authenticated connections where they have them.
-	uc := connection.UserFor(sess.PublicKey)
+	uc := connection.UserForKey(sess.UserKey(), sess.PublicKey)
 	if uc == nil {
 		writeSignedResponse(w, http.StatusInternalServerError, PublishSignedResponse{Error: "Client not available"})
 		return
@@ -235,7 +235,7 @@ func PublishSignedStreamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uc := connection.UserFor(sess.PublicKey) // publish as the session user
+	uc := connection.UserForKey(sess.UserKey(), sess.PublicKey) // publish as the session user
 	if uc == nil {
 		http.Error(w, "Client not available", http.StatusInternalServerError)
 		return

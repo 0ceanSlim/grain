@@ -17,11 +17,20 @@ var (
 	usersClient *core.Client // the core client users were created on
 )
 
-// UserFor returns pubkey's UserContext on the current core client, creating it
-// on first use. It returns nil when there is no core client or no pubkey.
+// UserFor returns pubkey's own UserContext on the current core client,
+// creating it on first use. Only for a pubkey whose control was proven (a
+// verified session); see UserForKey. It returns nil when there is no core
+// client or no pubkey.
 func UserFor(pubkey string) *core.UserContext {
+	return UserForKey(pubkey, pubkey)
+}
+
+// UserForKey returns the UserContext named key (a session's UserKey) for
+// pubkey, creating it on first use. It returns nil when there is no core
+// client, key or pubkey.
+func UserForKey(key, pubkey string) *core.UserContext {
 	cc := GetCoreClient()
-	if cc == nil || pubkey == "" {
+	if cc == nil || key == "" || pubkey == "" {
 		return nil
 	}
 	usersMu.Lock()
@@ -35,10 +44,10 @@ func UserFor(pubkey string) *core.UserContext {
 		users = make(map[string]*core.UserContext)
 		usersClient = cc
 	}
-	uc := users[pubkey]
+	uc := users[key]
 	if uc == nil {
 		uc = cc.NewUserContext(pubkey)
-		users[pubkey] = uc
+		users[key] = uc
 	}
 	return uc
 }
@@ -56,15 +65,16 @@ func releaseAllUsers() {
 	}
 }
 
-// ReleaseUser closes pubkey's UserContext, releasing their relay holds and
-// ending their NIP-42 sessions. Called when their last session ends.
-func ReleaseUser(pubkey string) {
+// ReleaseUser closes the UserContext named key (a session's UserKey),
+// releasing its relay holds and ending its NIP-42 sessions. Called when the
+// last session using it ends.
+func ReleaseUser(key string) {
 	usersMu.Lock()
-	uc := users[pubkey]
-	delete(users, pubkey)
+	uc := users[key]
+	delete(users, key)
 	usersMu.Unlock()
 	if uc != nil {
 		_ = uc.Close()
-		log.ClientConnection().Debug("Released user context", "pubkey", pubkey)
+		log.ClientConnection().Debug("Released user context", "key", key)
 	}
 }
