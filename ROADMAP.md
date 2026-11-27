@@ -60,11 +60,11 @@ gantt
     section v0.9.2 ▸ Spam defense (placeholder)
     nspam + GeoIP + report-driven bans                 :v092, after v091, 45d
 
-    section v0.9.3 ▸ WoT permission groups (placeholder)
-    Groups + tiered rate limits                        :v093, after v092, 60d
+    section v0.9.3 ▸ Relay as actor (placeholder)
+    Relay keypair + NIP-29 groups                      :v093, after v092, 60d
 
-    section v0.9.4 ▸ Relay as actor (placeholder)
-    Relay keypair + NIP-29 groups                      :v094, after v093, 60d
+    section v0.9.4 ▸ WoT permission groups (placeholder)
+    Groups + tiered rate limits                        :v094, after v093, 60d
 
     section v1.0 ▸ Polish (placeholder)
     NIP-62 + Blossom bundle + final audit              :crit, v10, after v094, 45d
@@ -132,7 +132,7 @@ Originally scoped as "relay-as-actor" (NIP-29 + relay keypair), v0.8 became the 
 
 Running rc1 on a live relay produced rc2's second half: the **durability bucket** (retention purge that actually drains, an LMDB map-usage gauge with pre-full write rejection, `MDB_NOTLS` reader stability, writer-failure visibility, a 64 GB default map), NIP-11 served from live config, self-repairing legacy configs, and **NIP-66 relay monitors** as a self-discovering, consensus-filtered source for the relay browser ([#104](https://github.com/0ceanSlim/grain/issues/104)). rc3 adds the Discovery settings tab, an on-demand discovery pass, the owner-only **Ban** button on profile pages (the self-contained slice of [#105](https://github.com/0ceanSlim/grain/issues/105)), and the full client-library guide ([#101](https://github.com/0ceanSlim/grain/issues/101), [docs/client-library-guide.md](docs/client-library-guide.md)).
 
-**Moved out:** NIP-29 + relay keypair ([#55](https://github.com/0ceanSlim/grain/issues/55), now v0.9.4) and the nostrdb prefix-filter fix ([#72](https://github.com/0ceanSlim/grain/issues/72)) to v1.0, geo/region blocking ([#64](https://github.com/0ceanSlim/grain/issues/64), now v0.9.2) to v0.9.0. None of them is client-library work, and WoT no longer needs the relay keypair first (the owner pubkey from v0.7 is the graph root).
+**Moved out:** NIP-29 + relay keypair ([#55](https://github.com/0ceanSlim/grain/issues/55), now v0.9.3) and the nostrdb prefix-filter fix ([#72](https://github.com/0ceanSlim/grain/issues/72)) to v1.0, geo/region blocking ([#64](https://github.com/0ceanSlim/grain/issues/64), now v0.9.2) to v0.9.0. None of them is client-library work, and WoT no longer needs the relay keypair first (the owner pubkey from v0.7 is the graph root).
 
 | # | Issue | Scope |
 |---|-------|-------|
@@ -224,7 +224,21 @@ Every item here is a hook into the existing blacklist cache and the temp-to-perm
 
 ---
 
-### ![v0.9.3](https://img.shields.io/badge/v0.9.3-planned-lightgrey) WoT permission groups
+### ![v0.9.3](https://img.shields.io/badge/v0.9.3-planned-lightgrey) Relay as actor
+
+**Theme:** The relay gets its own key.
+
+A relay-owned keypair lets grain sign its own events: group metadata, membership and moderation. NIP-29 groups are the first user of it and the heaviest protocol item left, so it gets a release of its own instead of riding with the 1.0 polish.
+
+| # | Issue | Scope |
+|---|-------|-------|
+| [#55](https://github.com/0ceanSlim/grain/issues/55) | NIP-29 Relay-based Groups (+ relay keypair) | Relay-as-actor |
+
+📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/15)
+
+---
+
+### ![v0.9.4](https://img.shields.io/badge/v0.9.4-planned-lightgrey) WoT permission groups
 
 **Theme:** The killer feature.
 
@@ -238,20 +252,6 @@ Composable permission groups built from any combination of explicit whitelist, W
 | [#18](https://github.com/0ceanSlim/grain/issues/18) | Whitelist words & relays | Folds into #14 or closes |
 
 📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/5)
-
----
-
-### ![v0.9.4](https://img.shields.io/badge/v0.9.4-planned-lightgrey) Relay as actor
-
-**Theme:** The relay gets its own key.
-
-A relay-owned keypair lets grain sign its own events: group metadata, membership and moderation. NIP-29 groups are the first user of it and the heaviest protocol item left, so it gets a release of its own instead of riding with the 1.0 polish.
-
-| # | Issue | Scope |
-|---|-------|-------|
-| [#55](https://github.com/0ceanSlim/grain/issues/55) | NIP-29 Relay-based Groups (+ relay keypair) | Relay-as-actor |
-
-📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/15)
 
 ---
 
@@ -299,4 +299,4 @@ These were considered and intentionally deferred:
 
 ---
 
-<sub>Last revised 2026-09-17 ahead of v0.8.0-rc3: v0.8 reframed from "relay-as-actor" to the client-library release it became and closed out (#101 / #104); the old v0.9 grab-bag split into v0.9.0 spam defense, v0.9.1 moderation queue and v0.9.2 WoT permission groups (the former v0.9 milestone, renamed); NIP-29, NIP-62, the nostrdb compliance fixes, metrics and NIP-26 moved to v1.0; gantt re-based with placeholder bars. 2026-09-18: added the Beyond-1.0 section pointing at the event-rendering design doc. 2026-09-21: after v0.8.0-rc4, filed the Beyond-1.0 items as issues — rich event rendering (#108, spec moved into the issue) and full-text NIP-50 search across the relay pool (#107); removed the docs/design/ folder (dashboard spec obsolete — shipped; event-rendering spec now lives in #108). 2026-11-14: v0.8 marked shipped (0.8.0, 0.8.1, 0.8.2); added v0.9.3 performance and ops from the benchmark against strfry and wisp (#115 to #120); lotus Blossom bundling (#121) in v1.0; per-kind purge (#109) closed since kind 5 deletions are now tombstones. 2026-11-27: after v0.8.3 and the weekly relay bench, re-sequenced to 1.0. v0.8.4 bench correctness (#123 to #125); performance and sync moved first as v0.9.0 with NIP-77 (#47) and metrics (#12); moderation queue v0.9.1 ahead of spam defense v0.9.2; WoT v0.9.3; relay keypair and NIP-29 (#55) out of v1.0 into v0.9.4; v1.0 is polish; #107 and #108 in a Post-1.0 milestone; NIP-26 (#54) closed.</sub>
+<sub>Last revised 2026-09-17 ahead of v0.8.0-rc3: v0.8 reframed from "relay-as-actor" to the client-library release it became and closed out (#101 / #104); the old v0.9 grab-bag split into v0.9.0 spam defense, v0.9.1 moderation queue and v0.9.2 WoT permission groups (the former v0.9 milestone, renamed); NIP-29, NIP-62, the nostrdb compliance fixes, metrics and NIP-26 moved to v1.0; gantt re-based with placeholder bars. 2026-09-18: added the Beyond-1.0 section pointing at the event-rendering design doc. 2026-09-21: after v0.8.0-rc4, filed the Beyond-1.0 items as issues — rich event rendering (#108, spec moved into the issue) and full-text NIP-50 search across the relay pool (#107); removed the docs/design/ folder (dashboard spec obsolete — shipped; event-rendering spec now lives in #108). 2026-11-14: v0.8 marked shipped (0.8.0, 0.8.1, 0.8.2); added v0.9.3 performance and ops from the benchmark against strfry and wisp (#115 to #120); lotus Blossom bundling (#121) in v1.0; per-kind purge (#109) closed since kind 5 deletions are now tombstones. 2026-11-27: after v0.8.3 and the weekly relay bench, re-sequenced to 1.0. v0.8.4 bench correctness (#123 to #125); performance and sync moved first as v0.9.0 with NIP-77 (#47) and metrics (#12); moderation queue v0.9.1 ahead of spam defense v0.9.2; relay keypair and NIP-29 (#55) out of v1.0 into v0.9.3; WoT v0.9.4; v1.0 is polish; #107 and #108 in a Post-1.0 milestone; NIP-26 (#54) closed.</sub>
