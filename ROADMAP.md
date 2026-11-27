@@ -1,6 +1,6 @@
 # 🌾 GRAIN Roadmap to 1.0
 
-> **The path from today (`v0.8.2`) to a 1.0 release.** This document is the human-readable map; the [GitHub milestones](https://github.com/0ceanSlim/grain/milestones) are the source of truth for individual issues.
+> **The path from today (`v0.8.3`) to a 1.0 release.** This document is the human-readable map; the [GitHub milestones](https://github.com/0ceanSlim/grain/milestones) are the source of truth for individual issues.
 
 ---
 
@@ -8,16 +8,16 @@
 
 [![Latest release](https://img.shields.io/github/v/release/0ceanSlim/grain?label=released&color=blue)](https://github.com/0ceanSlim/grain/releases/latest)
 [![Open issues](https://img.shields.io/github/issues/0ceanSlim/grain?color=green)](https://github.com/0ceanSlim/grain/issues)
-[![1.0 milestones](https://img.shields.io/badge/milestones%20to%201.0-5-orange)](https://github.com/0ceanSlim/grain/milestones)
+[![1.0 milestones](https://img.shields.io/badge/milestones%20to%201.0-7-orange)](https://github.com/0ceanSlim/grain/milestones)
 [![License](https://img.shields.io/github/license/0ceanSlim/grain?color=lightgrey)](license)
 
-**v0.8 shipped.** v0.8.0 (2026-10-04) delivered the importable client library and the web client built on it. v0.8.1 (2026-10-08) made the library safe for apps serving more than one user. v0.8.2 follows a benchmark against strfry and wisp: writes are acked only once they commit, the musl startup crash is fixed, and grain now passes every required relay-tester check. Small queries are faster than strfry's.
+**v0.8 shipped.** v0.8.0 (2026-10-04) delivered the importable client library and the web client built on it. v0.8.1 (2026-10-08) made the library safe for apps serving more than one user. v0.8.2 follows a benchmark against strfry and wisp: writes are acked only once they commit, the musl startup crash is fixed, and grain now passes every required relay-tester check. Small queries are faster than strfry's. v0.8.3 is a security release.
 
-The benchmark's speed and operations gaps are scheduled as **v0.9.3**: streaming query results, counting inside nostrdb, memory, full-text indexing cost, JSONL export.
+grain is now on a [weekly relay bench](https://0ceanslim.github.io/nostr-relay-bench/). **v0.8.4** fixes the rows it marks wrong: live fan-out under load, per-filter REQ limits, and the OK prefix for superseded events. The speed and operations gaps come next as **v0.9.0**: streaming query results, counting inside nostrdb, memory, full-text indexing cost, JSONL export, NIP-77 sync and metrics.
 
 Before that: v0.5 closed out the architectural rebirth (MongoDB → embedded `nostrdb`, single-binary, proactive NIP-42 AUTH, client library beta); v0.5.1–v0.5.4 hardened production under real load; v0.6.0 burned down the missing core NIPs (40, 50, 70, 45); v0.7.0 delivered web-based relay administration; v0.7.1 (2026-06-04) was the goroutine/connection memory-leak audit.
 
-> **Pace note.** grain is not full-time work right now. The dates below for v0.9 and v1.0 are placeholders for ordering, not commitments. v0.9 is split into four point releases, with spam defense and Web-of-Trust access control first.
+> **Pace note.** grain is not full-time work right now. The dates below for v0.9 and v1.0 are placeholders for ordering, not commitments. v0.9 is split into five point releases. Performance goes first because streaming rewrites the REQ read path that moderation, spam rules and WoT all add checks to. The moderation queue comes before spam defense so report-driven bans have both their targets in one release.
 
 ---
 
@@ -46,22 +46,28 @@ gantt
     rc1 library + web client                           :done, v08a, 2026-06-04, 2026-06-18
     rc2 durability + NIP-66 discovery                  :done, v08b, 2026-06-18, 2026-09-07
     rc3 → final                                        :done, v08c, 2026-09-07, 2026-10-04
-    v0.8.1 + v0.8.2 patches                            :done, v08p, 2026-10-04, 2026-11-14
+    v0.8.1 + v0.8.2 + v0.8.3 patches                   :done, v08p, 2026-10-04, 2026-11-27
 
-    section v0.9.0 ▸ Spam defense (placeholder)
-    nspam + GeoIP + report-driven bans                 :v090, after v08c, 45d
+    section v0.8.4 ▸ Bench correctness (placeholder)
+    Fan-out lag, per-filter limits, OK prefix          :v084, after v08p, 21d
+
+    section v0.9.0 ▸ Performance and sync (placeholder)
+    Streaming, COUNT in nostrdb, memory, NIP-77        :v090, after v084, 60d
 
     section v0.9.1 ▸ Moderation queue (placeholder)
     Held-events queue + mod UI                         :v091, after v090, 45d
 
-    section v0.9.2 ▸ WoT permission groups (placeholder)
-    Groups + tiered rate limits                        :v092, after v091, 60d
+    section v0.9.2 ▸ Spam defense (placeholder)
+    nspam + GeoIP + report-driven bans                 :v092, after v091, 45d
 
-    section v0.9.3 ▸ Performance and ops (placeholder)
-    Streaming, COUNT in nostrdb, memory, JSONL export  :v093, after v092, 45d
+    section v0.9.3 ▸ WoT permission groups (placeholder)
+    Groups + tiered rate limits                        :v093, after v092, 60d
 
-    section v1.0 ▸ Relay-as-actor + sync (placeholder)
-    NIP-29 + NIP-77 + final audit                      :crit, v10, after v093, 90d
+    section v0.9.4 ▸ Relay as actor (placeholder)
+    Relay keypair + NIP-29 groups                      :v094, after v093, 60d
+
+    section v1.0 ▸ Polish (placeholder)
+    NIP-62 + Blossom bundle + final audit              :crit, v10, after v094, 45d
 ```
 
 ---
@@ -126,7 +132,7 @@ Originally scoped as "relay-as-actor" (NIP-29 + relay keypair), v0.8 became the 
 
 Running rc1 on a live relay produced rc2's second half: the **durability bucket** (retention purge that actually drains, an LMDB map-usage gauge with pre-full write rejection, `MDB_NOTLS` reader stability, writer-failure visibility, a 64 GB default map), NIP-11 served from live config, self-repairing legacy configs, and **NIP-66 relay monitors** as a self-discovering, consensus-filtered source for the relay browser ([#104](https://github.com/0ceanSlim/grain/issues/104)). rc3 adds the Discovery settings tab, an on-demand discovery pass, the owner-only **Ban** button on profile pages (the self-contained slice of [#105](https://github.com/0ceanSlim/grain/issues/105)), and the full client-library guide ([#101](https://github.com/0ceanSlim/grain/issues/101), [docs/client-library-guide.md](docs/client-library-guide.md)).
 
-**Moved out:** NIP-29 + relay keypair ([#55](https://github.com/0ceanSlim/grain/issues/55)) and the nostrdb prefix-filter fix ([#72](https://github.com/0ceanSlim/grain/issues/72)) to v1.0, geo/region blocking ([#64](https://github.com/0ceanSlim/grain/issues/64)) to v0.9.0. None of them is client-library work, and WoT no longer needs the relay keypair first (the owner pubkey from v0.7 is the graph root).
+**Moved out:** NIP-29 + relay keypair ([#55](https://github.com/0ceanSlim/grain/issues/55), now v0.9.4) and the nostrdb prefix-filter fix ([#72](https://github.com/0ceanSlim/grain/issues/72)) to v1.0, geo/region blocking ([#64](https://github.com/0ceanSlim/grain/issues/64), now v0.9.2) to v0.9.0. None of them is client-library work, and WoT no longer needs the relay keypair first (the owner pubkey from v0.7 is the graph root).
 
 | # | Issue | Scope |
 |---|-------|-------|
@@ -150,27 +156,48 @@ Shipped 2026-10-04. **v0.8.1** (2026-10-08) moved per-user state onto `UserConte
 
 ---
 
-### ![v0.9.0](https://img.shields.io/badge/v0.9.0-next-blue) Spam defense
+### ![v0.8.4](https://img.shields.io/badge/v0.8.4-next-blue) Bench correctness
 
-**Theme:** Automated blocking that hooks what already exists — no new data model.
+**Theme:** The rows the weekly relay bench marks wrong or refused.
 
-The first relay-side release after the client cycle, and the fastest path to production value. Every item here is a hook into the existing blacklist cache and the temp-to-perma escalation the word filter already uses. Report-driven bans ship their **author-level** half here; the event-level half needs the moderation queue and follows in v0.9.1.
+grain passes every required relay-tester check, but the [weekly bench](https://0ceanslim.github.io/nostr-relay-bench/) runs heavier tests. Live fan-out falls seconds behind because broadcasts wait for the write commit. A REQ with several filters gives them one shared limit instead of one each. And resending an older version of a replaceable event gets `blocked:` where `duplicate:` belongs. The gift-wrap rows are a bench-side problem: the tool reads gift wraps without AUTH, so any relay that keeps them private fails them.
 
 | # | Issue | Scope |
 |---|-------|-------|
-| [#59](https://github.com/0ceanSlim/grain/issues/59) | nspam classifier: score-based auto-blacklist | Spam scoring at ingest |
-| [#97](https://github.com/0ceanSlim/grain/issues/97) | Report-driven moderation: temp/perma bans from NIP-56 reports | Author-level target (event-level in v0.9.1) |
-| [#64](https://github.com/0ceanSlim/grain/issues/64) | Geo/region blocking via GeoIP | Connection-level blocking |
+| [#123](https://github.com/0ceanSlim/grain/issues/123) | Live fan-out falls behind under load | Broadcast path |
+| [#124](https://github.com/0ceanSlim/grain/issues/124) | Several filters share one limit | REQ query path |
+| [#125](https://github.com/0ceanSlim/grain/issues/125) | OK prefix for superseded replaceable events | OK messages |
 
-📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/11)
+📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/14)
+
+---
+
+### ![v0.9.0](https://img.shields.io/badge/v0.9.0-planned-lightgrey) Performance and sync
+
+**Theme:** Close the gaps the benchmarks found, before more checks land on the read path.
+
+grain already out-ingests strfry and wisp and beats strfry on small queries. What's left: large results are buffered before the first event goes out, COUNT loads every match into Go, memory sits above wisp's, and full-text indexing makes one-at-a-time writes slower than strfry's. Streaming rewrites the REQ read path, so it goes before the releases that add moderation, spam and WoT checks to it. NIP-77 and metrics are the sync and operations half.
+
+| # | Issue | Scope |
+|---|-------|-------|
+| [#115](https://github.com/0ceanSlim/grain/issues/115) | Stream REQ results from nostrdb | Time to first event, memory per REQ |
+| [#116](https://github.com/0ceanSlim/grain/issues/116) | Count inside nostrdb | nostrdb fork change |
+| [#117](https://github.com/0ceanSlim/grain/issues/117) | Memory tuning | Under wisp's footprint |
+| [#118](https://github.com/0ceanSlim/grain/issues/118) | Full-text indexing cost on ingest | nostrdb fork change |
+| [#47](https://github.com/0ceanSlim/grain/issues/47) | NIP-77 Negentropy | Set reconciliation / efficient sync |
+| [#12](https://github.com/0ceanSlim/grain/issues/12) | Metrics | Metrics endpoint |
+| [#120](https://github.com/0ceanSlim/grain/issues/120) | JSONL export | Migrations without a wipe |
+| [#119](https://github.com/0ceanSlim/grain/issues/119) | Remove CI's start-up retry | CI cleanup |
+
+📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/13)
 
 ---
 
 ### ![v0.9.1](https://img.shields.io/badge/v0.9.1-planned-lightgrey) Moderation queue
 
-**Theme:** The first new data model — a held-events table and the tooling on top of it.
+**Theme:** The first new data model, a held-events table and the tooling on top of it.
 
-The queue backs the four NIP-86 event-moderation methods, gives report-driven bans their event-level target, and gets a dashboard section with approve / ban actions and a ban list with reasons. The owner-only Ban button on profile pages, the self-contained slice of [#105](https://github.com/0ceanSlim/grain/issues/105), already shipped in v0.8.0-rc3; its observability and broadcast-DM items are independent polish that may slide to v1.0.
+The queue backs the four NIP-86 event-moderation methods and gets a dashboard section with approve / ban actions and a ban list with reasons. It is also the event-level target that report-driven bans in v0.9.2 act on. The owner-only Ban button on profile pages, the self-contained slice of [#105](https://github.com/0ceanSlim/grain/issues/105), already shipped in v0.8.0-rc3; its observability and broadcast-DM items are independent polish that may slide to v1.0.
 
 | # | Issue | Scope |
 |---|-------|-------|
@@ -181,11 +208,27 @@ The queue backs the four NIP-86 event-moderation methods, gives report-driven ba
 
 ---
 
-### ![v0.9.2](https://img.shields.io/badge/v0.9.2-planned-lightgrey) WoT permission groups
+### ![v0.9.2](https://img.shields.io/badge/v0.9.2-planned-lightgrey) Spam defense
+
+**Theme:** Automated blocking that hooks what already exists. No new data model.
+
+Every item here is a hook into the existing blacklist cache and the temp-to-perma escalation the word filter already uses. With the moderation queue already in, report-driven bans ship both halves at once: author-level bans and event-level bans through the queue.
+
+| # | Issue | Scope |
+|---|-------|-------|
+| [#59](https://github.com/0ceanSlim/grain/issues/59) | nspam classifier: score-based auto-blacklist | Spam scoring at ingest |
+| [#97](https://github.com/0ceanSlim/grain/issues/97) | Report-driven moderation: temp/perma bans from NIP-56 reports | Author-level and event-level |
+| [#64](https://github.com/0ceanSlim/grain/issues/64) | Geo/region blocking via GeoIP | Connection-level blocking |
+
+📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/11)
+
+---
+
+### ![v0.9.3](https://img.shields.io/badge/v0.9.3-planned-lightgrey) WoT permission groups
 
 **Theme:** The killer feature.
 
-Composable permission groups built from any combination of explicit whitelist, WoT membership, score thresholds, AUTH state, and admin pubkey. Each group gets its own access, retention, and rate-limit policy. The WoT graph roots at the relay owner's follow list (the owner pubkey has existed since v0.7), so the relay keypair from NIP-29 is no longer a prerequisite. The domain whitelist becomes a group predicate, and the word / relay whitelists either fold into the group model or close.
+Composable permission groups built from any combination of explicit whitelist, WoT membership, score thresholds, AUTH state, and admin pubkey. Each group gets its own access, retention, and rate-limit policy. The WoT graph roots at the relay owner's follow list (the owner pubkey has existed since v0.7), so the relay keypair from NIP-29 is not a prerequisite. The domain whitelist becomes a group predicate, and the word / relay whitelists either fold into the group model or close.
 
 | # | Issue | Scope |
 |---|-------|-------|
@@ -198,41 +241,30 @@ Composable permission groups built from any combination of explicit whitelist, W
 
 ---
 
-### ![v0.9.3](https://img.shields.io/badge/v0.9.3-planned-lightgrey) Performance and ops
+### ![v0.9.4](https://img.shields.io/badge/v0.9.4-planned-lightgrey) Relay as actor
 
-**Theme:** Close the gaps the Nov 2026 benchmark found.
+**Theme:** The relay gets its own key.
 
-grain already out-ingests wisp and matches strfry on pipelined writes, and beats strfry on small queries. What's left: large results are buffered before the first event goes out, COUNT loads every match into Go, memory sits above wisp's, and full-text indexing makes one-at-a-time writes slower than strfry's. Export and the CI cleanup are the operations half.
-
-| # | Issue | Scope |
-|---|-------|-------|
-| [#115](https://github.com/0ceanSlim/grain/issues/115) | Stream REQ results from nostrdb | Time to first event, memory per REQ |
-| [#116](https://github.com/0ceanSlim/grain/issues/116) | Count inside nostrdb | nostrdb fork change |
-| [#117](https://github.com/0ceanSlim/grain/issues/117) | Memory tuning | Under wisp's footprint |
-| [#118](https://github.com/0ceanSlim/grain/issues/118) | Full-text indexing cost on ingest | nostrdb fork change |
-| [#120](https://github.com/0ceanSlim/grain/issues/120) | JSONL export | Migrations without a wipe |
-| [#119](https://github.com/0ceanSlim/grain/issues/119) | Remove CI's start-up retry | CI cleanup |
-
-📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/13)
-
----
-
-### ![v1.0](https://img.shields.io/badge/v1.0-planned-red) Relay-as-actor, sync + polish
-
-**Theme:** The heavy protocol additions, the compliance fixes, then ship.
-
-NIP-29 and NIP-77 are the two heaviest protocol items in the roadmap and both sit here so that if anything must slip, it slips without holding the spam and WoT releases. The nostrdb fork compliance fixes belong to the final audit. Migration docs and NIP-11 cleanup close it out.
+A relay-owned keypair lets grain sign its own events: group metadata, membership and moderation. NIP-29 groups are the first user of it and the heaviest protocol item left, so it gets a release of its own instead of riding with the 1.0 polish.
 
 | # | Issue | Scope |
 |---|-------|-------|
 | [#55](https://github.com/0ceanSlim/grain/issues/55) | NIP-29 Relay-based Groups (+ relay keypair) | Relay-as-actor |
-| [#47](https://github.com/0ceanSlim/grain/issues/47) | NIP-77 Negentropy | Set reconciliation / efficient sync |
+
+📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/15)
+
+---
+
+### ![v1.0](https://img.shields.io/badge/v1.0-planned-red) Polish
+
+**Theme:** The last additions, a final audit, then ship.
+
+| # | Issue | Scope |
+|---|-------|-------|
 | [#96](https://github.com/0ceanSlim/grain/issues/96) | NIP-62 Request to Vanish | Community request |
-| [#72](https://github.com/0ceanSlim/grain/issues/72) | nostrdb author/id prefix-filter compliance | nostrdb fork change |
-| [#71](https://github.com/0ceanSlim/grain/issues/71) | NIP-50 configurable indexed kinds | nostrdb fork change |
-| [#12](https://github.com/0ceanSlim/grain/issues/12) | Metrics | Good first issue |
-| [#54](https://github.com/0ceanSlim/grain/issues/54) | NIP-26 Delegated Event Signing | Low priority; likely won't-do |
 | [#121](https://github.com/0ceanSlim/grain/issues/121) | Bundle lotus as grain's Blossom server | 1.0 or after |
+
+Plus the final audit, migration docs and NIP-11 cleanup.
 
 📂 [View milestone →](https://github.com/0ceanSlim/grain/milestone/6)
 
@@ -240,7 +272,7 @@ NIP-29 and NIP-77 are the two heaviest protocol items in the roadmap and both si
 
 ## 🔭 Beyond 1.0
 
-Planned, but explicitly *after* the 1.0 line — captured so the design isn't lost, not scheduled.
+Planned, but explicitly *after* the 1.0 line — captured so the design isn't lost, not scheduled. Both are in the [Post-1.0 milestone](https://github.com/0ceanSlim/grain/milestone/16).
 
 - **Rich event rendering + browsable views.** Kind-aware rendering (notes with inline media, long-form articles, reposts / reactions / zaps, badges, NIP-A3 payment targets, the NIP-51 list family, …) as a **reusable, importable** Go renderer with an API surface — plus the aggregate **thread** view (reply trees over NIP-22/NIP-10 with engagement) and the aggregate **profile** view built on the client's outbox subscriptions, so `/p/` becomes the real profile and `/e/` renders any kind. The outbox-backed *event resolution* underneath it may land earlier as a pre-1.0 query-robustness fix. Full design in **[#108](https://github.com/0ceanSlim/grain/issues/108)**.
 
@@ -252,7 +284,7 @@ Planned, but explicitly *after* the 1.0 line — captured so the design isn't lo
 
 These were considered and intentionally deferred:
 
-- **NIP-26 (Delegated Event Signing)** — the ecosystem has largely abandoned NIP-26; few clients still implement it. Tagged `Low Priority`, parked in v1.0 only until a won't-do decision is made. ([#54](https://github.com/0ceanSlim/grain/issues/54))
+- **NIP-26 (Delegated Event Signing)**. Marked unrecommended in the NIPs repo. Closed as won't-do on 2026-11-27. ([#54](https://github.com/0ceanSlim/grain/issues/54))
 - **Per-kind blacklisting (NIP-51 kind:30007)** — already achievable via existing `rate_limit.kind_limits` set to 0 per kind. No new feature needed.
 - **Routing-directory cap / LRU** — the memory-hygiene half of [#104](https://github.com/0ceanSlim/grain/issues/104) Phase 0. Dropped once NIP-66 monitors took over the browser; reopen as its own issue only if it shows up in a memory profile.
 
@@ -260,11 +292,11 @@ These were considered and intentionally deferred:
 
 ## 🔄 How this doc stays current
 
-- Every issue tagged `1.0 Requirement` is also assigned a milestone (`v0.9.0` through `v1.0`, including `v0.9.3`).
+- Every issue tagged `1.0 Requirement` is also assigned a milestone (`v0.8.4` through `v1.0`).
 - This file is updated on milestone close: flip the section header status badge to `shipped`, move the next milestone to `current`, summarise what shipped.
 - For day-to-day status, prefer the [milestones page](https://github.com/0ceanSlim/grain/milestones) — it auto-counts open vs. closed.
 - Disagree with the sequencing? Open an issue or comment on the relevant milestone.
 
 ---
 
-<sub>Last revised 2026-09-17 ahead of v0.8.0-rc3: v0.8 reframed from "relay-as-actor" to the client-library release it became and closed out (#101 / #104); the old v0.9 grab-bag split into v0.9.0 spam defense, v0.9.1 moderation queue and v0.9.2 WoT permission groups (the former v0.9 milestone, renamed); NIP-29, NIP-62, the nostrdb compliance fixes, metrics and NIP-26 moved to v1.0; gantt re-based with placeholder bars. 2026-09-18: added the Beyond-1.0 section pointing at the event-rendering design doc. 2026-09-21: after v0.8.0-rc4, filed the Beyond-1.0 items as issues — rich event rendering (#108, spec moved into the issue) and full-text NIP-50 search across the relay pool (#107); removed the docs/design/ folder (dashboard spec obsolete — shipped; event-rendering spec now lives in #108). 2026-11-14: v0.8 marked shipped (0.8.0, 0.8.1, 0.8.2); added v0.9.3 performance and ops from the benchmark against strfry and wisp (#115 to #120); lotus Blossom bundling (#121) in v1.0; per-kind purge (#109) closed since kind 5 deletions are now tombstones.</sub>
+<sub>Last revised 2026-09-17 ahead of v0.8.0-rc3: v0.8 reframed from "relay-as-actor" to the client-library release it became and closed out (#101 / #104); the old v0.9 grab-bag split into v0.9.0 spam defense, v0.9.1 moderation queue and v0.9.2 WoT permission groups (the former v0.9 milestone, renamed); NIP-29, NIP-62, the nostrdb compliance fixes, metrics and NIP-26 moved to v1.0; gantt re-based with placeholder bars. 2026-09-18: added the Beyond-1.0 section pointing at the event-rendering design doc. 2026-09-21: after v0.8.0-rc4, filed the Beyond-1.0 items as issues — rich event rendering (#108, spec moved into the issue) and full-text NIP-50 search across the relay pool (#107); removed the docs/design/ folder (dashboard spec obsolete — shipped; event-rendering spec now lives in #108). 2026-11-14: v0.8 marked shipped (0.8.0, 0.8.1, 0.8.2); added v0.9.3 performance and ops from the benchmark against strfry and wisp (#115 to #120); lotus Blossom bundling (#121) in v1.0; per-kind purge (#109) closed since kind 5 deletions are now tombstones. 2026-11-27: after v0.8.3 and the weekly relay bench, re-sequenced to 1.0. v0.8.4 bench correctness (#123 to #125); performance and sync moved first as v0.9.0 with NIP-77 (#47) and metrics (#12); moderation queue v0.9.1 ahead of spam defense v0.9.2; WoT v0.9.3; relay keypair and NIP-29 (#55) out of v1.0 into v0.9.4; v1.0 is polish; #107 and #108 in a Post-1.0 milestone; NIP-26 (#54) closed.</sub>
